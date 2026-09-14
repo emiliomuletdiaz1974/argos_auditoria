@@ -1,68 +1,82 @@
-"""Configuración tipada de entorno y parámetros del appliance (Componente ARG-001)."""
+"""Configuración tipada del appliance; un servicio mal configurado no arranca (ARG-001)."""
 
 from enum import StrEnum
 from functools import lru_cache
+from pathlib import PurePosixPath, PureWindowsPath
+from typing import Self
 
-from pydantic import Field
+from pydantic import Field, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from .errors import ConfiguracionError
+
+
+class Entorno(StrEnum):
+    DESARROLLO = "development"
+    PREPRODUCCION = "staging"
+    PRODUCCION = "production"
+
+
+class NivelLog(StrEnum):
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
 
 
 class TallaAppliance(StrEnum):
-    """Tallas hardware del Servidor Cognitivo Lenovo SR675 V3."""
+    """Tallas del Servidor Cognitivo (Especificación Técnica §5)."""
 
-    S = "S"  # 1 GPU L40S, 32 cores, 128 GB RAM
-    M = "M"  # 2 GPU L40S, 64 cores, 256 GB RAM
-    L = "L"  # 4 GPU H100/L40S, 128 cores, 512 GB RAM
+    S = "S"
+    M = "M"
+    L = "L"
+
+
+_HOSTS_LOCALES = ("127.0.0.1", "localhost", "@localhost", "::1")
 
 
 class ArgosConfig(BaseSettings):
-    """Parámetros de configuración del sistema ARGOS."""
-
     model_config = SettingsConfigDict(
         env_prefix="ARGOS_", env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    # Identidad y versión
     VERSION: str = "0.1.0-alpha"
-    ENVIRONMENT: str = Field(
-        default="development", description="development | staging | production"
-    )
-    TALLA: TallaAppliance = Field(
-        default=TallaAppliance.S, description="Talla del appliance (S, M, L)"
-    )
+    ENVIRONMENT: Entorno = Entorno.DESARROLLO
+    TALLA: TallaAppliance = TallaAppliance.S
+    DATABASE_URL: str = Field(min_length=1)
+    NATS_URL: str = "nats://127.0.0.1:4222"
+    TEMPORAL_ADDRESS: str = "127.0.0.1:7233"
+    WORM_STORAGE_PATH: str = "./data/worm"
+    LOG_LEVEL: NivelLog = NivelLog.INFO
+    LOG_FORMAT_JSON: bool = True
+    LLM_LOCAL_ENDPOINT: str | None = "http://127.0.0.1:8000/v1"
 
-    # Almacén de persistencia (PostgreSQL + AGE + pgvector)
-    DATABASE_URL: str = Field(
-        default="postgresql://argos:argos_secret@localhost:5432/argos_db",
-        description="Cadena de conexión a la base de datos núcleo",
-    )
+    @model_validator(mode="after")
+    def _reglas_de_produccion(self) -> Self:
+        if self.ENVIRONMENT is not Entorno.PRODUCCION:
+            return self
+        if any(h in self.DATABASE_URL for h in _HOSTS_LOCALES):
+            raise ValueError("DATABASE_URL de producción no puede apuntar a una base local")
+        ruta = self.WORM_STORAGE_PATH
+        if not (PurePosixPath(ruta).is_absolute() or PureWindowsPath(ruta).is_absolute()):
+            raise ValueError("WORM_STORAGE_PATH debe ser absoluta en producción")
+        if not self.LOG_FORMAT_JSON:
+            raise ValueError("LOG_FORMAT_JSON debe ser true en producción")
+        return self
 
-    # Bus de eventos (NATS)
-    NATS_URL: str = Field(
-        default="nats://localhost:4222", description="URL del bus de eventos NATS"
-    )
 
-    # Almacén WORM y Evidencias
-    WORM_STORAGE_PATH: str = Field(
-        default="./data/worm", description="Ruta del volumen WORM inmutable de evidencias"
-    )
-
-    # Observabilidad
-    LOG_LEVEL: str = Field(
-        default="INFO", description="Nivel de registro (DEBUG, INFO, WARNING, ERROR)"
-    )
-    LOG_FORMAT_JSON: bool = Field(
-        default=True, description="Emisión de logs en formato estructurado JSON"
-    )
-
-    # Inferencia IA Local (Fase 06)
-    LLM_LOCAL_ENDPOINT: str | None = Field(
-        default="http://localhost:8000/v1",
-        description="Endpoint del servidor de inferencia local vLLM",
-    )
+def cargar_config() -> ArgosConfig:
+    """Construye y valida la configuración; los errores no incluyen los valores recibidos."""
+    try:
+        return ArgosConfig()  # DATABASE_URL llega del entorno o del .env
+    except ValidationError as exc:
+        errores = [
+            {"campo": ".".join(str(p) for p in e["loc"]) or "general", "mensaje": e["msg"]}
+            for e in exc.errors(include_input=False, include_url=False)
+        ]
+        raise ConfiguracionError("configuración inválida", detalles={"errores": errores}) from None
 
 
 @lru_cache(maxsize=1)
 def get_config() -> ArgosConfig:
-    """Devuelve la instancia única de configuración en caché."""
-    return ArgosConfig()
+    return cargar_config()
