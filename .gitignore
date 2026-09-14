@@ -9,3 +9,5 @@ htmlcov/
 .env
 dist/
 .scratch/
+.repo-map.xml
+.repo-map.stamp
