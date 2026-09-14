@@ -20,6 +20,7 @@ dev = [
     "pytest-cov>=5.0",
     "ruff>=0.8",
     "mypy>=1.13",
+    "types-hvac>=2.4.0.20260731",
 ]
 
 [tool.pytest.ini_options]

@@ -44,3 +44,10 @@ class SoloLecturaError(ArgosError):
 
     def __init__(self, mensaje: str, detalles: dict[str, Any] | None = None) -> None:
         super().__init__(mensaje, codigo="VIOLACION_SOLO_LECTURA", detalles=detalles)
+
+
+class SecretoNoAccesibleError(ArgosError):
+    """El secreto no existe o el llamador no tiene permiso: no se distingue a propósito."""
+
+    def __init__(self, mensaje: str, detalles: dict[str, Any] | None = None) -> None:
+        super().__init__(mensaje, codigo="SECRETO_NO_ACCESIBLE", detalles=detalles)
