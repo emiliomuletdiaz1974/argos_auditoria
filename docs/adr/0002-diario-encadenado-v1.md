@@ -1,6 +1,6 @@
 # ADR-0002 · Diario encadenado v1: especificación única
 
-**Estado:** Propuesta · **Fecha:** 2026-09-14
+**Estado:** Aceptado · 2026-09-14 · Aaron Escobar
 
 ## Contexto
 Hay tres definiciones incompatibles del diario:

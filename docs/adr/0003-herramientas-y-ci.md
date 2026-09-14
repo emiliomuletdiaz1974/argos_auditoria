@@ -1,6 +1,6 @@
 # ADR-0003 · Herramientas de desarrollo y CI
 
-**Estado:** Propuesta · **Fecha:** 2026-09-14
+**Estado:** Aceptado · 2026-09-14 · Aaron Escobar
 
 ## Contexto
 ARG-001/ARG-010 usan uv y GitLab CI autoalojado con cosign y clave en Vault. El Plan Director usa GitHub (repo, Projects, rama protegida). Hoy `argos/` usa pip, no tiene lockfile y ruff no está instalado.

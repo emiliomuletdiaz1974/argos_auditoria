@@ -1,6 +1,6 @@
 # ADR-0001 · Alcance de la Fase 1 y estructura del monorepo
 
-**Estado:** Propuesta · **Fecha:** 2026-09-14
+**Estado:** Aceptado · 2026-09-14 · Aaron Escobar
 
 ## Contexto
 El Plan Director (ARGOS-CTO-2026-001 §8.2) describe la Fase 1 como librería común (configuración, logging, errores, diario), gestor de secretos local, compose de desarrollo, `/salud` y CI. El documento ARGOS_Fase01 numera ARG-001…010 como monorepo, imagen Packer, k3s, PostgreSQL+AGE+pgvector, esquema núcleo, NATS, Temporal, Keycloak, Vault y CI con cosign. Las estructuras de repositorio también difieren: `services/conectores/…` (Plan) frente a `connectors/`, `services/<servicio-en-inglés>/`, `platform/`, `library/` (ARG-001). El código existente en `argos/` ya sigue la estructura de ARG-001.

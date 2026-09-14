@@ -1,6 +1,6 @@
 # ADR-0004 · Versión base de la web comercial
 
-**Estado:** Propuesta · **Fecha:** 2026-09-14
+**Estado:** Aceptado · 2026-09-14 · Aaron Escobar
 
 ## Contexto
 El informe de traspaso y el Plan Director fijan v6 como versión de referencia y exigen incorporar el aviso legal (LSSI-CE art. 10) y la política de privacidad (RGPD art. 13) de v7 antes de difundir la URL. En la carpeta de trabajo solo están desempaquetadas v4 y v7_1; v6 y v7 están dentro del ZIP de la base de conocimiento. Los seis PHP son idénticos en v4, v6, v7 y v7_1: la diferencia está solo en `index.html` y los ficheros de SEO (favicon, og, robots, sitemap, preguntas-frecuentes).
