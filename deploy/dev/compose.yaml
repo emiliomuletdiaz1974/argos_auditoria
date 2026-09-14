@@ -1,0 +1,101 @@
+# Entorno de desarrollo de ARGOS. Solo escucha en 127.0.0.1. Credenciales triviales a propósito.
+#
+# Imágenes verificadas el 2026-09-14 (para reproducir el entorno, sustituir la etiqueta por el digest):
+#   grafana      grafana/grafana@sha256:408afb9726de5122b00a2576763a8a57a3c86d5b0eff5305bc994ceb3eb96c3f
+#   keycloak     quay.io/keycloak/keycloak@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
+#   loki         grafana/loki@sha256:e689cc634841c937de4d7ea6157f17e29cf257d6a320f1c293ab18d46cfea986
+#   nats         nats@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
+#   prometheus   prom/prometheus@sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94
+#   temporal     temporalio/auto-setup@sha256:b1edc1e20002d958c8182f2ae08dee877a125083683a627a44917683419ba6a8
+#   temporal-db  postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+#   vault        hashicorp/vault@sha256:74a4ab138ab5d64725e89cd9a9c73f7040c7fe49e98b71697b275ca9a69919df
+#   postgres     construida en local desde ./postgres (base apache/age:release_PG16_1.5.0 + postgresql-16-pgvector)
+name: argos-dev
+
+services:
+  postgres:
+    build: ./postgres
+    image: argos-dev/postgres:16-age-vector
+    environment:
+      POSTGRES_USER: argos
+      POSTGRES_DB: argos
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports: ["127.0.0.1:55432:5432"]
+    volumes: ["pg-datos:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U argos -d argos"]
+      interval: 5s
+      retries: 30
+
+  nats:
+    image: nats:2.10-alpine
+    command: ["-js", "-sd", "/datos", "-m", "8222"]
+    ports: ["127.0.0.1:4222:4222", "127.0.0.1:8222:8222"]
+    volumes: ["nats-datos:/datos"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
+      interval: 5s
+      retries: 30
+
+  temporal-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      retries: 30
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+    environment:
+      DB: postgres12
+      DB_PORT: "5432"
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: ""
+      POSTGRES_SEEDS: temporal-db
+    ports: ["127.0.0.1:7233:7233"]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports: ["127.0.0.1:8180:8080"]   # 8180 en el host: el 8080 suele estar ocupado por servidores web locales
+
+  vault:
+    image: hashicorp/vault:1.17
+    command: ["server", "-dev", "-dev-root-token-id=root", "-dev-listen-address=0.0.0.0:8200"]
+    cap_add: ["IPC_LOCK"]
+    ports: ["127.0.0.1:8200:8200"]
+    healthcheck:
+      test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
+      interval: 5s
+      retries: 30
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes: ["./prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    ports: ["127.0.0.1:9090:9090"]
+
+  loki:
+    image: grafana/loki:3.1.1
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports: ["127.0.0.1:3100:3100"]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes: ["./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/argos.yaml:ro"]
+    ports: ["127.0.0.1:3000:3000"]
+
+volumes:
+  pg-datos:
+  nats-datos:

@@ -23,7 +23,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["libs"]
+testpaths = ["libs", "tests"]
 addopts = "-q --strict-markers"
 markers = ["integracion: necesita el entorno de make dev"]
 
