@@ -1,19 +1,19 @@
 [project]
 name = "argos-platform"
 version = "0.1.0-alpha"
-description = "Plataforma soberana de verificación de cumplimiento normativo (RGPD, EHDS, AI Act, ENS)"
+description = "Sovereign regulatory compliance verification platform (GDPR, EHDS, AI Act, ENS)"
 requires-python = ">=3.12"
-dependencies = ["argos-comun", "argos-ejemplo"]
+dependencies = ["argos-common", "argos-example"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["libs/comun", "services/ejemplo"]
+members = ["libs/common", "services/example"]
 
 [tool.uv.sources]
-argos-comun = { workspace = true }
-argos-ejemplo = { workspace = true }
+argos-common = { workspace = true }
+argos-example = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -28,7 +28,7 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["libs", "tests"]
 addopts = "-q --strict-markers"
-markers = ["integracion: necesita el entorno de make dev"]
+markers = ["integration: requires the make dev environment"]
 
 [tool.ruff]
 line-length = 100
@@ -38,7 +38,7 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["argos_comun"]
+known-first-party = ["argos_common", "argos_example"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106"]

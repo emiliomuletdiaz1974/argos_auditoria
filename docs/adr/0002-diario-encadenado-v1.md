@@ -4,7 +4,7 @@
 
 ## Contexto
 Hay tres definiciones incompatibles del diario:
-- `libs/comun/diario.py`: JSON canónico en memoria, génesis `"0"*64`, tabla `diario_inmutable`.
+- `libs/comun/diario.py` (código heredado, anterior a F1): JSON canónico en memoria, génesis `"0"*64`, tabla `diario_inmutable`.
 - ARG-005 (`argos.journal_append`): `sha256(prev ‖ actor ‖ action ‖ subject::text)`, génesis `sha256('ARGOS-GENESIS')`, columnas `prev_hash`/`entry_hash`.
 - ARG-066 (`verify_chain`): `sha256(prev ‖ actor ‖ action ‖ payload ‖ at)`, génesis de 32 bytes a cero, columnas `payload`/`hash`.
 
@@ -48,7 +48,7 @@ Escritura: solo mediante `argos.journal_append(p_actor text, p_action text, p_pa
 
 Además, `INSERT` directo revocado a todos los roles de servicio, y triggers que prohíben `UPDATE`, `DELETE` (por fila) y `TRUNCATE` (por sentencia).
 
-Verificación: implementación Python independiente (`libs/comun/diario.py`) que recalcula con la misma fórmula. Vectores de prueba compartidos en `tests/vectores/diario_v1.json`; los tests de Python y de PostgreSQL deben reproducirlos.
+Verificación: implementación Python independiente (`libs/common/argos_common/journal.py`) que recalcula con la misma fórmula. Vectores de prueba compartidos en `tests/vectors/journal_v1.json`; los tests de Python y de PostgreSQL deben reproducirlos.
 
 ## Consecuencias
 - ARG-012, ARG-066 y cualquier otro componente usan esta especificación; se abren Notas de Desviación ARG-005 y ARG-066.

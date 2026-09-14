@@ -8,7 +8,7 @@ El Plan Director (ARGOS-CTO-2026-001 §8.2) describe la Fase 1 como librería co
 ## Decisión
 1. Los documentos de fase mandan en **numeración, contenido de componentes y rutas**. El Plan Director manda en **orden de construcción, método, calendario y definición de hecho**.
 2. Estructura del monorepo: la de ARG-001 más lo que el Plan añade:
-   `libs/comun/` (librería común), `services/`, `connectors/`, `console/`, `platform/`, `library/`, `tools/`, `deploy/dev/` (compose de desarrollo), `tests/` (integración y extremo a extremo), `docs/{adr,desviaciones,fases,plantillas}`.
+   `libs/common/` (librería común; nombres de código en inglés según ADR-0005), `services/`, `connectors/`, `console/`, `platform/`, `library/`, `tools/`, `deploy/dev/` (compose de desarrollo), `tests/` (integración y extremo a extremo), `docs/{adr,desviaciones,fases,plantillas}`.
 3. La librería común (configuración, errores, logging, diario v1) se registra como parte de ARG-001 (convenciones) y ARG-005 (diario).
 4. **ARG-002 (imagen Packer) y ARG-003 (k3s) se aplazan** hasta tener el Servidor Cognitivo de laboratorio. Mientras, el entorno es Docker Compose con los mismos servicios. Se abre Nota de Desviación ARG-002/003.
 

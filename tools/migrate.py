@@ -1,19 +1,19 @@
-"""Aplica las migraciones pendientes.
+"""Apply pending migrations.
 
-Uso: uv run python tools/migrate.py [carpeta]   (por defecto services/api/migrations)
+Usage: uv run python tools/migrate.py [directory]   (defaults to services/api/migrations)
 """
 
 import sys
 from pathlib import Path
 
-from argos_comun.config import get_config
-from argos_comun.migraciones import aplicar
+from argos_common.config import get_config
+from argos_common.migrations import apply_migrations
 
 
 def main() -> int:
-    carpeta = Path(sys.argv[1] if len(sys.argv) > 1 else "services/api/migrations")
-    nuevas = aplicar(get_config().DATABASE_URL, carpeta)
-    print(f"aplicadas: {nuevas or 'ninguna'} · esquema al día")
+    directory = Path(sys.argv[1] if len(sys.argv) > 1 else "services/api/migrations")
+    applied = apply_migrations(get_config().DATABASE_URL, directory)
+    print(f"applied: {applied or 'none'} - schema up to date")
     return 0
 
 

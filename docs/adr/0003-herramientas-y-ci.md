@@ -10,7 +10,7 @@ ARG-001/ARG-010 usan uv y GitLab CI autoalojado con cosign y clave en Vault. El 
 - **ruff** (lint y formato, línea 100), **mypy** estricto en `libs/` y en cada servicio, **pytest** con `pytest-cov`, **gitleaks** en local y en CI.
 - `make dev | test | check | cover` como interfaz única; en CI se llama a los mismos objetivos.
 - **CI en GitHub Actions** sobre el repo privado `argos-platform`, con las etapas de ARG-010: `verify`, `build`, `package`, `sign`, `selfcheck`. Hasta que exista Vault de release (F1-10), `sign` y `selfcheck` quedan declarados y marcados como reservados. Runner alojado por GitHub hasta tener el autoalojado.
-- Tests de integración marcados `@pytest.mark.integracion`; `make test` ejecuta unitarios; `make check` añade integración contra `make dev`.
+- Tests de integración marcados `@pytest.mark.integration`; `make test` ejecuta unitarios; `make check` añade integración contra `make dev`.
 
 ## Consecuencias
 - Nota de Desviación ARG-010 (GitLab → GitHub Actions; misma estructura de etapas).

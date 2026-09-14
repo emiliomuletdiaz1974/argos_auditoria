@@ -1,6 +1,6 @@
-# Entorno de desarrollo de ARGOS. Solo escucha en 127.0.0.1. Credenciales triviales a propósito.
+# ARGOS development environment. Listens on 127.0.0.1 only. Trivial credentials on purpose.
 #
-# Imágenes verificadas el 2026-09-14 (para reproducir el entorno, sustituir la etiqueta por el digest):
+# Images verified on 2026-09-14 (to reproduce the environment, replace the tag with the digest):
 #   grafana      grafana/grafana@sha256:408afb9726de5122b00a2576763a8a57a3c86d5b0eff5305bc994ceb3eb96c3f
 #   keycloak     quay.io/keycloak/keycloak@sha256:09a381c715ab0b111835b70f2905955274843a219c6f27efb348e4d9f4086858
 #   loki         grafana/loki@sha256:e689cc634841c937de4d7ea6157f17e29cf257d6a320f1c293ab18d46cfea986
@@ -9,7 +9,7 @@
 #   temporal     temporalio/auto-setup@sha256:b1edc1e20002d958c8182f2ae08dee877a125083683a627a44917683419ba6a8
 #   temporal-db  postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
 #   vault        hashicorp/vault@sha256:74a4ab138ab5d64725e89cd9a9c73f7040c7fe49e98b71697b275ca9a69919df
-#   postgres     construida en local desde ./postgres (base apache/age:release_PG16_1.5.0 + postgresql-16-pgvector)
+#   postgres     built locally from ./postgres (base apache/age:release_PG16_1.5.0 + postgresql-16-pgvector)
 name: argos-dev
 
 services:
@@ -21,7 +21,7 @@ services:
       POSTGRES_DB: argos
       POSTGRES_HOST_AUTH_METHOD: trust
     ports: ["127.0.0.1:55432:5432"]
-    volumes: ["pg-datos:/var/lib/postgresql/data"]
+    volumes: ["pg-data:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U argos -d argos"]
       interval: 5s
@@ -29,9 +29,9 @@ services:
 
   nats:
     image: nats:2.10-alpine
-    command: ["-js", "-sd", "/datos", "-m", "8222"]
+    command: ["-js", "-sd", "/data", "-m", "8222"]
     ports: ["127.0.0.1:4222:4222", "127.0.0.1:8222:8222"]
-    volumes: ["nats-datos:/datos"]
+    volumes: ["nats-data:/data"]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
       interval: 5s
@@ -66,7 +66,7 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-    ports: ["127.0.0.1:8180:8080"]   # 8180 en el host: el 8080 suele estar ocupado por servidores web locales
+    ports: ["127.0.0.1:8180:8080"]   # 8180 on the host: 8080 is often taken by local web servers
 
   vault:
     image: hashicorp/vault:1.17
@@ -96,10 +96,10 @@ services:
     volumes: ["./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/argos.yaml:ro"]
     ports: ["127.0.0.1:3000:3000"]
 
-  ejemplo:
+  example:
     build:
       context: ../..
-      dockerfile: services/ejemplo/Dockerfile
+      dockerfile: services/example/Dockerfile
     environment:
       ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos
       ARGOS_LOG_LEVEL: INFO
@@ -108,10 +108,10 @@ services:
         condition: service_healthy
     ports: ["127.0.0.1:8001:8000"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/salud/viva', timeout=2)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"]
       interval: 5s
       retries: 30
 
 volumes:
-  pg-datos:
-  nats-datos:
+  pg-data:
+  nats-data:
