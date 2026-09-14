@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 import pytest
+
 from argos_comun.logs import configurar_logging, get_logger
 
 
