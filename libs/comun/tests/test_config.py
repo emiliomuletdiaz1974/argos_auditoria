@@ -1,8 +1,7 @@
 """Pruebas unitarias de configuración tipada (Componente ARG-001)."""
 
-import os
 import pytest
-from libs.comun.config import ArgosConfig, TallaAppliance
+from argos_comun.config import ArgosConfig, TallaAppliance
 
 
 def test_config_defaults() -> None:

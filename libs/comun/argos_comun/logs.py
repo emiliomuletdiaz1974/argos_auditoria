@@ -1,10 +1,10 @@
-"""Logging estructurado en formato JSON con correlación para Loki y el Diario Inmutable (Componente ARG-001)."""
+"""Logging estructurado JSON con correlación para Loki y el diario (ARG-001)."""
 
 import json
 import logging
 import sys
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 
 class JSONFormatter(logging.Formatter):
@@ -12,7 +12,7 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_entry: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -32,7 +32,7 @@ class JSONFormatter(logging.Formatter):
         return json.dumps(log_entry, ensure_ascii=False)
 
 
-def get_logger(nombre: str, componente: Optional[str] = None) -> logging.Logger:
+def get_logger(nombre: str, componente: str | None = None) -> logging.Logger:
     """Configura y devuelve un logger estructurado."""
     logger = logging.getLogger(nombre)
     if not logger.handlers:

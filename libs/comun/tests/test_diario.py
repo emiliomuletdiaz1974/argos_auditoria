@@ -1,9 +1,8 @@
 """Pruebas unitarias del Diario Inmutable encadenado por SHA-256 (Componente ARG-005)."""
 
 import pytest
-from libs.comun.diario import (
+from argos_comun.diario import (
     GENESIS_HASH,
-    AsientoDiario,
     DiarioInmutable,
     VerificacionDiarioError,
 )
@@ -19,7 +18,7 @@ def test_diario_genesis_and_chaining() -> None:
         operacion="INICIALIZAR_SISTEMA",
         actor="proceso_arranque",
         payload_bytes=b'{"version": "0.1.0-alpha"}',
-        detalles={"modulo": "nucleo"}
+        detalles={"modulo": "nucleo"},
     )
     assert asiento_1.seq == 1
     assert asiento_1.hash_previo == GENESIS_HASH
@@ -32,7 +31,7 @@ def test_diario_genesis_and_chaining() -> None:
         operacion="CONECTAR_FUENTE",
         actor="operador_auditoria",
         payload_bytes=b'{"source_id": "db_hospital_01"}',
-        detalles={"tipo": "postgresql"}
+        detalles={"tipo": "postgresql"},
     )
     assert asiento_2.seq == 2
     assert asiento_2.hash_previo == asiento_1.hash_actual
@@ -44,7 +43,7 @@ def test_diario_genesis_and_chaining() -> None:
         operacion="EJECUTAR_RETO",
         actor="motor_retos",
         payload_bytes=b'{"reto": "RGPD_SUPRESION_VERIFICADA"}',
-        detalles={"resultado": "CONFORME"}
+        detalles={"resultado": "CONFORME"},
     )
     assert asiento_3.seq == 3
     assert asiento_3.hash_previo == asiento_2.hash_actual

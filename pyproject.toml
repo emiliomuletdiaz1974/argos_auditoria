@@ -1,29 +1,43 @@
 [project]
 name = "argos-platform"
 version = "0.1.0-alpha"
-description = "Plataforma Soberana de Auditoria y Verificacion de Cumplimiento Normativo (RGPD, AI Act, ENS, DORA)"
+description = "Plataforma soberana de verificación de cumplimiento normativo (RGPD, EHDS, AI Act, ENS)"
 requires-python = ">=3.12"
-dependencies = [
-    "pydantic>=2.10.0",
-    "pydantic-settings>=2.7.0",
-    "cryptography>=43.0.0",
-    "pyyaml>=6.0.0",
-]
+dependencies = ["argos-comun"]
 
-[project.optional-dependencies]
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["libs/comun"]
+
+[tool.uv.sources]
+argos-comun = { workspace = true }
+
+[dependency-groups]
 dev = [
-    "pytest>=8.3.0",
-    "pytest-cov>=5.0.0",
-    "ruff>=0.8.0",
-    "mypy>=1.13.0",
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "ruff>=0.8",
+    "mypy>=1.13",
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_functions = "test_*"
-addopts = "-v --tb=short"
+testpaths = ["libs"]
+addopts = "-q --strict-markers"
+markers = ["integracion: necesita el entorno de make dev"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["S101", "S105", "S106"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
