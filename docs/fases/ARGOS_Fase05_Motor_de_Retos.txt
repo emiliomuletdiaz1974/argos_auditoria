@@ -1,0 +1,816 @@
+ULLSWATER INVESTMENTS
+ARGOS · Programa de ingeniería en 10 fases
+FASE 5
+Motor de retos y campañas — Componentes 41 a 50
+El segundo activo propietario: el DSL YAML de seis bloques, el compilador que lo convierte en plan ejecutable, los workflows Temporal de campaña con ventanas y reprogramación, las actividades de sonda, el muestreo estadístico declarado, el evaluador determinista, los puntos de control humanos, el ciclo de vida de los hallazgos, la reejecución de subsanación y la biblioteca empaquetada con retos reales completos
+Documento técnico 5 de 10 · Madrid, septiembre de 2026 · Versión 1.0 · Confidencial
+
+Índice
+ TOC \h \u \z \t "Heading 1,1,"
+
+
+0. La capa C4 en conjunto
+El motor de retos es donde ARGOS deja de saber y empieza a comprobar. Su unidad atómica es el reto (una pregunta formal con criterio de conformidad, ARG-041) y su unidad de trabajo la campaña (retos orquestados con ventanas, aprobaciones y evidencia, ARG-043). La frontera que gobierna toda la fase viene de la especificación y se repite aquí porque es la que hace defendible el producto: el veredicto lo determinan criterios deterministas sobre evidencia capturada (ARG-046); el modelo de lenguaje jamás decide conformidad — propone retos (fase 6) y redacta, con marca de texto asistido.
+El recorrido completo: el resolutor de la fase 4 entrega el plan de aplicabilidad (obligación × nodos × reto) → el compilador (ARG-042) materializa cada terna en sondas concretas por conector → el workflow de campaña (ARG-043) las ejecuta respetando ventanas, presupuesto y puntos de control (ARG-047), con muestreo calculado donde la población lo exige (ARG-045) → cada resultado pasa por el evaluador (ARG-046) que emite conformidad y, en su caso, hallazgo (ARG-048) → los hallazgos resueltos se verifican con reejecución selectiva (ARG-049) → y todo artefacto viaja ya etiquetado para la cadena de evidencia de la fase 7. La biblioteca (ARG-050) empaqueta los retos como contenido firmado, hermana de la ontología.
+
+ARG-041 · El DSL de retos: seis bloques en YAML
+ANÁLISIS
+El reto debe poder escribirlo el ingeniero normativo (y proponerlo el generador asistido de la fase 6) sin tocar Python, y debe poder auditarlo un tercero leyéndolo: declarativo, autocontenido y validable. Se evaluó un DSL propio con gramática (potente, coste alto de herramienta) frente a YAML con esquema JSON Schema estricto (herramientas gratis, validación en CI y en carga, diffs legibles en Git). YAML+Schema gana; la expresividad que un lenguaje daría (condiciones compuestas) se resuelve delegando el criterio complejo en OPA (ARG-036) por referencia — el YAML declara qué paquete Rego decide, no reinventa un lenguaje de expresiones.
+DISEÑO
+Seis bloques obligatorios: objetivo (la obligación de la ontología: la trazabilidad de ARG-037 nace aquí), selector (qué nodos, por AssetClass o selector directo), sonda (kind de ARG-011 + parámetros, con variantes por tipo de conector), criterio (umbral simple inline o referencia a paquete OPA), evidencia (qué se captura y su minimización declarada) y severidad. Bloques opcionales: muestreo (delega en ARG-045), ventanas propias, aprobacion_requerida (fuerza punto de control). El esquema JSON Schema es la ley: nada fuera de él compila.
+DESARROLLO
+library/challenges/schema/reto.schema.json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Reto ARGOS",
+  "type": "object",
+  "required": ["id", "version", "objetivo", "selector",
+               "sonda", "criterio", "evidencia", "severidad"],
+  "additionalProperties": false,
+  "properties": {
+    "id":       { "type": "string", "pattern": "^[a-z0-9-]{3,40}$" },
+    "version":  { "type": "string", "pattern": "^\\d+\\.\\d+$" },
+    "titulo":   { "type": "string", "maxLength": 120 },
+    "objetivo": {
+      "type": "object", "required": ["obligacion"],
+      "properties": { "obligacion": { "type": "string",
+                        "pattern": "^OBL-[A-Z0-9-]+$" } } },
+    "selector": {
+      "oneOf": [
+        { "type": "object", "required": ["asset_class"],
+          "properties": { "asset_class": { "type": "string" } } },
+        { "type": "object", "required": ["directo"],
+          "properties": { "directo": { "type": "object" } } } ] },
+    "sonda": {
+      "type": "object", "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["scan_schema","count","sample","check_config"] },
+        "por_conector": { "type": "object",
+          "additionalProperties": { "type": "object" } },
+        "params": { "type": "object" } } },
+    "criterio": {
+      "oneOf": [
+        { "type": "object", "required": ["umbral"],
+          "properties": { "umbral": { "type": "object",
+            "required": ["campo","operador","valor"],
+            "properties": { "operador":
+              { "enum": ["==","<=",">=","<",">","!="] } } } } },
+        { "type": "object", "required": ["opa"],
+          "properties": { "opa": { "type": "object",
+            "required": ["paquete"],
+            "properties": { "paquete": { "type": "string" },
+                             "input_map": { "type": "object" } } } } } ] },
+    "evidencia": {
+      "type": "object", "required": ["capturar","minimizacion"],
+      "properties": {
+        "capturar": { "type": "array",
+          "items": { "enum": ["resultado","recuentos","hashes",
+                               "configuracion","muestra_hasheada"] } },
+        "minimizacion": { "type": "string", "minLength": 20 } } },
+    "severidad": { "enum": ["critica","alta","media","baja"] },
+    "muestreo":  { "type": "object",
+      "properties": { "confianza": { "enum": [0.90, 0.95, 0.99] },
+                       "margen": { "type": "number" } } },
+    "aprobacion_requerida": { "type": "boolean" }
+  }
+}
+ 
+tools/challenge_lint.py — validador (CI y carga)
+#!/usr/bin/env python3
+"""Valida todos los retos contra el esquema + reglas extra del producto."""
+import json, pathlib, sys
+import jsonschema, yaml
+ 
+SCHEMA = json.loads(pathlib.Path(
+    "library/challenges/schema/reto.schema.json").read_text())
+ 
+EXTRA_RULES = [
+    # (condición de error, mensaje)
+    (lambda d: d["sonda"]["kind"] == "sample"
+               and not d.get("aprobacion_requerida"),
+     "toda sonda 'sample' exige aprobacion_requerida: true"),
+    (lambda d: "muestra_hasheada" in d["evidencia"]["capturar"]
+               and d["sonda"]["kind"] != "sample",
+     "muestra_hasheada solo con sonda sample"),
+]
+ 
+errors = 0
+for f in sorted(pathlib.Path("library/challenges").rglob("*.yaml")):
+    if "schema" in f.parts: continue
+    d = yaml.safe_load(f.read_text())
+    try:
+        jsonschema.validate(d, SCHEMA)
+    except jsonschema.ValidationError as e:
+        print(f"{f}: {e.message}", file=sys.stderr); errors += 1
+        continue
+    for cond, msg in EXTRA_RULES:
+        if cond(d):
+            print(f"{f}: {msg}", file=sys.stderr); errors += 1
+print(f"retos validados; errores: {errors}")
+sys.exit(1 if errors else 0)
+ 
+
+ARG-042 · Compilador: del YAML al plan ejecutable
+ANÁLISIS
+Entre el reto declarado y las sondas hay tres resoluciones: nodos (el selector contra el grafo, vía la puerta única de ARG-029 o el plan del resolutor si la campaña ya lo trae), variante de sonda (el mismo reto de retención se sondea distinto en PostgreSQL que en un recurso SMB: el bloque por_conector elige por el kind del conector del sistema) y parámetros (plantillas {{nodo.*}} sustituidas por las propiedades del nodo). El compilador hace las tres y produce unidades de trabajo inertes y completas — el workflow no interpreta nada en caliente, lo que hace el plan auditable antes de ejecutar: el DPO puede leer exactamente qué se va a preguntar.
+DISEÑO
+compile(campaign) devuelve una lista de WorkUnit(reto, nodo, system_id, ProbeSpec listo, criterio, evidencia, severidad) serializable; agrupa por sistema para que el workflow respete presupuestos por conector; y rechaza en compilación (no en ejecución) los retos sin variante para el conector del sistema — hallazgo 'no verificable en este sistema', otra vez la honestidad antes que el silencio.
+DESARROLLO
+services/challenge-engine/compiler/compile.py
+"""Compilador de campañas: retos YAML + plan de aplicabilidad -> WorkUnits."""
+import dataclasses as dc, pathlib, re, yaml
+from inventory_client import resolve_selector, get_nodes, system_kind
+ 
+@dc.dataclass
+class WorkUnit:
+    challenge_id: str
+    challenge_version: str
+    obligation: str
+    system_id: str
+    node_key: str
+    probe: dict            # ProbeSpec serializado, listo para ARG-044
+    criterio: dict
+    evidencia: dict
+    severidad: str
+    muestreo: dict | None
+    needs_approval: bool
+ 
+LIB = pathlib.Path("/opt/argos/library/challenges")
+_TPL = re.compile(r"{{\s*nodo\.([a-z_]+)\s*}}")
+ 
+def _load(challenge_id: str) -> dict:
+    for f in LIB.rglob(f"{challenge_id}.yaml"):
+        return yaml.safe_load(f.read_text())
+    raise KeyError(f"reto no encontrado en biblioteca: {challenge_id}")
+ 
+def _fill(params: dict, node: dict) -> dict:
+    def sub(v):
+        if isinstance(v, str):
+            return _TPL.sub(lambda m: str(node.get(m[1], "")), v)
+        if isinstance(v, dict):  return {k: sub(x) for k, x in v.items()}
+        if isinstance(v, list): return [sub(x) for x in v]
+        return v
+    return sub(params)
+ 
+async def compile_campaign(plan: list[dict]) -> tuple[list[WorkUnit], list[dict]]:
+    """plan: filas del resolutor (obligation, challenge_id, node_keys)."""
+    units, unverifiable = [], []
+    for row in plan:
+        ch = _load(row["challenge_id"])
+        nodes = await get_nodes(row["node_keys"])   # props completas
+        for node in nodes:
+            kind = await system_kind(node["system_id"])
+            variant = (ch["sonda"].get("por_conector", {}).get(kind)
+                       or (ch["sonda"].get("params")
+                           if not ch["sonda"].get("por_conector") else None))
+            if variant is None:
+                unverifiable.append({"challenge": ch["id"],
+                    "node": node["key"], "system_kind": kind,
+                    "motivo": "sin variante de sonda para este conector"})
+                continue
+            units.append(WorkUnit(
+                challenge_id=ch["id"], challenge_version=ch["version"],
+                obligation=row["obligation"],
+                system_id=node["system_id"], node_key=node["key"],
+                probe={"kind": ch["sonda"]["kind"],
+                       "target": node.get("fq_name", node["name"]),
+                       "statement": _fill(variant, node).get("statement"),
+                       "params": _fill(variant, node)},
+                criterio=ch["criterio"], evidencia=ch["evidencia"],
+                severidad=ch["severidad"], muestreo=ch.get("muestreo"),
+                needs_approval=bool(ch.get("aprobacion_requerida"))))
+    # agrupar por sistema: el workflow itera sistemas en paralelo acotado
+    units.sort(key=lambda u: u.system_id)
+    return units, unverifiable
+ 
+
+ARG-043 · El workflow de campaña
+ANÁLISIS
+La campaña es un proceso de días con humanos dentro: debe sobrevivir reinicios (Temporal lo da), respetar ventanas por sistema (espera hasta la próxima ventana, no falla), reaccionar al cortacircuitos de ARG-013 (el evento de circuito abierto reprograma las unidades de ese sistema), pausarse en los puntos de control (señales, ARG-047) y dejar un historial que es en sí mismo traza de auditoría. La concurrencia se acota en dos niveles: sistemas en paralelo (por talla) y unidades en serie dentro de cada sistema (el presupuesto ya limita el ritmo; la serialización evita ráfagas).
+DISEÑO
+Workflow padre CampaignWorkflow (compila, solicita aprobaciones de arranque y de muestreo, lanza hijos por sistema, agrega resultados, dispara el cierre de evidencia de la fase 7) e hijo SystemRun (itera las unidades de su sistema: espera de ventana, sonda ARG-044, evaluación ARG-046, hallazgo ARG-048). Señales: approve(gate_id), circuit_open(system_id). El estado consultable (query) alimenta la vista en vivo de la consola.
+DESARROLLO
+services/challenge-engine/workflows/campaign.py
+"""Workflows de campaña: padre (orquesta) e hijo (un sistema)."""
+import datetime as dt
+from temporalio import workflow
+from temporalio.common import RetryPolicy
+ 
+MAX_PARALLEL_SYSTEMS = 4      # talla M (config por talla)
+ 
+@workflow.defn
+class CampaignWorkflow:
+    def __init__(self):
+        self._approved: set[str] = set()
+        self._paused_systems: set[str] = set()
+        self._progress = {"done": 0, "total": 0, "findings": 0}
+ 
+    # ---------- señales ----------
+    @workflow.signal
+    def approve(self, gate_id: str):
+        self._approved.add(gate_id)
+ 
+    @workflow.signal
+    def circuit_open(self, system_id: str):
+        self._paused_systems.add(system_id)
+ 
+    @workflow.query
+    def progress(self) -> dict:
+        return self._progress
+ 
+    async def _wait_gate(self, gate_id: str, timeout_h: int = 72):
+        await workflow.wait_condition(
+            lambda: gate_id in self._approved,
+            timeout=dt.timedelta(hours=timeout_h))
+ 
+    # ---------- ejecución ----------
+    @workflow.run
+    async def run(self, campaign_id: str) -> dict:
+        units = await workflow.execute_activity(
+            "compile_campaign_act", campaign_id,
+            start_to_close_timeout=dt.timedelta(minutes=10))
+        self._progress["total"] = len(units["units"])
+ 
+        # Punto de control 1: arranque (revisor_dpo aprueba el plan compilado)
+        await workflow.execute_activity("request_approval_act",
+            {"campaign_id": campaign_id, "gate": "arranque",
+             "units": len(units["units"]),
+             "unverifiable": units["unverifiable"]},
+            start_to_close_timeout=dt.timedelta(minutes=1))
+        await self._wait_gate(f"{campaign_id}:arranque")
+ 
+        # Punto de control 2 (condicional): unidades con sample
+        if any(u["needs_approval"] for u in units["units"]):
+            await workflow.execute_activity("request_approval_act",
+                {"campaign_id": campaign_id, "gate": "muestreo"},
+                start_to_close_timeout=dt.timedelta(minutes=1))
+            await self._wait_gate(f"{campaign_id}:muestreo")
+ 
+        # Hijos por sistema, paralelismo acotado
+        by_system: dict[str, list] = {}
+        for u in units["units"]:
+            by_system.setdefault(u["system_id"], []).append(u)
+        pending = list(by_system.items())
+        running, results = [], []
+        while pending or running:
+            while pending and len(running) < MAX_PARALLEL_SYSTEMS:
+                sid, sys_units = pending.pop(0)
+                if sid in self._paused_systems:
+                    pending.append((sid, sys_units))   # al final de la cola
+                    if len(pending) == 1: break
+                    continue
+                running.append(workflow.start_child_workflow(
+                    SystemRun.run, args=[campaign_id, sid, sys_units],
+                    id=f"{campaign_id}-{sid}"))
+            done = await workflow.wait(running, return_when="FIRST_COMPLETED")
+            for h in done:
+                r = await h
+                results.append(r)
+                self._progress["done"] += r["done"]
+                self._progress["findings"] += r["findings"]
+                running.remove(h)
+ 
+        # Cierre: dispara el sellado de campaña (fase 7)
+        await workflow.execute_activity("seal_campaign_act", campaign_id,
+            start_to_close_timeout=dt.timedelta(minutes=30),
+            retry_policy=RetryPolicy(maximum_attempts=5))
+        return {"systems": len(results), **self._progress}
+ 
+ 
+@workflow.defn
+class SystemRun:
+    @workflow.run
+    async def run(self, campaign_id: str, system_id: str,
+                  units: list[dict]) -> dict:
+        done = findings = 0
+        for u in units:
+            await workflow.execute_activity("wait_window_act", system_id,
+                start_to_close_timeout=dt.timedelta(hours=24))
+            res = await workflow.execute_activity("probe_act", u,
+                start_to_close_timeout=dt.timedelta(minutes=30),
+                retry_policy=RetryPolicy(maximum_attempts=3,
+                    non_retryable_error_types=["ReadOnlyViolation"]))
+            verdict = await workflow.execute_activity("evaluate_act",
+                {"unit": u, "probe_result": res, "campaign_id": campaign_id},
+                start_to_close_timeout=dt.timedelta(minutes=5))
+            done += 1
+            findings += 0 if verdict["conforme"] else 1
+        return {"system_id": system_id, "done": done, "findings": findings}
+ 
+
+ARG-044 · Actividades de sonda
+ANÁLISIS
+La actividad de sonda es el puente Temporal→SDK: recibe la WorkUnit inerte, obtiene el conector del sistema (caché de instancias por proceso worker, con open perezoso) y llama execute() de ARG-011 — que ya trae diario previo, presupuesto y validación de solo lectura. Las decisiones finas: los errores de presupuesto/ventana no son fallos sino esperas (se relanzan como retryable con backoff largo), la violación de solo lectura es non-retryable y crítica (algo va muy mal: se congela la unidad y se alerta), y el resultado viaja ya reducido a lo que la evidencia declaró capturar — la minimización se aplica aquí, antes de que nada toque el historial del workflow.
+DISEÑO
+Tres actividades: probe_act (la sonda), wait_window_act (consulta el presupuesto del sistema y duerme hasta ventana con heartbeat) y request_approval_act (crea la solicitud de aprobación en base de datos y notifica — la espera la hace el workflow, no la actividad). El recorte de evidencia aplica una lista blanca por clave declarada en el bloque evidencia del reto.
+DESARROLLO
+services/challenge-engine/activities/probe.py
+"""Actividades: sonda, espera de ventana y solicitud de aprobación."""
+import asyncio, datetime as dt, json
+from temporalio import activity
+from temporalio.exceptions import ApplicationError
+from argos_connector.base import ProbeSpec, ReadOnlyViolation
+from argos_connector.budget import BudgetExceeded, CircuitOpen
+from connector_registry import get_connector    # caché por system_id
+from argos_db import pool
+ 
+CAPTURE_KEYS = {"resultado": ["ok"], "recuentos": ["count", "n", "total"],
+                "hashes": ["cell_hashes", "head_sha256", "dns_sha256"],
+                "configuracion": ["rows", "security_headers", "acl"],
+                "muestra_hasheada": ["entries", "rows", "studies"]}
+ 
+def _minimize(data: dict, capturar: list[str]) -> dict:
+    allowed = {k for c in capturar for k in CAPTURE_KEYS.get(c, [])}
+    return {k: v for k, v in data.items() if k in allowed}
+ 
+@activity.defn(name="probe_act")
+async def probe_act(unit: dict) -> dict:
+    conn = await get_connector(unit["system_id"])
+    spec = ProbeSpec(**unit["probe"])
+    try:
+        res = await asyncio.to_thread(conn.execute, spec)
+    except ReadOnlyViolation as e:
+        raise ApplicationError(str(e), type="ReadOnlyViolation",
+                               non_retryable=True)
+    except (BudgetExceeded, CircuitOpen) as e:
+        raise ApplicationError(str(e), type=type(e).__name__)  # retryable
+    return {"probe_id": res.probe_id, "ok": res.ok,
+            "journal_seq": res.journal_seq,
+            "duration_ms": res.duration_ms,
+            "data": _minimize(res.data, unit["evidencia"]["capturar"])}
+ 
+@activity.defn(name="wait_window_act")
+async def wait_window_act(system_id: str):
+    conn = await get_connector(system_id)
+    while not conn.budget._in_window():
+        activity.heartbeat("esperando ventana")
+        await asyncio.sleep(300)
+ 
+@activity.defn(name="request_approval_act")
+async def request_approval_act(req: dict):
+    with pool.connection() as db:
+        db.execute("""INSERT INTO argos.approval_requests
+            (campaign_id, gate, payload, requested_at)
+            VALUES (%s,%s,%s::jsonb, now())
+            ON CONFLICT (campaign_id, gate) DO NOTHING""",
+            (req["campaign_id"], req["gate"],
+             json.dumps({k: v for k, v in req.items()
+                         if k not in ("campaign_id", "gate")})))
+        db.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+            ("system:campaign", "approval.request",
+             json.dumps({"campaign": req["campaign_id"],
+                         "gate": req["gate"]})))
+        db.commit()
+    # notificación (webhook/correo) vía ARG-079; best-effort aquí
+ 
+
+ARG-045 · Muestreo estadístico declarado
+ANÁLISIS
+Sobre poblaciones grandes (millones de ficheros, cientos de miles de historias) el censo es inviable y la honestidad exige dos cosas: calcular el tamaño muestral para el nivel de confianza configurado —proporción con corrección por población finita, el estándar de auditoría— y declarar en la evidencia que es muestra, con n, N, confianza y margen. La inferencia del veredicto también cambia: con muestreo, el criterio se evalúa sobre el límite superior del intervalo de confianza de la proporción de incumplimiento (Wilson), no sobre la puntual — ARGOS nunca absuelve por el optimismo de una muestra.
+DISEÑO
+Módulo puro: sample_size(N, confianza, margen, p=0,5) con corrección finita; wilson_upper(k, n, confianza) para el límite superior; y plan_sampling(unit, N) que decide si la unidad muestrea (población sobre umbral) y reescribe los parámetros de la sonda con el k calculado. El evaluador (ARG-046) usa wilson_upper cuando la unidad viene marcada como muestral.
+DESARROLLO
+services/challenge-engine/sampling/stats.py
+"""Muestreo de auditoría: tamaño, intervalo de Wilson, plan por unidad."""
+import math
+ 
+Z = {0.90: 1.6449, 0.95: 1.9600, 0.99: 2.5758}
+POP_THRESHOLD = 5_000       # por debajo, censo
+ 
+def sample_size(N: int, confianza: float = 0.95,
+                margen: float = 0.05, p: float = 0.5) -> int:
+    """n para estimar una proporción con corrección por población finita."""
+    z = Z[confianza]
+    n0 = (z * z * p * (1 - p)) / (margen * margen)
+    n = n0 / (1 + (n0 - 1) / N)           # corrección finita
+    return min(N, math.ceil(n))
+ 
+def wilson_upper(k: int, n: int, confianza: float = 0.95) -> float:
+    """Límite superior del intervalo de Wilson para k incumplimientos en n."""
+    if n == 0: return 1.0
+    z = Z[confianza]; phat = k / n
+    denom = 1 + z * z / n
+    centre = phat + z * z / (2 * n)
+    margin = z * math.sqrt(phat * (1 - phat) / n + z * z / (4 * n * n))
+    return min(1.0, (centre + margin) / denom)
+ 
+def plan_sampling(unit: dict, population: int) -> dict:
+    """Decide censo o muestra y reescribe la sonda; anota la declaración."""
+    cfg = unit.get("muestreo") or {}
+    conf = cfg.get("confianza", 0.95)
+    margen = cfg.get("margen", 0.05)
+    if population <= POP_THRESHOLD:
+        unit["sampling"] = {"mode": "censo", "N": population}
+        return unit
+    k = sample_size(population, conf, margen)
+    unit["probe"]["params"]["k"] = k
+    unit["sampling"] = {"mode": "muestra", "N": population, "n": k,
+                        "confianza": conf, "margen": margen}
+    return unit
+ 
+# Autoprueba rápida (pytest la formaliza):
+#   sample_size(1_000_000, 0.95, 0.05) == 385
+#   sample_size(10_000, 0.95, 0.05)    == 371
+#   wilson_upper(0, 385)  ≈ 0.0099  -> con 0 fallos en 385, p<1% al 95%
+ 
+
+ARG-046 · Evaluador determinista de criterios
+ANÁLISIS
+El evaluador es la frontera sagrada del producto materializada en código: recibe la unidad y el resultado minimizado de la sonda, y produce el veredicto de conformidad por una de dos vías cerradas — umbral inline (comparación simple sobre un campo del resultado) o delegación al paquete OPA declarado (ARG-036), con el input construido por el input_map del reto. Con muestreo, evalúa sobre el límite superior de Wilson. No hay tercera vía: ninguna rama consulta al modelo de lenguaje, y el veredicto se persiste con todo su porqué (criterio aplicado, valores, versión de reto y de ontología) porque el expediente de la fase 7 lo empaqueta tal cual.
+DISEÑO
+evaluate_act: resuelve el valor del campo (ruta con puntos sobre el dict), aplica operador o llama a OPA, ajusta por muestreo, persiste el veredicto en argos.verdicts (con journal_append) y, si no conforme, delega la apertura del hallazgo en ARG-048. La función de comparación es una tabla cerrada de operadores — sin eval, sin sorpresas.
+DESARROLLO
+services/challenge-engine/evaluator/evaluate.py
+"""Evaluador: umbral inline u OPA. Jamás un modelo. Jamás eval()."""
+import json, operator, uuid
+from temporalio import activity
+from sampling.stats import wilson_upper
+from opa_client import evaluate as opa_eval      # ARG-036
+from findings import open_finding                # ARG-048
+from argos_db import pool
+ 
+OPS = {"==": operator.eq, "!=": operator.ne, "<=": operator.le,
+       ">=": operator.ge, "<": operator.lt, ">": operator.gt}
+ 
+def _pluck(data: dict, path: str):
+    cur = data
+    for part in path.split("."):
+        cur = cur[part]
+    return cur
+ 
+@activity.defn(name="evaluate_act")
+async def evaluate_act(payload: dict) -> dict:
+    unit, res = payload["unit"], payload["probe_result"]
+    crit = unit["criterio"]
+    detail: dict = {"via": None}
+ 
+    if not res["ok"]:
+        conforme, detail = False, {"via": "error_sonda",
+                                   "error": res["data"].get("error")}
+    elif "umbral" in crit:
+        u = crit["umbral"]
+        valor = _pluck(res["data"], u["campo"])
+        # Ajuste muestral: evaluar el límite superior de incumplimiento
+        if unit.get("sampling", {}).get("mode") == "muestra" \
+           and u["campo"].endswith("count"):
+            s = unit["sampling"]
+            frac_up = wilson_upper(int(valor), s["n"], s["confianza"])
+            valor = round(frac_up * s["N"])
+            detail["ajuste_muestral"] = {"observado": _pluck(res["data"],
+                u["campo"]), "proyectado_sup": valor, **s}
+        conforme = OPS[u["operador"]](valor, u["valor"])
+        detail.update(via="umbral", campo=u["campo"], valor=valor,
+                      operador=u["operador"], esperado=u["valor"])
+    else:  # OPA
+        o = crit["opa"]
+        input_doc = {k: _pluck(res["data"], v) if isinstance(v, str)
+                        and v.startswith("$.") is False else v
+                     for k, v in o.get("input_map", {}).items()}
+        input_doc.setdefault("resultado", res["data"])
+        verdict = await opa_eval(o["paquete"], input_doc)
+        conforme = bool(verdict.get("conforme"))
+        detail.update(via="opa", paquete=o["paquete"], opa=verdict)
+ 
+    verdict_id = str(uuid.uuid7())
+    with pool.connection() as db:
+        db.execute("""INSERT INTO argos.verdicts
+            (id, campaign_id, challenge_id, challenge_version, obligation,
+             system_id, node_key, conforme, detail, probe_journal_seq)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)""",
+            (verdict_id, payload["campaign_id"], unit["challenge_id"],
+             unit["challenge_version"], unit["obligation"],
+             unit["system_id"], unit["node_key"], conforme,
+             json.dumps(detail, default=str), res["journal_seq"]))
+        db.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+            ("system:evaluator", "verdict.emit",
+             json.dumps({"verdict": verdict_id, "conforme": conforme})))
+        db.commit()
+    if not conforme and detail["via"] != "error_sonda":
+        await open_finding(payload["campaign_id"], unit, verdict_id, detail)
+    return {"verdict_id": verdict_id, "conforme": conforme}
+ 
+
+ARG-047 · Puntos de control humanos
+ANÁLISIS
+El RACI del pliego es taxativo: ARGOS ejecuta y evidencia; el cliente aprueba. Los puntos de control son la implementación: la campaña se detiene en compuertas (arranque siempre; muestreo si hay sondas de contenido; cierres configurables) hasta que un usuario con rol revisor_dpo aprueba — con doble aprobación configurable para el muestreo. La aprobación es una acción de consola que valida rol y, crucialmente, entra en el diario encadenado con el usuario, la compuerta y el resumen de lo aprobado: en la inspección, quién aprobó qué y cuándo es tan importante como qué se encontró.
+DISEÑO
+Endpoint POST /campaigns/{id}/gates/{gate}/approve (rol revisor_dpo; si la compuerta exige doble control, dos usuarios distintos), que registra en argos.approvals + diario y envía la señal approve al workflow vía cliente Temporal. La tabla approval_requests (creada por ARG-044) alimenta la bandeja de aprobaciones de la consola con el payload que resume exactamente qué se aprueba.
+DESARROLLO
+services/api/routes/approvals.py
+"""Aprobaciones: rol, doble control opcional, diario y señal Temporal."""
+import json
+from fastapi import APIRouter, Depends, HTTPException
+from temporalio.client import Client
+from argos_auth.fastapi import require_role, current_user
+from argos_db import pool
+ 
+router = APIRouter()
+DOUBLE_CONTROL_GATES = {"muestreo"}     # configurable por cliente
+ 
+@router.post("/campaigns/{cid}/gates/{gate}/approve",
+             dependencies=[Depends(require_role("revisor_dpo"))])
+async def approve(cid: str, gate: str, user=Depends(current_user)):
+    with pool.connection() as db:
+        req = db.execute("""SELECT payload FROM argos.approval_requests
+            WHERE campaign_id=%s AND gate=%s""", (cid, gate)).fetchone()
+        if not req:
+            raise HTTPException(404, "compuerta inexistente o no solicitada")
+        prev = [r[0] for r in db.execute("""SELECT approved_by
+            FROM argos.approvals WHERE campaign_id=%s AND gate=%s""",
+            (cid, gate))]
+        if user["sub"] in prev:
+            raise HTTPException(409, "ya aprobado por este usuario")
+        db.execute("""INSERT INTO argos.approvals
+            (campaign_id, gate, approved_by, approved_at)
+            VALUES (%s,%s,%s, now())""", (cid, gate, user["sub"]))
+        db.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+            (f"user:{user['sub']}", "approval.grant",
+             json.dumps({"campaign": cid, "gate": gate,
+                         "payload_resumen": req[0]})))
+        db.commit()
+        needed = 2 if gate in DOUBLE_CONTROL_GATES else 1
+        granted = len(prev) + 1
+    if granted >= needed:
+        tclient = await Client.connect("temporal.argos-core:7233")
+        handle = tclient.get_workflow_handle(f"campaign-{cid}")
+        await handle.signal("approve", f"{cid}:{gate}")
+        return {"estado": "aprobada", "aprobaciones": granted}
+    return {"estado": "pendiente_segunda_aprobacion",
+            "aprobaciones": granted, "necesarias": needed}
+ 
+
+ARG-048 · Ciclo de vida de los hallazgos
+ANÁLISIS
+Un hallazgo no es un log: es una no conformidad con dueño, severidad y camino de salida. Su ciclo: abierto → en_resolucion (el cliente trabaja) → pendiente_verificacion (el cliente declara resuelto) → cerrado_conforme (la reejecución de ARG-049 lo confirma) o reabierto (no lo confirma); con la vía excepcional aceptado_riesgo (decisión documentada del DPO con justificación y caducidad — porque negar esa vía solo produce hallazgos eternamente abiertos que nadie mira). La deduplicación por huella (reto+nodo) evita que campañas sucesivas dupliquen: la recurrencia incrementa el contador y agrava, no multiplica.
+DISEÑO
+Tabla argos.findings con huella única, contador de ocurrencias, severidad heredada del reto (escalable por recurrencia: 3 ocurrencias suben un nivel), transiciones validadas en una máquina de estados explícita y todas registradas en el diario. open_finding() la usa el evaluador; transition() la usa la consola; el evento finding.opened alimenta webhooks (ARG-079).
+DESARROLLO
+services/challenge-engine/findings/lifecycle.py
+"""Hallazgos: máquina de estados explícita, deduplicación y escalado."""
+import hashlib, json, uuid
+from argos_db import pool
+from argos_events import Bus
+ 
+TRANSITIONS = {
+    "abierto":                {"en_resolucion", "aceptado_riesgo"},
+    "en_resolucion":          {"pendiente_verificacion", "aceptado_riesgo"},
+    "pendiente_verificacion": {"cerrado_conforme", "reabierto"},
+    "reabierto":              {"en_resolucion", "aceptado_riesgo"},
+    "aceptado_riesgo":        {"reabierto"},   # al caducar la aceptación
+    "cerrado_conforme":       set(),
+}
+SEV_ORDER = ["baja", "media", "alta", "critica"]
+ 
+def _fingerprint(challenge_id: str, node_key: str) -> str:
+    return hashlib.sha256(f"{challenge_id}|{node_key}".encode()).hexdigest()[:24]
+ 
+async def open_finding(campaign_id: str, unit: dict,
+                       verdict_id: str, detail: dict):
+    fp = _fingerprint(unit["challenge_id"], unit["node_key"])
+    with pool.connection() as db:
+        row = db.execute("""SELECT id, occurrences, severity, status
+            FROM argos.findings WHERE fingerprint=%s""", (fp,)).fetchone()
+        if row and row[3] not in ("cerrado_conforme",):
+            occ = row[1] + 1
+            sev = row[2]
+            if occ >= 3 and SEV_ORDER.index(sev) < 3:
+                sev = SEV_ORDER[SEV_ORDER.index(sev) + 1]   # escalado
+            db.execute("""UPDATE argos.findings SET occurrences=%s,
+                severity=%s, last_verdict=%s, updated_at=now()
+                WHERE id=%s""", (occ, sev, verdict_id, row[0]))
+            fid = row[0]
+        else:
+            fid = str(uuid.uuid7())
+            db.execute("""INSERT INTO argos.findings
+                (id, fingerprint, campaign_id, challenge_id, obligation,
+                 system_id, node_key, severity, status, occurrences,
+                 last_verdict, detail)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,'abierto',1,%s,%s::jsonb)""",
+                (fid, fp, campaign_id, unit["challenge_id"],
+                 unit["obligation"], unit["system_id"], unit["node_key"],
+                 unit["severidad"], verdict_id, json.dumps(detail, default=str)))
+        db.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+            ("system:findings", "finding.open",
+             json.dumps({"finding": fid, "fingerprint": fp})))
+        db.commit()
+    bus = Bus("findings"); await bus.connect()
+    await bus.publish("argos.challenge.finding_opened",
+                      "challenge.finding_opened.v1",
+                      {"finding_id": fid, "severity": unit["severidad"],
+                       "campaign_id": campaign_id})
+ 
+def transition(finding_id: str, to: str, actor: str, note: str = "",
+               risk_expiry: str | None = None):
+    with pool.connection() as db:
+        cur = db.execute("SELECT status FROM argos.findings WHERE id=%s",
+                         (finding_id,)).fetchone()
+        if not cur: raise KeyError("hallazgo inexistente")
+        if to not in TRANSITIONS[cur[0]]:
+            raise ValueError(f"transición ilegal {cur[0]} -> {to}")
+        if to == "aceptado_riesgo" and not (note and risk_expiry):
+            raise ValueError("aceptar riesgo exige justificación y caducidad")
+        db.execute("""UPDATE argos.findings SET status=%s,
+            risk_note=%s, risk_expiry=%s, updated_at=now() WHERE id=%s""",
+            (to, note or None, risk_expiry, finding_id))
+        db.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+            (actor, "finding.transition",
+             json.dumps({"finding": finding_id, "from": cur[0], "to": to})))
+        db.commit()
+ 
+
+ARG-049 · Reejecución selectiva y verificación de subsanación
+ANÁLISIS
+El cierre de un hallazgo no lo declara el cliente: lo confirma el mismo reto que lo abrió, reejecutado sobre el mismo nodo — misma sonda, mismo criterio, misma versión de reto (aunque la biblioteca haya avanzado: la subsanación se verifica contra lo que se midió, y el reto nuevo ya la cubrirá en la próxima campaña ordinaria). Esta simetría es la que hace creíble la promesa comercial de que la segunda credencial cuesta una fracción: no se relanza la campaña, se relanzan exactamente las unidades no conformes.
+DISEÑO
+Workflow RemediationRun: toma los hallazgos en pendiente_verificacion (de una campaña o sueltos), reconstruye cada WorkUnit desde el veredicto original (que guardó reto+versión+nodo+sonda), reusa las actividades de ARG-044/046 y transiciona el hallazgo según el nuevo veredicto — cerrado_conforme o reabierto con el contador de ocurrencias intacto (la reapertura no es recurrencia nueva). El resultado alimenta la credencial de subsanación de la fase 7.
+DESARROLLO
+services/challenge-engine/workflows/remediation.py
+"""Reejecución de subsanación: mismos retos, mismos nodos, misma versión."""
+import datetime as dt, json
+from temporalio import workflow, activity
+from temporalio.common import RetryPolicy
+from argos_db import pool
+from findings.lifecycle import transition
+ 
+@activity.defn(name="load_pending_units_act")
+async def load_pending_units_act(scope: dict) -> list[dict]:
+    """Reconstruye WorkUnits desde los veredictos originales."""
+    q = """SELECT f.id AS finding_id, v.challenge_id, v.challenge_version,
+                  v.obligation, v.system_id, v.node_key, v.detail
+           FROM argos.findings f
+           JOIN argos.verdicts v ON v.id = f.last_verdict
+           WHERE f.status = 'pendiente_verificacion'"""
+    args: tuple = ()
+    if scope.get("campaign_id"):
+        q += " AND f.campaign_id = %s"; args = (scope["campaign_id"],)
+    units = []
+    with pool.connection() as db:
+        for r in db.execute(q, args):
+            # la sonda original se recupera de la biblioteca por id+versión
+            from compiler.compile import _load, _fill
+            ch = _load(r[1])                      # id
+            assert ch["version"] == r[2], \
+                f"versión {r[2]} archivada: usar library/archive/"
+            units.append({"finding_id": r[0], "challenge_id": r[1],
+                "challenge_version": r[2], "obligation": r[3],
+                "system_id": r[4], "node_key": r[5],
+                "probe": json.loads(r[6]).get("probe_original")
+                         or {"kind": ch["sonda"]["kind"],
+                             "target": r[5], "params": ch["sonda"]
+                             .get("params", {})},
+                "criterio": ch["criterio"], "evidencia": ch["evidencia"],
+                "severidad": ch["severidad"], "muestreo": ch.get("muestreo"),
+                "needs_approval": False})
+    return units
+ 
+@workflow.defn
+class RemediationRun:
+    @workflow.run
+    async def run(self, scope: dict) -> dict:
+        units = await workflow.execute_activity(
+            load_pending_units_act, scope,
+            start_to_close_timeout=dt.timedelta(minutes=5))
+        closed = reopened = 0
+        for u in units:
+            res = await workflow.execute_activity("probe_act", u,
+                start_to_close_timeout=dt.timedelta(minutes=30),
+                retry_policy=RetryPolicy(maximum_attempts=3))
+            verdict = await workflow.execute_activity("evaluate_act",
+                {"unit": u, "probe_result": res,
+                 "campaign_id": scope.get("campaign_id", "remediacion")},
+                start_to_close_timeout=dt.timedelta(minutes=5))
+            await workflow.execute_activity("transition_finding_act",
+                {"finding_id": u["finding_id"],
+                 "to": "cerrado_conforme" if verdict["conforme"]
+                       else "reabierto"},
+                start_to_close_timeout=dt.timedelta(minutes=1))
+            closed += verdict["conforme"]; reopened += not verdict["conforme"]
+        return {"verificados": len(units), "cerrados": closed,
+                "reabiertos": reopened}
+ 
+
+ARG-050 · La biblioteca de retos empaquetada
+ANÁLISIS
+La biblioteca es contenido con el mismo estatuto que la ontología: versionada en Git, validada por la CI (ARG-041 lint + ARG-037 trazabilidad), publicada firmada junto al bundle de ontología (ARG-040 empaqueta ambas) y archivada por versión (ARG-049 necesita versiones antiguas). Su organización refleja el negocio: familias transversales (ret-, acc-, cns-, ia-, ds-, sec-, coh-) y carpetas por vertical para los retos específicos. Aquí se entregan dos retos reales completos que ejercitan las dos vías del criterio — el resto de la biblioteca de GA (300) se fabrica con esta plantilla y el generador asistido de la fase 6.
+DISEÑO
+Estructura library/challenges/{familia}/{id}.yaml + archive/{version}/ congelado en cada publicación. Los dos retos ejemplo: ret-001 (retención en tabla, criterio OPA con el calendario del cliente — el reto estrella de sanidad) y sec-cifrado-reposo (umbral inline sobre check_config — el enlace con la obligación OBL-RGPD-32-1 de la fase 4).
+DESARROLLO
+library/challenges/retencion/ret-001.yaml
+id: ret-001
+version: "1.2"
+titulo: Retención efectiva en tabla frente a calendario declarado
+objetivo:
+  obligacion: OBL-RGPD-5-1-e
+selector:
+  asset_class: AC-dato-personal-almacenado
+sonda:
+  kind: count
+  por_conector:
+    rdbms.postgresql:
+      statement: >-
+        SELECT COUNT(*) FROM {{nodo.fq_table}}
+        WHERE {{nodo.fecha_referencia}} < now() - make_interval(days =>
+        :plazo_dias)
+      binds: { plazo_dias: "{{nodo.plazo_dias}}" }
+    files:
+      glob: "*"
+      older_than_years: "{{nodo.plazo_anios}}"
+criterio:
+  opa:
+    paquete: argos.retencion
+    input_map:
+      categoria: "{{nodo.categoria}}"
+      tratamiento: "{{nodo.tratamiento_id}}"
+      fuera_de_plazo: count
+muestreo: { confianza: 0.95, margen: 0.05 }
+evidencia:
+  capturar: [recuentos]
+  minimizacion: >-
+    Solo el recuento de registros fuera de plazo y los parámetros del
+    cálculo; ningún identificador ni contenido abandona el sistema origen.
+severidad: alta
+ 
+library/challenges/seguridad/sec-cifrado-reposo.yaml
+id: sec-cifrado-reposo
+version: "1.0"
+titulo: Cifrado en reposo verificado en sistemas con categorías especiales
+objetivo:
+  obligacion: OBL-RGPD-32-1
+selector:
+  asset_class: AC-salud-almacenado
+sonda:
+  kind: check_config
+  por_conector:
+    rdbms.postgresql: { params: { check: encryption_at_rest } }
+    rdbms.mssql:
+      statement: >-
+        SELECT db_name(database_id) AS db, encryption_state
+        FROM sys.dm_database_encryption_keys
+    files: { params: { check: volume_encryption } }
+criterio:
+  umbral:
+    campo: rows.0.encryption_state    # 3 = cifrada (TDE)
+    operador: "=="
+    valor: 3
+evidencia:
+  capturar: [configuracion]
+  minimizacion: >-
+    Solo parámetros de configuración de cifrado; ninguna clave, ninguna
+    cadena de conexión, ningún dato de negocio.
+severidad: critica
+ 
+library/challenges/README.md — organización y ciclo
+# Biblioteca de retos ARGOS
+ 
+## Familias transversales
+ret-*  retención y supresión      acc-*  accesos y perímetros
+cns-*  consentimiento             ia-*   gobierno de la IA
+ds-*   espacios de datos          sec-*  medidas de seguridad
+coh-*  coherencia (delegan en SHACL, ARG-034)
+ 
+## Verticales
+sanidad/  aapp/  farma/  seguros/   (retos específicos de sector)
+ 
+## Ciclo de vida
+1. Alta:    plantilla + challenge_lint + trazabilidad (CI, ARG-041/037)
+2. Publica: junto a la ontología, bundle firmado (ARG-040)
+3. Archiva: copia congelada en archive/<version>/ (la usa ARG-049)
+4. Retira:  version fuera de soporte -> solo lectura en archive/
+ 
+## Regla de versionado de un reto
+- parche: corrige sonda sin cambiar criterio (1.0 -> 1.1)
+- menor:  endurece criterio o amplía conectores (1.x -> 2.0 NO: ver mayor)
+- mayor:  cambia el criterio o la evidencia -> nuevo numero, el anterior
+          se archiva; los hallazgos abiertos se verifican con el archivado.
+ 
+
+Interfaces que esta fase exporta
+Componente
+Interfaz exportada
+Consumidores
+ARG-041
+reto.schema.json + challenge_lint — la ley del DSL
+Equipo normativo, generador asistido (ARG-056), CI
+ARG-042
+compile_campaign() → WorkUnits inertes y auditables
+ARG-043; consola (vista previa del plan para el DPO)
+ARG-043/044
+CampaignWorkflow (señales approve/circuit_open, query progress) + actividades
+Fase 8 (vista en vivo), ARG-013 (reprogramación)
+ARG-045
+sample_size/wilson_upper/plan_sampling
+ARG-046; la declaración muestral viaja al expediente
+ARG-046
+argos.verdicts con detalle completo y ajuste muestral
+Fase 7: el expediente empaqueta veredictos tal cual
+ARG-047
+Compuertas con doble control + argos.approvals en diario
+Consola (bandeja), inspección (quién aprobó qué)
+ARG-048/049
+Máquina de estados de hallazgos + RemediationRun
+Consola (triaje), fase 7 (credencial de subsanación), webhooks
+ARG-050
+Biblioteca versionada con archive/ + 2 retos patrón
+Las 300 de GA; ARG-049 (versiones congeladas)
+
+Estado del programa: ARGOS ya reta: compila campañas auditables antes de ejecutarlas, respeta ventanas y cede el paso cuando el sistema del cliente sufre, se detiene ante el DPO donde debe, mide con estadística de auditoría declarada, veredicta solo con reglas deterministas y verifica las subsanaciones con el mismo metro que midió el problema. Las fases 6 y 7 completan el ciclo: la IA que asiste sin decidir, y la cadena de evidencia que convierte cada campaña en credencial.

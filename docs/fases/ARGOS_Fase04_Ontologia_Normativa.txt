@@ -1,0 +1,793 @@
+ULLSWATER INVESTMENTS
+ARGOS · Programa de ingeniería en 10 fases
+FASE 4
+Ontología normativa — Componentes 31 a 40
+El primer activo propietario de ARGOS: el esquema OWL de los tres planos (norma, aplicabilidad, verificación), la carga versionada de normas desde Git, las formas SHACL, las políticas ODRL 2.2 de los espacios de datos, las reglas OPA/Rego, la matriz de trazabilidad obligación-reto, el flujo editorial jurista-ingeniero, el resolutor de aplicabilidad y la publicación firmada
+Documento técnico 4 de 10 · Madrid, septiembre de 2026 · Versión 1.0 · Confidencial
+
+Índice
+ TOC \h \u \z \t "Heading 1,1,"
+
+
+0. La capa C3 en conjunto
+La ontología es la traducción del paquete europeo de datos a un modelo que una máquina evalúa, y su arquitectura intelectual son tres planos enlazados: el plano normativo (qué dice la norma: normas → artículos → obligaciones, con vigencia versionada), el plano de aplicabilidad (a qué clase de activo del grafo aplica cada obligación) y el plano de verificación (qué reto de la biblioteca comprueba cada obligación). El principio de diseño que gobierna la fase: la ontología es contenido, no código — cambia por publicación editorial firmada (ARG-038, ARG-040), jamás por despliegue de software, porque la norma cambia más deprisa que las releases y porque un supervisor debe poder preguntar «¿qué versión de la obligación aplicasteis el 3 de marzo?» y recibir respuesta exacta.
+El flujo de la capa: los juristas editan fuentes Turtle en Git (ARG-032) → la CI editorial valida coherencia (ARG-038) → la publicación firma el bundle (ARG-040) → el appliance lo carga en su almacén RDF (ARG-032) → el resolutor (ARG-039) cruza ontología y grafo para responder «qué aplica a qué» → SHACL (ARG-034) valida formas declarativas, ODRL (ARG-035) evalúa políticas de espacios de datos y OPA (ARG-036) las reglas operativas → y la matriz (ARG-037) garantiza que ninguna obligación quede sin reto ni ningún reto sin obligación.
+
+ARG-031 · Esquema OWL de los tres planos
+ANÁLISIS
+Se evaluó modelar las obligaciones en tablas relacionales (simple, pero incapaz de expresar jerarquías de conceptos, equivalencias entre marcos y razonamiento de subsunción: «toda obligación sobre categoría especial aplica también al dato de salud») frente a RDF/OWL (expresividad exacta, estándar W3C, herramientas maduras, y el mismo idioma que ODRL y los vocabularios Gaia-X). Se elige OWL con perfil deliberadamente ligero (jerarquías, propiedades, sin razonadores DL completos en producción: el razonamiento costoso se hace en la CI editorial y se materializa). El vocabulario propio se declara bajo el espacio de nombres argos: y reutiliza DPV (Data Privacy Vocabulary del W3C) para categorías de datos, ELI para identificar normas europeas y ODRL para políticas.
+DISEÑO
+Clases núcleo: Norm (con identificador ELI y vigencia), Article, Obligation (la unidad atómica: qué se debe, con severidad de incumplimiento), AssetClass (el puente al grafo: se corresponde con etiquetas+categorías de ARG-021), Challenge (referencia a la biblioteca, el puente a C4) y Verification (la terna obligación-clase-reto). Propiedades: derivesFrom (obligación→artículo), appliesTo (obligación→clase de activo), verifiedBy (obligación→reto), supersedes (versionado), equivalentTo (cruces entre marcos: la medida ENS que satisface el artículo 32). El fichero núcleo cabe en una página y es la constitución del activo.
+DESARROLLO
+library/ontology/core/argos-core.ttl
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix dpv:   <https://w3id.org/dpv#> .
+@prefix eli:   <http://data.europa.eu/eli/ontology#> .
+@prefix odrl:  <http://www.w3.org/ns/odrl/2/> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+ 
+argos: a owl:Ontology ;
+  rdfs:label "ARGOS Core Ontology"@es ;
+  owl:versionInfo "1.0.0" .
+ 
+### ----- Plano normativo -----
+argos:Norm a owl:Class ;
+  rdfs:label "Norma"@es .
+argos:Article a owl:Class ;
+  rdfs:label "Artículo"@es .
+argos:Obligation a owl:Class ;
+  rdfs:label "Obligación verificable"@es .
+ 
+argos:eli          a owl:DatatypeProperty ; rdfs:domain argos:Norm .
+argos:inForceFrom  a owl:DatatypeProperty ; rdfs:range xsd:date .
+argos:inForceUntil a owl:DatatypeProperty ; rdfs:range xsd:date .
+argos:derivesFrom  a owl:ObjectProperty ;
+  rdfs:domain argos:Obligation ; rdfs:range argos:Article .
+argos:partOf       a owl:ObjectProperty ;
+  rdfs:domain argos:Article ;   rdfs:range argos:Norm .
+argos:severity     a owl:DatatypeProperty ;
+  rdfs:comment "critica | alta | media | baja"@es .
+argos:supersedes   a owl:ObjectProperty ;
+  rdfs:domain argos:Obligation ; rdfs:range argos:Obligation .
+argos:equivalentTo a owl:ObjectProperty , owl:SymmetricProperty ;
+  rdfs:comment "Cruce entre marcos (p.ej. medida ENS <-> art. 32)"@es .
+ 
+### ----- Plano de aplicabilidad -----
+argos:AssetClass a owl:Class ;
+  rdfs:label "Clase de activo del grafo"@es .
+argos:graphLabel    a owl:DatatypeProperty .   # Column, Table, AISystem...
+argos:dataCategory  a owl:ObjectProperty ;
+  rdfs:range dpv:PersonalData .                # reutiliza DPV
+argos:appliesTo a owl:ObjectProperty ;
+  rdfs:domain argos:Obligation ; rdfs:range argos:AssetClass .
+ 
+### ----- Plano de verificación -----
+argos:Challenge a owl:Class ;
+  rdfs:label "Reto de la biblioteca"@es .
+argos:challengeId a owl:DatatypeProperty .     # id YAML en library/challenges
+argos:verifiedBy a owl:ObjectProperty ;
+  rdfs:domain argos:Obligation ; rdfs:range argos:Challenge .
+ 
+library/ontology/norms/rgpd/art5-1e.ttl — una obligación real
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n:     <https://ns.argos.eu/norms/> .
+@prefix dpv:   <https://w3id.org/dpv#> .
+ 
+n:RGPD a argos:Norm ;
+  argos:eli "http://data.europa.eu/eli/reg/2016/679/oj" ;
+  argos:inForceFrom "2018-05-25"^^xsd:date .
+ 
+n:RGPD-5 a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 5. Principios"@es .
+ 
+n:OBL-RGPD-5-1-e a argos:Obligation ;
+  rdfs:label "Limitación del plazo de conservación"@es ;
+  argos:derivesFrom n:RGPD-5 ;
+  argos:severity "alta" ;
+  argos:appliesTo n:AC-dato-personal-almacenado ;
+  argos:verifiedBy n:CH-retencion-tabla , n:CH-retencion-ficheros .
+ 
+n:AC-dato-personal-almacenado a argos:AssetClass ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory dpv:PersonalData .
+ 
+n:CH-retencion-tabla    a argos:Challenge ; argos:challengeId "ret-001" .
+n:CH-retencion-ficheros a argos:Challenge ; argos:challengeId "ret-002" .
+ 
+
+ARG-032 · Almacén RDF y carga versionada
+ANÁLISIS
+El appliance necesita consultar la ontología con SPARQL sin añadir otro servidor (un triplestore dedicado como Fuseki sería el cuarto almacén). El análisis de volumetría lo permite: la ontología completa de GA rondará 50-100 mil triples —minúsculo—, así que rdflib con persistencia en PostgreSQL (una tabla de quads por versión de bundle) da SPARQL completo en proceso con coste operativo cero. La regla de versionado: cada bundle publicado carga en un grafo nombrado propio (urn:argos:ontology:1.4.0) y nunca se sobreescribe — la pregunta del supervisor («¿qué versión aplicaba en marzo?») se responde consultando el grafo nombrado vigente en esa fecha.
+DISEÑO
+Tabla argos.ontology_bundles (versión, hash, firma verificada, cargado, vigente_desde) y argos.ontology_quads (bundle, s, p, o, con índices spo/pos). El cargador verifica la firma del bundle (ARG-040), parsea los .ttl con rdflib, materializa las inferencias baratas precalculadas en la CI (cierre de subclases) e inserta por lotes. Un objeto OntologyStore expone sparql(query, version=None) donde None resuelve a la versión vigente.
+DESARROLLO
+services/ontology/store/loader.py
+"""Carga versionada de bundles de ontología en PostgreSQL."""
+import hashlib, io, json, tarfile
+import rdflib
+from argos_db import pool
+from .signing import verify_bundle    # ARG-040
+ 
+def load_bundle(bundle_bytes: bytes) -> str:
+    manifest = verify_bundle(bundle_bytes)      # lanza si firma inválida
+    version = manifest["version"]
+    g = rdflib.ConjunctiveGraph()
+    with tarfile.open(fileobj=io.BytesIO(bundle_bytes)) as tar:
+        for m in tar.getmembers():
+            if m.name.endswith(".ttl"):
+                g.parse(io.BytesIO(tar.extractfile(m).read()), format="turtle")
+    rows = [(version, str(s), str(p), o.n3()) for s, p, o in g]
+    with pool.connection() as conn:
+        conn.execute("""INSERT INTO argos.ontology_bundles
+            (version, sha256, quads, loaded_at, in_force_from)
+            VALUES (%s,%s,%s, now(), now())
+            ON CONFLICT (version) DO NOTHING""",
+            (version, hashlib.sha256(bundle_bytes).hexdigest(), len(rows)))
+        with conn.cursor().copy(
+            "COPY argos.ontology_quads (bundle, s, p, o) FROM STDIN") as cp:
+            for r in rows:
+                cp.write_row(r)
+        conn.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+            ("system:ontology", "ontology.load",
+             json.dumps({"version": version, "quads": len(rows)})))
+        conn.commit()
+    return version
+ 
+services/ontology/store/store.py
+"""OntologyStore: SPARQL en proceso sobre el bundle vigente."""
+import functools
+import rdflib
+from argos_db import pool
+ 
+class OntologyStore:
+    def __init__(self, version: str | None = None):
+        self.version = version or self._current()
+        self.g = self._load_graph(self.version)
+ 
+    @staticmethod
+    def _current() -> str:
+        with pool.connection() as conn:
+            row = conn.execute("""SELECT version FROM argos.ontology_bundles
+                ORDER BY in_force_from DESC LIMIT 1""").fetchone()
+        if not row:
+            raise RuntimeError("ninguna ontología cargada")
+        return row[0]
+ 
+    @staticmethod
+    @functools.lru_cache(maxsize=4)     # las 4 últimas versiones en memoria
+    def _load_graph(version: str) -> rdflib.Graph:
+        g = rdflib.Graph()
+        with pool.connection() as conn:
+            for s, p, o in conn.execute(
+                "SELECT s, p, o FROM argos.ontology_quads WHERE bundle=%s",
+                (version,)):
+                g.add((rdflib.URIRef(s), rdflib.URIRef(p),
+                       rdflib.util.from_n3(o)))
+        return g
+ 
+    def sparql(self, query: str, **binds):
+        return list(self.g.query(query, initBindings={
+            k: rdflib.URIRef(v) if v.startswith("http") else rdflib.Literal(v)
+            for k, v in binds.items()}))
+ 
+
+ARG-033 · Plano de aplicabilidad: de AssetClass a selector
+ANÁLISIS
+La ontología habla de clases abstractas (dato personal almacenado, sistema de IA de alto riesgo) y el grafo habla de nodos concretos; el plano de aplicabilidad es el diccionario bilingüe. La tentación es codificar la correspondencia en Python — error: quedaría fuera del ciclo editorial y de la trazabilidad. La correspondencia se declara en la propia ontología: cada AssetClass lleva su selector materializado (el JSON que ARG-029 resolveSelector entiende), escrito por el ingeniero normativo y validado por la CI contra la lista blanca de campos. Así «a qué aplica la obligación X» es una consulta SPARQL seguida de una llamada GraphQL: dos capas, cero código ad hoc.
+DISEÑO
+Propiedad argos:selectorJson sobre AssetClass con el selector literal; convención de nombres AC-* ; y las clases de arranque del vertical: dato personal almacenado, categoría especial de salud, columna sin clasificar, tabla desaparecida del inventario, sistema de IA pendiente, flujo transfronterizo. El resolutor (ARG-039) las consume; aquí se define el contrato y las clases fundacionales.
+DESARROLLO
+library/ontology/asset-classes/base.ttl
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n:     <https://ns.argos.eu/norms/> .
+@prefix dpv:   <https://w3id.org/dpv#> .
+ 
+argos:selectorJson a owl:DatatypeProperty ;
+  rdfs:comment "Selector JSON para resolveSelector (ARG-029)"@es .
+ 
+n:AC-dato-personal-almacenado a argos:AssetClass ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory dpv:PersonalData ;
+  argos:selectorJson """{"label":"Column",
+    "category":"dato", "min_confidence":0.85}""" .
+ 
+n:AC-salud-almacenado a argos:AssetClass ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory dpv:HealthData ;
+  argos:selectorJson """{"label":"Column",
+    "category":"categoria_especial.salud", "min_confidence":0.85}""" .
+ 
+n:AC-columna-sin-clasificar a argos:AssetClass ;
+  argos:graphLabel "Column" ;
+  argos:selectorJson """{"label":"Column", "category":null}""" .
+ 
+n:AC-ia-pendiente a argos:AssetClass ;
+  argos:graphLabel "AISystem" ;
+  argos:selectorJson """{"label":"AISystem",
+    "name_like":".*", "missing":false}""" .
+ 
+n:AC-tabla-desaparecida a argos:AssetClass ;
+  argos:graphLabel "Table" ;
+  argos:selectorJson """{"label":"Table", "missing":true}""" .
+ 
+
+ARG-034 · Motor de formas SHACL
+ANÁLISIS
+Una familia de obligaciones no reta sistemas del cliente sino la coherencia del propio conocimiento: todo tratamiento debe tener base jurídica, todo sistema con datos especiales debe estar declarado en algún tratamiento, toda IA confirmada debe tener clasificación de riesgo. Son validaciones de forma sobre el grafo+ontología, y SHACL es su lenguaje estándar: declarativo, editable por el equipo normativo y ejecutable con pyshacl. El truco de integración: las formas validan un grafo RDF, así que el motor exporta la porción relevante del grafo AGE a triples efímeros con un mapeo fijo — la validación corre en memoria y el resultado se traduce a hallazgos.
+DISEÑO
+Mapeo AGE→RDF de solo tres pasos (nodo→recurso urn:argos:node:<key>, etiqueta→rdf:type, propiedades y aristas→predicados argos:), formas en library/ontology/shapes/*.ttl con severidad SHACL alineada a la del producto, y el ejecutor que corre pyshacl y emite un hallazgo por resultado de validación con el foco (el nodo) y la forma incumplida — el reto tipo 'coherencia' de la fase 5 delega aquí.
+DESARROLLO
+library/ontology/shapes/tratamientos.ttl
+@prefix sh:    <http://www.w3.org/ns/shacl#> .
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix g:     <urn:argos:graph:> .
+ 
+# Todo Treatment debe declarar base jurídica y plazo
+g:TreatmentShape a sh:NodeShape ;
+  sh:targetClass g:Treatment ;
+  sh:property [ sh:path g:legal_basis ; sh:minCount 1 ;
+                sh:severity sh:Violation ;
+                sh:message "Tratamiento sin base jurídica declarada"@es ] ;
+  sh:property [ sh:path g:retention ;   sh:minCount 1 ;
+                sh:severity sh:Warning ;
+                sh:message "Tratamiento sin plazo de conservación"@es ] .
+ 
+# Todo System que contiene salud debe estar en algún Treatment
+g:SystemHealthShape a sh:NodeShape ;
+  sh:targetClass g:SystemConSalud ;    # clase derivada en la exportación
+  sh:property [ sh:path g:declared_in ; sh:minCount 1 ;
+                sh:severity sh:Violation ;
+                sh:message "Sistema con datos de salud fuera del registro de actividades"@es ] .
+ 
+# Toda AISystem confirmada debe tener clasificación de riesgo
+g:AIShape a sh:NodeShape ;
+  sh:targetClass g:AISystemConfirmada ;
+  sh:property [ sh:path g:risk_class ; sh:minCount 1 ;
+                sh:in ("prohibida" "alto" "limitado" "minimo") ;
+                sh:severity sh:Violation ;
+                sh:message "IA confirmada sin clasificación AI Act"@es ] .
+ 
+services/ontology/shacl/runner.py
+"""Ejecutor SHACL: exporta grafo AGE -> RDF efímero, valida, emite hallazgos."""
+import rdflib
+from pyshacl import validate
+from graph.cypher import cypher
+ 
+G = rdflib.Namespace("urn:argos:graph:")
+N = rdflib.Namespace("urn:argos:node:")
+ 
+EXPORTS = {  # qué porción del grafo alimenta cada validación
+  "treatments": """
+    MATCH (t:Treatment)
+    OPTIONAL MATCH (s:System)-[:DECLARED_IN]->(t)
+    RETURN t.id AS id, t.legal_basis AS lb, t.retention AS ret,
+           collect(s.id) AS systems""",
+  "health_systems": """
+    MATCH (s:System)-[:CONTAINS*2]->(:Table)-[:CONTAINS]->
+          (:Column)-[:CLASSIFIED_AS]->(c:Category)
+    WHERE c.name STARTS WITH 'categoria_especial.salud'
+    OPTIONAL MATCH (s)-[:DECLARED_IN]->(tr:Treatment)
+    RETURN DISTINCT s.id AS id, collect(tr.id) AS treatments""",
+}
+ 
+def build_data_graph() -> rdflib.Graph:
+    g = rdflib.Graph()
+    for r in cypher(EXPORTS["treatments"],
+                    cols="id agtype, lb agtype, ret agtype, systems agtype"):
+        n = N[str(r["id"])]
+        g.add((n, rdflib.RDF.type, G.Treatment))
+        if r["lb"]:  g.add((n, G.legal_basis, rdflib.Literal(r["lb"])))
+        if r["ret"]: g.add((n, G.retention,   rdflib.Literal(r["ret"])))
+    for r in cypher(EXPORTS["health_systems"],
+                    cols="id agtype, treatments agtype"):
+        n = N[str(r["id"])]
+        g.add((n, rdflib.RDF.type, G.SystemConSalud))
+        for t in (r["treatments"] or []):
+            if t: g.add((n, G.declared_in, N[str(t)]))
+    return g
+ 
+def run_shapes(shapes_ttl: str) -> list[dict]:
+    data = build_data_graph()
+    shapes = rdflib.Graph().parse(data=shapes_ttl, format="turtle")
+    _, report, _ = validate(data, shacl_graph=shapes, inference="none")
+    findings = []
+    for res in report.subjects(rdflib.RDF.type,
+            rdflib.URIRef("http://www.w3.org/ns/shacl#ValidationResult")):
+        get = lambda p: report.value(res, rdflib.URIRef(
+            "http://www.w3.org/ns/shacl#" + p))
+        findings.append({
+            "node": str(get("focusNode")).removeprefix("urn:argos:node:"),
+            "message": str(get("resultMessage")),
+            "severity": str(get("resultSeverity")).rsplit("#", 1)[-1].lower(),
+        })
+    return findings
+ 
+
+ARG-035 · Políticas ODRL 2.2 de espacios de datos
+ANÁLISIS
+En los espacios de datos (Gaia-X, EHDS, Catena-X) las condiciones de uso viajan como políticas ODRL: permisos con restricciones (propósito, tiempo, ámbito) y deberes (borrar tras N días, notificar, atribuir). ARGOS necesita leer exactamente ese formato —el que el conector EDC negocia (ARG-070)— y traducir cada regla a algo verificable: una restricción de retención se convierte en un reto de la familia ret-*; una prohibición de redistribución, en la vigilancia de flujos de ARG-027 sobre el activo recibido. La pieza es un parser del perfil acotado que los espacios reales usan (no ODRL completo, que es enorme) y un traductor regla→plantilla de reto.
+DISEÑO
+Modelo de datos Policy/Rule/Constraint fiel al JSON-LD de ODRL; parser con validación del perfil soportado (leftOperands: purpose, elapsedTime, dateTime, spatial; deberes: delete, notify); y el traductor to_challenges() que produce especificaciones de reto parametrizadas con el activo del espacio como objetivo. Lo no soportado no se ignora: genera un hallazgo 'política no verificable automáticamente' — la honestidad del producto también aquí.
+DESARROLLO
+services/ontology/odrl/parser.py
+"""Parser ODRL 2.2 (perfil espacios de datos) y traductor a retos."""
+import dataclasses as dc, re
+ 
+SUPPORTED_LEFT = {"purpose", "elapsedTime", "dateTime", "spatial"}
+SUPPORTED_DUTIES = {"delete", "notify"}
+ 
+@dc.dataclass
+class Constraint:
+    left: str; op: str; right: str
+ 
+@dc.dataclass
+class Rule:
+    kind: str                 # permission | prohibition | duty
+    action: str
+    constraints: list[Constraint]
+ 
+@dc.dataclass
+class Policy:
+    uid: str
+    target: str               # asset del espacio (URN)
+    rules: list[Rule]
+    unsupported: list[str]
+ 
+def parse(jsonld: dict) -> Policy:
+    rules, unsupported = [], []
+    for kind in ("permission", "prohibition", "obligation"):
+        for r in jsonld.get(kind, []):
+            cs = []
+            for c in r.get("constraint", []):
+                left = c["leftOperand"].rsplit(":", 1)[-1]
+                if left not in SUPPORTED_LEFT:
+                    unsupported.append(f"{kind}:{left}")
+                    continue
+                cs.append(Constraint(left, c["operator"].rsplit(":", 1)[-1],
+                                     str(c["rightOperand"])))
+            action = r["action"] if isinstance(r["action"], str) \
+                     else r["action"]["id"]
+            rules.append(Rule("duty" if kind == "obligation" else kind,
+                              action.rsplit(":", 1)[-1], cs))
+    return Policy(uid=jsonld["uid"], target=jsonld["target"],
+                  rules=rules, unsupported=unsupported)
+ 
+ISO_DUR = re.compile(r"P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?")
+def _days(iso: str) -> int:
+    y, m, d = (int(x or 0) for x in ISO_DUR.fullmatch(iso).groups())
+    return y * 365 + m * 30 + d
+ 
+def to_challenges(pol: Policy) -> list[dict]:
+    """Traduce reglas verificables a especificaciones de reto (fase 5)."""
+    out = []
+    for r in pol.rules:
+        if r.kind == "duty" and r.action == "delete":
+            dur = next((c.right for c in r.constraints
+                        if c.left == "elapsedTime"), None)
+            if dur:
+                out.append({"template": "ds-retencion-activo",
+                            "params": {"asset": pol.target,
+                                       "max_days": _days(dur)},
+                            "policy_uid": pol.uid})
+        if r.kind == "permission" and any(c.left == "purpose"
+                                          for c in r.constraints):
+            purposes = [c.right for c in r.constraints if c.left == "purpose"]
+            out.append({"template": "ds-proposito-uso",
+                        "params": {"asset": pol.target,
+                                   "allowed_purposes": purposes},
+                        "policy_uid": pol.uid})
+        if r.kind == "prohibition" and r.action in ("distribute", "share"):
+            out.append({"template": "ds-no-redistribucion",
+                        "params": {"asset": pol.target},
+                        "policy_uid": pol.uid})
+    if pol.unsupported:
+        out.append({"template": "ds-no-verificable",
+                    "params": {"asset": pol.target,
+                               "clauses": pol.unsupported},
+                    "policy_uid": pol.uid, "finding_only": True})
+    return out
+ 
+
+ARG-036 · Reglas operativas OPA/Rego
+ANÁLISIS
+Entre la ontología (qué obliga la norma) y los retos (cómo se sondea) hay una capa de decisiones operativas parametrizables por cliente: ¿este plazo de retención cumple el calendario declarado?, ¿este acceso a categoría especial está en la lista de perfiles autorizados?, ¿este flujo transfronterizo tiene instrumento vigente? Codificarlas en Python las sacaría del ciclo editorial; expresarlas en SHACL las forzaría a un molde de formas que no es el suyo. Open Policy Agent con Rego es la herramienta exacta: reglas declarativas, datos del cliente como input JSON, evaluación local en milisegundos, y bundles firmados — el mismo modelo de distribución que la ontología.
+DISEÑO
+OPA como sidecar en argos-services con la API /v1/data; paquetes Rego por dominio (retencion, accesos, transferencias) versionados junto a la ontología en library/; los parámetros del cliente (calendario de conservación, perfiles autorizados, instrumentos de transferencia) se cargan como data desde la configuración visada en implantación. El evaluador de retos (ARG-046) delega aquí toda decisión que no sea puro umbral numérico, pasando la evidencia de la sonda como input.
+DESARROLLO
+library/policies/retencion.rego
+package argos.retencion
+ 
+# input:  { "categoria": "categoria_especial.salud",
+#           "tratamiento": "HIS-episodios",
+#           "edad_max_dias": 4380,          # lo midió la sonda
+#           "excepciones_documentadas": 12 }
+# data:   calendario de conservación visado del cliente
+ 
+default conforme := false
+default plazo_dias := 0
+ 
+plazo_dias := d if {
+    d := data.calendario[input.tratamiento].dias
+}
+ 
+plazo_dias := d if {
+    not data.calendario[input.tratamiento]
+    d := data.calendario_defecto[input.categoria].dias
+}
+ 
+conforme if {
+    plazo_dias > 0
+    input.edad_max_dias <= plazo_dias
+}
+ 
+# Excepciones legítimas: fuera de plazo PERO todas documentadas
+conforme if {
+    plazo_dias > 0
+    input.fuera_de_plazo == input.excepciones_documentadas
+}
+ 
+veredicto := {"conforme": conforme,
+              "plazo_aplicado_dias": plazo_dias,
+              "regla": "argos.retencion"}
+ 
+library/policies/accesos.rego
+package argos.accesos
+ 
+# input: { "objetivo": "his.episodios",
+#          "categoria": "categoria_especial.salud",
+#          "identidades": [ {"name":"dr.perez","perfil":"medico"},
+#                            {"name":"svc_bi","perfil":null} ] }
+# data.perfiles_autorizados["categoria_especial.salud"] = ["medico",...]
+ 
+autorizados := data.perfiles_autorizados[input.categoria]
+ 
+no_autorizadas contains i.name if {
+    some i in input.identidades
+    not i.perfil in autorizados
+}
+ 
+conforme if count(no_autorizadas) == 0
+ 
+veredicto := {"conforme": conforme,
+              "no_autorizadas": no_autorizadas,
+              "total": count(input.identidades)}
+ 
+services/ontology/opa/client.py
+"""Cliente OPA: una llamada, un veredicto estructurado."""
+import httpx
+ 
+OPA = "http://localhost:8181"    # sidecar en el mismo pod
+ 
+async def evaluate(package: str, input_doc: dict) -> dict:
+    async with httpx.AsyncClient(timeout=5.0) as c:
+        r = await c.post(f"{OPA}/v1/data/{package.replace('.', '/')}/veredicto",
+                         json={"input": input_doc})
+        r.raise_for_status()
+        result = r.json().get("result")
+        if result is None:
+            raise RuntimeError(f"paquete Rego sin veredicto: {package}")
+        return result
+ 
+
+ARG-037 · Matriz de trazabilidad obligación–reto
+ANÁLISIS
+La promesa comercial «cada reto trazado a la obligación que verifica» necesita su inverso como control de calidad: ninguna obligación publicada sin al menos un reto (o una marca explícita de no-verificable-aún), y ningún reto huérfano de obligación. La matriz no es un documento: es una consulta reproducible sobre ontología+biblioteca que la CI editorial (ARG-038) ejecuta como puerta de publicación y la consola muestra como el mapa de cobertura normativa — el argumento de venta convertido en artefacto verificable.
+DISEÑO
+Un generador que cruza los verifiedBy de la ontología con los ids reales de library/challenges (parseando los YAML), produce la matriz (obligación, severidad, retos, estado: cubierta|declarada-pendiente|huérfana) y falla con código de salida si hay huérfanas en cualquier dirección — salvo las marcadas argos:verificationPending con justificación, que aparecen en la matriz con su motivo. Salidas: JSON para consola, CSV para el anexo del contrato.
+DESARROLLO
+tools/traceability.py
+#!/usr/bin/env python3
+"""Matriz obligación<->reto: control de calidad y mapa de cobertura."""
+import json, pathlib, sys
+import rdflib, yaml
+ 
+ONT_DIR = pathlib.Path("library/ontology")
+CH_DIR  = pathlib.Path("library/challenges")
+A = rdflib.Namespace("https://ns.argos.eu/core#")
+ 
+def load_ontology() -> rdflib.Graph:
+    g = rdflib.Graph()
+    for f in ONT_DIR.rglob("*.ttl"):
+        g.parse(f, format="turtle")
+    return g
+ 
+def challenge_ids() -> set[str]:
+    ids = set()
+    for f in CH_DIR.rglob("*.yaml"):
+        doc = yaml.safe_load(f.read_text())
+        ids.add(doc["id"])
+    return ids
+ 
+def build_matrix():
+    g, real = load_ontology(), challenge_ids()
+    rows, errors = [], []
+    for obl in g.subjects(rdflib.RDF.type, A.Obligation):
+        label = str(g.value(obl, rdflib.RDFS.label) or obl)
+        sev   = str(g.value(obl, A.severity) or "media")
+        chs   = [str(g.value(c, A.challengeId))
+                 for c in g.objects(obl, A.verifiedBy)]
+        pending = g.value(obl, A.verificationPending)
+        missing = [c for c in chs if c not in real]
+        if missing:
+            errors.append(f"{label}: reto(s) inexistente(s) {missing}")
+        if not chs and not pending:
+            errors.append(f"{label}: obligación sin reto ni justificación")
+        rows.append({"obligacion": label, "severidad": sev,
+                     "retos": chs,
+                     "estado": ("cubierta" if chs else
+                                f"pendiente: {pending}" if pending
+                                else "huérfana")})
+    linked = {c for r in rows for c in r["retos"]}
+    for orphan in sorted(real - linked):
+        errors.append(f"reto huérfano sin obligación: {orphan}")
+    return rows, errors
+ 
+if __name__ == "__main__":
+    rows, errors = build_matrix()
+    pathlib.Path("dist").mkdir(exist_ok=True)
+    pathlib.Path("dist/traceability.json").write_text(
+        json.dumps(rows, ensure_ascii=False, indent=1))
+    print(f"{len(rows)} obligaciones; "
+          f"{sum(1 for r in rows if r['estado']=='cubierta')} cubiertas")
+    if errors:
+        print("\n".join("ERROR: " + e for e in errors), file=sys.stderr)
+        sys.exit(1)
+ 
+
+ARG-038 · Flujo editorial jurista–ingeniero
+ANÁLISIS
+La ontología la escriben dos perfiles a cuatro manos: el jurista redacta la obligación (qué dice la norma, severidad, vigencia) y el ingeniero normativo la formaliza (clases de activo, selectores, retos enlazados). El flujo debe darles un carril común sin exigir al jurista escribir Turtle a pelo: una plantilla YAML editorial por obligación que un generador convierte en Turtle canónico, revisión por pares en Git (el jurista aprueba el contenido, el ingeniero la formalización) y una CI que no deja pasar nada incoherente. El SLA interno de la especificación —30 días de norma publicada a reto disponible— vive o muere en esta tubería.
+DISEÑO
+Plantilla obligacion.yaml con los campos en castellano llano; generador yaml→ttl determinista (mismo YAML, mismo Turtle, diffs limpios); y la CI editorial de cinco puertas: sintaxis Turtle, coherencia OWL básica (dominios/rangos), selectores contra la lista blanca de ARG-029, matriz de trazabilidad (ARG-037) y prueba de carga completa del bundle. Solo lo que pasa las cinco entra en una publicación.
+DESARROLLO
+library/ontology/editorial/plantilla-obligacion.yaml
+# Plantilla editorial: el jurista rellena; el generador produce Turtle.
+id: OBL-RGPD-32-1                      # único, estable
+norma: RGPD                            # debe existir en norms/
+articulo: "32"
+titulo: Seguridad del tratamiento — cifrado de categorías especiales
+vigente_desde: 2018-05-25
+severidad: critica                     # critica | alta | media | baja
+texto_resumen: >
+  Los datos de categoría especial almacenados deben contar con cifrado
+  en reposo verificado, no meramente declarado en la política.
+aplica_a:                              # AssetClass existentes o nuevas
+  - AC-salud-almacenado
+verificado_por:                        # ids de library/challenges
+  - sec-cifrado-reposo
+equivalencias:                         # cruces entre marcos (opcional)
+  - ENS:op.exp.10
+# pendiente_verificacion: "motivo"    # SOLO si aún no hay reto posible
+ 
+tools/editorial/yaml2ttl.py (núcleo del generador)
+#!/usr/bin/env python3
+"""Generador determinista: plantilla editorial YAML -> Turtle canónico."""
+import pathlib, sys, yaml
+ 
+TPL = """n:{id} a argos:Obligation ;
+  rdfs:label \"{titulo}\"@es ;
+  argos:derivesFrom n:{norma}-{articulo} ;
+  argos:severity \"{severidad}\" ;
+  argos:inForceFrom \"{vigente_desde}\"^^xsd:date ;
+{aplica}{verifica}{equiv}{pendiente}.
+"""
+ 
+def convert(path: pathlib.Path) -> str:
+    d = yaml.safe_load(path.read_text())
+    aplica = "".join(f"  argos:appliesTo n:{a} ;\n"
+                     for a in d.get("aplica_a", []))
+    verifica = "".join(f"  argos:verifiedBy n:CH-{c} ;\n"
+                       for c in d.get("verificado_por", []))
+    equiv = "".join(f"  argos:equivalentTo n:{e.replace(':','-')} ;\n"
+                    for e in d.get("equivalencias", []))
+    pendiente = (f"  argos:verificationPending "
+                 f"\"{d['pendiente_verificacion']}\" ;\n"
+                 if d.get("pendiente_verificacion") else "")
+    header = ("@prefix argos: <https://ns.argos.eu/core#> .\n"
+              "@prefix n: <https://ns.argos.eu/norms/> .\n"
+              "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+              "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n\n")
+    body = TPL.format(aplica=aplica, verifica=verifica,
+                      equiv=equiv, pendiente=pendiente, **d)
+    # los retos referenciados se declaran como Challenge
+    for c in d.get("verificado_por", []):
+        body += (f"n:CH-{c} a argos:Challenge ; "
+                 f"argos:challengeId \"{c}\" .\n")
+    return header + body
+ 
+if __name__ == "__main__":
+    src = pathlib.Path(sys.argv[1])
+    out = src.with_suffix(".ttl")
+    out.write_text(convert(src))
+    print(f"{src.name} -> {out.name}")
+ 
+platform/ci/editorial.yaml (las cinco puertas)
+editorial:
+  stage: verify
+  rules: [ { changes: ["library/**"] } ]
+  script:
+    # 1) generación determinista y sintaxis Turtle
+    - for f in library/ontology/editorial/*.yaml; do
+        python tools/editorial/yaml2ttl.py "$f"; done
+    - python -c "import rdflib,glob;
+        [rdflib.Graph().parse(f) for f in
+         glob.glob('library/ontology/**/*.ttl', recursive=True)]"
+    # 2) coherencia OWL básica (dominios/rangos)
+    - python tools/editorial/owl_lint.py
+    # 3) selectores contra la lista blanca de ARG-029
+    - python tools/editorial/selector_lint.py
+    # 4) matriz de trazabilidad: falla con huérfanas
+    - python tools/traceability.py
+    # 5) carga completa de prueba del bundle
+    - python tools/editorial/bundle_dryrun.py
+ 
+
+ARG-039 · Resolutor de aplicabilidad
+ANÁLISIS
+El resolutor responde la pregunta que enciende toda campaña: dadas la ontología vigente y el grafo de hoy, ¿qué obligaciones aplican a qué activos y con qué retos se verifican? Es el cruce de las dos mitades del producto y debe ser barato (se ejecuta al planificar cada campaña y tras cada delta) y explicable (cada correspondencia guarda su porqué: la obligación, la clase, el selector, los nodos resueltos, la versión de ontología — el expediente empieza aquí).
+DISEÑO
+Servicio con una operación resolve(scope): SPARQL sobre el bundle vigente para obtener (obligación, severidad, AssetClass, selector, retos) → resolveSelector de ARG-029 por cada clase (con caché por hash de selector durante la resolución) → producto (obligación × nodos × retos) filtrado por el ámbito de la campaña → persistencia en argos.applicability_runs para el expediente y evento applicability_ready para la fase 5. La versión de ontología viaja en cada fila: la reproducibilidad ante el supervisor es literal.
+DESARROLLO
+services/ontology/resolver/resolve.py
+"""Resolutor: (ontología vigente x grafo de hoy) -> plan de aplicabilidad."""
+import json, uuid
+from store.store import OntologyStore
+from inventory_client import resolve_selector    # GraphQL ARG-029
+from argos_db import pool
+from argos_events import Bus
+ 
+SPARQL = """
+PREFIX argos: <https://ns.argos.eu/core#>
+PREFIX rdfs:  <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?obl ?label ?sev ?selector ?chid WHERE {
+  ?obl a argos:Obligation ;
+       rdfs:label ?label ;
+       argos:severity ?sev ;
+       argos:appliesTo ?ac ;
+       argos:verifiedBy ?ch .
+  ?ac  argos:selectorJson ?selector .
+  ?ch  argos:challengeId ?chid .
+}"""
+ 
+async def resolve(scope: dict, campaign_id: str | None = None) -> dict:
+    store = OntologyStore()
+    run_id = str(uuid.uuid7())
+    cache: dict[str, list] = {}
+    plan, rows = [], 0
+    for obl, label, sev, selector, chid in store.sparql(SPARQL):
+        sel = json.loads(str(selector))
+        if scope.get("system_ids"):          # acotar al ámbito de campaña
+            sel["system_ids"] = scope["system_ids"]
+        key = json.dumps(sel, sort_keys=True)
+        if key not in cache:
+            cache[key] = await resolve_selector(sel)
+        nodes = cache[key]
+        if not nodes:
+            continue
+        plan.append({"obligation": str(obl), "label": str(label),
+                     "severity": str(sev), "challenge_id": str(chid),
+                     "node_keys": [n["key"] for n in nodes]})
+        rows += len(nodes)
+    with pool.connection() as conn:
+        conn.execute("""INSERT INTO argos.applicability_runs
+            (id, campaign_id, ontology_version, scope, plan, nodes_total)
+            VALUES (%s,%s,%s,%s::jsonb,%s::jsonb,%s)""",
+            (run_id, campaign_id, store.version, json.dumps(scope),
+             json.dumps(plan), rows))
+        conn.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+            ("system:resolver", "applicability.resolve",
+             json.dumps({"run": run_id, "ontology": store.version,
+                         "pairs": len(plan), "nodes": rows})))
+        conn.commit()
+    bus = Bus("resolver"); await bus.connect()
+    await bus.publish("argos.challenge.applicability_ready",
+                      "challenge.applicability_ready.v1",
+                      {"run_id": run_id, "campaign_id": campaign_id,
+                       "pairs": len(plan)})
+    return {"run_id": run_id, "ontology": store.version,
+            "pairs": len(plan), "nodes": rows}
+ 
+
+ARG-040 · Publicación firmada de la ontología
+ANÁLISIS
+La ontología viaja del equipo editorial a los appliances de los clientes —incluidos los aislados— y es exactamente el tipo de artefacto que un atacante querría alterar: cambiar una severidad, aflojar un selector. La publicación hereda el modelo de ARG-010: bundle tar con manifiesto, firma con la clave de contenidos (distinta de la de software: rotación y custodia separadas) y verificación en el appliance antes de cargar, con las claves públicas grabadas en la imagen. El SLA de 30 días exige además que publicar sea un comando, no un ritual.
+DISEÑO
+publish.sh empaqueta (fuentes ttl + matriz de trazabilidad + CHANGELOG), calcula el manifiesto con hashes por fichero, firma con cosign (clave hashivault://argos-content) y sube al repositorio de contenidos; verify_bundle() en el appliance comprueba firma y hashes antes de que el cargador (ARG-032) toque nada. La versión sigue SemVer de contenidos: mayor = obligaciones eliminadas o endurecidas, menor = nuevas, parche = correcciones.
+DESARROLLO
+tools/editorial/publish.sh
+#!/usr/bin/env bash
+# Publica un bundle de ontología firmado. Uso: publish.sh 1.4.0
+set -euo pipefail
+V=$1; OUT=dist/ontology
+mkdir -p $OUT
+ 
+# 1) puertas editoriales completas (la CI en local)
+python tools/traceability.py
+ 
+# 2) empaquetado con manifiesto de hashes
+find library/ontology library/policies -name '*.ttl' -o -name '*.rego' \
+  | sort | xargs sha256sum > $OUT/hashes.txt
+jq -n --arg v "$V" --arg date "$(date -u +%FT%TZ)" \
+  --rawfile hashes $OUT/hashes.txt \
+  '{artifact:"argos-ontology", version:$v, built:$date,
+    hashes:($hashes | split("\n") | map(select(length>0)))}' \
+  > $OUT/manifest.json
+tar -czf $OUT/argos-ontology-$V.tar.gz \
+  -C . library/ontology library/policies dist/traceability.json \
+  -C dist/ontology manifest.json
+ 
+# 3) firma con la clave de CONTENIDOS (separada de la de software)
+cosign sign-blob --key hashivault://argos-content \
+  $OUT/argos-ontology-$V.tar.gz \
+  --output-signature $OUT/argos-ontology-$V.sig
+ 
+echo "publicado: $OUT/argos-ontology-$V.tar.gz (+.sig)"
+ 
+services/ontology/store/signing.py — verificación en el appliance
+"""Verificación del bundle antes de cargar: firma + hashes por fichero."""
+import hashlib, io, json, subprocess, tarfile, tempfile
+ 
+CONTENT_PUBKEY = "/etc/argos/keys/content.pub"   # grabada en la imagen
+ 
+class BundleRejected(Exception): ...
+ 
+def verify_bundle(bundle_bytes: bytes) -> dict:
+    with tempfile.NamedTemporaryFile(suffix=".tar.gz") as f, \
+         tempfile.NamedTemporaryFile(suffix=".sig") as s:
+        f.write(bundle_bytes); f.flush()
+        sig = _sidecar_signature()          # llega junto al bundle
+        s.write(sig); s.flush()
+        r = subprocess.run(
+            ["cosign", "verify-blob", "--key", CONTENT_PUBKEY,
+             "--signature", s.name, f.name],
+            capture_output=True)
+        if r.returncode != 0:
+            raise BundleRejected("firma de contenido inválida")
+    with tarfile.open(fileobj=io.BytesIO(bundle_bytes)) as tar:
+        manifest = json.load(tar.extractfile("manifest.json"))
+        for line in manifest["hashes"]:
+            want, name = line.split(maxsplit=1)
+            member = tar.extractfile(name.strip())
+            if member is None:
+                raise BundleRejected(f"fichero ausente: {name}")
+            got = hashlib.sha256(member.read()).hexdigest()
+            if got != want:
+                raise BundleRejected(f"hash alterado: {name}")
+    return manifest
+ 
+
+Interfaces que esta fase exporta
+Componente
+Interfaz exportada
+Consumidores
+ARG-031
+Vocabulario argos: (3 planos) + convenciones n:OBL-*/AC-*/CH-*
+Todo el contenido editorial; fase 5 lee challengeId
+ARG-032
+OntologyStore.sparql(query, version) sobre grafos nombrados
+ARG-039, consola (navegador normativo), expediente
+ARG-033
+AssetClass con selectorJson — el diccionario ontología↔grafo
+ARG-039; ARG-038 lo valida contra la lista blanca
+ARG-034
+run_shapes() → hallazgos de coherencia
+Retos tipo 'coherencia' (fase 5), hito de visado
+ARG-035
+parse()/to_challenges() de políticas ODRL
+ARG-070 (EDC), campañas de espacios de datos
+ARG-036
+evaluate(package, input) → veredicto estructurado
+ARG-046 (evaluador de criterios)
+ARG-037
+dist/traceability.json — el mapa de cobertura normativa
+CI editorial, consola, anexo de contrato
+ARG-038/040
+Plantilla editorial + 5 puertas CI + bundle firmado y verify_bundle()
+Equipo normativo (SLA 30 días), ARG-032, modo aislado
+ARG-039
+resolve(scope) → applicability_runs + evento applicability_ready
+ARG-042/043: el plan del que nacen las campañas
+
+Estado del programa: la norma ya es ejecutable: tres planos formales, políticas de espacios de datos leídas en su idioma nativo, reglas operativas parametrizadas por cliente, trazabilidad bidireccional garantizada por la CI y distribución firmada hasta el appliance aislado. El resolutor ya sabe decir qué obligación aplica a qué nodo del grafo y con qué reto se comprueba. La fase 5 construye la pieza que convierte ese saber en acción: el motor de retos y campañas.

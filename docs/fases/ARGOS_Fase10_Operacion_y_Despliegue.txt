@@ -1,0 +1,703 @@
+ULLSWATER INVESTMENTS
+ARGOS · Programa de ingeniería en 10 fases
+FASE 10
+Operación y despliegue — Componentes 91 a 100
+La última fase del programa: la observación completa (Prometheus, Grafana, Loki), los exporters de salud del dominio, la alta disponibilidad por tallas, el instalador de la semana 1, la comprobación de sala, la telemetría local con límites de talla — y el broche que da sentido a todo: ARG-100, la auto-verificación de release en la que ARGOS verifica a ARGOS
+Documento técnico 10 de 10 · Madrid, septiembre de 2026 · Versión 1.0 · Confidencial
+
+Índice
+ TOC \h \u \z \t "Heading 1,1,"
+
+
+0. La operación en conjunto
+Un appliance se juzga por sus lunes: cómo se instala, cómo avisa, cómo sobrevive a un disco muerto y cuánta gente hace falta para mantenerlo. La fase 10 cierra el programa con la doctrina operativa: observación nacida del dominio (las métricas que importan son «campañas atascadas» y «cortacircuitos abiertos», no solo CPU), disponibilidad proporcionada a la talla (la S se restaura, la M conmuta, la L no se cae), implantación como producto (la semana 1 del pliego es un instalador con lista de comprobación, no una consultoría) y honestidad de límites (el appliance conoce su capacidad y avisa antes de alcanzarla — vender talla M y comportarse como S sería la clase de mentira que el producto existe para combatir).
+Y el cierre conceptual del programa: ARG-100. Si ARGOS acredita el cumplimiento de otros con retos, evidencia y credencial, su propia release debe pasar por el mismo aro: la última puerta de la CI es una campaña de ARGOS contra el appliance de banco recién actualizado, cuyo expediente firmado acompaña a cada versión publicada. El producto que se verifica a sí mismo con su propio método es el argumento comercial definitivo — y la mejor prueba de integración jamás escrita.
+
+ARG-091 · Métricas y reglas de alerta
+ANÁLISIS
+Prometheus en el clúster con retención local de 90 días (el appliance no exporta telemetría: P-03 también aquí), scrapeando los exporters estándar (node, kube-state, postgres, NATS, Temporal, vLLM) y los del dominio (ARG-094). Las reglas de alerta se escriben desde los objetivos de la especificación, no desde plantillas: cada objetivo medible del documento técnico tiene su alerta con su umbral — la especificación se convierte en vigilancia. El enrutamiento es local: Alertmanager entrega a la consola (siempre) y al correo/webhook del operador del cliente (configurable); las críticas despiertan a alguien, las demás esperan al lunes.
+DESARROLLO
+platform/observability/rules/argos.rules.yaml
+groups:
+- name: argos-dominio
+  rules:
+  # --- del objetivo 'primer token < 2 s (talla M)' ---
+  - alert: IALatenciaPrimerToken
+    expr: histogram_quantile(0.95,
+          rate(vllm_time_to_first_token_seconds_bucket[10m])) > 2
+    for: 15m
+    labels: { severity: warning }
+    annotations:
+      summary: "IA: primer token p95 > 2 s (objetivo de talla)"
+ 
+  # --- del objetivo 'reexploración incremental < 2 h' ---
+  - alert: ReexploracionLenta
+    expr: max(argos_scan_duration_seconds) > 7200
+    for: 5m
+    labels: { severity: warning }
+ 
+  # --- campañas: atascadas en compuerta > 72 h (el timeout de ARG-043) ---
+  - alert: CampanaAtascadaEnCompuerta
+    expr: argos_campaign_gate_waiting_hours > 60
+    labels: { severity: warning }
+    annotations:
+      summary: "Compuerta sin aprobar {{ $labels.campaign }}: avisar al DPO"
+ 
+  # --- cortacircuitos abierto de forma sostenida ---
+  - alert: CortacircuitosAbierto
+    expr: argos_connector_circuit_open == 1
+    for: 30m
+    labels: { severity: warning }
+    annotations:
+      summary: "Sistema {{ $labels.system }} con latencia alta sostenida"
+ 
+  # --- evidencia: cola TSA creciendo (¿ventana de conectividad rota?) ---
+  - alert: ColaTSACreciente
+    expr: argos_tsa_queue_pending > 50 and
+          delta(argos_tsa_queue_pending[6h]) > 0
+    labels: { severity: warning }
+ 
+  # --- CRÍTICAS: despiertan a alguien ---
+  - alert: DiarioNoIntegro
+    expr: argos_journal_verify_ok == 0
+    labels: { severity: critical }
+    annotations:
+      summary: "VERIFICACIÓN DEL DIARIO FALLIDA: posible manipulación"
+  - alert: PruebaRestauracionFallida
+    expr: time() - argos_backup_restore_test_success_timestamp > 40*86400
+    labels: { severity: critical }
+    annotations:
+      summary: "Backup sin prueba de restauración reciente: es decorativo"
+  - alert: WormEscrituraFallida
+    expr: rate(argos_worm_write_errors_total[15m]) > 0
+    labels: { severity: critical }
+  - alert: DiscoEvidencia85
+    expr: argos_evidence_volume_used_ratio > 0.85
+    labels: { severity: critical }
+    annotations:
+      summary: "Volumen de evidencia al {{ $value }}: planificar ampliación"
+ 
+
+ARG-092 · Paneles Grafana aprovisionados
+ANÁLISIS
+Los paneles se aprovisionan como JSON versionado (nada de paneles artesanales que se pierden al reinstalar) y siguen la jerarquía de audiencias: Operación (el lunes del administrador: salud, colas, discos, certificados por caducar), Cumplimiento en cifras (para el DPO que quiere gráficas junto a la consola: campañas, hallazgos por severidad, cobertura, tiempo hasta subsanación) y Plataforma IA (colas del gateway, cuotas consumidas, latencias, deriva de calibración desde ARG-059). El panel de Operación abre con una sola fila de semáforos —los ocho indicadores que deciden si hoy es un día normal— porque el mejor panel es el que se mira tres segundos.
+DESARROLLO
+platform/observability/dashboards/operacion.json (estructura esencial)
+{
+  "title": "ARGOS · Operación",
+  "uid": "argos-ops",
+  "panels": [
+    { "type": "stat", "title": "Semáforos", "gridPos":
+        {"h": 4, "w": 24, "x": 0, "y": 0},
+      "targets": [
+        {"expr": "argos_journal_verify_ok",       "legendFormat": "Diario"},
+        {"expr": "argos_worm_healthy",            "legendFormat": "WORM"},
+        {"expr": "min(up{job=~'argos.*'})",       "legendFormat": "Servicios"},
+        {"expr": "argos_tsa_queue_pending < 50",  "legendFormat": "TSA"},
+        {"expr": "argos_backup_restore_test_ok",  "legendFormat": "Backup"},
+        {"expr": "1 - argos_evidence_volume_used_ratio > 0.15",
+         "legendFormat": "Disco evidencia"},
+        {"expr": "argos_certs_expiring_7d == 0",  "legendFormat": "Certs"},
+        {"expr": "argos_update_pending == 0",     "legendFormat": "Versión"}
+      ],
+      "fieldConfig": {"defaults": {"thresholds": {"steps": [
+        {"color": "red", "value": null},
+        {"color": "green", "value": 1}]}}} },
+ 
+    { "type": "timeseries", "title": "Campañas activas y unidades/h",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "targets": [
+        {"expr": "argos_campaigns_running"},
+        {"expr": "rate(argos_probe_total[1h])*3600"}] },
+ 
+    { "type": "timeseries", "title": "Colas: TSA / webhooks / revisión",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "targets": [
+        {"expr": "argos_tsa_queue_pending"},
+        {"expr": "argos_webhook_deliveries_pending"},
+        {"expr": "argos_review_queue_pending"}] },
+ 
+    { "type": "table", "title": "Certificados por caducar (30 d)",
+      "gridPos": {"h": 6, "w": 12, "x": 0, "y": 12},
+      "targets": [{"expr":
+        "(certmanager_certificate_expiration_timestamp_seconds - time())"
+        " / 86400 < 30"}] }
+  ],
+  "time": {"from": "now-24h", "to": "now"},
+  "refresh": "1m"
+}
+ 
+
+ARG-093 · Logs centralizados con Loki
+ANÁLISIS
+Loki (single binary, almacenamiento en el volumen de datos, retención 30 días) con Promtail recogiendo los logs de todos los pods — y la disciplina de logging del producto como contrato: formato JSON estructurado con los campos comunes (servicio, nivel, evento, campaign_id/system_id cuando aplica), nunca datos del cliente (los guardarraíles de ARG-060 en el gateway; la revisión de logging en el checklist de PR para el resto) y correlación con el diario: los eventos que también son asientos llevan su journal_seq en el log — del panel al asiento firmado en un clic. Las consultas guardadas de operación (errores por servicio, la historia de una campaña, los rechazos de la esclusa) se aprovisionan junto a los paneles.
+DESARROLLO
+platform/observability/loki-values.yaml + disciplina de logging
+# Loki single-binary sobre el volumen de datos (retención 30 días)
+loki:
+  commonConfig: { replication_factor: 1 }
+  storage: { type: filesystem }
+  limits_config:
+    retention_period: 720h
+    max_line_size: 64KB
+  compactor:
+    retention_enabled: true
+promtail:
+  config:
+    snippets:
+      pipelineStages:
+        - cri: {}
+        - json:
+            expressions: { level: level, service: service,
+                           event: event, campaign: campaign_id }
+        - labels: { level: "", service: "" }   # solo 2 labels: cardinalidad
+ 
+# --------------------------------------------------------------
+# libs/argos_log/__init__.py — el logger común (la disciplina)
+# import json, sys, datetime as dt
+# def log(level, service, event, **fields):
+#     assert not any(k in fields for k in ('dni','email','password')), \
+#         'campos prohibidos en logs'
+#     print(json.dumps({'ts': dt.datetime.now(dt.UTC).isoformat(),
+#                       'level': level, 'service': service,
+#                       'event': event, **fields},
+#                      ensure_ascii=False), file=sys.stdout, flush=True)
+#
+# Consultas guardadas (aprovisionadas):
+#  errores:   {service=~"argos.*", level="error"}
+#  campaña:   {service=~"argos.*"} | json | campaign="<id>"
+#  esclusa:   {service="airgap"} | json | event=~"airgap.*"
+ 
+
+ARG-094 · Exporters de salud del dominio
+ANÁLISIS
+Las métricas del dominio no existen en ningún exporter estándar: hay que fabricarlas. Un servicio de salud único (mejor que un sidecar por servicio: las consultas son baratas y el punto único simplifica) expone en /metrics los indicadores que las reglas de ARG-091 y los semáforos de ARG-092 consumen: estado de conectores (¿la última sonda de vida de cada sistema funcionó?), campañas (corriendo, esperando compuerta y desde cuándo), colas (TSA, webhooks, revisión), evidencia (verificación periódica del diario, salud del WORM con una escritura-lectura de canario en el bucket de trabajo, ocupación del volumen) y las marcas temporales de los jobs (backup, prueba de restauración, calibración) — el patrón timestamp-del-último-éxito que convierte cualquier job en vigilable.
+DESARROLLO
+services/health/exporter.py
+"""Exporter de salud del dominio: las métricas que ningún estándar trae."""
+import time
+from prometheus_client import Gauge, Counter, start_http_server
+from argos_db import pool
+from journal.verify import verify_chain          # ARG-066
+from store.worm import put_immutable_working, get_working  # canario
+ 
+G = {
+ "journal_ok":  Gauge("argos_journal_verify_ok",
+                      "1 si la cadena del diario es íntegra"),
+ "worm":        Gauge("argos_worm_healthy",
+                      "1 si el canario escribe y relee"),
+ "camp_run":    Gauge("argos_campaigns_running", "campañas en ejecución"),
+ "gate_hours":  Gauge("argos_campaign_gate_waiting_hours",
+                      "horas esperando compuerta", ["campaign"]),
+ "circuit":     Gauge("argos_connector_circuit_open",
+                      "1 si cortacircuitos abierto", ["system"]),
+ "tsa":         Gauge("argos_tsa_queue_pending", "sellos pendientes"),
+ "webhooks":    Gauge("argos_webhook_deliveries_pending", "entregas"),
+ "review":      Gauge("argos_review_queue_pending", "revisiones DPO"),
+ "vol":         Gauge("argos_evidence_volume_used_ratio", "ocupación"),
+ "backup_ts":   Gauge("argos_backup_restore_test_success_timestamp",
+                      "epoch de la última prueba OK"),
+}
+ 
+def collect_db():
+    with pool.connection() as db:
+        G["camp_run"].set(db.execute("""SELECT count(*)
+            FROM argos.campaigns WHERE status='ejecutando'""")
+            .fetchone()[0])
+        for cid, hours in db.execute("""SELECT campaign_id,
+              EXTRACT(EPOCH FROM now()-requested_at)/3600
+            FROM argos.approval_requests r
+            WHERE NOT EXISTS (SELECT 1 FROM argos.approvals a
+              WHERE a.campaign_id=r.campaign_id AND a.gate=r.gate)"""):
+            G["gate_hours"].labels(campaign=cid).set(hours)
+        G["tsa"].set(db.execute("""SELECT count(*) FROM argos.tsa_queue
+            WHERE status='pendiente'""").fetchone()[0])
+        G["review"].set(db.execute("""SELECT count(*)
+            FROM argos.review_queue WHERE resolution IS NULL""")
+            .fetchone()[0])
+ 
+def collect_journal():
+    """Verificación rotativa: el último tramo cada 5 min, completa cada 24h."""
+    res = verify_chain(from_seq=max(1, _head_seq() - 10_000))
+    G["journal_ok"].set(1 if res["integro"] else 0)
+ 
+def collect_worm_canary():
+    try:
+        key = f"canario/{int(time.time())}"
+        put_immutable_working(key, b"argos-canary")
+        G["worm"].set(1 if get_working(key) == b"argos-canary" else 0)
+    except Exception:
+        G["worm"].set(0)
+ 
+if __name__ == "__main__":
+    start_http_server(9400)
+    while True:
+        collect_db(); collect_worm_canary()
+        if int(time.time()) % 300 < 30:
+            collect_journal()
+        time.sleep(30)
+ 
+
+ARG-095 · Alta disponibilidad por tallas
+ANÁLISIS
+La disponibilidad se compra por talla y el diseño lo respeta sin teatro: la talla S es un nodo con RAID, backup probado y RTO de 4 h por restauración — suficiente para un agente que trabaja en lotes nocturnos; la talla M añade el segundo nodo en espera pasiva: réplica física de PostgreSQL (streaming, con slot), sincronización del almacén de objetos y del registro, y una conmutación asistida (un comando, decisión humana: el split-brain en un appliance de evidencia sería catastrófico, así que no hay failover automático en M — hay un runbook de 10 minutos); la talla L es el clúster de tres con quórum real (etcd de k3s en los tres, Patroni para PostgreSQL, almacén distribuido) y ahí sí, conmutación automática. La réplica de M se aprovecha: las sondas de solo lectura del inventario pueden apuntarle, descargando al primario.
+DESARROLLO
+platform/ha/talla-m/failover.sh (la conmutación asistida)
+#!/usr/bin/env bash
+# Conmutación asistida talla M: decisión humana, ejecución de 10 minutos.
+# Uso: failover.sh --confirm  (sin --confirm: simulacro que solo verifica)
+set -euo pipefail
+CONFIRM=${1:-}
+ 
+echo '[1/6] Verificando que el primario está realmente caído'
+if curl -fsS -m 5 http://argos-a.local:8080/healthz >/dev/null 2>&1; then
+  echo 'ERROR: el primario responde. Abortando (¿split-brain?)'; exit 1
+fi
+ 
+echo '[2/6] Estado de la réplica'
+LAG=$(psql -h localhost -U postgres -tAc \
+  "SELECT COALESCE(EXTRACT(EPOCH FROM now()-pg_last_xact_replay_timestamp()),0)")
+echo "   retraso de réplica: ${LAG}s"
+awk -v l="$LAG" 'BEGIN { exit (l > 300) }' || {
+  echo 'AVISO: retraso > 5 min; posibles transacciones perdidas.'; }
+ 
+[ "$CONFIRM" = "--confirm" ] || { echo 'Simulacro OK. Ejecutar con --confirm'; exit 0; }
+ 
+echo '[3/6] Promoviendo PostgreSQL'
+psql -h localhost -U postgres -c 'SELECT pg_promote(wait := true)'
+ 
+echo '[4/6] Verificando la cadena del diario en el promovido'
+python3 /opt/argos/tools/verify_journal.py --quick || {
+  echo 'CRÍTICO: diario no íntegro tras promoción; NO continuar'; exit 1; }
+ 
+echo '[5/6] Arrancando servicios y adoptando la IP virtual'
+systemctl start k3s-argos
+ip addr add 10.10.0.100/24 dev bond0 2>/dev/null || true
+arping -c 3 -U -I bond0 10.10.0.100
+ 
+echo '[6/6] Registro y aviso'
+argos-journal 'system:ha' 'ha.failover' \
+  "{\"promovido\": \"$(hostname)\", \"lag_s\": $LAG}"
+argos-alert warning 'Conmutación a nodo B completada; revisar nodo A'
+echo 'CONMUTACIÓN COMPLETA. El antiguo primario NO debe arrancar servicios
+sin reincorporarse como réplica (rejoin.sh).'
+ 
+
+ARG-096 · El instalador de la semana 1
+ANÁLISIS
+Las seis semanas de implantación del pliego empiezan con una semana 1 que debe ser un producto, no una visita: el appliance llega con la imagen de fábrica y el instalador guiado convierte «caja en el rack» en «sistema listo para conectar fuentes» en una jornada. El instalador es una TUI (el CPD no siempre tiene navegador a mano) que recorre los pasos con verificación en cada uno: red y bastión, hora (NTP del cliente o deriva local declarada), el sellado del disco (ARG-082), el alta del primer administrador contra Keycloak, la federación opcional con el IdP corporativo, la TSA (o el modo aislado explícito), y el informe de instalación —firmado, al diario, exportable— que abre el expediente de implantación que el hito de visado (P-26) cerrará.
+DESARROLLO
+services/installer/setup_tui.py (estructura y pasos)
+"""Instalador de la semana 1: TUI guiada con verificación por paso."""
+import json, subprocess, datetime as dt
+from dataclasses import dataclass
+ 
+@dataclass
+class Step:
+    key: str
+    title: str
+    run: callable          # -> dict (resultado)
+    verify: callable       # -> tuple[bool, str]
+ 
+def sh(c): return subprocess.run(c, shell=True, capture_output=True,
+                                 text=True)
+ 
+def step_red(cfg):
+    sh(f"netplan set ethernets.mgmt.addresses=[{cfg['ip']}/24]")
+    sh(f"netplan set ethernets.mgmt.gateway4={cfg['gw']}")
+    sh("netplan apply")
+    return {"ip": cfg["ip"]}
+ 
+def verify_red(cfg):
+    ok = sh(f"ping -c 2 -W 2 {cfg['gw']}").returncode == 0
+    return ok, "pasarela alcanzable" if ok else "pasarela NO responde"
+ 
+def step_hora(cfg):
+    if cfg.get("ntp"):
+        sh(f"timedatectl set-ntp true")
+        sh(f"sed -i 's/^#NTP=.*/NTP={cfg['ntp']}/' "
+       "/etc/systemd/timesyncd.conf && systemctl restart systemd-timesyncd")
+        return {"modo": "ntp", "servidor": cfg["ntp"]}
+    return {"modo": "deriva_local_declarada"}   # aislado: se documenta
+ 
+def verify_hora(cfg):
+    out = sh("timedatectl show -p NTPSynchronized --value").stdout.strip()
+    if cfg.get("ntp"):
+        return out == "yes", f"sincronizado={out}"
+    return True, "modo aislado: deriva documentada en el informe"
+ 
+STEPS = [
+  Step("red",    "Red de gestión y bastión",     step_red,    verify_red),
+  Step("hora",   "Sincronización horaria",       step_hora,   verify_hora),
+  Step("disco",  "Sellado del disco al TPM",
+       run=lambda c: {"out": sh("/opt/argos/seal-disk.sh").stdout[-200:]},
+       verify=lambda c: (sh("cryptsetup luksDump "
+           "/dev/disk/by-partlabel/argos-data | grep -q tpm2")
+           .returncode == 0, "slot TPM2 presente")),
+  Step("admin",  "Primer administrador (Keycloak)",
+       run=lambda c: {"user": c["admin_user"]},   # kcadm create user...
+       verify=lambda c: (True, "alta realizada; obligado cambio de clave")),
+  Step("idp",    "Federación IdP corporativo (opcional)",
+       run=lambda c: {"skipped": not c.get("idp_url")},
+       verify=lambda c: (True, "federación configurada"
+                         if c.get("idp_url") else "omitida")),
+  Step("tsa",    "Autoridad de sellado (o modo aislado)",
+       run=lambda c: {"tsa": c.get("tsa_url", "AISLADO")},
+       verify=lambda c: (True, c.get("tsa_url", "modo aislado explícito"))),
+]
+ 
+def run_install(cfg: dict) -> dict:
+    report = {"iniciado": dt.datetime.now(dt.UTC).isoformat(), "pasos": []}
+    for s in STEPS:
+        result = s.run(cfg)
+        ok, msg = s.verify(cfg)
+        report["pasos"].append({"paso": s.key, "titulo": s.title,
+                                 "ok": ok, "detalle": msg, **result})
+        if not ok:
+            report["estado"] = f"detenido_en_{s.key}"
+            return report            # la TUI ofrece corregir y reintentar
+    report["estado"] = "completado"
+    # informe firmado -> diario + esclusa (exportable para el expediente)
+    from evidence_client import sign_and_journal
+    sign_and_journal("install.report", report)
+    return report
+ 
+
+ARG-097 · Comprobación de sala
+ANÁLISIS
+La prescripción P-29 pide verificar los prerrequisitos del CPD antes y durante la instalación, y la experiencia de campo dice que la mitad de las implantaciones fallidas mueren aquí: un SAI infradimensionado, una toma sin el amperaje, un rack sin fondo. La comprobación es doble: la lista previa (que el cliente responde antes del envío, con las cifras de la talla: consumo, BTU, U de rack, tomas) y la verificación in situ que el propio appliance ejecuta en el primer arranque — porque puede medir: voltaje y estabilidad (IPMI), temperatura de entrada, velocidad real de los enlaces, latencia al bastión y a las fuentes declaradas. El resultado entra en el informe de instalación: si la sala no da, queda escrito el primer día, no descubierto en la primera campaña.
+DESARROLLO
+services/installer/site_check.py
+"""Comprobación de sala: lo que el appliance puede medir, medido."""
+import json, re, subprocess
+ 
+def sh(c): return subprocess.run(c, shell=True, capture_output=True,
+                                 text=True).stdout
+ 
+LIMITS = {  # por talla; se cargan del perfil (aquí talla M)
+  "temp_entrada_max_c": 27,        # ASHRAE A1 recomendado
+  "voltaje_min": 210, "voltaje_max": 240,
+  "enlace_datos_min_gbps": 10,
+  "latencia_bastion_max_ms": 5,
+}
+ 
+def check_energia() -> dict:
+    raw = sh("ipmitool sensor list")
+    volt = [float(m) for m in re.findall(
+        r"Voltage.*?\|\s*([\d.]+)\s*\|\s*Volts", raw)]
+    psu_ok = "Presence detected" in sh("ipmitool sdr type 'Power Supply'")
+    v = sum(volt) / len(volt) if volt else 0
+    return {"voltaje_medio": round(v, 1),
+            "psu_redundante": psu_ok,
+            "ok": LIMITS["voltaje_min"] <= v <= LIMITS["voltaje_max"]
+                  and psu_ok}
+ 
+def check_termica() -> dict:
+    raw = sh("ipmitool sensor get 'Inlet Temp'")
+    m = re.search(r"Sensor Reading\s*:\s*([\d.]+)", raw)
+    t = float(m[1]) if m else 99
+    return {"temp_entrada_c": t,
+            "ok": t <= LIMITS["temp_entrada_max_c"]}
+ 
+def check_red(bastion_ip: str) -> dict:
+    speed = sh("ethtool bond0 | grep Speed")
+    gbps = int(re.search(r"(\d+)", speed)[1]) / 1000 if speed else 0
+    ping = sh(f"ping -c 10 -q {bastion_ip}")
+    lat = re.search(r"= [\d.]+/([\d.]+)/", ping)
+    ms = float(lat[1]) if lat else 999
+    return {"enlace_gbps": gbps, "latencia_bastion_ms": ms,
+            "ok": gbps >= LIMITS["enlace_datos_min_gbps"]
+                  and ms <= LIMITS["latencia_bastion_max_ms"]}
+ 
+def check_gpu() -> dict:
+    raw = sh("nvidia-smi --query-gpu=name,temperature.gpu,power.draw "
+             "--format=csv,noheader")
+    gpus = [l.strip() for l in raw.splitlines() if l.strip()]
+    return {"gpus": gpus, "ok": len(gpus) >= 1}
+ 
+def run_site_check(cfg: dict) -> dict:
+    checks = {"energia": check_energia(), "termica": check_termica(),
+              "red": check_red(cfg["bastion_ip"]), "gpu": check_gpu()}
+    checks["veredicto"] = "apto" if all(
+        c["ok"] for c in checks.values() if isinstance(c, dict)) \
+        else "no_apto"
+    print(json.dumps(checks, indent=1, ensure_ascii=False))
+    return checks     # se incorpora al informe de instalación (ARG-096)
+ 
+
+ARG-098 · Telemetría local y límites de talla
+ANÁLISIS
+El appliance conoce su talla y sus números de la especificación (sistemas conectables, activos inventariables, campañas paralelas, tokens/día de IA) y se vigila contra ellos con una política de tres franjas: verde (opera normal), ámbar al 80% (la consola lo dice claro: «se acerca al límite de talla M; opciones: reducir cadencia, ampliar a L» — con la telemetría local como evidencia para dimensionar la ampliación) y rojo al límite (el appliance no acepta más carga de esa dimensión: rechaza conectar el sistema 41 en una S con mensaje honesto en vez de degradarse en silencio). Nada sale del appliance: la telemetría es local, se guarda 13 meses para la estacionalidad y el informe de capacidad se genera bajo demanda para renovaciones y ampliaciones — el comercial de la ampliación es un informe del propio aparato, no una opinión.
+DESARROLLO
+services/capacity/limits.py
+"""Límites de talla: el appliance conoce sus números y no se miente."""
+import json, datetime as dt
+from argos_db import pool
+ 
+PROFILES = {
+  "S": {"sistemas": 40,  "activos": 250_000,   "campanas_paralelas": 2,
+        "ia_tokens_dia": 4_000_000},
+  "M": {"sistemas": 150, "activos": 1_000_000, "campanas_paralelas": 4,
+        "ia_tokens_dia": 12_000_000},
+  "L": {"sistemas": 500, "activos": 5_000_000, "campanas_paralelas": 10,
+        "ia_tokens_dia": 40_000_000},
+}
+AMBAR = 0.80
+ 
+def _talla() -> str:
+    return open("/var/lib/argos/size").read().strip()
+ 
+def usage() -> dict:
+    lim = PROFILES[_talla()]
+    with pool.connection() as db:
+        used = {
+          "sistemas": db.execute(
+            "SELECT count(*) FROM argos.systems").fetchone()[0],
+          "activos": db.execute(
+            "SELECT count(*) FROM argos.catalog_columns").fetchone()[0],
+          "campanas_paralelas": db.execute("""SELECT count(*)
+            FROM argos.campaigns WHERE status='ejecutando'""")
+            .fetchone()[0],
+          "ia_tokens_dia": db.execute("""SELECT coalesce(sum(tokens),0)
+            FROM argos.ai_usage WHERE at::date=current_date""")
+            .fetchone()[0],
+        }
+    out = {}
+    for k, v in used.items():
+        ratio = v / lim[k]
+        out[k] = {"usado": v, "limite": lim[k],
+                  "franja": ("rojo" if ratio >= 1.0 else
+                             "ambar" if ratio >= AMBAR else "verde")}
+    return {"talla": _talla(), "dimensiones": out}
+ 
+class SizeLimitExceeded(Exception): ...
+ 
+def enforce(dimension: str, adding: int = 1):
+    """Llamado por las APIs de alta: rechaza con mensaje honesto."""
+    u = usage()["dimensiones"][dimension]
+    if u["usado"] + adding > u["limite"]:
+        raise SizeLimitExceeded(
+            f"Límite de talla {_talla()} alcanzado en {dimension} "
+            f"({u['usado']}/{u['limite']}). Opciones: reducir carga, "
+            f"ampliar talla, o consultar el informe de capacidad.")
+ 
+def snapshot_daily():
+    """Serie local de 13 meses para estacionalidad e informes."""
+    with pool.connection() as db:
+        db.execute("""INSERT INTO argos.capacity_snapshots (day, data)
+            VALUES (current_date, %s::jsonb)
+            ON CONFLICT (day) DO UPDATE SET data=EXCLUDED.data""",
+            (json.dumps(usage()),))
+        db.execute("""DELETE FROM argos.capacity_snapshots
+            WHERE day < current_date - interval '13 months'""")
+        db.commit()
+ 
+
+ARG-099 · El libro de operación
+ANÁLISIS
+El appliance lo opera el cliente y el contrato de soporte se apoya en el libro de operación: un runbook por alerta de ARG-091 (síntoma → diagnóstico → acción → verificación → cuándo escalar) más los procedimientos programados (conmutación, restauración, esclusa, ampliación de disco, renovación de certificados externa). Los runbooks viven en el repositorio, se renderizan en la consola (la alerta enlaza su runbook: el operador de madrugada no busca en un wiki) y se prueban: el simulacro trimestral ejecuta dos al azar en el banco — un runbook no probado envejece hasta la mentira. Se muestra el índice y un runbook completo como patrón.
+DESARROLLO
+ops/runbooks/INDICE.md + RB-03 (patrón completo)
+# Libro de operación ARGOS — índice
+RB-01 DiarioNoIntegro (critical)        RB-07 Conmutación talla M
+RB-02 WormEscrituraFallida (critical)   RB-08 Restauración completa
+RB-03 DiscoEvidencia85 (critical)       RB-09 Operación de esclusa
+RB-04 CortacircuitosAbierto (warning)   RB-10 Ampliación de volumen
+RB-05 ColaTSACreciente (warning)        RB-11 Renovación cert. externa
+RB-06 CampanaAtascada (warning)         RB-12 Simulacro trimestral
+ 
+----------------------------------------------------------------
+# RB-03 · DiscoEvidencia85 (critical)
+ 
+## Síntoma
+Alerta DiscoEvidencia85: el volumen de evidencia supera el 85%.
+La evidencia WORM NO se puede borrar (retención bloqueada): la única
+salida es ampliar o exportar-y-ampliar. NO intentar liberar espacio.
+ 
+## Diagnóstico (5 min)
+1. Panel Operación -> 'Disco evidencia': tendencia de 30 días.
+2. `df -h /var/lib/argos/objectstore` — confirmar cifra real.
+3. `argos-capacity report --dimension evidencia` — proyección:
+   ¿cuántas semanas quedan al ritmo actual?
+ 
+## Acción
+- Si quedan > 8 semanas: planificar ampliación (RB-10) en la próxima
+  ventana de mantenimiento. Registrar decisión en el diario.
+- Si quedan < 8 semanas: ampliación urgente. La talla M admite
+  crecer el volumen en caliente (LVM sobre el RAID):
+    RB-10 pasos 3-7 sin parada de servicio.
+- Si la ampliación física no es posible: abrir con soporte la
+  exportación certificada a WORM externo del cliente (mantiene
+  cadena y retención; requiere acta firmada).
+ 
+## Verificación
+- df -h de nuevo: ratio < 0.70 tras ampliar.
+- La alerta pasa a resuelta en < 10 min.
+- Canario WORM verde (argos_worm_healthy = 1).
+ 
+## Escalar si
+- La proyección es < 2 semanas y no hay ampliación posible.
+- El canario WORM falla durante la operación.
+Contacto: soporte N2 (contrato) con paquete de diagnóstico (RB-09).
+ 
+
+ARG-100 · La auto-verificación de release: ARGOS verifica ARGOS
+ANÁLISIS
+El componente que cierra el programa donde empezó: la puerta ★ selfcheck del pipeline de ARG-010, hasta ahora un contrato pendiente, se implementa como lo que siempre quiso ser — una campaña real de ARGOS contra el appliance de banco recién actualizado, con una biblioteca de retos cuyo objetivo es el propio producto: ¿la postura de pods se cumple? (sonda a la API de Kubernetes en solo lectura), ¿el diario es íntegro?, ¿el WORM retiene?, ¿los goldens de IA pasan?, ¿la matriz de trazabilidad está completa?, ¿los certificados rotan?, ¿el actualizador dejó la versión coherente? El expediente resultante —con su árbol, su firma y su sello— se publica junto a cada release: el cliente no recibe la promesa de que la versión fue verificada; recibe la evidencia, en el mismo formato que ARGOS le da a él.
+DISEÑO
+Familia de retos self-* en la biblioteca (mismo DSL, mismo motor: el conector es uno más, apuntando al propio appliance con cuenta de solo lectura), el job de CI que actualiza el banco, lanza la campaña selfcheck, espera el expediente y falla la release si hay hallazgos de severidad alta o crítica — y adjunta el expediente firmado como artefacto de la release. La circularidad es el argumento: si el motor de retos tuviera un fallo que ocultara hallazgos, tendría que ocultárselo también a sí mismo en presencia de retos diseñados para detectarlo (los self-trampa: retos que DEBEN fallar, y cuya ausencia de hallazgo es el hallazgo).
+DESARROLLO
+library/challenges/self/self-001-postura-pods.yaml
+id: self-001-postura-pods
+version: "1.0"
+titulo: Postura restringida efectiva en todos los pods argos-*
+objetivo:
+  obligacion: OBL-SELF-PLATAFORMA-01   # la spec del producto como norma
+selector:
+  directo: { label: System, name_like: "argos-appliance" }
+sonda:
+  kind: check_config
+  por_conector:
+    self.k8s:
+      params: { check: pod_security_posture }   # lista pods sin postura
+criterio:
+  umbral: { campo: violaciones, operador: "==", valor: 0 }
+evidencia:
+  capturar: [configuracion]
+  minimizacion: >-
+    Solo nombres de pods y campos de securityContext; ningún contenido.
+severidad: critica
+ 
+library/challenges/self/self-099-trampa.yaml — el reto que DEBE fallar
+id: self-099-trampa
+version: "1.0"
+titulo: "Reto trampa: verifica que el motor no oculta hallazgos"
+objetivo:
+  obligacion: OBL-SELF-MOTOR-01
+selector:
+  directo: { label: System, name_like: "argos-appliance" }
+sonda:
+  kind: check_config
+  por_conector:
+    self.k8s: { params: { check: constante_uno } }   # devuelve siempre 1
+criterio:
+  umbral: { campo: valor, operador: "==", valor: 0 }  # imposible: DEBE fallar
+evidencia:
+  capturar: [resultado]
+  minimizacion: Constante de control; sin datos.
+severidad: baja
+# La CI comprueba que este hallazgo EXISTE en el expediente:
+# su ausencia significa que el motor oculta hallazgos => release bloqueada.
+ 
+platform/ci/selfcheck.py (la puerta ★)
+#!/usr/bin/env python3
+"""Puerta ★ del pipeline: ARGOS verifica ARGOS. La release lleva su
+propio expediente firmado o no sale."""
+import json, subprocess, sys, time
+import httpx
+ 
+BENCH = "https://bench.argos.internal/api/v1"
+TOKEN = None    # service account de CI (rol gestor_campanas en el banco)
+H = lambda: {"Authorization": f"Bearer {TOKEN}"}
+ 
+def main(version: str):
+    # 1) el banco ya corre la versión candidata (job anterior: updater)
+    v = httpx.get(f"{BENCH}/systems/self/version", headers=H()).json()
+    assert v["version"] == version, f"banco en {v['version']}, no {version}"
+ 
+    # 2) lanzar la campaña selfcheck (biblioteca self-*)
+    r = httpx.post(f"{BENCH}/campaigns", headers=H(), json={
+        "name": f"selfcheck-{version}",
+        "scope": {"challenge_family": "self"}}).json()
+    cid = r["id"]
+    # la compuerta de arranque la aprueba el bot de CI (banco, no prod)
+    httpx.post(f"{BENCH}/campaigns/{cid}/gates/arranque/approve",
+               headers=H())
+ 
+    # 3) esperar el cierre (con la campaña sellada)
+    for _ in range(120):
+        time.sleep(30)
+        st = httpx.get(f"{BENCH}/campaigns/{cid}", headers=H()).json()
+        if st["status"] == "sellada":
+            break
+    else:
+        sys.exit("selfcheck: la campaña no cerró en 60 min")
+ 
+    # 4) el expediente: cero hallazgos altos/críticos + la trampa presente
+    dossier = httpx.get(f"{BENCH}/evidence/{cid}/dossier.json",
+                        headers=H()).json()
+    graves = [f for f in dossier["hallazgos"]
+              if f["severidad"] in ("critica", "alta")
+              and f["reto"] != "self-099-trampa"]
+    trampa = any(f["reto"] == "self-099-trampa"
+                 for f in dossier["hallazgos"])
+    if graves:
+        print(json.dumps(graves, indent=1, ensure_ascii=False))
+        sys.exit(f"selfcheck: {len(graves)} hallazgos graves")
+    if not trampa:
+        sys.exit("selfcheck: el reto trampa NO aparece: "
+                 "el motor podría estar ocultando hallazgos")
+ 
+    # 5) adjuntar el expediente firmado a la release
+    pdf = httpx.get(f"{BENCH}/evidence/{cid}/dossier.pdf", headers=H())
+    open(f"dist/selfcheck-{version}.pdf", "wb").write(pdf.content)
+    print(f"★ selfcheck OK: expediente selfcheck-{version}.pdf "
+          f"({dossier['resultados']['verificaciones']} verificaciones, "
+          f"raíz {dossier['cadena']['merkle_root'][:16]}…)")
+ 
+if __name__ == "__main__":
+    main(sys.argv[1])
+ 
+
+Interfaces que esta fase exporta
+Componente
+Interfaz exportada
+Consumidores
+ARG-091/092/093
+Reglas desde la especificación + paneles JSON + Loki con journal_seq
+Operador del cliente; los objetivos medibles, vigilados
+ARG-094
+Exporter del dominio (diario, WORM canario, colas, jobs)
+ARG-091; los semáforos del panel de operación
+ARG-095
+Conmutación asistida M (runbook 10 min) / quórum L
+Contratos de disponibilidad por talla
+ARG-096/097
+Instalador TUI + comprobación de sala medida
+La semana 1 del pliego como producto; informe firmado
+ARG-098
+usage()/enforce() + serie local 13 meses
+Consola (franjas), renovaciones y ampliaciones con datos
+ARG-099
+12 runbooks enlazados desde las alertas + simulacro trimestral
+Operador de madrugada; contrato de soporte
+ARG-100
+Familia self-* + puerta ★ + expediente por release
+Cada release publicada con su propia credencial
+
+Cierre del programa: los 100 componentes
+El programa de ingeniería queda completo: cien componentes en diez fases, cada uno con su análisis, su decisión de diseño y su desarrollo, encadenados por interfaces explícitas desde el primer Makefile hasta la campaña que verifica la propia release. El recorrido, visto entero, es el argumento del producto contado en código:
+Fase
+Lo que quedó construido
+1 · Cimientos
+El appliance reproducible: k3s, un solo almacén, el diario encadenado, el bus, la identidad y la CI firmada
+2 · Conectores
+Tocar sin dañar: solo lectura por construcción, registro previo, presupuesto y cortacircuitos; 7 conectores
+3 · Inventario
+El mapa vivo: grafo idempotente y temporal, clasificación honesta, flujos, IA descubierta, una sola puerta de consulta
+4 · Ontología
+La norma ejecutable: tres planos OWL, ODRL, SHACL, OPA, trazabilidad bidireccional, publicación firmada
+5 · Motor de retos
+La verificación activa: DSL auditable, campañas con humanos dentro, estadística declarada, veredicto determinista
+6 · IA local
+La asistencia sin mando: gateway único, RAG que cita, confianza calibrada, cifras verificadas, guardarraíles
+7 · Evidencia
+La verdad oponible: WORM, Merkle, TPM, sello cualificado, expediente, credencial W3C, comprobador, EDC
+8 · Consola y APIs
+El uso diario: una API sin verdades paralelas, el plan legible antes de ejecutar, el dorado solo acreditado
+9 · Seguridad
+El blindaje: arranque medido, disco sellado, mTLS, secretos efímeros, actualización transaccional, esclusa
+10 · Operación
+La vida real: alertas desde la especificación, HA por tallas, la semana 1 como producto — y ARGOS verificando a ARGOS
+
+El programa termina donde el producto empieza: con una release que no promete estar verificada, sino que llega con su expediente firmado, su raíz de Merkle y su sello de tiempo — la misma credencial que ARGOS emitirá, desde el primer día, para cada uno de sus clientes.

@@ -1,0 +1,12 @@
+### Conservación del diseño — ARG-NNN
+- [ ] Las restricciones de ANÁLISIS siguen satisfechas (listar las 2-3 críticas y cómo se verifica cada una)
+- [ ] La decisión de DISEÑO se implementa tal cual, o existe Nota de Desviación aprobada: <enlace o "no aplica">
+- [ ] Garantías por construcción intactas donde apliquen:
+  - [ ] sin métodos de escritura fuera de contrato (conectores)
+  - [ ] sin método de borrado (WORM/diario)
+  - [ ] sin camino LLM → veredicto (IA local)
+- [ ] Toda operación relevante escribe su asiento en el diario (test que lo prueba)
+- [ ] La interfaz exportada coincide con la tabla de la fase (test de contrato)
+- [ ] Cobertura del componente ≥ umbral de su zona (80 % comun/motor/evidencia/seguridad; 70 % resto)
+- [ ] Sin secretos, credenciales ni datos reales en el diff
+- [ ] Documentación de uso del componente actualizada en su paquete

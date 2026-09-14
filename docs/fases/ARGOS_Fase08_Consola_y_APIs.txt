@@ -1,0 +1,896 @@
+ULLSWATER INVESTMENTS
+ARGOS · Programa de ingeniería en 10 fases
+FASE 8
+Consola y APIs — Componentes 71 a 80
+La capa C7 al completo: la API REST con su contrato OpenAPI, el RBAC de cuatro roles con doble aprobación, la sesión OIDC del frontend, las cuatro vistas de la consola (inventario, campañas, hallazgos, evidencia), el chat del asistente con citas, los webhooks firmados hacia el ITSM del cliente y el sistema de diseño donde el dorado solo se enciende con el veredicto
+Documento técnico 8 de 10 · Madrid, septiembre de 2026 · Versión 1.0 · Confidencial
+
+Índice
+ TOC \h \u \z \t "Heading 1,1,"
+
+
+0. La capa C7 en conjunto
+La consola es el rostro del producto y su regla de diseño viene del posicionamiento: ARGOS no es un panel de gráficas, es un instrumento de trabajo del DPO y del CISO — cada vista responde una pregunta de su jornada (¿qué hay?, ¿qué está pasando?, ¿qué hago primero?, ¿qué enseño?) y cada acción sensible deja rastro en el diario. La API que la sirve es la misma que se ofrece al cliente para integración: no hay endpoints privados de la consola, porque un producto de evidencia no puede tener dos verdades.
+La arquitectura de la capa: FastAPI como API única (ARG-071) con autorización por rol y doble aprobación como middleware (ARG-072), sesión OIDC contra el Keycloak del appliance con PKCE (ARG-073); frontend React servido como estáticos desde el propio appliance (sin CDN: P-03), con las cuatro vistas (ARG-074..077) y el chat (ARG-078) montados sobre el sistema de diseño (ARG-080); y los webhooks firmados (ARG-079) que llevan hallazgos y campañas al ITSM del cliente — porque el trabajo de subsanación vive donde el cliente trabaja, no donde ARGOS quiera.
+
+ARG-071 · La API REST única
+ANÁLISIS
+Los recursos de la API calcan el dominio: systems, inventory (catálogo+grafo vía ARG-029), campaigns (con sus gates y su progreso en vivo), findings (con transiciones), evidence (índice y descargas), credentials, assistant. Las decisiones transversales: paginación por cursor opaco en todo listado (offset se degrada con volumen), errores RFC 9457 (problem+json: tipo, título, detalle, instancia — depurables sin leer código), idempotencia por clave en todo POST que crea (el cliente ITSM reintenta sin duplicar campañas) y versionado por cabecera con v1 congelada al GA. El contrato OpenAPI se genera del código y se publica en el propio appliance: la documentación no puede divergir.
+DISEÑO
+Aplicación FastAPI con routers por recurso, dependencias comunes (auth, paginación, idempotencia) y el middleware de auditoría: toda mutación escribe en el diario con actor, recurso y resumen — la consola hereda la trazabilidad sin que cada endpoint la recuerde. Se muestra el núcleo: aplicación, dependencias y el router de campañas como patrón (los demás lo repiten).
+DESARROLLO
+services/api/app.py
+"""API única de ARGOS: la misma para consola e integración."""
+import base64, json, uuid
+from fastapi import FastAPI, Depends, Request, HTTPException
+from fastapi.responses import JSONResponse
+from argos_auth.fastapi import current_user
+from argos_db import pool
+ 
+app = FastAPI(title="ARGOS API", version="1.0",
+              docs_url="/api/docs", openapi_url="/api/openapi.json")
+ 
+# ---------- errores problem+json (RFC 9457) ----------
+@app.exception_handler(HTTPException)
+async def problem_handler(req: Request, exc: HTTPException):
+    return JSONResponse(status_code=exc.status_code, content={
+        "type": f"https://argos.local/errors/{exc.status_code}",
+        "title": exc.detail if isinstance(exc.detail, str) else "error",
+        "status": exc.status_code,
+        "instance": str(req.url.path)},
+        media_type="application/problem+json")
+ 
+# ---------- paginación por cursor opaco ----------
+def pagination(cursor: str | None = None, limit: int = 50):
+    after = 0
+    if cursor:
+        after = int(base64.urlsafe_b64decode(cursor).decode())
+    return {"after": after, "limit": min(limit, 200)}
+ 
+def next_cursor(last_id: int) -> str:
+    return base64.urlsafe_b64encode(str(last_id).encode()).decode()
+ 
+# ---------- idempotencia en POST creadores ----------
+async def idempotency(request: Request):
+    key = request.headers.get("Idempotency-Key")
+    if request.method == "POST" and key:
+        with pool.connection() as db:
+            row = db.execute("""SELECT response FROM argos.idempotency
+                WHERE key=%s AND path=%s""",
+                (key, request.url.path)).fetchone()
+            if row:
+                raise HTTPException(200, detail=row[0])   # respuesta cacheada
+    return key
+ 
+# ---------- auditoría de mutaciones ----------
+@app.middleware("http")
+async def audit_mutations(request: Request, call_next):
+    resp = await call_next(request)
+    if request.method in ("POST", "PATCH", "DELETE") \
+       and resp.status_code < 400:
+        user = getattr(request.state, "user", {"sub": "anonimo"})
+        with pool.connection() as db:
+            db.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+                (f"user:{user['sub']}", "api.mutation",
+                 json.dumps({"method": request.method,
+                             "path": request.url.path,
+                             "status": resp.status_code})))
+            db.commit()
+    return resp
+ 
+from routes import systems, inventory, campaigns, findings, \
+                   evidence, credentials, assistant, approvals
+for r in (systems, inventory, campaigns, findings,
+          evidence, credentials, assistant, approvals):
+    app.include_router(r.router, prefix="/api/v1")
+ 
+services/api/routes/campaigns.py (el patrón de router)
+"""Campañas: crear (idempotente), listar, progreso en vivo, compilación previa."""
+import json, uuid
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from temporalio.client import Client
+from argos_auth.fastapi import require_role
+from app import pagination, next_cursor, idempotency
+from argos_db import pool
+ 
+router = APIRouter(tags=["campaigns"])
+ 
+class NewCampaign(BaseModel):
+    name: str
+    scope: dict                 # {system_ids: [...]} o {vertical: 'sanidad'}
+    ontology_pin: str | None = None
+ 
+@router.post("/campaigns",
+             dependencies=[Depends(require_role("gestor_campanas"))])
+async def create(body: NewCampaign, idem=Depends(idempotency)):
+    cid = str(uuid.uuid7())
+    with pool.connection() as db:
+        db.execute("""INSERT INTO argos.campaigns
+            (id, name, scope, status, created_at)
+            VALUES (%s,%s,%s::jsonb,'planificada', now())""",
+            (cid, body.name, json.dumps(body.scope)))
+        if idem:
+            db.execute("""INSERT INTO argos.idempotency (key, path, response)
+                VALUES (%s,'/api/v1/campaigns',%s::jsonb)""",
+                (idem, json.dumps({"id": cid})))
+        db.commit()
+    t = await Client.connect("temporal.argos-core:7233")
+    await t.start_workflow("CampaignWorkflow", cid,
+                           id=f"campaign-{cid}",
+                           task_queue="argos-challenge")
+    return {"id": cid, "status": "planificada"}
+ 
+@router.get("/campaigns")
+async def list_campaigns(page=Depends(pagination)):
+    with pool.connection() as db:
+        rows = db.execute("""SELECT seq, id, name, status,
+                created_at::text FROM argos.campaigns
+            WHERE seq > %s ORDER BY seq LIMIT %s""",
+            (page["after"], page["limit"])).fetchall()
+    items = [dict(zip(("seq","id","name","status","created_at"), r))
+             for r in rows]
+    return {"items": items,
+            "next": next_cursor(items[-1]["seq"]) if items else None}
+ 
+@router.get("/campaigns/{cid}/progress")
+async def progress(cid: str):
+    t = await Client.connect("temporal.argos-core:7233")
+    h = t.get_workflow_handle(f"campaign-{cid}")
+    try:
+        return await h.query("progress")     # la query de ARG-043
+    except Exception:
+        raise HTTPException(404, "campaña sin ejecución activa")
+ 
+@router.get("/campaigns/{cid}/plan")
+async def plan_preview(cid: str):
+    """El plan compilado que el DPO lee antes de aprobar el arranque."""
+    with pool.connection() as db:
+        row = db.execute("""SELECT plan, ontology_version, nodes_total
+            FROM argos.applicability_runs WHERE campaign_id=%s
+            ORDER BY created_at DESC LIMIT 1""", (cid,)).fetchone()
+    if not row:
+        raise HTTPException(404, "plan no compilado todavía")
+    return {"ontology": row[1], "nodes": row[2], "plan": row[0]}
+ 
+
+ARG-072 · Autorización: roles, ámbitos y doble control
+ANÁLISIS
+Los cuatro roles de la fase 1 se convierten aquí en una matriz explícita permiso→rol que vive en un fichero versionado — no dispersa en decoradores—: la matriz es revisable por el cliente en la implantación (¿quién puede aceptar riesgo? es una pregunta de gobierno, no de código) y el middleware la aplica. Las reglas extra del dominio: auditor_lectura ve todo y no toca nada (GET universal); aceptar riesgo exige revisor_dpo y justificación; las compuertas de muestreo exigen dos revisores distintos (ya en ARG-047); y plataforma_admin no puede aprobar compuertas — la separación de deberes entre quien opera la máquina y quien gobierna el cumplimiento.
+DISEÑO
+permissions.yaml (recurso.acción → roles) cargado al arranque; require_perm('findings.accept_risk') como dependencia; y la comprobación de separación de deberes como regla nominal en la matriz (deny para plataforma_admin en approvals.*). El token JWT del Keycloak trae los roles; el middleware resuelve y deja el usuario en request.state para la auditoría de ARG-071.
+DESARROLLO
+services/api/authz/permissions.yaml
+# Matriz permiso -> roles. Revisable con el cliente en implantación.
+systems.read:        [plataforma_admin, gestor_campanas, revisor_dpo, auditor_lectura]
+systems.write:       [plataforma_admin]
+inventory.read:      [plataforma_admin, gestor_campanas, revisor_dpo, auditor_lectura]
+inventory.classify_review: [revisor_dpo]
+campaigns.create:    [gestor_campanas]
+campaigns.read:      [plataforma_admin, gestor_campanas, revisor_dpo, auditor_lectura]
+approvals.grant:     [revisor_dpo]          # admin EXCLUIDO: separación de deberes
+findings.read:       [plataforma_admin, gestor_campanas, revisor_dpo, auditor_lectura]
+findings.transition: [gestor_campanas, revisor_dpo]
+findings.accept_risk: [revisor_dpo]
+evidence.read:       [revisor_dpo, auditor_lectura, gestor_campanas]
+credentials.issue:   [revisor_dpo]
+assistant.use:       [gestor_campanas, revisor_dpo, auditor_lectura]
+webhooks.manage:     [plataforma_admin]
+ 
+services/api/authz/enforce.py
+"""Autorización por matriz versionada; separación de deberes nominal."""
+import pathlib, yaml
+from fastapi import Depends, HTTPException, Request
+from argos_auth.fastapi import current_user
+ 
+MATRIX = yaml.safe_load(pathlib.Path(
+    "/opt/argos/config/permissions.yaml").read_text())
+ 
+def require_perm(perm: str):
+    allowed = set(MATRIX.get(perm, []))
+    if not allowed:
+        raise RuntimeError(f"permiso no declarado en la matriz: {perm}")
+    async def dep(request: Request, user=Depends(current_user)):
+        roles = set(user.get("roles", []))
+        if not roles & allowed:
+            raise HTTPException(403,
+                f"requiere uno de: {sorted(allowed)}")
+        request.state.user = user
+        return user
+    return dep
+ 
+
+ARG-073 · Sesión OIDC del frontend
+ANÁLISIS
+La consola es una SPA servida por el propio appliance y su sesión sigue el patrón recomendado para SPAs sin secretos: Authorization Code con PKCE contra el Keycloak local, tokens en memoria (jamás localStorage: XSS no debe encontrar nada persistente), renovación silenciosa por refresh token en cookie HttpOnly+Secure+SameSite=Strict que solo ve el endpoint de renovación, y expiración de sesión alineada con la política del cliente (importable de su IdP corporativo si el Keycloak federa, que es el caso habitual en AAPP).
+DISEÑO
+Del lado del frontend, un módulo auth.js minimalista (sin dependencia pesada): login() construye la URL de autorización con el verifier PKCE, callback() canjea el código, y fetchApi() adjunta el Bearer y reintenta una vez tras renovar. Del lado API, /auth/refresh custodia la cookie. Se muestra el módulo frontend, que es donde están las decisiones.
+DESARROLLO
+console/src/lib/auth.js
+// Sesión OIDC con PKCE. Tokens SOLO en memoria; refresh en cookie HttpOnly.
+const KC = "/auth/realms/argos/protocol/openid-connect";
+const CLIENT = "argos-console";
+let accessToken = null;              // memoria: se pierde al recargar (ok)
+ 
+const b64url = (buf) =>
+  btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+ 
+async function pkce() {
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+  const digest = await crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode(verifier));
+  sessionStorage.setItem("pkce_v", verifier);   // solo el verifier, efímero
+  return { verifier, challenge: b64url(digest) };
+}
+ 
+export async function login() {
+  const { challenge } = await pkce();
+  const p = new URLSearchParams({
+    client_id: CLIENT, response_type: "code",
+    redirect_uri: location.origin + "/callback",
+    scope: "openid profile roles",
+    code_challenge: challenge, code_challenge_method: "S256",
+  });
+  location.assign(`${KC}/auth?${p}`);
+}
+ 
+export async function callback() {
+  const code = new URLSearchParams(location.search).get("code");
+  const body = new URLSearchParams({
+    grant_type: "authorization_code", client_id: CLIENT,
+    code, redirect_uri: location.origin + "/callback",
+    code_verifier: sessionStorage.getItem("pkce_v"),
+  });
+  const r = await fetch(`${KC}/token`, { method: "POST", body,
+    credentials: "include" });          // set-cookie del refresh (HttpOnly)
+  const tok = await r.json();
+  accessToken = tok.access_token;
+  sessionStorage.removeItem("pkce_v");
+  location.replace("/");
+}
+ 
+async function refresh() {
+  const r = await fetch("/api/v1/auth/refresh",
+    { method: "POST", credentials: "include" });
+  if (!r.ok) { login(); return false; }
+  accessToken = (await r.json()).access_token;
+  return true;
+}
+ 
+export async function fetchApi(path, opts = {}) {
+  const go = () => fetch(path, { ...opts, headers: {
+    ...opts.headers, Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json" } });
+  let r = await go();
+  if (r.status === 401 && await refresh()) r = await go();
+  if (r.status === 403) throw new Error("permiso insuficiente");
+  return r;
+}
+ 
+
+ARG-074 · Vista de inventario
+ANÁLISIS
+La vista responde «¿qué hay y cuánto sé de ello?» en tres planos: el mapa (sistemas con su cobertura y sus datos especiales, la foto que el DPO enseña en comité), el detalle (navegación por el vecindario del grafo vía ARG-029, con la línea temporal de deltas de ARG-023) y la cola de revisión (las propuestas del clasificador asistido esperando el sí/no del DPO — cada resolución, además de corregir el grafo, alimenta la calibración de ARG-055: el botón enseña al sistema). La regla visual: la cobertura es el número grande; los datos especiales llevan el ámbar de severidad, jamás el dorado.
+DISEÑO
+Tres componentes React: InventoryMap (tarjetas por sistema desde catalog_coverage), NodeExplorer (vecindario expandible) y ReviewQueue (aprobación/corrección en línea). Se muestra ReviewQueue completo —el más rico en decisiones— y el mapa esencial; el patrón de datos es SWR sobre fetchApi.
+DESARROLLO
+console/src/views/inventory/ReviewQueue.jsx
+// Cola de revisión: cada resolución corrige el grafo Y calibra el modelo.
+import { useState } from "react";
+import useSWR from "swr";
+import { fetchApi } from "../../lib/auth";
+ 
+const CATS = ["dato_personal", "categoria_especial.salud",
+  "categoria_especial.otro", "identificador_oficial", "dato_financiero",
+  "dato_contacto", "dato_localizacion", "credencial_tecnica",
+  "sin_dato_personal"];
+ 
+const fetcher = (u) => fetchApi(u).then((r) => r.json());
+ 
+export default function ReviewQueue() {
+  const { data, mutate } = useSWR(
+    "/api/v1/inventory/review-queue", fetcher);
+  const [busy, setBusy] = useState(null);
+ 
+  async function resolve(item, category) {
+    setBusy(item.node_key);
+    await fetchApi(`/api/v1/inventory/review-queue/${item.node_key}`, {
+      method: "POST",
+      body: JSON.stringify({ resolution: category }),
+    });
+    mutate();                       // refresca la cola
+    setBusy(null);
+  }
+ 
+  if (!data) return <div className="skeleton" />;
+  return (
+    <section className="panel">
+      <header className="panel-head">
+        <h2>Cola de revisión</h2>
+        <span className="badge">{data.items.length} pendientes</span>
+      </header>
+      {data.items.map((it) => (
+        <article key={it.node_key} className="review-row">
+          <div className="review-meta">
+            <code>{it.table_name}.{it.column_name}</code>
+            <span className="muted">{it.system_name}</span>
+          </div>
+          <div className="review-proposal">
+            <span className="chip chip-ai"
+                  title={`confianza ${it.confidence}`}>
+              {it.proposed_category}
+            </span>
+            <small className="muted">{it.reason}</small>
+          </div>
+          <div className="review-actions">
+            <button className="btn-primary"
+                    disabled={busy === it.node_key}
+                    onClick={() => resolve(it, it.proposed_category)}>
+              Confirmar
+            </button>
+            <select defaultValue=""
+                    onChange={(e) => resolve(it, e.target.value)}>
+              <option value="" disabled>Corregir a…</option>
+              {CATS.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </div>
+        </article>
+      ))}
+    </section>
+  );
+}
+ 
+console/src/views/inventory/InventoryMap.jsx (esencial)
+import useSWR from "swr";
+import { fetchApi } from "../../lib/auth";
+const fetcher = (u) => fetchApi(u).then((r) => r.json());
+ 
+export default function InventoryMap() {
+  const { data } = useSWR("/api/v1/inventory/coverage", fetcher);
+  if (!data) return <div className="skeleton" />;
+  return (
+    <div className="grid-cards">
+      {data.items.map((s) => (
+        <button key={s.system_id} className="card card-link"
+                onClick={() => location.assign(`/inventory/${s.system_id}`)}>
+          <h3>{s.name}</h3>
+          <div className="kpi">{s.coverage_pct}<small>%</small></div>
+          <p className="muted">cobertura de clasificación</p>
+          {s.special_columns > 0 && (
+            <span className="chip chip-warn">
+              {s.special_columns} columnas de categoría especial
+            </span>)}
+          {s.missing_nodes > 0 && (
+            <span className="chip">{s.missing_nodes} desaparecidos</span>)}
+        </button>
+      ))}
+    </div>);
+}
+ 
+
+ARG-075 · Vista de campañas
+ANÁLISIS
+El ciclo del gestor en una pantalla: planificar (ámbito → el resolutor compila → la vista previa del plan muestra qué se preguntará exactamente, con lo no verificable en su sección — la transparencia previa que hace firmable la compuerta de arranque), aprobar (la bandeja de compuertas con su doble control), seguir (progreso en vivo desde la query del workflow, con los sistemas pausados por cortacircuitos visibles con su motivo) y cerrar (el enlace al expediente cuando la fase 7 sella). El plan previo es la pieza distintiva: ningún competidor enseña la lista literal de sondas antes de ejecutarlas.
+DISEÑO
+CampaignDetail con cuatro secciones por estado; PlanPreview agrupa el plan por obligación con las sondas expandibles; LiveProgress consulta /progress cada 5 s mientras corre. Se muestra PlanPreview y el seguimiento —las dos piezas con decisiones—.
+DESARROLLO
+console/src/views/campaigns/PlanPreview.jsx
+// La lista literal de lo que se va a preguntar, ANTES de ejecutar.
+import useSWR from "swr";
+import { fetchApi } from "../../lib/auth";
+const fetcher = (u) => fetchApi(u).then((r) => r.json());
+ 
+export default function PlanPreview({ campaignId }) {
+  const { data } = useSWR(
+    `/api/v1/campaigns/${campaignId}/plan`, fetcher);
+  if (!data) return <div className="skeleton" />;
+ 
+  const byObligation = {};
+  for (const row of data.plan)
+    (byObligation[row.label] ??= []).push(row);
+ 
+  return (
+    <section className="panel">
+      <header className="panel-head">
+        <h2>Plan compilado</h2>
+        <span className="muted">
+          ontología {data.ontology} · {data.nodes} activos
+        </span>
+      </header>
+      {Object.entries(byObligation).map(([label, rows]) => (
+        <details key={label} className="plan-group">
+          <summary>
+            <strong>{label}</strong>
+            <span className="badge">{rows.reduce(
+              (n, r) => n + r.node_keys.length, 0)} comprobaciones</span>
+          </summary>
+          {rows.map((r) => (
+            <div key={r.challenge_id} className="plan-row">
+              <code>{r.challenge_id}</code>
+              <span className={`chip chip-${r.severity}`}>
+                {r.severity}</span>
+              <span className="muted">
+                {r.node_keys.length} activos</span>
+            </div>))}
+        </details>
+      ))}
+      {data.unverifiable?.length > 0 && (
+        <div className="callout callout-warn">
+          <h4>No verificable en este ámbito</h4>
+          {data.unverifiable.map((u, i) => (
+            <p key={i}><code>{u.challenge}</code> — {u.motivo}</p>))}
+        </div>)}
+    </section>);
+}
+ 
+console/src/views/campaigns/LiveProgress.jsx (esencial)
+import useSWR from "swr";
+import { fetchApi } from "../../lib/auth";
+const fetcher = (u) => fetchApi(u).then((r) => r.json());
+ 
+export default function LiveProgress({ campaignId, running }) {
+  const { data } = useSWR(
+    `/api/v1/campaigns/${campaignId}/progress`, fetcher,
+    { refreshInterval: running ? 5000 : 0 });
+  if (!data) return null;
+  const pct = data.total ? Math.round(100 * data.done / data.total) : 0;
+  return (
+    <div className="progress-block">
+      <div className="progress-bar">
+        <div className="progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="progress-stats">
+        <span>{data.done}/{data.total} comprobaciones</span>
+        <span className={data.findings ? "chip chip-alta" : "chip"}>
+          {data.findings} hallazgos</span>
+        {data.paused_systems?.map((s) => (
+          <span key={s} className="chip chip-warn"
+                title="cortacircuitos abierto">
+            {s} en pausa</span>))}
+      </div>
+    </div>);
+}
+ 
+
+ARG-076 · Vista de hallazgos
+ANÁLISIS
+El triaje responde «¿qué hago primero?»: la lista ordenada por severidad y recurrencia con filtros persistentes, el detalle con el porqué completo (el veredicto con sus valores, el enlace a la consulta literal del diario, la obligación con su artículo) y las acciones de la máquina de estados de ARG-048 — con la de aceptar riesgo tras un modal que exige justificación y caducidad y avisa de que queda en el expediente. La vista muestra siempre el estado de verificación: un hallazgo «pendiente de verificación» enseña el botón que lanza la reejecución (ARG-049), y uno reabierto enseña su historia — la consola no deja mentirse.
+DISEÑO
+FindingsBoard (lista+filtros), FindingDetail (el porqué + transiciones permitidas leídas de la API — el frontend no duplica la máquina de estados) y AcceptRiskModal. Se muestran el detalle y el modal, donde están las decisiones de producto.
+DESARROLLO
+console/src/views/findings/FindingDetail.jsx
+// El porqué completo y las transiciones que la API permita (no el front).
+import useSWR from "swr";
+import { useState } from "react";
+import { fetchApi } from "../../lib/auth";
+import AcceptRiskModal from "./AcceptRiskModal";
+const fetcher = (u) => fetchApi(u).then((r) => r.json());
+ 
+const LABELS = { en_resolucion: "Marcar en resolución",
+  pendiente_verificacion: "Declarar resuelto (verificará ARGOS)",
+  cerrado_conforme: null,            // solo lo cierra la reejecución
+  reabierto: null, aceptado_riesgo: "Aceptar riesgo…" };
+ 
+export default function FindingDetail({ id }) {
+  const { data: f, mutate } = useSWR(`/api/v1/findings/${id}`, fetcher);
+  const [riskOpen, setRiskOpen] = useState(false);
+  if (!f) return <div className="skeleton" />;
+ 
+  async function transition(to, extra = {}) {
+    await fetchApi(`/api/v1/findings/${id}/transition`, {
+      method: "POST", body: JSON.stringify({ to, ...extra }) });
+    mutate();
+  }
+ 
+  return (
+    <article className="panel">
+      <header className="panel-head">
+        <span className={`chip chip-${f.severity}`}>{f.severity}</span>
+        <h2>{f.challenge_title}</h2>
+        <span className="badge">{f.status}</span>
+        {f.occurrences > 1 && (
+          <span className="chip chip-warn">
+            {f.occurrences}ª ocurrencia</span>)}
+      </header>
+ 
+      <section className="why">
+        <h3>Por qué</h3>
+        <dl>
+          <dt>Obligación</dt><dd>{f.obligation_label}</dd>
+          <dt>Criterio</dt>
+          <dd><code>{f.verdict.via === "umbral"
+            ? `${f.verdict.campo} ${f.verdict.operador} `
+              + `${f.verdict.esperado} (obtenido: ${f.verdict.valor})`
+            : `OPA ${f.verdict.paquete}`}</code></dd>
+          {f.verdict.ajuste_muestral && (
+            <><dt>Muestreo</dt>
+            <dd>n={f.verdict.ajuste_muestral.n} de
+               N={f.verdict.ajuste_muestral.N};
+               proyección superior {f.verdict.ajuste_muestral
+                 .proyectado_sup}</dd></>)}
+          <dt>Consulta emitida</dt>
+          <dd><a href={`/journal/${f.probe_journal_seq}`}>
+            asiento nº {f.probe_journal_seq} del diario</a></dd>
+        </dl>
+      </section>
+ 
+      <footer className="actions">
+        {f.allowed_transitions.map((to) => LABELS[to] && (
+          <button key={to}
+            className={to === "aceptado_riesgo" ? "btn-ghost" : "btn"}
+            onClick={() => to === "aceptado_riesgo"
+              ? setRiskOpen(true) : transition(to)}>
+            {LABELS[to]}
+          </button>))}
+        {f.status === "pendiente_verificacion" && (
+          <button className="btn-primary" onClick={() =>
+            fetchApi(`/api/v1/findings/${id}/verify`, { method: "POST" })}>
+            Lanzar verificación
+          </button>)}
+      </footer>
+ 
+      {riskOpen && <AcceptRiskModal onClose={() => setRiskOpen(false)}
+        onAccept={(note, expiry) => transition("aceptado_riesgo",
+          { note, risk_expiry: expiry }).then(() => setRiskOpen(false))} />}
+    </article>);
+}
+ 
+console/src/views/findings/AcceptRiskModal.jsx (esencial)
+import { useState } from "react";
+ 
+export default function AcceptRiskModal({ onClose, onAccept }) {
+  const [note, setNote] = useState("");
+  const [expiry, setExpiry] = useState("");
+  const valid = note.trim().length >= 30 && expiry;
+  return (
+    <div className="modal-backdrop">
+      <div className="modal">
+        <h3>Aceptar riesgo</h3>
+        <p className="callout callout-warn">
+          La aceptación queda registrada en el diario y aparece en el
+          expediente con su justificación, autor y caducidad.
+        </p>
+        <label>Justificación (mín. 30 caracteres)
+          <textarea rows={4} value={note}
+                    onChange={(e) => setNote(e.target.value)} />
+        </label>
+        <label>Caducidad de la aceptación
+          <input type="date" value={expiry}
+                 onChange={(e) => setExpiry(e.target.value)} />
+        </label>
+        <footer className="actions">
+          <button className="btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn-primary" disabled={!valid}
+                  onClick={() => onAccept(note, expiry)}>
+            Aceptar con registro</button>
+        </footer>
+      </div>
+    </div>);
+}
+ 
+
+ARG-077 · Vista de evidencia y credenciales
+ANÁLISIS
+La vista con la que ARGOS se enseña a terceros: la cadena de la campaña dibujada eslabón a eslabón con su estado real (artefactos → raíz → firma → sello: cada uno verde, ámbar «en cola» o rojo), el navegador de artefactos con su prueba de Merkle descargable, la descarga del expediente (JSON y PDF) y la emisión de credencial —un acto explícito del revisor_dpo, con la vista previa de exactamente qué campos viajarán y cuáles no—. El estado del sellado para aislados es visible sin vergüenza: «firmada; sello temporal pendiente de ventana de conectividad» es información, no un defecto.
+DISEÑO
+EvidenceChain (los eslabones con estado desde /evidence/{cid}/chain), ArtifactBrowser (índice paginado + descarga artefacto+prueba) e IssueCredential (previsualización del credentialSubject + confirmación). Se muestra EvidenceChain, la pieza narrativa.
+DESARROLLO
+console/src/views/evidence/EvidenceChain.jsx
+// La cadena dibujada: cada eslabón con su estado real.
+import useSWR from "swr";
+import { fetchApi } from "../../lib/auth";
+const fetcher = (u) => fetchApi(u).then((r) => r.json());
+ 
+const LINKS = [
+  { key: "artifacts", label: "Artefactos WORM",
+    desc: (c) => `${c.artifacts} escritos, retención ${c.retention_years} años` },
+  { key: "merkle",    label: "Árbol de Merkle",
+    desc: (c) => c.merkle_root
+      ? `raíz ${c.merkle_root.slice(0, 16)}…` : "pendiente de cierre" },
+  { key: "signature", label: "Firma del appliance (TPM)",
+    desc: (c) => c.signed ? `clave ${c.key_id}` : "pendiente" },
+  { key: "timestamp", label: "Sello temporal cualificado",
+    desc: (c) => ({ sellado: "obtenido",
+      pendiente: "en cola (ventana de conectividad)",
+      sin_tsa: "modo aislado: exportar solicitudes" }[c.tsa_status]) },
+  { key: "journal",   label: "Diario verificado",
+    desc: (c) => c.journal_ok
+      ? `${c.journal_entries} asientos íntegros, cabeza anclada`
+      : "anomalías detectadas" },
+];
+ 
+const state = (c, key) => ({
+  artifacts: c.artifacts > 0, merkle: !!c.merkle_root,
+  signature: c.signed, timestamp: c.tsa_status === "sellado",
+  journal: c.journal_ok }[key]);
+ 
+export default function EvidenceChain({ campaignId }) {
+  const { data: c } = useSWR(
+    `/api/v1/evidence/${campaignId}/chain`, fetcher);
+  if (!c) return <div className="skeleton" />;
+  return (
+    <section className="panel">
+      <header className="panel-head"><h2>Cadena de evidencia</h2></header>
+      <ol className="chain">
+        {LINKS.map((l) => {
+          const ok = state(c, l.key);
+          const pending = !ok && l.key === "timestamp"
+                          && c.tsa_status === "pendiente";
+          return (
+            <li key={l.key} className={ok ? "link-ok"
+                : pending ? "link-pending" : "link-off"}>
+              <span className="chain-dot" />
+              <div>
+                <strong>{l.label}</strong>
+                <p className="muted">{l.desc(c)}</p>
+              </div>
+            </li>);
+        })}
+      </ol>
+      <footer className="actions">
+        <a className="btn" href={`/api/v1/evidence/${campaignId}/dossier.pdf`}>
+          Descargar expediente (PDF)</a>
+        <a className="btn-ghost"
+           href={`/api/v1/evidence/${campaignId}/dossier.json`}>
+          JSON</a>
+        {c.credential_issued
+          ? <span className="chip chip-verdict">Credencial emitida</span>
+          : <a className="btn-primary"
+               href={`/campaigns/${campaignId}/credential`}>
+              Emitir credencial…</a>}
+      </footer>
+    </section>);
+}
+ 
+
+ARG-078 · El chat del asistente
+ANÁLISIS
+La interfaz del asistente de ARG-058 con las tres reglas de presentación que lo hacen de fiar: las citas son de primera clase (los [n] del texto se renderizan como referencias desplegables con el fragmento y su origen: norma, guía o documento del cliente), las herramientas usadas se enseñan (la línea «consultado: hallazgos, cobertura» bajo cada respuesta — el usuario ve de dónde salió el dato) y el rehúso se presenta como tal, con los fragmentos más cercanos por si el humano quiere juzgar. Marca permanente «asistente de IA: las respuestas no constituyen veredictos» — la frontera del producto también en el pie del chat.
+DESARROLLO
+console/src/views/assistant/Chat.jsx
+import { useRef, useState } from "react";
+import { fetchApi } from "../../lib/auth";
+ 
+function Answer({ msg }) {
+  // convierte [n] en referencias desplegables
+  const parts = msg.answer.split(/(\[\d+\])/g);
+  return (
+    <div className="msg msg-assistant">
+      <p>{parts.map((p, i) => {
+        const m = p.match(/^\[(\d+)\]$/);
+        if (!m) return p;
+        const cita = msg.citas?.find((c) => c.n === +m[1]);
+        return cita ? (
+          <details key={i} className="cite">
+            <summary>[{m[1]}]</summary>
+            <blockquote>
+              <cite>{cita.ref_completa}</cite>
+              <p>{cita.fragmento}</p>
+            </blockquote>
+          </details>) : p;
+      })}</p>
+      {msg.suficiente === false && (
+        <div className="callout callout-warn">
+          Sin base suficiente en el corpus para responder con rigor.
+        </div>)}
+      {msg.tools_used?.length > 0 && (
+        <small className="muted">
+          consultado: {[...new Set(msg.tools_used)].join(", ")}
+        </small>)}
+    </div>);
+}
+ 
+export default function Chat() {
+  const [msgs, setMsgs] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const input = useRef();
+ 
+  async function send() {
+    const q = input.current.value.trim();
+    if (!q || busy) return;
+    input.current.value = "";
+    setMsgs((m) => [...m, { role: "user", answer: q }]);
+    setBusy(true);
+    const r = await fetchApi("/api/v1/assistant/ask", {
+      method: "POST", body: JSON.stringify({ question: q }) });
+    setMsgs((m) => [...m, { role: "assistant", ...(await r.json()) }]);
+    setBusy(false);
+  }
+ 
+  return (
+    <section className="chat">
+      <div className="chat-scroll">
+        {msgs.map((m, i) => m.role === "user"
+          ? <div key={i} className="msg msg-user">{m.answer}</div>
+          : <Answer key={i} msg={m} />)}
+        {busy && <div className="msg msg-assistant skeleton-line" />}
+      </div>
+      <footer className="chat-input">
+        <input ref={input} placeholder="Pregunta sobre normativa o estado…"
+               onKeyDown={(e) => e.key === "Enter" && send()} />
+        <button className="btn-primary" onClick={send}>Enviar</button>
+      </footer>
+      <small className="muted chat-disclaimer">
+        Asistente de IA: las respuestas no constituyen veredictos de
+        conformidad.
+      </small>
+    </section>);
+}
+ 
+
+ARG-079 · Webhooks firmados e integración ITSM
+ANÁLISIS
+La subsanación vive en el ITSM del cliente, así que ARGOS empuja: hallazgo abierto → incidencia; campaña cerrada → notificación; compuerta pendiente → aviso al aprobador. Los requisitos de un webhook serio: firma HMAC del cuerpo con secreto por suscripción (el receptor verifica que es ARGOS y que nada cambió), timestamp contra replay, reintentos con backoff exponencial y una bandeja de entregas con el estado de cada intento — porque «¿llegó al ServiceNow?» debe responderse desde la consola. Las plantillas de transformación por destino (ServiceNow, Jira, genérico) son configuración, no código.
+DESARROLLO
+services/api/webhooks/dispatch.py
+"""Webhooks: HMAC + timestamp, reintentos con backoff, bandeja de entregas."""
+import hashlib, hmac, json, time
+import httpx
+from temporalio import activity
+from argos_db import pool
+ 
+MAX_ATTEMPTS = 8          # backoff: 1,2,4... ~2h en total
+ 
+def _sign(secret: bytes, ts: str, body: bytes) -> str:
+    mac = hmac.new(secret, f"{ts}.".encode() + body, hashlib.sha256)
+    return f"t={ts},v1={mac.hexdigest()}"
+ 
+TEMPLATES = {
+  "servicenow": lambda e: {"short_description":
+      f"[ARGOS] {e['severity']}: {e.get('challenge_id','')}",
+      "description": json.dumps(e, ensure_ascii=False),
+      "urgency": {"critica": 1, "alta": 2}.get(e.get("severity"), 3)},
+  "jira": lambda e: {"fields": {"summary":
+      f"[ARGOS] {e.get('challenge_id','evento')}",
+      "description": json.dumps(e, ensure_ascii=False),
+      "issuetype": {"name": "Bug"}}},
+  "generic": lambda e: e,
+}
+ 
+@activity.defn(name="deliver_webhook_act")
+async def deliver_webhook_act(delivery_id: int) -> str:
+    with pool.connection() as db:
+        d = db.execute("""SELECT w.url, w.secret, w.template, dl.event,
+                dl.attempts FROM argos.webhook_deliveries dl
+            JOIN argos.webhooks w ON w.id = dl.webhook_id
+            WHERE dl.id=%s""", (delivery_id,)).fetchone()
+    url, secret, template, event, attempts = d
+    payload = TEMPLATES.get(template, TEMPLATES["generic"])(event)
+    body = json.dumps(payload, ensure_ascii=False).encode()
+    ts = str(int(time.time()))
+    try:
+        async with httpx.AsyncClient(timeout=15) as c:
+            r = await c.post(url, content=body, headers={
+                "Content-Type": "application/json",
+                "X-Argos-Signature": _sign(bytes(secret), ts, body),
+                "X-Argos-Event": event["type"]})
+        ok = r.status_code < 300
+        status = "entregado" if ok else f"http_{r.status_code}"
+    except Exception as e:
+        ok, status = False, f"error: {str(e)[:120]}"
+    with pool.connection() as db:
+        db.execute("""UPDATE argos.webhook_deliveries
+            SET attempts=%s, status=%s, last_at=now() WHERE id=%s""",
+            (attempts + 1, status, delivery_id))
+        db.commit()
+    if not ok and attempts + 1 < MAX_ATTEMPTS:
+        raise RuntimeError(status)      # Temporal reintenta con backoff
+    return status
+ 
+# Suscriptor del bus: finding_opened / campaign_sealed / approval_requested
+# crea filas en webhook_deliveries y lanza deliver_webhook_act por cada una.
+ 
+
+ARG-080 · El sistema de diseño de la consola
+ANÁLISIS
+La consola hereda la identidad definida en los trabajos de marca: piel oscura institucional (fondo #0A1830, paneles #0E1F3D), teal como color de acción, la escala de severidades (crítica burdeos, alta ámbar, media arena, baja gris) y la regla de oro literal: el dorado #C9A227 aparece únicamente en el veredicto y la credencial — cuando algo brilla dorado en ARGOS, es que está acreditado. Tokens CSS como única fuente (los componentes no conocen un color), tipografía del sistema con una serif solo para los sellos del expediente, foco visible y contraste AA verificado en los pares de la paleta.
+DESARROLLO
+console/src/styles/tokens.css
+:root {
+  /* --- piel --- */
+  --bg:        #0A1830;   /* fondo profundo */
+  --panel:     #0E1F3D;   /* paneles */
+  --panel-2:   #16294D;   /* elevación 2 / hover */
+  --line:      #24365C;   /* bordes */
+  --text:      #E8ECF4;
+  --text-mut:  #9AA7BF;
+ 
+  /* --- acción --- */
+  --accent:    #1F7A7A;   /* teal: botones, enlaces, foco */
+  --accent-hi: #2E9C9C;
+ 
+  /* --- severidades --- */
+  --sev-critica: #8C2F39;
+  --sev-alta:    #C97B27;
+  --sev-media:   #C9B27F;
+  --sev-baja:    #6C7A93;
+ 
+  /* --- LA REGLA DE ORO: solo veredicto y credencial --- */
+  --verdict:   #C9A227;
+ 
+  --radius: 10px;
+  --font: ui-sans-serif, system-ui, 'Segoe UI', Roboto, sans-serif;
+  --font-seal: Georgia, 'Times New Roman', serif;  /* solo sellos */
+}
+ 
+body { background: var(--bg); color: var(--text);
+       font-family: var(--font); }
+ 
+.panel { background: var(--panel); border: 1px solid var(--line);
+         border-radius: var(--radius); padding: 20px; }
+ 
+.btn-primary { background: var(--accent); color: #fff; border: 0;
+  border-radius: var(--radius); padding: 8px 16px; cursor: pointer; }
+.btn-primary:hover { background: var(--accent-hi); }
+.btn-primary:focus-visible { outline: 2px solid var(--accent-hi);
+                             outline-offset: 2px; }
+ 
+.chip { border-radius: 999px; padding: 2px 10px; font-size: 12px;
+        background: var(--panel-2); color: var(--text-mut); }
+.chip-critica { background: var(--sev-critica); color: #fff; }
+.chip-alta    { background: var(--sev-alta);    color: #fff; }
+.chip-media   { background: var(--sev-media);   color: #1c1c1c; }
+.chip-baja    { background: var(--sev-baja);    color: #fff; }
+.chip-warn    { background: var(--sev-alta);    color: #fff; }
+ 
+/* Dorado: EXCLUSIVO del veredicto acreditado y la credencial */
+.chip-verdict { background: var(--verdict); color: #1c1c1c;
+                font-weight: 600; }
+.chain .link-ok .chain-dot { background: var(--accent); }
+.chain .link-pending .chain-dot { background: var(--sev-alta); }
+.credential-seal { font-family: var(--font-seal);
+  border: 2px solid var(--verdict); color: var(--verdict);
+  border-radius: var(--radius); padding: 12px 18px; }
+ 
+console/src/styles/CONTRIBUTING.md — reglas de uso
+# Reglas del sistema de diseño
+1. Ningún componente declara un color: SIEMPRE var(--token).
+2. --verdict (dorado) SOLO en: chip-verdict, credential-seal y el
+   veredicto global del expediente. El linter de estilos lo vigila:
+   stylelint declara 'declaration-property-value-disallowed-list'
+   para #C9A227 fuera de tokens.css.
+3. Severidades: siempre el chip; nunca texto coloreado suelto.
+4. Contraste: pares verificados AA (texto normal 4.5:1). Los tres
+   pares límite (media/arena, warn) llevan texto oscuro #1c1c1c.
+5. Foco visible en TODO elemento interactivo (:focus-visible).
+6. La serif (--font-seal) existe solo para sellos y credenciales:
+   si aparece en un párrafo, es un error.
+ 
+
+Interfaces que esta fase exporta
+Componente
+Interfaz exportada
+Consumidores
+ARG-071
+API v1 única (OpenAPI publicado) + auditoría de mutaciones
+Consola, ITSM del cliente, integradores
+ARG-072
+permissions.yaml + require_perm() con separación de deberes
+Todos los routers; revisión de gobierno en implantación
+ARG-073
+auth.js (PKCE, tokens en memoria, refresh HttpOnly)
+Todas las vistas vía fetchApi()
+ARG-074
+InventoryMap/NodeExplorer/ReviewQueue
+DPO; cada revisión alimenta la calibración (ARG-055)
+ARG-075
+PlanPreview (la lista literal previa) + LiveProgress
+La compuerta de arranque firmable con conocimiento
+ARG-076
+FindingDetail con transiciones servidas por la API
+Triaje diario; la reejecución de ARG-049 a un clic
+ARG-077
+EvidenceChain + descarga expediente + emisión credencial
+Lo que se enseña a terceros; ARG-068/069
+ARG-078
+Chat con citas desplegables y herramientas visibles
+Usuarios; la frontera del producto en el pie
+ARG-079
+Webhooks HMAC con bandeja de entregas + plantillas ITSM
+ServiceNow/Jira del cliente; ARG-048 (aperturas)
+ARG-080
+tokens.css + reglas linter (dorado exclusivo)
+Toda la consola; el expediente PDF hereda la paleta
+
+Estado del programa: ARGOS ya se usa: una API única sin verdades paralelas, cuatro roles con separación de deberes real, vistas que responden las preguntas de la jornada del DPO, un plan legible antes de cada campaña, un chat que cita y confiesa sus fuentes, y webhooks que llevan el trabajo a donde el cliente trabaja. Quedan el blindaje de la plataforma (fase 9) y la operación del appliance (fase 10).

@@ -1,0 +1,895 @@
+ULLSWATER INVESTMENTS
+ARGOS · Programa de ingeniería en 10 fases
+FASE 2
+Conectores de solo lectura — Componentes 11 a 20
+La capa C1 al completo: el SDK que garantiza la no-escritura, el diario previo de consultas, el presupuesto de carga con cortacircuitos, y los siete conectores de arranque — SQL genérico, PostgreSQL, Oracle/SQL Server, ficheros, LDAP/Active Directory, REST y los clínicos FHIR/DICOM
+Documento técnico 2 de 10 · Madrid, septiembre de 2026 · Versión 1.0 · Confidencial
+
+Índice
+ TOC \h \u \z \t "Heading 1,1,"
+
+
+0. La capa C1 en conjunto
+Los conectores son la única frontera entre ARGOS y los sistemas del cliente, y por eso los tres primeros componentes de la fase no son conectores sino garantías: el SDK (ARG-011) que impone el contrato de solo lectura por construcción, el diario (ARG-012) que registra cada consulta antes de emitirla, y el presupuesto de carga (ARG-013) que hace imposible degradar un sistema en producción. Ningún conector puede ejecutar nada sin pasar por los tres; el orden de este documento es, literalmente, el orden de las dependencias.
+Principios heredados del pliego que esta fase materializa: P-04 (solo lectura acreditada y registro íntegro), P-05 (presupuestos con corte automático por latencia) y P-10 (catálogo mínimo de conectores). Cada conector se despliega como contenedor propio con la etiqueta argos/role=connector, que es la que le concede —vía la NetworkPolicy de ARG-003— la única salida existente hacia la red del cliente.
+
+ARG-011 · SDK de conectores: el contrato de solo lectura
+ANÁLISIS
+La promesa de no-escritura no puede depender de la disciplina de cada desarrollador de conector: debe ser estructural. El análisis identificó tres líneas de defensa componibles: (1) cuentas de solo lectura creadas por el cliente (organizativa, fuera del código), (2) imposibilidad sintáctica en el SDK —el conector no expone ninguna primitiva de escritura y toda sonda declara su consulta, que se valida contra una lista de verbos permitidos antes de emitirse— y (3) sesiones abiertas en modo de solo lectura cuando el protocolo lo soporta. El SDK implementa (2) y (3) y verifica (1) en el alta del sistema (la prueba de no-escritura del capítulo 7 del pliego).
+DISEÑO
+Una clase base Connector con ciclo de vida (open/close), un descriptor de capacidades y cuatro tipos de sonda normalizados que las fases 3 y 5 consumen: scan_schema (estructura), count (recuentos con predicado), sample (muestreo minimizado con hash de contenido) y check_config (configuraciones). Toda sonda devuelve ProbeResult con metadatos de ejecución (duración, filas, presupuesto consumido) y pasa obligatoriamente por journal() y budget() — el SDK las invoca; el conector concreto no puede saltárselas porque el método público execute() es final y las sondas concretas son hooks protegidos.
+DESARROLLO
+connectors/sdk/argos_connector/base.py
+"""SDK de conectores ARGOS: contrato de solo lectura por construcción."""
+from __future__ import annotations
+import abc, time, uuid, dataclasses as dc
+from typing import Any
+from .journal import QueryJournal
+from .budget import LoadBudget, BudgetExceeded
+from .secrets import connector_credentials   # lee /argos/connectors/<id> (ARG-009)
+ 
+READ_VERBS = {"select", "show", "explain", "describe", "with"}
+ 
+@dc.dataclass(frozen=True)
+class ProbeSpec:
+    kind: str                # scan_schema | count | sample | check_config
+    target: str              # tabla/ruta/endpoint según conector
+    statement: str | None    # consulta declarada (validable)
+    params: dict[str, Any] = dc.field(default_factory=dict)
+ 
+@dc.dataclass(frozen=True)
+class ProbeResult:
+    probe_id: str
+    kind: str
+    ok: bool
+    data: dict[str, Any]          # SIEMPRE minimizado: recuentos, hashes, esquemas
+    duration_ms: int
+    rows_touched: int
+    journal_seq: int              # entrada del diario que la registró ANTES
+ 
+class ReadOnlyViolation(Exception): ...
+ 
+class Connector(abc.ABC):
+    """Base de todo conector. Las subclases implementan _do_* ;
+    NUNCA reimplementan execute()."""
+ 
+    kind: str = "abstract"
+ 
+    def __init__(self, system_id: str, config: dict):
+        self.system_id = system_id
+        self.config = config
+        self.creds = connector_credentials(system_id)
+        self.journal = QueryJournal(system_id)
+        self.budget = LoadBudget(system_id, config.get("budget", {}))
+ 
+    # -------- ciclo de vida --------
+    def open(self): ...
+    def close(self): ...
+ 
+    # -------- validación sintáctica de solo lectura --------
+    @staticmethod
+    def assert_read_only(statement: str | None):
+        if statement is None:
+            return
+        first = statement.lstrip().split(None, 1)[0].lower().rstrip("(")
+        if first not in READ_VERBS:
+            raise ReadOnlyViolation(f"verbo no permitido: {first!r}")
+ 
+    # -------- punto de entrada ÚNICO (final) --------
+    def execute(self, spec: ProbeSpec) -> ProbeResult:
+        self.assert_read_only(spec.statement)
+        seq = self.journal.register(spec)          # 1) diario ANTES de emitir
+        self.budget.acquire()                      # 2) presupuesto (bloquea o eleva)
+        t0 = time.monotonic()
+        try:
+            handler = getattr(self, f"_do_{spec.kind}")
+            data, rows = handler(spec)
+            ok = True
+        except BudgetExceeded:
+            raise
+        except Exception as e:
+            data, rows, ok = {"error": str(e)}, 0, False
+        dur = int((time.monotonic() - t0) * 1000)
+        self.budget.observe_latency(dur)           # 3) alimenta el cortacircuitos
+        self.journal.complete(seq, ok=ok, duration_ms=dur, rows=rows)
+        return ProbeResult(str(uuid.uuid7()), spec.kind, ok, data, dur, rows, seq)
+ 
+    # -------- hooks que implementa cada conector --------
+    @abc.abstractmethod
+    def _do_scan_schema(self, spec) -> tuple[dict, int]: ...
+    @abc.abstractmethod
+    def _do_count(self, spec) -> tuple[dict, int]: ...
+    @abc.abstractmethod
+    def _do_sample(self, spec) -> tuple[dict, int]: ...
+    @abc.abstractmethod
+    def _do_check_config(self, spec) -> tuple[dict, int]: ...
+ 
+
+ARG-012 · Diario previo de consultas
+ANÁLISIS
+«El cliente puede reconstruir todo lo que el agente ha preguntado» exige que el registro sea previo (una consulta que falla o se interrumpe también debe constar), completo (la consulta literal con sus parámetros, no un resumen) e inmutable (se apoya en el diario encadenado de ARG-005). Un registro posterior a la ejecución —el patrón habitual de logging— no sirve: dejaría fuera precisamente los casos conflictivos.
+DISEÑO
+Dos escrituras por sonda: register() inserta la consulta declarada en argos.connector_queries y añade la entrada 'query.emit' al diario encadenado, todo en una transacción, antes de que el SDK toque el sistema del cliente; complete() cierra la fila con resultado y duración (la fila de cierre es actualizable; la entrada del diario, no). La tabla incluye el hash de la consulta normalizada para detectar patrones y deduplicar en el análisis.
+DESARROLLO
+connectors/sdk/argos_connector/journal.py
+"""Registro previo e íntegro de toda consulta emitida (P-04)."""
+import hashlib, json
+import psycopg
+from .db import pool   # pool psycopg hacia postgres.argos-core (rol svc_connector)
+ 
+DDL_DOC = """ver migración 0002_conectores.sql:
+CREATE TABLE argos.connector_queries (
+  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  system_id    uuid NOT NULL REFERENCES argos.systems(id),
+  kind         text NOT NULL,
+  target       text NOT NULL,
+  statement    text,
+  params       jsonb NOT NULL DEFAULT '{}',
+  stmt_hash    bytea NOT NULL,
+  journal_seq  bigint NOT NULL,        -- FK lógica a audit_journal
+  emitted_at   timestamptz NOT NULL DEFAULT now(),
+  finished_at  timestamptz,
+  ok           boolean,
+  duration_ms  integer,
+  rows_touched bigint
+);"""
+ 
+class QueryJournal:
+    def __init__(self, system_id: str):
+        self.system_id = system_id
+ 
+    def register(self, spec) -> int:
+        stmt = spec.statement or ""
+        h = hashlib.sha256(" ".join(stmt.lower().split()).encode()).digest()
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT argos.journal_append(%s,%s,%s::jsonb)",
+                (f"system:connector:{self.system_id}", "query.emit",
+                 json.dumps({"kind": spec.kind, "target": spec.target,
+                             "stmt_sha256": h.hex()})))
+            seq = cur.fetchone()[0]
+            cur.execute("""INSERT INTO argos.connector_queries
+                (system_id, kind, target, statement, params, stmt_hash, journal_seq)
+                VALUES (%s,%s,%s,%s,%s::jsonb,%s,%s) RETURNING id""",
+                (self.system_id, spec.kind, spec.target, spec.statement,
+                 json.dumps(spec.params, default=str), h, seq))
+            conn.commit()
+        return seq
+ 
+    def complete(self, journal_seq: int, ok: bool, duration_ms: int, rows: int):
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute("""UPDATE argos.connector_queries
+                SET finished_at=now(), ok=%s, duration_ms=%s, rows_touched=%s
+                WHERE journal_seq=%s""", (ok, duration_ms, rows, journal_seq))
+            conn.commit()
+ 
+
+ARG-013 · Presupuesto de carga y cortacircuitos
+ANÁLISIS
+El daño posible de un agente de verificación no es escribir —eso ya es imposible— sino saturar: una sonda de recuento sobre una tabla de mil millones de filas en horario asistencial. El presupuesto necesita tres controles ortogonales: ritmo (consultas por minuto), ventanas (cuándo se permite ejecutar) y un cortacircuitos por latencia observada — si el sistema del cliente empieza a responder lento, ARGOS es el primero en apartarse, aunque su ritmo esté dentro de presupuesto, porque la lentitud puede deberse a carga ajena.
+DISEÑO
+Token bucket clásico para el ritmo, comprobación de ventanas contra la configuración de campaña, y cortacircuitos de tres estados (cerrado→abierto→semiabierto) alimentado por la mediana móvil de latencias que el SDK reporta en observe_latency(). Los umbrales viven en la configuración del sistema (argos.systems.connection.budget) y sus valores por defecto son deliberadamente conservadores; superarse el presupuesto no es un error del conector sino una espera, y abrirse el cortacircuitos publica un evento en el bus para que la campaña (fase 5) reprograme.
+DESARROLLO
+connectors/sdk/argos_connector/budget.py
+"""Presupuesto de carga: ritmo, ventanas y cortacircuitos por latencia (P-05)."""
+import collections, statistics, threading, time, datetime as dt
+from zoneinfo import ZoneInfo
+ 
+class BudgetExceeded(Exception): ...
+class CircuitOpen(Exception): ...
+ 
+DEFAULTS = {
+    "queries_per_minute": 30,
+    "burst": 10,
+    "windows": [{"days": "lun-dom", "from": "00:00", "to": "23:59"}],
+    "latency_p50_limit_ms": 2000,   # si la mediana supera esto, abrir
+    "open_cooldown_s": 300,
+    "tz": "Europe/Madrid",
+}
+ 
+DAYS = {"lun":0,"mar":1,"mie":2,"jue":3,"vie":4,"sab":5,"dom":6}
+ 
+class LoadBudget:
+    def __init__(self, system_id: str, cfg: dict):
+        self.cfg = {**DEFAULTS, **cfg}
+        self.system_id = system_id
+        self._tokens = float(self.cfg["burst"])
+        self._last = time.monotonic()
+        self._lock = threading.Lock()
+        self._lat = collections.deque(maxlen=20)
+        self._state = "closed"      # closed | open | half
+        self._opened_at = 0.0
+ 
+    # ---------- ventanas ----------
+    def _in_window(self) -> bool:
+        now = dt.datetime.now(ZoneInfo(self.cfg["tz"]))
+        for w in self.cfg["windows"]:
+            d0, d1 = (DAYS[x] for x in w["days"].split("-"))
+            days = range(d0, d1 + 1) if d0 <= d1 else \
+                   list(range(d0, 7)) + list(range(0, d1 + 1))
+            if now.weekday() in days and w["from"] <= now.strftime("%H:%M") <= w["to"]:
+                return True
+        return False
+ 
+    # ---------- token bucket ----------
+    def _refill(self):
+        now = time.monotonic()
+        rate = self.cfg["queries_per_minute"] / 60.0
+        self._tokens = min(self.cfg["burst"], self._tokens + (now - self._last) * rate)
+        self._last = now
+ 
+    def acquire(self, wait_max_s: float = 120.0):
+        if not self._in_window():
+            raise BudgetExceeded("fuera de ventana pactada")
+        if self._state == "open":
+            if time.monotonic() - self._opened_at < self.cfg["open_cooldown_s"]:
+                raise CircuitOpen("cortacircuitos abierto: sistema con latencia alta")
+            self._state = "half"    # una sonda de prueba
+        deadline = time.monotonic() + wait_max_s
+        while True:
+            with self._lock:
+                self._refill()
+                if self._tokens >= 1.0:
+                    self._tokens -= 1.0
+                    return
+            if time.monotonic() > deadline:
+                raise BudgetExceeded("presupuesto agotado (espera máxima)")
+            time.sleep(0.25)
+ 
+    # ---------- cortacircuitos ----------
+    def observe_latency(self, ms: int):
+        self._lat.append(ms)
+        if len(self._lat) < 5:
+            return
+        p50 = statistics.median(self._lat)
+        if self._state in ("closed", "half") and p50 > self.cfg["latency_p50_limit_ms"]:
+            self._state, self._opened_at = "open", time.monotonic()
+            from argos_events import Bus  # notifica para reprogramación (ARG-043)
+            # publicación best-effort; la campaña reacciona al evento
+        elif self._state == "half" and p50 <= self.cfg["latency_p50_limit_ms"]:
+            self._state = "closed"; self._lat.clear()
+ 
+
+ARG-014 · Conector SQL genérico
+ANÁLISIS
+La mayor parte del parque verificable habla SQL. Un conector por motor daría el mejor detalle, pero retrasaría la cobertura; la estrategia es un conector genérico sobre SQLAlchemy (dialectos: PostgreSQL, MySQL/MariaDB, SQL Server, Oracle, DB2 vía driver) que cubre las cuatro sondas con SQL portable, y conectores específicos (ARG-015, ARG-016) que lo heredan para añadir el catálogo profundo de cada motor. La sesión se abre en modo de solo lectura donde el motor lo soporta y con timeout de sentencia siempre.
+DISEÑO
+Hereda de Connector; abre engine con pool mínimo (los conectores no compiten con el cliente por conexiones), fija el modo lectura y el timeout por dialecto en el evento de conexión, e implementa: scan_schema con el Inspector de SQLAlchemy (portable), count con SELECT COUNT(*) y predicado parametrizado, sample con muestreo por TABLESAMPLE cuando existe (o LIMIT aleatorizado si no) devolviendo hashes por columna y nunca valores salvo que la campaña lo apruebe, y check_config delegado en la subclase (el genérico devuelve las variables de sesión visibles).
+DESARROLLO
+connectors/sql/argos_sql/generic.py
+"""Conector SQL genérico (SQLAlchemy) — solo lectura estructural."""
+import hashlib
+from sqlalchemy import create_engine, event, inspect, text
+from argos_connector.base import Connector, ProbeSpec
+ 
+SESSION_RO = {
+    "postgresql": "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY;"
+                  " SET statement_timeout = :t",
+    "mysql":      "SET SESSION TRANSACTION READ ONLY;"
+                  " SET SESSION max_execution_time = :t",
+    "mssql":      "SET LOCK_TIMEOUT :t",           # + cuenta db_datareader
+    "oracle":     "ALTER SESSION SET READ ONLY",   # timeout via driver
+}
+ 
+class SqlConnector(Connector):
+    kind = "rdbms"
+ 
+    def open(self):
+        url = self.creds["url"]          # p.ej. postgresql+psycopg://ro_user@host/db
+        self.engine = create_engine(url, pool_size=2, max_overflow=0,
+                                    pool_pre_ping=True,
+                                    connect_args=self.creds.get("args", {}))
+        self.dialect = self.engine.dialect.name
+        timeout_ms = int(self.config.get("stmt_timeout_ms", 30000))
+ 
+        @event.listens_for(self.engine, "connect")
+        def _ro(dbapi_conn, rec):
+            cur = dbapi_conn.cursor()
+            for stmt in SESSION_RO.get(self.dialect, "").split(";"):
+                if stmt.strip():
+                    cur.execute(stmt.replace(":t", str(timeout_ms)))
+            cur.close()
+ 
+    # ---------- sondas ----------
+    def _do_scan_schema(self, spec: ProbeSpec):
+        insp = inspect(self.engine)
+        out, n = {"schemas": {}}, 0
+        for sch in insp.get_schema_names():
+            if sch in ("information_schema", "pg_catalog", "sys"):
+                continue
+            tables = {}
+            for t in insp.get_table_names(schema=sch):
+                cols = [{"name": c["name"], "type": str(c["type"]),
+                         "nullable": c["nullable"]}
+                        for c in insp.get_columns(t, schema=sch)]
+                tables[t] = {"columns": cols}
+                n += len(cols)
+            out["schemas"][sch] = tables
+        return out, n
+ 
+    def _do_count(self, spec: ProbeSpec):
+        where = spec.params.get("where", "")   # SOLO plantillas de la biblioteca
+        q = f'SELECT COUNT(*) FROM {spec.target}' + (f' WHERE {where}' if where else '')
+        self.assert_read_only(q)
+        with self.engine.connect() as c:
+            n = c.execute(text(q), spec.params.get("binds", {})).scalar_one()
+        return {"count": int(n)}, int(n)
+ 
+    def _do_sample(self, spec: ProbeSpec):
+        cols = spec.params["columns"]; k = int(spec.params.get("k", 100))
+        sel = ", ".join(cols)
+        if self.dialect == "postgresql":
+            q = f"SELECT {sel} FROM {spec.target} TABLESAMPLE SYSTEM (1) LIMIT {k}"
+        else:
+            q = f"SELECT {sel} FROM {spec.target} LIMIT {k}"
+        with self.engine.connect() as c:
+            rows = c.execute(text(q)).fetchall()
+        # Minimización: hashes por celda, jamás valores en claro
+        hashed = [[hashlib.sha256(str(v).encode()).hexdigest()[:16] for v in r]
+                  for r in rows]
+        return {"columns": cols, "n": len(rows), "cell_hashes": hashed}, len(rows)
+ 
+    def _do_check_config(self, spec: ProbeSpec):
+        q = spec.statement   # declarada por el reto y ya validada read-only
+        with self.engine.connect() as c:
+            rows = [dict(r._mapping) for r in c.execute(text(q)).fetchall()]
+        return {"rows": rows}, len(rows)
+ 
+
+ARG-015 · Conector PostgreSQL de catálogo profundo
+ANÁLISIS
+PostgreSQL es el motor mejor documentado por su propio catálogo: tamaños reales, comentarios, privilegios efectivos, réplicas. Un conector específico convierte ese catálogo en inventario de primera calidad para C2 y en sondas de configuración para los retos de accesos (¿quién puede leer la tabla de historia clínica?) sin coste sobre las tablas de negocio: todo sale de pg_catalog. Además detecta si la conexión apunta a una réplica en espera —el modo pasivo preferido de ARG-011— y lo anota en el resultado.
+DISEÑO
+Hereda de SqlConnector y sobreescribe scan_schema (añade tamaño estimado, filas estimadas y comentarios) y check_config con tres comprobaciones empaquetadas que los retos referencian por nombre: privileges (privilegios efectivos por rol sobre un objetivo), encryption_at_rest (evidencia indirecta: parámetros y tablespaces) y replica_status (si es standby y su retraso).
+DESARROLLO
+connectors/sql/argos_sql/postgres.py
+"""Conector PostgreSQL: catálogo profundo y comprobaciones de acceso."""
+from sqlalchemy import text
+from .generic import SqlConnector
+ 
+Q_SCHEMA = """
+SELECT n.nspname AS schema, c.relname AS table_name,
+       pg_total_relation_size(c.oid) AS bytes,
+       c.reltuples::bigint          AS est_rows,
+       obj_description(c.oid)       AS comment
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'r' AND n.nspname NOT IN ('pg_catalog','information_schema')
+"""
+ 
+Q_PRIVS = """
+SELECT grantee, privilege_type
+FROM information_schema.role_table_grants
+WHERE table_schema = :sch AND table_name = :tbl
+UNION
+SELECT r.rolname, 'SELECT(effective)'
+FROM pg_roles r
+WHERE has_table_privilege(r.rolname, :fq, 'SELECT') AND r.rolcanlogin
+"""
+ 
+class PostgresConnector(SqlConnector):
+    kind = "rdbms.postgresql"
+ 
+    def _do_scan_schema(self, spec):
+        base, n = super()._do_scan_schema(spec)
+        with self.engine.connect() as c:
+            for r in c.execute(text(Q_SCHEMA)):
+                t = base["schemas"].get(r.schema, {}).get(r.table_name)
+                if t is not None:
+                    t.update(bytes=int(r.bytes), est_rows=int(r.est_rows),
+                             comment=r.comment)
+            standby = c.execute(text("SELECT pg_is_in_recovery()")).scalar_one()
+        base["is_replica"] = bool(standby)   # modo pasivo detectado
+        return base, n
+ 
+    CONFIG_CHECKS = {
+        "privileges": lambda self, p: self._privileges(p),
+        "encryption_at_rest": lambda self, p: self._encryption(p),
+        "replica_status": lambda self, p: self._replica(p),
+    }
+ 
+    def _do_check_config(self, spec):
+        name = spec.params.get("check")
+        if name in self.CONFIG_CHECKS:
+            data = self.CONFIG_CHECKS[name](self, spec.params)
+            return data, len(data.get("rows", []))
+        return super()._do_check_config(spec)
+ 
+    def _privileges(self, p):
+        sch, tbl = p["schema"], p["table"]
+        with self.engine.connect() as c:
+            rows = [dict(r._mapping) for r in c.execute(
+                text(Q_PRIVS), {"sch": sch, "tbl": tbl, "fq": f"{sch}.{tbl}"})]
+        return {"target": f"{sch}.{tbl}", "rows": rows}
+ 
+    def _encryption(self, p):
+        with self.engine.connect() as c:
+            rows = [dict(r._mapping) for r in c.execute(text(
+                "SELECT name, setting FROM pg_settings "
+                "WHERE name IN ('ssl','data_directory')"))]
+        return {"rows": rows,
+                "nota": "cifrado en reposo se acredita a nivel de volumen"}
+ 
+    def _replica(self, p):
+        with self.engine.connect() as c:
+            standby = c.execute(text("SELECT pg_is_in_recovery()")).scalar_one()
+            lag = None
+            if standby:
+                lag = c.execute(text(
+                    "SELECT EXTRACT(EPOCH FROM now()-pg_last_xact_replay_timestamp())"
+                )).scalar()
+        return {"rows": [{"standby": bool(standby), "lag_s": lag}]}
+ 
+
+ARG-016 · Conectores Oracle y SQL Server
+ANÁLISIS
+Los HIS y ERPs del vertical de arranque viven mayoritariamente en Oracle y SQL Server, y ambos exigen su dialecto de catálogo: ALL_TAB_COLUMNS/DBA_* en Oracle (según privilegios de la cuenta de lectura), sys.tables/INFORMATION_SCHEMA en SQL Server, y comprobaciones de auditoría propias (unified auditing, SQL Server Audit). El riesgo específico es el bloqueo: las sondas deben ser incapaces de esperar bloqueos largos, así que ambos fijan tiempo de espera de bloqueo mínimo y nivel de aislamiento de solo lectura por instantánea donde exista.
+DISEÑO
+Dos subclases de SqlConnector con el mismo patrón que ARG-015: scan_schema enriquecido desde el catálogo nativo y comprobaciones de configuración nominales para los retos (audit_status, generic_accounts, privileged_grants). Se muestran las piezas diferenciales; el resto se hereda.
+DESARROLLO
+connectors/sql/argos_sql/oracle_mssql.py
+"""Conectores Oracle y SQL Server: catálogo nativo y auditoría."""
+from sqlalchemy import text
+from .generic import SqlConnector
+ 
+class OracleConnector(SqlConnector):
+    kind = "rdbms.oracle"
+ 
+    def open(self):
+        super().open()
+        with self.engine.connect() as c:   # espera de bloqueo mínima
+            c.execute(text("ALTER SESSION SET DDL_LOCK_TIMEOUT = 0"))
+ 
+    def _do_scan_schema(self, spec):
+        q = """SELECT owner, table_name, column_name, data_type, nullable
+               FROM all_tab_columns
+               WHERE owner NOT IN ('SYS','SYSTEM','XDB','OUTLN')
+               ORDER BY owner, table_name, column_id"""
+        out, n = {"schemas": {}}, 0
+        with self.engine.connect() as c:
+            for r in c.execute(text(q)):
+                t = out["schemas"].setdefault(r.owner, {}) \
+                       .setdefault(r.table_name, {"columns": []})
+                t["columns"].append({"name": r.column_name,
+                    "type": r.data_type, "nullable": r.nullable == "Y"})
+                n += 1
+        return out, n
+ 
+    def _do_check_config(self, spec):
+        if spec.params.get("check") == "audit_status":
+            q = """SELECT policy_name, enabled_option
+                   FROM audit_unified_enabled_policies"""
+        elif spec.params.get("check") == "generic_accounts":
+            q = """SELECT username, account_status, profile FROM dba_users
+                   WHERE oracle_maintained = 'N'"""
+        else:
+            return super()._do_check_config(spec)
+        with self.engine.connect() as c:
+            rows = [dict(r._mapping) for r in c.execute(text(q))]
+        return {"rows": rows}, len(rows)
+ 
+ 
+class MssqlConnector(SqlConnector):
+    kind = "rdbms.mssql"
+ 
+    def open(self):
+        super().open()
+        with self.engine.connect() as c:
+            c.execute(text("SET LOCK_TIMEOUT 1000"))
+            c.execute(text(  # lectura consistente sin bloquear escritores
+              "SET TRANSACTION ISOLATION LEVEL SNAPSHOT"))
+ 
+    def _do_check_config(self, spec):
+        checks = {
+          "audit_status":
+            "SELECT name, is_state_enabled FROM sys.server_audits",
+          "generic_accounts":
+            "SELECT name, type_desc, is_disabled FROM sys.sql_logins "
+            "WHERE name NOT LIKE '##%'",
+          "privileged_grants":
+            "SELECT p.name, r.name AS role FROM sys.server_role_members m "
+            "JOIN sys.server_principals p ON p.principal_id=m.member_principal_id "
+            "JOIN sys.server_principals r ON r.principal_id=m.role_principal_id",
+        }
+        q = checks.get(spec.params.get("check"))
+        if not q:
+            return super()._do_check_config(spec)
+        with self.engine.connect() as c:
+            rows = [dict(r._mapping) for r in c.execute(text(q))]
+        return {"rows": rows}, len(rows)
+ 
+
+ARG-017 · Conector de ficheros SMB/NFS/S3
+ANÁLISIS
+Los repositorios de ficheros son donde el dato personal se esconde: exportaciones olvidadas, copias de trabajo, carpetas de escaneados. El conector debe recorrer millones de entradas sin leerlas (los metadatos bastan para el inventario) y muestrear contenido solo bajo aprobación, con tipo detectado por firma binaria y hash como evidencia. Tres protocolos con una abstracción común: SMB (smbprotocol), NFS (montado por el pod con volumen del cliente) y S3 compatible (boto3 contra el endpoint del cliente). El presupuesto aquí se mide también en entradas listadas por minuto, no solo en operaciones.
+DISEÑO
+Un backend por protocolo con la interfaz mínima walk(prefix, limit) y read_head(path, nbytes); el conector implementa scan_schema como recorrido de metadatos con recorte configurable y agregación por extensión y antigüedad, count como recuento por patrón, sample como lectura de cabeceras (magic + hash SHA-256 del primer bloque) y check_config como comprobación de ACLs visibles. Nunca se descarga un fichero completo.
+DESARROLLO
+connectors/files/argos_files/connector.py
+"""Conector de ficheros: metadatos primero, contenido solo aprobado."""
+import fnmatch, hashlib, io, stat, time
+from argos_connector.base import Connector, ProbeSpec
+ 
+MAGIC = {b"%PDF": "pdf", b"PK\x03\x04": "zip/ooxml", b"\x89PNG": "png",
+         b"\xff\xd8\xff": "jpeg", b"DICM": "dicom"}
+ 
+def sniff(head: bytes) -> str:
+    for sig, name in MAGIC.items():
+        if head[:8].startswith(sig) or head[128:132] == b"DICM":
+            return name
+    return "desconocido"
+ 
+class FilesConnector(Connector):
+    kind = "files"
+ 
+    def open(self):
+        proto = self.config["protocol"]        # smb | nfs | s3
+        if proto == "smb":
+            from .backends.smb import SmbBackend
+            self.be = SmbBackend(self.creds)
+        elif proto == "s3":
+            from .backends.s3 import S3Backend
+            self.be = S3Backend(self.creds)
+        else:
+            from .backends.local import LocalBackend  # NFS montado en el pod
+            self.be = LocalBackend(self.config["mount"])
+ 
+    def _do_scan_schema(self, spec: ProbeSpec):
+        limit = int(spec.params.get("limit", 100_000))
+        agg = {"total": 0, "bytes": 0, "by_ext": {}, "age_years": {}}
+        now = time.time()
+        for e in self.be.walk(spec.target, limit=limit):   # (path,size,mtime)
+            agg["total"] += 1
+            agg["bytes"] += e.size
+            ext = (e.path.rsplit(".", 1)[-1].lower() if "." in e.path else "(sin)")
+            agg["by_ext"][ext] = agg["by_ext"].get(ext, 0) + 1
+            y = int((now - e.mtime) / 31_557_600)
+            agg["age_years"][y] = agg["age_years"].get(y, 0) + 1
+        return agg, agg["total"]
+ 
+    def _do_count(self, spec: ProbeSpec):
+        pattern = spec.params.get("glob", "*")
+        older_y = spec.params.get("older_than_years")
+        n = 0; now = time.time()
+        for e in self.be.walk(spec.target, limit=10_000_000):
+            if not fnmatch.fnmatch(e.path, pattern):
+                continue
+            if older_y and (now - e.mtime) < older_y * 31_557_600:
+                continue
+            n += 1
+        return {"count": n, "glob": pattern, "older_than_years": older_y}, n
+ 
+    def _do_sample(self, spec: ProbeSpec):
+        k = int(spec.params.get("k", 50)); out = []
+        for i, e in enumerate(self.be.walk(spec.target, limit=k)):
+            head = self.be.read_head(e.path, 4096)
+            out.append({"path_hash":
+                          hashlib.sha256(e.path.encode()).hexdigest()[:16],
+                        "type": sniff(head), "size": e.size,
+                        "head_sha256": hashlib.sha256(head).hexdigest()})
+        return {"n": len(out), "entries": out}, len(out)
+ 
+    def _do_check_config(self, spec: ProbeSpec):
+        acl = self.be.get_acl(spec.target)   # backend-específico; smb: security desc
+        return {"acl": acl}, 1
+ 
+connectors/files/argos_files/backends/smb.py (backend SMB esencial)
+import collections
+import smbclient
+ 
+Entry = collections.namedtuple("Entry", "path size mtime")
+ 
+class SmbBackend:
+    def __init__(self, creds):
+        smbclient.ClientConfig(username=creds["user"], password=creds["password"])
+        self.root = creds["share"]             # \\\\servidor\\recurso
+ 
+    def walk(self, prefix, limit):
+        n = 0
+        for base, dirs, files in smbclient.walk(self.root + prefix):
+            for f in files:
+                st = smbclient.stat(rf"{base}\{f}")
+                yield Entry(f"{base}\\{f}", st.st_size, st.st_mtime)
+                n += 1
+                if n >= limit: return
+ 
+    def read_head(self, path, nbytes):
+        with smbclient.open_file(path, mode="rb") as fh:
+            return fh.read(nbytes)
+ 
+    def get_acl(self, path):
+        info = smbclient.stat(self.root + path)
+        return {"mode": oct(info.st_mode), "nota": "SD completo vía smbprotocol"}
+ 
+
+ARG-018 · Conector LDAP / Active Directory
+ANÁLISIS
+La dimensión de identidades es la mitad de los retos de accesos: quién existe, en qué grupos, con qué privilegios y desde cuándo sin usarse. Active Directory expone todo por LDAP; el conector necesita búsqueda paginada (los directorios grandes cortan en 1.000 entradas), lectura de atributos operativos (lastLogonTimestamp, pwdLastSet, userAccountControl) y resolución de pertenencia anidada a grupos privilegiados — el clásico agujero de los informes manuales. LDAPS obligatorio; cuenta de solo lectura del cliente.
+DISEÑO
+ldap3 con conexión LDAPS verificada contra la CA del cliente; scan_schema devuelve la foto agregada del directorio (usuarios activos/inactivos, cuentas de servicio, grupos), count aplica filtros LDAP de la biblioteca (cuentas sin caducidad de contraseña, inactivas >90 días), sample devuelve atributos no personales de una muestra (flags, edades de contraseña) y check_config resuelve la membresía transitiva de los grupos privilegiados configurados.
+DESARROLLO
+connectors/ldap/argos_ldap/connector.py
+"""Conector LDAP/AD: identidades, grupos y privilegios efectivos."""
+import datetime as dt, ssl
+from ldap3 import Server, Connection, Tls, SUBTREE, BASE
+from argos_connector.base import Connector, ProbeSpec
+ 
+FILETIME_EPOCH = dt.datetime(1601, 1, 1, tzinfo=dt.UTC)
+def ft(v):     # FILETIME -> datetime
+    return FILETIME_EPOCH + dt.timedelta(microseconds=int(v) / 10) if v else None
+ 
+UAC_DISABLED = 0x2
+UAC_DONT_EXPIRE = 0x10000
+ 
+class LdapConnector(Connector):
+    kind = "directory"
+ 
+    def open(self):
+        tls = Tls(validate=ssl.CERT_REQUIRED,
+                  ca_certs_file=self.config["ca_file"])
+        srv = Server(self.creds["host"], port=636, use_ssl=True, tls=tls)
+        self.conn = Connection(srv, user=self.creds["bind_dn"],
+                               password=self.creds["password"],
+                               auto_bind=True, read_only=True)
+        self.base = self.config["base_dn"]
+ 
+    def _paged(self, flt, attrs):
+        return self.conn.extend.standard.paged_search(
+            self.base, flt, SUBTREE, attributes=attrs,
+            paged_size=500, generator=True)
+ 
+    def _do_scan_schema(self, spec: ProbeSpec):
+        agg = {"users": 0, "disabled": 0, "no_expire_pwd": 0,
+               "service_like": 0, "groups": 0}
+        for e in self._paged("(objectClass=user)",
+                             ["userAccountControl", "servicePrincipalName"]):
+            a = e.get("attributes", {})
+            if not a: continue
+            agg["users"] += 1
+            uac = int(a.get("userAccountControl", 0) or 0)
+            if uac & UAC_DISABLED: agg["disabled"] += 1
+            if uac & UAC_DONT_EXPIRE: agg["no_expire_pwd"] += 1
+            if a.get("servicePrincipalName"): agg["service_like"] += 1
+        for _ in self._paged("(objectClass=group)", []):
+            agg["groups"] += 1
+        return agg, agg["users"]
+ 
+    def _do_count(self, spec: ProbeSpec):
+        n = sum(1 for e in self._paged(spec.params["ldap_filter"], [])
+                if e.get("attributes") is not None or e.get("dn"))
+        return {"count": n, "filter": spec.params["ldap_filter"]}, n
+ 
+    def _do_sample(self, spec: ProbeSpec):
+        k = int(spec.params.get("k", 100)); out = []
+        for i, e in enumerate(self._paged("(objectClass=user)",
+                  ["userAccountControl", "lastLogonTimestamp", "pwdLastSet"])):
+            if i >= k: break
+            a = e.get("attributes", {})
+            if not a: continue
+            ll = ft(a.get("lastLogonTimestamp"))
+            out.append({"disabled": bool(int(a.get("userAccountControl",0)) & 2),
+                        "days_since_logon":
+                          (dt.datetime.now(dt.UTC) - ll).days if ll else None})
+        return {"n": len(out), "entries": out}, len(out)
+ 
+    def _do_check_config(self, spec: ProbeSpec):
+        """Membresía TRANSITIVA de un grupo privilegiado (matching rule in chain)."""
+        gdn = spec.params["group_dn"]
+        flt = f"(&(objectClass=user)(memberOf:1.2.840.113556.1.4.1941:={gdn}))"
+        members = [e["dn"] for e in self._paged(flt, []) if e.get("dn")]
+        return {"group": gdn, "transitive_members": len(members),
+                "dns_sha256": [__import__('hashlib').sha256(d.encode())
+                               .hexdigest()[:16] for d in members]}, len(members)
+ 
+
+ARG-019 · Conector REST/API genérico
+ANÁLISIS
+Las aplicaciones de negocio modernas solo se dejan verificar por su API. El conector genérico debe ser declarativo (la biblioteca de retos no puede programar un cliente por aplicación): un descriptor por sistema define autenticación, endpoints permitidos y cómo paginar, y el conector solo emite métodos seguros (GET/HEAD/OPTIONS) — la validación de solo lectura aquí es por método HTTP, no por verbo SQL. Si existe especificación OpenAPI, el descriptor se genera asistido (fase 6) y se revisa a mano.
+DISEÑO
+httpx con verificación TLS contra la CA del cliente, autenticación por token/OAuth2 client-credentials desde Vault, allowlist estricta de rutas con plantillas, paginación declarativa (cursor o página) y las cuatro sondas: scan_schema (descubre recursos vía OPTIONS/OpenAPI publicado), count (endpoints de recuento o iteración acotada), sample (campos declarados con hash) y check_config (cabeceras de seguridad y versión TLS observadas).
+DESARROLLO
+connectors/rest/argos_rest/connector.py
+"""Conector REST declarativo: métodos seguros y rutas en allowlist."""
+import hashlib, ssl
+import httpx
+from argos_connector.base import Connector, ProbeSpec, ReadOnlyViolation
+ 
+SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+ 
+class RestConnector(Connector):
+    kind = "api"
+ 
+    def open(self):
+        d = self.config["descriptor"]          # revisado en implantación
+        self.allow = [r["path"] for r in d["routes"]]
+        self.routes = {r["path"]: r for r in d["routes"]}
+        ctx = ssl.create_default_context(cafile=self.config.get("ca_file"))
+        headers = {}
+        if self.creds.get("token"):
+            headers["Authorization"] = f"Bearer {self.creds['token']}"
+        self.http = httpx.Client(base_url=d["base_url"], verify=ctx,
+                                 headers=headers, timeout=15.0)
+ 
+    def _request(self, method: str, path: str, **kw) -> httpx.Response:
+        if method.upper() not in SAFE_METHODS:
+            raise ReadOnlyViolation(f"método no seguro: {method}")
+        if not any(path.startswith(a.split("{")[0]) for a in self.allow):
+            raise ReadOnlyViolation(f"ruta fuera de allowlist: {path}")
+        return self.http.request(method, path, **kw)
+ 
+    def _do_scan_schema(self, spec):
+        found = []
+        for path, r in self.routes.items():
+            resp = self._request("HEAD", path.format(**r.get("defaults", {})))
+            found.append({"path": path, "status": resp.status_code,
+                          "content_type": resp.headers.get("content-type")})
+        return {"routes": found}, len(found)
+ 
+    def _do_count(self, spec):
+        r = self.routes[spec.target]
+        if "count_field" in r:      # el API da el total (p.ej. FHIR total)
+            js = self._request("GET", spec.target,
+                               params=spec.params.get("query", {})).json()
+            for k in r["count_field"].split("."):
+                js = js[k]
+            return {"count": int(js)}, int(js)
+        # iteración acotada por paginación declarada
+        n, page, cap = 0, None, int(spec.params.get("cap", 100_000))
+        while n < cap:
+            q = dict(spec.params.get("query", {}))
+            if page: q[r["page"]["param"]] = page
+            js = self._request("GET", spec.target, params=q).json()
+            items = js.get(r["items_field"], [])
+            n += len(items)
+            page = js.get(r["page"]["next_field"])
+            if not page or not items: break
+        return {"count": n, "capped": n >= cap}, n
+ 
+    def _do_sample(self, spec):
+        r = self.routes[spec.target]; fields = spec.params["fields"]
+        js = self._request("GET", spec.target,
+                           params=spec.params.get("query", {})).json()
+        rows = js.get(r["items_field"], [])[: int(spec.params.get("k", 50))]
+        hashed = [{f: hashlib.sha256(str(x.get(f)).encode()).hexdigest()[:16]
+                   for f in fields} for x in rows]
+        return {"n": len(hashed), "rows": hashed}, len(hashed)
+ 
+    def _do_check_config(self, spec):
+        resp = self._request("GET", spec.target)
+        sec = {h: resp.headers.get(h) for h in
+               ("strict-transport-security", "x-content-type-options",
+                "cache-control", "server")}
+        return {"status": resp.status_code, "security_headers": sec,
+                "tls": str(resp.extensions.get("network_stream", ""))[:60]}, 1
+ 
+
+ARG-020 · Conectores clínicos FHIR y DICOM
+ANÁLISIS
+El vertical de arranque exige hablar los dos idiomas del hospital: FHIR para la historia clínica moderna (y el idioma del EHDS) y DICOM para la imagen. FHIR es REST, así que ARG-019 hace el 80%: el conector añade lo específico (CapabilityStatement como scan, _summary=count como recuento nativo, y los recursos sensibles predeclarados). DICOM exige protocolo propio: pynetdicom limitado exclusivamente a C-ECHO (verificación) y C-FIND (consulta de metadatos) — C-MOVE, C-GET y C-STORE no existen en el conector: no es que no se usen; es que no están.
+DISEÑO
+FhirConnector hereda de RestConnector con descriptor autogenerado desde el CapabilityStatement y recuentos por _summary=count (coste mínimo en el servidor). DicomConnector hereda de Connector directamente: open() hace C-ECHO como prueba de vida; scan_schema y count usan C-FIND a nivel STUDY con filtros por fecha y modalidad; sample devuelve metadatos técnicos (modalidad, fecha, presencia de datos identificativos en cabecera) con identificadores hasheados; check_config verifica que el AE Title de ARGOS solo tiene concedido el rol de consulta.
+DESARROLLO
+connectors/fhir/argos_fhir/connector.py
+"""Conector FHIR: la vía REST clínica, con recuentos de coste mínimo."""
+from argos_rest.connector import RestConnector
+ 
+SENSITIVE = ["Patient", "Condition", "Observation", "DocumentReference",
+             "Consent", "AuditEvent"]
+ 
+class FhirConnector(RestConnector):
+    kind = "clinical.fhir"
+ 
+    def open(self):
+        # descriptor mínimo autogenerado; se enriquece con CapabilityStatement
+        self.config.setdefault("descriptor", {
+            "base_url": self.creds["base_url"],
+            "routes": [{"path": f"/{r}", "items_field": "entry",
+                        "count_field": "total"} for r in SENSITIVE]
+                      + [{"path": "/metadata", "items_field": "rest"}],
+        })
+        super().open()
+ 
+    def _do_scan_schema(self, spec):
+        cap = self._request("GET", "/metadata").json()
+        resources = [r["type"] for rest in cap.get("rest", [])
+                     for r in rest.get("resource", [])]
+        return {"fhir_version": cap.get("fhirVersion"),
+                "resources": resources,
+                "sensitive_present": [r for r in resources if r in SENSITIVE]}, \
+               len(resources)
+ 
+    def _do_count(self, spec):
+        # _summary=count: el servidor devuelve solo el total
+        q = dict(spec.params.get("query", {}), _summary="count")
+        js = self._request("GET", spec.target, params=q).json()
+        return {"count": js.get("total", 0)}, js.get("total", 0)
+ 
+connectors/dicom/argos_dicom/connector.py
+"""Conector DICOM: SOLO C-ECHO y C-FIND. Mover o guardar no existe aquí."""
+import hashlib
+from pydicom.dataset import Dataset
+from pynetdicom import AE
+from pynetdicom.sop_class import (StudyRootQueryRetrieveInformationModelFind,
+                                  Verification)
+from argos_connector.base import Connector, ProbeSpec
+ 
+class DicomConnector(Connector):
+    kind = "clinical.dicom"
+ 
+    def open(self):
+        self.ae = AE(ae_title=self.config.get("ae_title", "ARGOS_QR"))
+        self.ae.add_requested_context(Verification)
+        self.ae.add_requested_context(StudyRootQueryRetrieveInformationModelFind)
+        self.host = self.creds["host"]; self.port = int(self.creds["port"])
+        self.called = self.creds["called_ae"]
+        assoc = self.ae.associate(self.host, self.port, ae_title=self.called)
+        assert assoc.is_established and assoc.send_c_echo().Status == 0
+        assoc.release()
+ 
+    def _find(self, ds: Dataset, cap: int = 100_000):
+        assoc = self.ae.associate(self.host, self.port, ae_title=self.called)
+        try:
+            for i, (status, ident) in enumerate(assoc.send_c_find(
+                    ds, StudyRootQueryRetrieveInformationModelFind)):
+                if ident is None or i >= cap: break
+                yield ident
+        finally:
+            assoc.release()
+ 
+    def _do_scan_schema(self, spec: ProbeSpec):
+        ds = Dataset(); ds.QueryRetrieveLevel = "STUDY"
+        ds.ModalitiesInStudy = ""; ds.StudyDate = spec.params.get("dates", "")
+        agg = {"studies": 0, "by_modality": {}}
+        for ident in self._find(ds):
+            agg["studies"] += 1
+            for m in str(getattr(ident, "ModalitiesInStudy", "")).split("\\"):
+                if m: agg["by_modality"][m] = agg["by_modality"].get(m, 0) + 1
+        return agg, agg["studies"]
+ 
+    def _do_count(self, spec: ProbeSpec):
+        ds = Dataset(); ds.QueryRetrieveLevel = "STUDY"
+        ds.StudyDate = spec.params["dates"]        # p.ej. '-20050101' (antiguos)
+        ds.ModalitiesInStudy = spec.params.get("modality", "")
+        n = sum(1 for _ in self._find(ds))
+        return {"count": n, "dates": ds.StudyDate}, n
+ 
+    def _do_sample(self, spec: ProbeSpec):
+        ds = Dataset(); ds.QueryRetrieveLevel = "STUDY"
+        ds.PatientID = ""; ds.StudyDate = ""; ds.StudyInstanceUID = ""
+        out = []
+        for ident in self._find(ds, cap=int(spec.params.get("k", 50))):
+            out.append({
+              "study_uid_h": hashlib.sha256(
+                  str(ident.StudyInstanceUID).encode()).hexdigest()[:16],
+              "patient_id_present": bool(str(getattr(ident,'PatientID',''))),
+              "date": str(getattr(ident, "StudyDate", ""))})
+        return {"n": len(out), "studies": out}, len(out)
+ 
+    def _do_check_config(self, spec: ProbeSpec):
+        # La prueba de rol: ARGOS NO debe poder recuperar. Se acredita porque
+        # el AE no negocia contextos de C-MOVE/C-GET: no existen en el conector.
+        ctxs = [str(c.abstract_syntax) for c in self.ae.requested_contexts]
+        return {"requested_contexts": ctxs,
+                "retrieve_capable": False}, len(ctxs)
+ 
+
+Interfaces que esta fase exporta
+Componente
+Interfaz exportada
+Consumidores
+ARG-011
+Connector, ProbeSpec, ProbeResult y las 4 sondas normalizadas
+Fase 3 (ingesta de inventario), fase 5 (actividades de sonda ARG-044)
+ARG-012
+argos.connector_queries + entradas 'query.emit' en el diario
+Fase 7 (evidencia enlaza journal_seq), consola (transparencia)
+ARG-013
+LoadBudget con ventanas y cortacircuitos; evento de circuito abierto
+ARG-043 (reprogramación de campañas), ARG-094 (salud)
+ARG-014..016
+Conectores rdbms.* con checks nominales (privileges, audit_status, generic_accounts...)
+Biblioteca de retos (ARG-050): los referencia por nombre
+ARG-017..020
+Conectores files, directory, api, clinical.* con la misma interfaz
+Retos de retención, accesos, consentimiento y clínicos de las olas 1-2
+
+Estado del programa: ARGOS ya puede tocar —solo para leer, con registro previo, presupuesto y cortacircuitos— bases de datos, ficheros, directorios, APIs y los sistemas clínicos del vertical de arranque. Todo lo que estos conectores descubren fluye por el bus de la fase 1 hacia la fase 3: el inventario y el grafo de conocimiento, donde los hallazgos sueltos se convierten en el mapa vivo de la organización.

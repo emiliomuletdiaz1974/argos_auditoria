@@ -1,0 +1,745 @@
+ULLSWATER INVESTMENTS
+ARGOS · Programa de ingeniería en 10 fases
+FASE 9
+Seguridad de plataforma — Componentes 81 a 90
+El blindaje del appliance: imagen endurecida con perfil CIS, arranque medido con Secure Boot y disco sellado al TPM, mTLS interno con rotación automática, confinamiento seccomp/AppArmor por servicio, secretos dinámicos, el actualizador firmado transaccional con vuelta atrás, la cadena de suministro con SBOM verificado en admisión, el paquete de diagnóstico revisable, el backup cifrado con restauración probada y el modo aislado completo
+Documento técnico 9 de 10 · Madrid, septiembre de 2026 · Versión 1.0 · Confidencial
+
+Índice
+ TOC \h \u \z \t "Heading 1,1,"
+
+
+0. La postura de seguridad en conjunto
+Un producto que verifica la seguridad de otros no puede permitirse la suya a medias: la fase 9 asume que el appliance vivirá en redes hostiles a su pesar, será administrado por personal ajeno al fabricante y pasará auditorías ENS/ISO como un sistema más del cliente. La postura se apoya en cuatro ideas: superficie mínima (todo lo que no se necesita, no está: la imagen se construye por inclusión, no por limpieza), confianza medida (el arranque prueba criptográficamente qué corre antes de liberar las claves del disco), degradación segura (una actualización que falla vuelve sola al estado anterior; un backup existe cuando su restauración se prueba) y operabilidad sin puertas traseras (el soporte trabaja con paquetes de diagnóstico que el cliente revisa y envía — no hay acceso remoto del fabricante que negar, porque no existe).
+Los diez componentes se encadenan: la imagen (ARG-081) es lo que el arranque medido (ARG-082) atestigua; sobre esa base corren los servicios confinados (ARG-084) que se hablan con mTLS (ARG-083) y credenciales efímeras (ARG-085); el actualizador (ARG-086) solo acepta lo que la cadena de suministro (ARG-087) firmó; y diagnóstico, backup y modo aislado (ARG-088..090) cubren la vida real del aparato.
+
+ARG-081 · Imagen endurecida con perfil CIS
+ANÁLISIS
+La imagen de la fase 1 se endurece con el benchmark CIS de Ubuntu Server 24.04 como referencia contractual (es lo que el auditor del cliente conoce) aplicado por código en el provisioning de Packer, no por guía manual: particionado con opciones restrictivas (nodev/nosuid/noexec donde procede), sysctl de red y kernel endurecidos, auditd con reglas de las acciones que importan (ejecuciones privilegiadas, cambios en /etc, montajes), SSH reducido a llave+bastión del cliente, y la verificación automatizada con el escáner CIS en el propio pipeline: la imagen que no puntúa por encima del umbral pactado no se publica — el hardening es una puerta de CI, no una intención.
+DISEÑO
+Script harden.sh idempotente invocado por Packer tras el provisioning base de ARG-002, dividido en secciones numeradas según el benchmark; reglas auditd en fichero versionado; y el job de CI que ejecuta el escáner y compara con el umbral (mínimo 90% del perfil Level 1 Server, excepciones documentadas en hardening-exceptions.yaml con su justificación — porque k3s necesita algunas desviaciones y ocultarlas sería peor que documentarlas).
+DESARROLLO
+platform/image/harden.sh (secciones esenciales)
+#!/usr/bin/env bash
+# Endurecimiento CIS Ubuntu 24.04 — idempotente, invocado por Packer.
+set -euo pipefail
+ 
+### 1. Sistema de ficheros
+cat >> /etc/fstab <<'EOF'
+tmpfs /dev/shm tmpfs defaults,nodev,nosuid,noexec 0 0
+tmpfs /tmp     tmpfs defaults,nodev,nosuid       0 0
+EOF
+# módulos de FS innecesarios: fuera
+for m in cramfs freevxfs jffs2 hfs hfsplus udf usb-storage; do
+  echo "install $m /bin/false" > /etc/modprobe.d/$m.conf
+done
+ 
+### 2. Red (sysctl)
+cat > /etc/sysctl.d/60-argos-hardening.conf <<'EOF'
+net.ipv4.ip_forward=1                 # requerido por k3s (excepción doc.)
+net.ipv4.conf.all.send_redirects=0
+net.ipv4.conf.all.accept_redirects=0
+net.ipv4.conf.all.accept_source_route=0
+net.ipv4.conf.all.log_martians=1
+net.ipv4.tcp_syncookies=1
+net.ipv6.conf.all.accept_ra=0
+kernel.randomize_va_space=2
+kernel.kptr_restrict=2
+kernel.dmesg_restrict=1
+kernel.yama.ptrace_scope=1
+fs.suid_dumpable=0
+EOF
+ 
+### 3. auditd: lo que importa, no todo
+apt-get install -y auditd audispd-plugins
+cat > /etc/audit/rules.d/argos.rules <<'EOF'
+-w /etc/ -p wa -k etc_changes
+-w /var/lib/argos/keys/ -p rwa -k argos_keys
+-a always,exit -F arch=b64 -S execve -F euid=0 -k root_exec
+-a always,exit -F arch=b64 -S mount -k mounts
+-w /etc/sudoers -p wa -k sudoers
+-e 2
+EOF
+ 
+### 4. SSH: llave + bastión, nada más
+cat > /etc/ssh/sshd_config.d/60-argos.conf <<'EOF'
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+AllowGroups argos-ops
+MaxAuthTries 3
+ClientAliveInterval 300
+ClientAliveCountMax 2
+EOF
+ 
+### 5. Baseline de paquetes: quitar lo que no se usa
+apt-get purge -y telnet rsh-client talk avahi-daemon cups isc-dhcp-server \
+  2>/dev/null || true
+apt-get autoremove -y
+ 
+echo "hardening aplicado; el escáner CIS valida en CI"
+ 
+platform/ci/hardening-gate.yaml
+cis_scan:
+  stage: verify-image
+  script:
+    # escáner CIS (perfil Level 1 Server) sobre la imagen recién construida
+    - ./tools/cis-scan --profile level1-server --target $IMAGE \
+        --format json > cis-report.json
+    - python3 - <<'PY'
+      import json, sys, yaml
+      rep = json.load(open('cis-report.json'))
+      exc = yaml.safe_load(open('platform/image/hardening-exceptions.yaml'))
+      failed = [c for c in rep['checks'] if c['result'] == 'fail'
+                and c['id'] not in exc['accepted']]
+      score = rep['score']
+      print(f"CIS score: {score}%; fallos no exceptuados: {len(failed)}")
+      for c in failed[:20]: print(' -', c['id'], c['title'])
+      sys.exit(1 if score < 90 or failed else 0)
+      PY
+  artifacts: { paths: [cis-report.json] }
+ 
+
+ARG-082 · Arranque medido y disco sellado al TPM
+ANÁLISIS
+El appliance vive físicamente en la sala del cliente: el modelo de amenaza incluye el disco extraído y el arranque desde USB. La respuesta en dos capas: Secure Boot (UEFI solo ejecuta cargador y kernel firmados — con las claves del fabricante inscritas en fábrica) y measured boot con sellado LUKS: cada etapa del arranque extiende medidas en los PCRs del TPM, y la clave del volumen de datos está sellada a los valores esperados (PCR 7: estado de Secure Boot; PCR 11: kernel unificado UKI) — el disco solo se abre si arrancó exactamente el software previsto. Extraído el disco, o arrancado otro kernel, la clave no se libera y el volumen es ruido; la contraseña de recuperación queda en custodia del cliente en sobre, para desastres, con su uso registrado.
+DISEÑO
+Kernel unificado (UKI: kernel+initrd+cmdline en un solo PE firmado, lo que hace la medida de PCR 11 estable y predecible), systemd-cryptenroll para sellar la clave LUKS a PCR 7+11, y el enrolamiento en el primer arranque de fábrica con el script que también inscribe la clave de recuperación. La actualización de kernel usa el mecanismo de ARG-086: el nuevo UKI se firma, se mide en el arranque siguiente, y el resellado a los nuevos PCR se hace tras confirmar el arranque sano (la ventana de doble sellado evita el ladrillo).
+DESARROLLO
+platform/image/seal-disk.sh (enrolamiento de fábrica)
+#!/usr/bin/env bash
+# Sella el volumen de datos LUKS2 al estado medido del arranque.
+set -euo pipefail
+DEV=/dev/disk/by-partlabel/argos-data
+ 
+echo "[1/4] Verificando estado de Secure Boot"
+mokutil --sb-state | grep -q 'SecureBoot enabled' || {
+  echo 'ERROR: Secure Boot deshabilitado; abortando sellado'; exit 1; }
+ 
+echo "[2/4] Clave de recuperación (custodia del cliente)"
+RECOVERY=$(systemd-cryptenroll --recovery-key "$DEV" | tail -1)
+echo "$RECOVERY" > /root/recovery-key.txt   # se imprime y se destruye
+chmod 600 /root/recovery-key.txt
+ 
+echo "[3/4] Sellando al TPM (PCR 7: SecureBoot, PCR 11: UKI)"
+systemd-cryptenroll "$DEV" \
+  --tpm2-device=auto \
+  --tpm2-pcrs=7+11 \
+  --wipe-slot=tpm2         # idempotente: reemplaza sellados previos
+ 
+echo "[4/4] crypttab: apertura automática por TPM, recovery manual"
+cat > /etc/crypttab <<EOF
+argos-data $DEV none tpm2-device=auto,timeout=30
+EOF
+ 
+update-initramfs -u
+echo "Sellado completo. Guardar recovery-key.txt en sobre y BORRAR."
+ 
+platform/image/reseal-after-update.sh (tras actualización de kernel)
+#!/usr/bin/env bash
+# Ejecutado por el actualizador (ARG-086) TRAS confirmar arranque sano
+# con el kernel nuevo: resella a los PCR actuales y retira el doble slot.
+set -euo pipefail
+DEV=/dev/disk/by-partlabel/argos-data
+ 
+# comprobar que el arranque actual es el esperado (UKI nuevo medido)
+CURRENT_ENTRY=$(bootctl status --json=short | jq -r '.default')
+[ "$CURRENT_ENTRY" = "$(cat /var/lib/argos/expected-boot-entry)" ] || {
+  echo 'arranque inesperado: no se resella'; exit 1; }
+ 
+systemd-cryptenroll "$DEV" --tpm2-device=auto --tpm2-pcrs=7+11
+# retirar el slot del sellado ANTERIOR (quedó como puente en la ventana)
+OLD_SLOT=$(cat /var/lib/argos/pending-old-tpm-slot 2>/dev/null || true)
+[ -n "$OLD_SLOT" ] && systemd-cryptenroll "$DEV" --wipe-slot="$OLD_SLOT"
+rm -f /var/lib/argos/pending-old-tpm-slot
+logger -t argos-update 'resellado TPM completado tras actualización'
+ 
+
+ARG-083 · mTLS interno con rotación automática
+ANÁLISIS
+Las NetworkPolicies dicen quién puede hablar con quién; el mTLS añade quién es cada uno y cifra el tránsito — defensa en profundidad dentro del propio appliance (un pod comprometido no puede suplantar a otro ni escuchar). La PKI de Vault de la fase 1 emite; cert-manager la consume como issuer y renueva solo: certificados de 30 días renovados a los 20, de modo que la rotación es el estado normal y un certificado viejo es una alarma, no una costumbre. Los servicios cargan certificados desde ficheros y recargan al cambio (SIGHUP o watch) — sin reinicios de rotación.
+DISEÑO
+cert-manager con ClusterIssuer hacia el PKI intermedio de Vault (auth por Kubernetes service account), un Certificate por servicio con SAN de su Service DNS, y el patrón de montaje+recarga documentado en la plantilla de Deployment. La CA raíz vive fuera del clúster (se generó en ARG-009); aquí se emite solo desde la intermedia.
+DESARROLLO
+platform/k8s/security/mtls.yaml
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata: { name: vault-intermediate }
+spec:
+  vault:
+    server: http://vault.argos-core:8200
+    path: pki_int/sign/argos-services      # rol restringido a *.argos-*
+    auth:
+      kubernetes:
+        role: cert-manager
+        mountPath: /v1/auth/kubernetes
+        serviceAccountRef: { name: cert-manager }
+---
+# Patrón por servicio (ejemplo: challenge-engine)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata: { name: challenge-engine-tls, namespace: argos-services }
+spec:
+  secretName: challenge-engine-tls
+  duration: 720h        # 30 días
+  renewBefore: 240h     # renueva a los 20
+  privateKey: { algorithm: ECDSA, size: 256, rotationPolicy: Always }
+  dnsNames:
+    - challenge-engine.argos-services.svc
+  usages: [server auth, client auth]      # mTLS: ambos papeles
+  issuerRef: { name: vault-intermediate, kind: ClusterIssuer }
+ 
+libs/argos_tls/reload.py — recarga sin reinicio
+"""Contexto TLS que se recarga al rotar el certificado (sin reinicio)."""
+import ssl, threading, time, pathlib
+ 
+CERT_DIR = pathlib.Path("/etc/argos/tls")   # secret montado
+ 
+class ReloadingTLS:
+    def __init__(self, server: bool = True):
+        self.server = server
+        self._ctx = self._build()
+        self._mtime = self._stamp()
+        threading.Thread(target=self._watch, daemon=True).start()
+ 
+    def _stamp(self):
+        return (CERT_DIR / "tls.crt").stat().st_mtime
+ 
+    def _build(self) -> ssl.SSLContext:
+        purpose = ssl.Purpose.CLIENT_AUTH if self.server \
+                  else ssl.Purpose.SERVER_AUTH
+        ctx = ssl.create_default_context(purpose,
+                cafile=str(CERT_DIR / "ca.crt"))
+        ctx.load_cert_chain(CERT_DIR / "tls.crt", CERT_DIR / "tls.key")
+        ctx.verify_mode = ssl.CERT_REQUIRED       # mTLS: exige par
+        ctx.minimum_version = ssl.TLSVersion.TLSv1_3
+        return ctx
+ 
+    def _watch(self):
+        while True:
+            time.sleep(60)
+            m = self._stamp()
+            if m != self._mtime:
+                self._ctx = self._build()
+                self._mtime = m
+ 
+    @property
+    def context(self) -> ssl.SSLContext:
+        return self._ctx
+ 
+
+ARG-084 · Confinamiento seccomp y AppArmor por servicio
+ANÁLISIS
+El principio: cada contenedor puede hacer exactamente lo que su oficio exige y nada más — un RCE en un conector no debe poder abrir sockets raw, cargar módulos ni leer el TPM. Tres capas componibles: el securityContext estricto por defecto (no root, sin capabilities, sistema de ficheros raíz de solo lectura, sin escalada), el perfil seccomp RuntimeDefault como base con perfiles propios para los servicios sensibles (el de evidencia, que sí necesita el dispositivo TPM, lo declara; los demás ni lo ven) y AppArmor para el acceso a rutas (el conector de ficheros solo lee su montaje). La validación es de admisión: Kyverno rechaza todo pod que no declare la postura — la seguridad por defecto no es una plantilla que copiar sino una regla que no se puede incumplir.
+DESARROLLO
+platform/k8s/security/pod-baseline.yaml (Kyverno)
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata: { name: argos-pod-baseline }
+spec:
+  validationFailureAction: Enforce
+  rules:
+    - name: require-restricted-posture
+      match: { any: [ { resources: { kinds: [Pod],
+                namespaces: [argos-core, argos-services,
+                             argos-ai, argos-connect] } } ] }
+      validate:
+        message: "Postura restringida obligatoria (ARG-084)"
+        pattern:
+          spec:
+            =(securityContext):
+              =(seccompProfile): { type: "RuntimeDefault|Localhost" }
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities: { drop: ["ALL"] }
+    - name: forbid-host-access
+      match: { any: [ { resources: { kinds: [Pod] } } ] }
+      validate:
+        message: "hostPath/hostNetwork prohibidos salvo lista blanca"
+        deny:
+          conditions:
+            any:
+              - key: "{{ request.object.spec.hostNetwork || false }}"
+                operator: Equals
+                value: true
+ 
+platform/k8s/security/seccomp/evidence.json (perfil propio)
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "architectures": ["SCMP_ARCH_X86_64"],
+  "syscalls": [
+    { "names": [
+        "read","write","openat","close","fstat","lseek","mmap",
+        "mprotect","munmap","brk","rt_sigaction","rt_sigprocmask",
+        "ioctl","pread64","pwrite64","futex","epoll_wait","epoll_ctl",
+        "socket","connect","sendto","recvfrom","bind","listen",
+        "accept4","getsockname","clone3","execve","exit_group",
+        "getrandom","clock_gettime","nanosleep","fcntl","getdents64",
+        "newfstatat","statx","uname","prctl","sched_yield"
+      ], "action": "SCMP_ACT_ALLOW" },
+    { "names": ["ioctl"], "action": "SCMP_ACT_ALLOW",
+      "comment": "acceso /dev/tpmrm0: solo este perfil lo permite" }
+  ]
+}
+ 
+
+ARG-085 · Secretos dinámicos y rotación
+ANÁLISIS
+El objetivo: que no exista ninguna credencial de larga vida que robar. Las credenciales de base de datos pasan a ser dinámicas (el motor database de Vault crea un usuario PostgreSQL efímero por servicio con TTL de 24 h y lo revoca al vencer: la credencial filtrada hoy no vale mañana), las de los conectores hacia sistemas del cliente —que el cliente crea y no pueden ser dinámicas— se custodian en KV con recordatorio de rotación pactado en implantación, y los tokens de servicio de Vault se renuevan por Kubernetes auth con TTL corto. El patrón de consumo: los servicios piden la credencial al arrancar y la renuevan antes del TTL; el pool de ARG-004 se reconstruye en caliente al rotar.
+DESARROLLO
+platform/vault/database-engine.sh
+#!/usr/bin/env bash
+# Motor de credenciales dinámicas de PostgreSQL por servicio.
+set -euo pipefail
+ 
+vault secrets enable -path=db database 2>/dev/null || true
+ 
+vault write db/config/argos \
+  plugin_name=postgresql-database-plugin \
+  allowed_roles='svc-*' \
+  connection_url='postgresql://{{username}}:{{password}}@postgres.argos-core:5432/argos' \
+  username='vault_admin' password="$VAULT_DB_ADMIN_PW"
+ 
+# Un rol por servicio: usuario efímero con SOLO sus grants
+for svc in inventory challenge evidence api ai_gateway; do
+vault write db/roles/svc-$svc \
+  db_name=argos \
+  default_ttl=24h max_ttl=72h \
+  creation_statements="
+    CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}'
+      VALID UNTIL '{{expiration}}' IN ROLE svc_$svc;" \
+  revocation_statements="
+    REASSIGN OWNED BY \"{{name}}\" TO svc_$svc;
+    DROP ROLE IF EXISTS \"{{name}}\";"
+done
+echo 'credenciales dinámicas listas: TTL 24h, revocación automática'
+ 
+libs/argos_db/dynamic.py — pool con renovación en caliente
+"""Pool psycopg respaldado por credenciales dinámicas de Vault."""
+import threading, time
+import hvac
+from psycopg_pool import ConnectionPool
+ 
+class DynamicPool:
+    def __init__(self, service: str):
+        self.role = f"svc-{service}"
+        self.client = hvac.Client(url="http://vault.argos-core:8200")
+        self._k8s_login()
+        self._pool = None
+        self._renew()
+        threading.Thread(target=self._loop, daemon=True).start()
+ 
+    def _k8s_login(self):
+        jwt = open("/var/run/secrets/kubernetes.io/"
+                   "serviceaccount/token").read()
+        self.client.auth.kubernetes.login(role=self.role, jwt=jwt)
+ 
+    def _renew(self):
+        lease = self.client.secrets.database.generate_credentials(
+            name=self.role, mount_point="db")
+        user, pw = lease["data"]["username"], lease["data"]["password"]
+        self._ttl = lease["lease_duration"]
+        new_pool = ConnectionPool(
+            f"postgresql://{user}:{pw}@postgres.argos-core:5432/argos",
+            min_size=2, max_size=10)
+        old, self._pool = self._pool, new_pool
+        if old:
+            old.close(timeout=30)     # drena conexiones viejas en caliente
+ 
+    def _loop(self):
+        while True:
+            time.sleep(max(self._ttl - 3600, 600))   # 1h antes del TTL
+            try:
+                self._k8s_login(); self._renew()
+            except Exception:
+                time.sleep(60)        # reintento corto; el TTL da margen
+ 
+    def connection(self):
+        return self._pool.connection()
+ 
+
+ARG-086 · Actualizador firmado transaccional
+ANÁLISIS
+La actualización es el momento de máximo riesgo del appliance y el diseño la trata como una transacción: o se completa entera y el sistema queda en la versión nueva, o se revierte sola y queda exactamente en la anterior. El actualizador consume el release-manifest firmado de ARG-010: verifica la firma cosign y los digests de todas las imágenes antes de tocar nada; aplica por fases (imágenes al registro local → base de datos con migraciones expand-contract de ARG-005 → despliegues con rollout vigilado → contenido si el paquete lo trae, vía ARG-040); vigila la salud tras cada fase con las sondas de ARG-094; y ante fallo ejecuta la vuelta atrás del plan inverso registrado durante la aplicación. El arranque del sistema operativo (kernel/UKI) usa el esquema A/B con el resellado de ARG-082. Todo el proceso, asiento a asiento, en el diario.
+DISEÑO
+apply_update(bundle) con las fases como pasos declarados (cada uno con do/undo/verify), el registro del plan inverso en disco antes de empezar (si el propio actualizador muere, el arranque siguiente encuentra el plan y decide), y la regla de oro operativa: las migraciones de datos son siempre compatibles con la versión anterior (expand-contract), de modo que revertir código nunca exige revertir datos.
+DESARROLLO
+services/updater/apply.py
+"""Actualizador transaccional: verificar todo, aplicar por fases,
+revertir solo ante fallo. El plan inverso se escribe ANTES de empezar."""
+import json, pathlib, subprocess, time
+ 
+STATE = pathlib.Path("/var/lib/argos/update")
+ 
+def sh(cmd: str) -> str:
+    r = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise RuntimeError(f"{cmd}\n{r.stderr[-400:]}")
+    return r.stdout
+ 
+def verify_bundle(bundle: pathlib.Path) -> dict:
+    sh(f"cosign verify-blob --key /etc/argos/keys/release.pub "
+       f"--signature {bundle}.sig {bundle}/release-manifest.json")
+    manifest = json.loads((bundle / "release-manifest.json").read_text())
+    for img in manifest["images"]:
+        sh(f"cosign verify --key /etc/argos/keys/release.pub "
+           f"{img['ref']}@{img['digest']}")
+    return manifest
+ 
+class Step:
+    def __init__(self, name, do, undo, verify):
+        self.name, self.do, self.undo, self.verify = name, do, undo, verify
+ 
+def build_steps(m: dict, bundle: pathlib.Path) -> list[Step]:
+    v_old = sh("cat /var/lib/argos/version").strip()
+    return [
+      Step("imagenes",
+        do=lambda: [sh(f"skopeo copy dir:{bundle}/images/{i['name']} "
+                       f"docker://registry.argos.internal:5000/{i['name']}"
+                       f":{m['version']}") for i in m["images"]],
+        undo=lambda: None,      # imágenes extra no dañan: no se revierten
+        verify=lambda: True),
+      Step("migraciones",
+        do=lambda: sh(f"argos-migrate up --target {m['db_rev']}"),
+        undo=lambda: None,      # expand-contract: compatibles hacia atrás
+        verify=lambda: "ok" in sh("argos-migrate status")),
+      Step("despliegues",
+        do=lambda: sh(f"kubectl set image -n argos-services "
+                      f"--all deploy \"*={m['version']}\" "
+                      f"&& kubectl rollout status -n argos-services "
+                      f"deploy --timeout=300s"),
+        undo=lambda: sh(f"kubectl rollout undo -n argos-services deploy"),
+        verify=lambda: healthcheck()),
+      Step("contenido",
+        do=lambda: (bundle / "ontology.tar.gz").exists() and
+                   sh(f"argos-content load {bundle}/ontology.tar.gz"),
+        undo=lambda: None,      # los bundles de contenido no se descargan
+        verify=lambda: True),
+    ]
+ 
+def healthcheck(retries: int = 10) -> bool:
+    for _ in range(retries):
+        try:
+            out = sh("curl -fsS http://api.argos-services:8080/healthz")
+            if json.loads(out).get("status") == "ok":
+                return True
+        except RuntimeError:
+            pass
+        time.sleep(15)
+    return False
+ 
+def apply_update(bundle_path: str):
+    bundle = pathlib.Path(bundle_path)
+    m = verify_bundle(bundle)
+    steps = build_steps(m, bundle)
+    STATE.mkdir(exist_ok=True)
+    (STATE / "plan.json").write_text(json.dumps(   # plan inverso ANTES
+        {"version": m["version"], "steps": [s.name for s in steps]}))
+    done: list[Step] = []
+    try:
+        for s in steps:
+            journal(f"update.step.start", {"step": s.name})
+            s.do()
+            if not s.verify():
+                raise RuntimeError(f"verificación fallida: {s.name}")
+            done.append(s)
+            journal(f"update.step.ok", {"step": s.name})
+        sh(f"echo {m['version']} > /var/lib/argos/version")
+        (STATE / "plan.json").unlink()
+        journal("update.complete", {"version": m["version"]})
+    except Exception as e:
+        journal("update.rollback.start", {"error": str(e)[:200]})
+        for s in reversed(done):
+            try: s.undo()
+            except Exception: pass    # best-effort; el estado queda escrito
+        journal("update.rollback.done", {})
+        raise
+ 
+def journal(action: str, payload: dict):
+    from argos_db import pool
+    with pool.connection() as db:
+        db.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+            ("system:updater", action, json.dumps(payload)))
+        db.commit()
+ 
+
+ARG-087 · Cadena de suministro: SBOM y admisión
+ANÁLISIS
+El cliente de AAPP pregunta dos cosas: qué contiene exactamente esto (SBOM) y cómo sé que lo que corre es lo que firmasteis (admisión). La respuesta en tres piezas: la CI genera el SBOM (syft, formato CycloneDX) de cada imagen y lo adjunta como attestation cosign (el SBOM viaja pegado a la imagen, firmado); el escáner de vulnerabilidades (grype) corre sobre ese SBOM con la política de severidad como puerta (crítica sin corrección publicada = no sale, con las excepciones justificadas y con caducidad en vex.yaml); y en el appliance, Kyverno verifica en admisión que toda imagen de los namespaces argos-* está firmada con la clave de release — un contenedor no firmado no arranca, aunque alguien lo empuje al registro local.
+DESARROLLO
+platform/ci/supply-chain.yaml
+sbom_and_scan:
+  stage: verify
+  script:
+    - for img in $(cat images.txt); do
+        syft "$img" -o cyclonedx-json > "sbom-$(basename $img).json";
+        cosign attest --key hashivault://argos-release \
+          --type cyclonedx \
+          --predicate "sbom-$(basename $img).json" "$img";
+        grype "sbom:sbom-$(basename $img).json" -o json \
+          > "vulns-$(basename $img).json";
+      done
+    - python3 tools/vuln_gate.py vulns-*.json   # crítica sin fix => exit 1
+  artifacts: { paths: ["sbom-*.json", "vulns-*.json"] }
+ 
+platform/k8s/security/verify-images.yaml (Kyverno)
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata: { name: verify-argos-images }
+spec:
+  validationFailureAction: Enforce
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: require-release-signature
+      match: { any: [ { resources: { kinds: [Pod],
+                namespaces: [argos-core, argos-services,
+                             argos-ai, argos-connect] } } ] }
+      verifyImages:
+        - imageReferences: ["registry.argos.internal:5000/*"]
+          attestors:
+            - entries:
+                - keys:
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      (clave de release grabada en la imagen)
+                      -----END PUBLIC KEY-----
+          mutateDigest: true        # fija el digest: tags inmutables
+          verifyDigest: true
+ 
+
+ARG-088 · Paquete de diagnóstico revisable
+ANÁLISIS
+El soporte sin acceso remoto exige que el diagnóstico viaje como paquete: el operador lo genera desde consola, lo revisa (la parte crucial: el paquete lista su propio contenido en un índice legible y el operador ve exactamente qué sale antes de enviarlo) y lo remite por su canal. El recolector aplica la minimización del producto a su propia casa: logs de servicios con los depuradores de ARG-060 pasados (ningún dato del cliente en un log debería existir, pero la defensa en profundidad no se fía), configuraciones sin secretos (los valores de Vault jamás; los nombres sí), métricas, versiones, los últimos asientos del diario y el estado de salud — y nada del contenido de la base de datos de negocio.
+DESARROLLO
+services/support/diagnostics.py
+"""Paquete de diagnóstico: recolecta, minimiza, indexa, cifra al soporte."""
+import datetime as dt, io, json, subprocess, tarfile
+from guardrails import scrub_input          # ARG-060, reutilizado
+from argos_db import pool
+ 
+def _sh(cmd: str) -> str:
+    return subprocess.run(cmd, shell=True, capture_output=True,
+                          text=True).stdout
+ 
+COLLECTORS = {
+  "versiones.txt": lambda: _sh("cat /var/lib/argos/version; "
+                                "kubectl get deploy -A -o wide"),
+  "salud.json":    lambda: _sh("curl -fsS "
+                                "http://api.argos-services:8080/healthz"),
+  "eventos.txt":   lambda: _sh("kubectl get events -A "
+                                "--sort-by=.lastTimestamp | tail -200"),
+  "logs/":         None,     # tratado aparte, con depuración
+  "diario-cola.json": lambda: _journal_tail(),
+  "config-nombres.txt": lambda: _sh(
+      "kubectl get cm -A -o name; kubectl get secret -A -o name"),
+}
+ 
+def _journal_tail(n: int = 200) -> str:
+    with pool.connection() as db:
+        rows = db.execute("""SELECT seq, actor, action, at::text
+            FROM argos.audit_journal ORDER BY seq DESC LIMIT %s""",
+            (n,)).fetchall()
+    return json.dumps([dict(zip(("seq","actor","action","at"), r))
+                       for r in rows], ensure_ascii=False, indent=1)
+ 
+def _logs() -> dict[str, str]:
+    out = {}
+    pods = _sh("kubectl get pods -A -o name").split()
+    for pod in pods[:60]:
+        raw = _sh(f"kubectl logs {pod} --tail=500 --all-containers")
+        clean, n = scrub_input(raw)         # defensa en profundidad
+        out[f"logs/{pod.replace('/', '_')}.log"] = \
+            f"# depuraciones aplicadas: {n}\n" + clean
+    return out
+ 
+def build_package() -> bytes:
+    files: dict[str, str] = {}
+    for name, fn in COLLECTORS.items():
+        if fn: files[name] = fn()
+    files.update(_logs())
+    index = {"generado": dt.datetime.now(dt.UTC).isoformat(),
+             "contenido": sorted(files),
+             "nota": "Sin datos de negocio; logs depurados; "
+                     "secretos excluidos por diseño."}
+    files["INDICE.json"] = json.dumps(index, ensure_ascii=False, indent=1)
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name, content in sorted(files.items()):
+            data = content.encode()
+            info = tarfile.TarInfo(name); info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    # cifrado a la clave pública del soporte (age): el cliente lo envía
+    enc = subprocess.run(
+        ["age", "-r", open("/etc/argos/keys/support.age").read().strip()],
+        input=buf.getvalue(), capture_output=True).stdout
+    return enc
+ 
+
+ARG-089 · Backup cifrado con restauración probada
+ANÁLISIS
+La política: un backup solo existe cuando su restauración se ha probado. Piezas: restic (cifrado de extremo a extremo, deduplicado, destino S3/SFTP del cliente o disco local rotado) sobre tres conjuntos con cadencias propias — base de datos (dump lógico diario + WAL para punto en el tiempo), evidencia WORM (sincronización incremental: el object lock del destino la protege igual) y configuración (Vault snapshot + manifiestos). La prueba de restauración es un job mensual automático: restaura el último backup en un espacio efímero, levanta un PostgreSQL desechable, verifica la cadena del diario (ARG-066) y compara recuentos con producción — el resultado, al diario y al panel; un fallo de la prueba es una alerta crítica, porque significa que el backup era decorativo.
+DESARROLLO
+platform/backup/backup.sh + restore-test.sh
+#!/usr/bin/env bash
+# backup.sh — diario, tres conjuntos, cifrado extremo a extremo.
+set -euo pipefail
+export RESTIC_REPOSITORY RESTIC_PASSWORD_FILE=/etc/argos/keys/restic.key
+ 
+# 1) base de datos: dump lógico consistente
+pg_dump -h postgres.argos-core -U backup -Fc argos \
+  > /var/tmp/argos-db.dump
+restic backup /var/tmp/argos-db.dump --tag db
+ 
+# 2) evidencia WORM: sincronización incremental del bucket
+restic backup /var/lib/argos/objectstore/evidence --tag evidence
+ 
+# 3) configuración: snapshot de Vault + manifiestos aplicados
+vault operator raft snapshot save /var/tmp/vault.snap
+kubectl get -A -o yaml deploy,cm,networkpolicy > /var/tmp/k8s-state.yaml
+restic backup /var/tmp/vault.snap /var/tmp/k8s-state.yaml --tag config
+ 
+restic forget --keep-daily 14 --keep-weekly 8 --keep-monthly 12 --prune
+restic check --read-data-subset=5%     # verificación de integridad rotativa
+ 
+# ---------------------------------------------------------------
+# restore-test.sh — mensual: el backup se prueba restaurando.
+set -euo pipefail
+WORK=$(mktemp -d)
+restic restore latest --tag db --target "$WORK"
+ 
+# PostgreSQL efímero y restauración real
+docker run -d --name restore-test -e POSTGRES_PASSWORD=t \
+  -v "$WORK":/restore postgres:16
+sleep 10
+docker exec restore-test pg_restore -U postgres -C -d postgres \
+  /restore/var/tmp/argos-db.dump
+ 
+# verificación: cadena del diario íntegra + recuentos coherentes
+docker exec restore-test psql -U postgres -d argos -tAc \
+  "SELECT count(*) FROM argos.audit_journal" > "$WORK/journal_count"
+python3 /opt/argos/tools/verify_restored_journal.py \
+  --container restore-test || {
+    logger -t argos-backup 'FALLO PRUEBA RESTAURACION';
+    argos-alert critical 'backup: prueba de restauración fallida';
+    exit 1; }
+docker rm -f restore-test; rm -rf "$WORK"
+logger -t argos-backup 'prueba de restauración OK'
+ 
+
+ARG-090 · Modo aislado: la esclusa de soportes
+ANÁLISIS
+El appliance sin salida a Internet (P-02) necesita una esclusa formal para lo que entra y lo que sale. Entra: paquetes de actualización (ARG-086), bundles de contenido (ARG-040) y tokens TSA (.tsr de ARG-065) — todo firmado, todo verificado antes de tocar nada, con el soporte físico montado de solo lectura y escaneado. Sale: solicitudes TSA (.tsq), paquetes de diagnóstico (ARG-088), expedientes y credenciales — nada más tiene exportador, y la lista cerrada es la garantía. Cada operación de esclusa (qué soporte, qué ficheros, qué hashes, qué veredicto de verificación, qué usuario) es un asiento del diario: la esclusa es auditable como todo lo demás.
+DESARROLLO
+services/airgap/gate.py
+"""Esclusa de soportes: importaciones verificadas, exportaciones de lista
+cerrada, todo al diario."""
+import hashlib, json, pathlib, shutil, subprocess
+from argos_db import pool
+ 
+MOUNT = pathlib.Path("/media/argos-gate")     # montado ro por udev rule
+ 
+IMPORTERS = {
+  "update":  {"pattern": "argos-update-*.tar",
+              "handler": "services.updater.apply:apply_update"},
+  "content": {"pattern": "argos-ontology-*.tar.gz",
+              "handler": "services.ontology.store.loader:load_bundle"},
+  "tsr":     {"pattern": "*.tsr",
+              "handler": "services.evidence.tsa.worker:import_tokens"},
+}
+ 
+EXPORTERS = {   # LISTA CERRADA: nada más sale del appliance
+  "tsq":        "services.evidence.tsa.worker:export_requests",
+  "diagnostico":"services.support.diagnostics:build_package",
+  "expediente": "services.evidence.dossier.export:export_dossier",
+  "credencial": "services.evidence.credential.export:export_vc",
+}
+ 
+def _journal(action: str, payload: dict, actor: str):
+    with pool.connection() as db:
+        db.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+            (actor, action, json.dumps(payload)))
+        db.commit()
+ 
+def _resolve(handler: str):
+    mod, fn = handler.split(":")
+    return getattr(__import__(mod, fromlist=[fn]), fn)
+ 
+def scan_and_import(actor: str) -> list[dict]:
+    """Recorre el soporte (ro), verifica e importa lo reconocido."""
+    results = []
+    for kind, spec in IMPORTERS.items():
+        for f in sorted(MOUNT.glob(spec["pattern"])):
+            sha = hashlib.sha256(f.read_bytes()).hexdigest()
+            entry = {"kind": kind, "file": f.name, "sha256": sha}
+            try:
+                # copiar a zona de trabajo (el soporte es ro) y procesar;
+                # cada handler verifica SU firma antes de aplicar nada
+                work = pathlib.Path("/var/lib/argos/gate-in") / f.name
+                shutil.copy2(f, work)
+                _resolve(spec["handler"])(str(work))
+                entry["resultado"] = "importado"
+            except Exception as e:
+                entry["resultado"] = f"rechazado: {str(e)[:160]}"
+            _journal("airgap.import", entry, actor)
+            results.append(entry)
+    return results
+ 
+def export(kind: str, actor: str, **kwargs) -> dict:
+    if kind not in EXPORTERS:
+        raise PermissionError(f"exportación no contemplada: {kind}")
+    out_dir = MOUNT / "export"
+    if not out_dir.parent.exists():
+        raise RuntimeError("soporte de esclusa no montado")
+    # remontar rw SOLO durante la exportación (udev lo devuelve a ro)
+    subprocess.run(["mount", "-o", "remount,rw", str(MOUNT)], check=True)
+    try:
+        out_dir.mkdir(exist_ok=True)
+        result = _resolve(EXPORTERS[kind])(str(out_dir), **kwargs)
+        files = [{"file": p.name,
+                  "sha256": hashlib.sha256(p.read_bytes()).hexdigest()}
+                 for p in out_dir.iterdir() if p.is_file()]
+    finally:
+        subprocess.run(["mount", "-o", "remount,ro", str(MOUNT)])
+    _journal("airgap.export", {"kind": kind, "files": files}, actor)
+    return {"kind": kind, "files": files, "result": result}
+ 
+
+Interfaces que esta fase exporta
+Componente
+Interfaz exportada
+Consumidores
+ARG-081
+harden.sh + puerta CIS en CI (umbral 90%, excepciones doc.)
+Auditorías ENS/ISO del cliente; ARG-082 (lo que se mide)
+ARG-082
+Sellado LUKS a PCR 7+11 + resellado post-actualización
+ARG-086 (ventana de doble sellado); recovery en sobre
+ARG-083
+ClusterIssuer Vault + patrón Certificate + ReloadingTLS
+Todos los servicios; rotación como estado normal
+ARG-084
+Kyverno baseline + perfiles seccomp propios
+Admisión: la postura no es opcional
+ARG-085
+Credenciales DB dinámicas TTL 24h + DynamicPool
+Todos los servicios; nada de larga vida que robar
+ARG-086
+apply_update() transaccional con plan inverso previo
+Operación; consume release-manifest (ARG-010)
+ARG-087
+SBOM attestation + puerta grype + verifyImages
+AAPP (transparencia); nada sin firma arranca
+ARG-088
+build_package() minimizado, indexado y cifrado
+Soporte sin acceso remoto; el cliente revisa y envía
+ARG-089
+backup.sh 3 conjuntos + prueba mensual de restauración
+RPO 24h/RTO 4h de la especificación, demostrables
+ARG-090
+Esclusa: importadores verificados + exportadores de lista cerrada
+P-02 completo; cada operación al diario
+
+Estado del programa: el appliance ya es defendible como producto de seguridad: superficie mínima medida en el arranque, tránsito interno cifrado con identidad, credenciales que caducan solas, actualizaciones que no pueden dejarlo a medias, una cadena de suministro que se verifica a sí misma en admisión, y una esclusa formal para la vida sin red. La fase 10 cierra el programa: observación, alta disponibilidad, implantación y la auto-verificación final — ARGOS verificando a ARGOS.

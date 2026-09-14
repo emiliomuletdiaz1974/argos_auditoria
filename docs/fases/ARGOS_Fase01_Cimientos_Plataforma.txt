@@ -1,0 +1,837 @@
+ULLSWATER INVESTMENTS
+ARGOS · Programa de ingeniería en 10 fases
+FASE 1
+Cimientos de plataforma — Componentes 1 a 10
+Análisis, diseño y desarrollo con código completo: monorepo, imagen del appliance, orquestación k3s, PostgreSQL con grafo y vectores, esquema núcleo, bus de eventos, motor de workflows, identidad, PKI y cadena CI/CD firmada
+Documento técnico 1 de 10 · Madrid, septiembre de 2026 · Versión 1.0 · Confidencial
+
+Índice
+ TOC \h \u \z \t "Heading 1,1,"
+
+
+0. Método de trabajo y plan maestro de los 100 componentes
+Este es el primero de diez documentos técnicos que descomponen ARGOS en sus 100 componentes de ingeniería y los desarrollan uno a uno con la misma disciplina: Análisis (qué problema resuelve el componente, qué requisitos hereda de la especificación de producto y qué alternativas se evaluaron), Diseño (la decisión tomada, sus interfaces y su encaje en las siete capas) y Desarrollo (código completo y ejecutable, con su ruta en el monorepo). El código es la referencia de implementación de la fase F0-F1 del plan de ingeniería: primera versión funcional, con las decisiones de seguridad y soberanía ya incorporadas, sobre la que el equipo itera.
+Convenciones de todo el programa: los lenguajes de referencia son Python 3.12 para servicios y conectores, SQL/openCypher para el plano de datos, TypeScript/React para consola, YAML para infraestructura y Bash para operación; todo componente se identifica como ARG-NNN; toda ruta es relativa a la raíz del monorepo argos/; ningún componente escribe jamás en un sistema del cliente; y todo artefacto que cruza una frontera (imagen, bundle, ontología, biblioteca) va firmado.
+Fase
+Documento
+Componentes
+1
+Cimientos de plataforma
+001-010 · monorepo, imagen appliance, k3s, PostgreSQL+AGE+pgvector, esquema núcleo, NATS, Temporal, Keycloak, Vault/PKI, CI/CD firmada
+2
+Conectores de solo lectura (C1)
+011-020 · SDK conector, diario de consultas, presupuesto de carga, JDBC genérico, PostgreSQL, Oracle/SQLServer, ficheros, LDAP/AD, REST, FHIR/DICOM
+3
+Inventario y grafo (C2)
+021-030 · modelo de grafo, ingesta, versionado temporal, clasificador determinista, clasificador asistido, catálogo, flujos, descubrimiento IA, API grafo, reexploración
+4
+Ontología normativa (C3)
+031-040 · esquema OWL, carga de normas, aplicabilidad, motor SHACL, ODRL 2.2, OPA/Rego, trazabilidad obligación-reto, flujo editorial, resolutor, publicación firmada
+5
+Motor de retos (C4)
+041-050 · DSL YAML, compilador, workflows de campaña, actividades de sonda, muestreo estadístico, evaluador, puntos de control, hallazgos, reejecución, biblioteca
+6
+IA local (C5)
+051-060 · vLLM, gateway IA, embeddings, RAG normativo, clasificación semántica, generación de retos, dictámenes, asistente, evaluación, guardarraíles
+7
+Evidencia y credencial (C6)
+061-070 · WORM, artefactos, Merkle, firma TPM, sellado RFC3161, diario encadenado, expediente, credencial VC 2.0, comprobador público, conector EDC
+8
+Consola y APIs (C7)
+071-080 · API REST/GraphQL, RBAC, OIDC, vistas inventario/campañas/hallazgos/evidencia/credenciales, webhooks, sistema de diseño
+9
+Seguridad de plataforma (C8)
+081-090 · imagen endurecida, arranque medido+LUKS, mTLS, seccomp/AppArmor, secretos, actualización firmada, SBOM, diagnóstico, backup, modo aislado
+10
+Operación y despliegue (C9)
+091-100 · Prometheus, Grafana, Loki, salud, HA talla M, clúster L, instalador de implantación, comprobación de sala, telemetría local, auto-verificación de release
+
+La numeración es estable en todo el programa: cuando la fase 5 invoque el diario de consultas dirá simplemente «ARG-012». Cada documento cierra con la lista de interfaces que exporta a las fases siguientes.
+
+ARG-001 · Monorepo y convenciones de construcción
+ANÁLISIS
+ARGOS es un producto de siete capas con decenas de servicios que deben versionarse, probarse y firmarse como una sola imagen de appliance: la release es un todo o no es. Se evaluaron multirepo (aísla equipos pero fragmenta la release y complica la trazabilidad del SBOM único) y monorepo (una revisión = un producto completo, refactorizaciones transversales atómicas, un solo pipeline de firma). Para un equipo de nueve personas que entrega un appliance, el monorepo es la opción con menor fricción y máxima trazabilidad; el riesgo clásico (crecimiento del tiempo de CI) se mitiga con construcción incremental por rutas afectadas.
+DISEÑO
+Un único repositorio argos/ con cinco raíces: services/ (microservicios Python), connectors/ (SDK y conectores C1), console/ (frontend), platform/ (infraestructura como código del appliance) y library/ (ontología y retos, con su propio ciclo editorial). Un Makefile raíz orquesta todo; cada servicio declara sus dependencias con uv (lockfile reproducible) y se construye como imagen OCI mínima y sin raíz. La convención de identidad: cada componente lleva su ARG-NNN en el pyproject y en la etiqueta OCI, lo que permite reconstruir el SBOM por componente.
+DESARROLLO
+argos/ — estructura del monorepo
+argos/
+├── Makefile                    # orquestación raíz (build/test/sbom/sign)
+├── VERSION                     # versión única de producto (SemVer)
+├── services/
+│   ├── inventory/              # ARG-022..030 (C2)
+│   ├── ontology/               # ARG-031..040 (C3)
+│   ├── challenge-engine/       # ARG-041..049 (C4)
+│   ├── ai-gateway/             # ARG-052..060 (C5)
+│   ├── evidence/               # ARG-061..067 (C6)
+│   ├── credentials/            # ARG-068..070 (C6)
+│   └── api/                    # ARG-071..079 (C7)
+├── connectors/
+│   ├── sdk/                    # ARG-011..013
+│   └── {sql,files,ldap,rest,fhir,dicom}/   # ARG-014..020
+├── console/                    # ARG-074..080 (React/TS)
+├── platform/
+│   ├── image/                  # ARG-002, ARG-081..082
+│   ├── k8s/                    # ARG-003..009 (manifiestos)
+│   └── ci/                     # ARG-010
+├── library/
+│   ├── ontology/               # fuentes OWL/ODRL (ARG-031..)
+│   └── challenges/             # retos YAML (ARG-050)
+└── tools/                      # scripts de desarrollo y release
+ 
+argos/Makefile
+SHELL := /bin/bash
+VERSION := $(shell cat VERSION)
+REGISTRY := registry.argos.internal:5000
+SERVICES := $(notdir $(wildcard services/*)) $(notdir $(wildcard connectors/*))
+ 
+.PHONY: all build test sbom sign release
+ 
+all: build test sbom sign
+ 
+build:   ## construye todas las imágenes OCI con etiqueta de versión única
+for s in $(SERVICES); do \
+  d=$$(ls -d services/$$s connectors/$$s 2>/dev/null | head -1); \
+  docker build -t $(REGISTRY)/argos-$$s:$(VERSION) \
+    --label org.argos.component=$$(cat $$d/COMPONENT) \
+    --label org.argos.version=$(VERSION) $$d; \
+done
+ 
+test:    ## pruebas unitarias y de contrato de todos los servicios
+for s in $(SERVICES); do \
+  d=$$(ls -d services/$$s connectors/$$s 2>/dev/null | head -1); \
+  (cd $$d && uv run pytest -q --maxfail=1); \
+done
+ 
+sbom:    ## SBOM por imagen y SBOM agregado de producto (ARG-087)
+mkdir -p dist/sbom
+for s in $(SERVICES); do \
+  syft $(REGISTRY)/argos-$$s:$(VERSION) -o spdx-json \
+    > dist/sbom/argos-$$s-$(VERSION).spdx.json; \
+done
+ 
+sign:    ## firma cosign de imágenes y SBOM (clave en Vault, ARG-010)
+for s in $(SERVICES); do \
+  cosign sign --key hashivault://argos-release \
+    $(REGISTRY)/argos-$$s:$(VERSION); \
+done
+ 
+
+ARG-002 · Imagen base del Servidor Cognitivo
+ANÁLISIS
+El appliance debe arrancar en casa del cliente sin intervención del fabricante y quedar en un estado conocido, reproducible y auditable: sistema mínimo, disco cifrado, k3s listo y ni un paquete de más. Se evaluaron una distribución convencional gestionada con Ansible (deriva de configuración con los años) y una imagen inmutable construida con Packer y configurada por cloud-init en el primer arranque (estado reproducible, actualización por reemplazo transaccional, base del arranque medido de ARG-082). Se elige imagen inmutable sobre Ubuntu Server LTS minimal, que equilibra soporte de drivers NVIDIA y ciclo de parches largo.
+DISEÑO
+Packer produce la imagen dorada por talla (S/M/L solo difieren en drivers y ajustes de GPU); cloud-init del primer arranque particiona y cifra los volúmenes de datos (el cifrado raíz con TPM llega en ARG-082), fija red y usuario de mantenimiento local sin acceso remoto, e instala el plano k3s desde artefactos incluidos en la propia imagen: el primer arranque funciona sin internet, coherente con P-02 del pliego.
+DESARROLLO
+platform/image/appliance.pkr.hcl
+packer {
+  required_plugins { qemu = { source = "github.com/hashicorp/qemu", version = ">= 1.1.0" } }
+}
+ 
+variable "talla"   { type = string, default = "M" }   # S | M | L
+variable "version" { type = string }
+ 
+source "qemu" "argos" {
+  iso_url          = "ubuntu-24.04-live-server-amd64.iso"
+  iso_checksum     = "file:SHA256SUMS"
+  disk_size        = "60G"
+  memory           = 8192
+  ssh_username     = "packer"
+  shutdown_command = "sudo shutdown -P now"
+  http_directory   = "http"            # autoinstall minimal
+  output_directory = "dist/image-${var.talla}-${var.version}"
+}
+ 
+build {
+  sources = ["source.qemu.argos"]
+ 
+  provisioner "shell" { scripts = [
+    "scripts/00-minimal.sh",      # purga snapd, paquetes no esenciales
+    "scripts/10-kernel-gpu.sh",   # driver NVIDIA + nvidia-container-toolkit
+    "scripts/20-k3s-airgap.sh",   # binario k3s + imágenes precargadas
+    "scripts/30-hardening.sh",    # CIS L1: sysctl, auditd, ssh (ARG-081)
+    "scripts/40-firstboot.sh"     # instala unidad firstboot + cloud-init
+  ] }
+ 
+  post-processor "checksum" { checksum_types = ["sha256"] }
+}
+ 
+platform/image/cloud-init/user-data.yaml (primer arranque en cliente)
+#cloud-config
+hostname: argos-appliance
+users:
+  - name: argosadmin            # consola local; sin SSH hasta que TI cliente lo habilite
+    lock_passwd: false
+    groups: [sudo]
+    shell: /bin/bash
+ssh_pwauth: false
+disk_setup:
+  /dev/nvme1n1: { table_type: gpt, layout: true, overwrite: false }
+fs_setup:
+  - { label: argos-data, filesystem: ext4, device: /dev/nvme1n1p1 }
+runcmd:
+  # 1) cifrar volumen de datos con clave aleatoria custodiada por TPM (ARG-082 la sella)
+  - cryptsetup luksFormat --type luks2 /dev/nvme1n1p1 /etc/argos/data.key --batch-mode
+  - cryptsetup open /dev/nvme1n1p1 argos-data --key-file /etc/argos/data.key
+  - mkfs.ext4 -L argos-data /dev/mapper/argos-data && mkdir -p /var/lib/argos
+  - echo 'argos-data /var/lib/argos ext4 defaults 0 2' >> /etc/fstab
+  - mount /var/lib/argos
+  # 2) arrancar k3s en modo aislado con registro local (ARG-003)
+  - systemctl enable --now k3s
+  # 3) desplegar la pila base desde manifiestos incluidos en imagen
+  - kubectl apply -k /opt/argos/platform/k8s/base
+  # 4) marcar estado y presentar URL de consola en tty1
+  - /opt/argos/tools/firstboot-banner.sh
+ 
+
+ARG-003 · Orquestación k3s y política de red base
+ANÁLISIS
+Los servicios necesitan un orquestador con ciclo de vida, reinicios y aislamiento, pero un Kubernetes completo es inasumible de operar dentro de un appliance. k3s aporta la API estándar en un binario único, sin dependencias de nube, con containerd embebido y soporte de registro privado en aislamiento — exactamente el perfil. La alternativa docker-compose se descartó por carecer de políticas de red, gestión declarativa y camino a los clústeres de la talla L (ARG-096).
+DISEÑO
+Un solo nodo k3s en tallas S/M (la L añade nodos, fase 10) con cuatro namespaces que reproducen las fronteras de capas: argos-core (datos y bus), argos-services (C2-C6), argos-edge (API y consola, lo único expuesto) y argos-ai (vLLM, con acceso a GPU). La política de red parte de denegación total: cada permiso de tráfico es una NetworkPolicy explícita, lo que materializa en el clúster la regla «las capas solo hablan con la inmediata».
+DESARROLLO
+platform/k8s/base/namespaces.yaml
+apiVersion: v1
+kind: Namespace
+metadata: { name: argos-core,     labels: { argos/zone: core } }
+---
+apiVersion: v1
+kind: Namespace
+metadata: { name: argos-services, labels: { argos/zone: services } }
+---
+apiVersion: v1
+kind: Namespace
+metadata: { name: argos-edge,     labels: { argos/zone: edge } }
+---
+apiVersion: v1
+kind: Namespace
+metadata: { name: argos-ai,       labels: { argos/zone: ai } }
+ 
+platform/k8s/base/netpol-default-deny.yaml
+# Denegación por defecto en los cuatro namespaces: todo tráfico no
+# autorizado expresamente está prohibido (entrada y salida).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny, namespace: argos-services }
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+# Permiso mínimo: servicios -> PostgreSQL (5432) y NATS (4222) en core
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: services-to-core, namespace: argos-core }
+spec:
+  podSelector: { matchLabels: { argos/tier: datastore } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: { matchLabels: { argos/zone: services } }
+        - namespaceSelector: { matchLabels: { argos/zone: edge } }
+      ports:
+        - { protocol: TCP, port: 5432 }
+        - { protocol: TCP, port: 4222 }
+---
+# Los conectores (services) son los ÚNICOS con salida hacia la red cliente,
+# y solo a los CIDR/puertos pactados en implantación (se parchea por cliente).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: connectors-egress-cliente, namespace: argos-services }
+spec:
+  podSelector: { matchLabels: { argos/role: connector } }
+  policyTypes: [Egress]
+  egress:
+    - to: [ { ipBlock: { cidr: 10.0.0.0/8 } } ]   # AJUSTAR en semana 1
+      ports: [ { protocol: TCP, port: 5432 }, { protocol: TCP, port: 1521 },
+               { protocol: TCP, port: 1433 }, { protocol: TCP, port: 445 },
+               { protocol: TCP, port: 636 }, { protocol: TCP, port: 443 } ]
+ 
+platform/k8s/base/registries.yaml (modo aislado, en /etc/rancher/k3s/)
+mirrors:
+  "registry.argos.internal:5000":
+    endpoint: ["http://registry.argos.internal:5000"]
+configs:
+  "registry.argos.internal:5000":
+    tls: { insecure_skip_verify: false, ca_file: /etc/argos/pki/ca.crt }
+ 
+
+ARG-004 · PostgreSQL 16 con Apache AGE y pgvector
+ANÁLISIS
+El producto necesita tres modelos de datos —relacional (campañas, hallazgos, configuración), grafo (inventario, ARG-021) y vectorial (RAG, ARG-053)— y la tentación de tres motores (PostgreSQL + Neo4j + Qdrant) triplicaría la operación, el respaldo y el cifrado dentro del appliance. La especificación ya decidió la consolidación: PostgreSQL 16 con Apache AGE (openCypher sobre el mismo motor transaccional) y pgvector. El coste aceptado es que AGE rinde por debajo de Neo4j en travesías profundas; el objetivo de diseño (<2 s hasta un millón de nodos, ARG-029) se cubre con índices sobre las tablas subyacentes de AGE.
+DISEÑO
+Imagen propia que apila las dos extensiones sobre la oficial de PostgreSQL; StatefulSet con un réplica en tallas S/M (la HA llega en ARG-095); credenciales servidas desde Vault; y un init-job idempotente que crea extensiones, grafo y esquema núcleo (ARG-005). Ajustes de memoria parametrizados por talla vía ConfigMap.
+DESARROLLO
+platform/k8s/core/postgres/Dockerfile
+FROM postgres:16-bookworm
+ 
+ARG AGE_VERSION=1.5.0
+ARG PGVECTOR_VERSION=0.8.0
+ 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential postgresql-server-dev-16 git ca-certificates \
+ && git clone --depth 1 -b PG16/v${AGE_VERSION}-rc0 https://github.com/apache/age /tmp/age \
+ && make -C /tmp/age install \
+ && git clone --depth 1 -b v${PGVECTOR_VERSION} https://github.com/pgvector/pgvector /tmp/pgvector \
+ && make -C /tmp/pgvector install \
+ && apt-get purge -y build-essential git && apt-get autoremove -y \
+ && rm -rf /var/lib/apt/lists/* /tmp/age /tmp/pgvector
+ 
+COPY conf/postgresql-argos.conf /etc/postgresql/postgresql-argos.conf
+CMD ["postgres", "-c", "config_file=/etc/postgresql/postgresql-argos.conf"]
+ 
+platform/k8s/core/postgres/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: postgres, namespace: argos-core }
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector: { matchLabels: { app: postgres } }
+  template:
+    metadata: { labels: { app: postgres, argos/tier: datastore } }
+    spec:
+      securityContext: { runAsNonRoot: true, runAsUser: 999, fsGroup: 999 }
+      containers:
+        - name: postgres
+          image: registry.argos.internal:5000/argos-postgres:16-age-pgvector
+          ports: [ { containerPort: 5432 } ]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: pg-superuser, key: password } }
+          resources:
+            requests: { cpu: "2",  memory: 8Gi }
+            limits:   { cpu: "8",  memory: 32Gi }   # talla M; S usa overlay
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+          readinessProbe:
+            exec: { command: ["pg_isready","-U","postgres"] }
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: 2Ti } }
+ 
+platform/k8s/core/postgres/init/00-extensions.sql
+-- Idempotente: lo ejecuta el init-job en cada arranque de versión
+CREATE EXTENSION IF NOT EXISTS age;
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+ 
+LOAD 'age';
+SET search_path = ag_catalog, public;
+ 
+-- Grafo de inventario (lo modela ARG-021)
+SELECT create_graph('inventario')
+ WHERE NOT EXISTS (SELECT 1 FROM ag_catalog.ag_graph WHERE name='inventario');
+ 
+-- Roles de servicio con privilegio mínimo
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='svc_inventory') THEN
+    CREATE ROLE svc_inventory LOGIN;   END IF;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='svc_challenge') THEN
+    CREATE ROLE svc_challenge LOGIN;   END IF;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='svc_evidence')  THEN
+    CREATE ROLE svc_evidence LOGIN;    END IF;
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='svc_api')       THEN
+    CREATE ROLE svc_api LOGIN;         END IF;
+END $$;
+ 
+
+ARG-005 · Esquema de datos núcleo y migraciones
+ANÁLISIS
+Antes de que existan conectores o retos hace falta el sustrato común que todas las capas comparten: versión de esquema, configuración, sistemas registrados, campañas y —crítico desde el minuto uno— el diario de auditoría encadenado en el que se apoyará la cadena de evidencia (la versión criptográficamente completa llega en ARG-066; aquí nace su tabla con el encadenado de hash ya operativo, porque reescribir un diario a posteriori no es aceptable en un producto de evidencia). Las migraciones se gestionan con ficheros SQL numerados aplicados por un migrador propio minimalista: se evaluó Alembic, pero el appliance exige que la migración sea un artefacto auditable y firmado, no una generación dinámica.
+DISEÑO
+Esquema argos con las entidades transversales; claves UUID v7 (ordenables por tiempo); todas las tablas con created_at/updated_at; el diario audit_journal es de solo inserción (regla y trigger que prohíben UPDATE/DELETE) y cada entrada incluye el hash de la anterior. El migrador aplica en orden, dentro de transacción, y registra cada migración en el propio diario.
+DESARROLLO
+services/api/migrations/0001_nucleo.sql
+CREATE SCHEMA IF NOT EXISTS argos;
+ 
+CREATE TABLE argos.schema_version (
+  version     integer PRIMARY KEY,
+  applied_at  timestamptz NOT NULL DEFAULT now(),
+  checksum    text NOT NULL
+);
+ 
+CREATE TABLE argos.settings (
+  key         text PRIMARY KEY,
+  value       jsonb NOT NULL,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+ 
+-- Sistemas del cliente registrados para verificación (los puebla C1/C2)
+CREATE TABLE argos.systems (
+  id           uuid PRIMARY KEY,
+  name         text NOT NULL,
+  kind         text NOT NULL CHECK (kind IN
+               ('rdbms','files','api','directory','clinical','ai','other')),
+  environment  text NOT NULL DEFAULT 'produccion',
+  owner        text,                       -- dueño de sistema (RACI)
+  connection   jsonb NOT NULL,             -- referencia a secreto, no credencial
+  read_only_verified_at timestamptz,       -- prueba de no-escritura (P-04)
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now()
+);
+ 
+CREATE TABLE argos.campaigns (
+  id           uuid PRIMARY KEY,
+  name         text NOT NULL,
+  status       text NOT NULL DEFAULT 'borrador' CHECK (status IN
+               ('borrador','aprobada','en_ejecucion','en_revision','cerrada')),
+  scope        jsonb NOT NULL,             -- selectores de sistemas/retos
+  windows      jsonb NOT NULL DEFAULT '[]',-- ventanas de ejecución pactadas
+  created_by   text NOT NULL,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  closed_at    timestamptz
+);
+ 
+-- Diario de auditoría encadenado: SOLO INSERCIÓN
+CREATE TABLE argos.audit_journal (
+  seq          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  at           timestamptz NOT NULL DEFAULT now(),
+  actor        text NOT NULL,              -- 'system:<svc>' o 'user:<sub>'
+  action       text NOT NULL,              -- p.ej. 'query.emit', 'campaign.approve'
+  subject      jsonb NOT NULL,
+  prev_hash    bytea NOT NULL,
+  entry_hash   bytea NOT NULL
+);
+ 
+CREATE OR REPLACE FUNCTION argos.journal_forbid() RETURNS trigger AS $$
+BEGIN RAISE EXCEPTION 'audit_journal es inmutable'; END $$ LANGUAGE plpgsql;
+CREATE TRIGGER journal_no_update BEFORE UPDATE OR DELETE ON argos.audit_journal
+  FOR EACH ROW EXECUTE FUNCTION argos.journal_forbid();
+ 
+-- Inserción encadenada: calcula prev/entry hash en el propio motor
+CREATE OR REPLACE FUNCTION argos.journal_append(
+  p_actor text, p_action text, p_subject jsonb) RETURNS bigint AS $$
+DECLARE v_prev bytea; v_seq bigint;
+BEGIN
+  SELECT entry_hash INTO v_prev FROM argos.audit_journal
+   ORDER BY seq DESC LIMIT 1 FOR UPDATE;
+  IF v_prev IS NULL THEN v_prev := digest('ARGOS-GENESIS','sha256'); END IF;
+  INSERT INTO argos.audit_journal(actor,action,subject,prev_hash,entry_hash)
+  VALUES (p_actor,p_action,p_subject,v_prev,
+          digest(v_prev || convert_to(p_actor||p_action||p_subject::text,'UTF8'),
+                 'sha256'))
+  RETURNING seq INTO v_seq;
+  RETURN v_seq;
+END $$ LANGUAGE plpgsql SECURITY DEFINER;
+ 
+tools/migrate.py — migrador auditable
+#!/usr/bin/env python3
+"""Migrador ARGOS: aplica SQL numerado, verifica checksum, registra en diario."""
+import hashlib, pathlib, sys
+import psycopg
+ 
+MIGRATIONS = sorted(pathlib.Path(sys.argv[1]).glob("[0-9]*.sql"))
+DSN = sys.argv[2]  # inyectado por el init-job desde Vault
+ 
+def checksum(p: pathlib.Path) -> str:
+    return hashlib.sha256(p.read_bytes()).hexdigest()
+ 
+with psycopg.connect(DSN, autocommit=False) as conn, conn.cursor() as cur:
+    cur.execute("CREATE SCHEMA IF NOT EXISTS argos")
+    cur.execute("""CREATE TABLE IF NOT EXISTS argos.schema_version(
+        version int PRIMARY KEY, applied_at timestamptz DEFAULT now(),
+        checksum text NOT NULL)""")
+    cur.execute("SELECT version, checksum FROM argos.schema_version")
+    done = dict(cur.fetchall())
+    for m in MIGRATIONS:
+        v = int(m.name.split("_")[0])
+        cs = checksum(m)
+        if v in done:
+            assert done[v] == cs, f"¡Migración {v} alterada tras aplicarse!"
+            continue
+        print(f"aplicando {m.name}")
+        cur.execute(m.read_text())
+        cur.execute("INSERT INTO argos.schema_version VALUES (%s, now(), %s)", (v, cs))
+        cur.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+                    ("system:migrator", "schema.migrate",
+                     f'{{"version":{v},"checksum":"{cs}"}}'))
+    conn.commit()
+print("esquema al día")
+ 
+
+ARG-006 · Bus de eventos NATS JetStream
+ANÁLISIS
+Las capas cooperan por eventos (un conector descubre una tabla → C2 la ingiere → C3 evalúa aplicabilidad → C4 propone retos) y ese acoplamiento debe ser asíncrono, persistente y reproducible: si un servicio cae, no puede perderse el descubrimiento. Kafka es el estándar pero su coste operativo (JVM, ZooKeeper/KRaft, tuning) es desproporcionado para un appliance; NATS JetStream ofrece persistencia, reentrega y consumidores duraderos en un binario de 20 MB. Los eventos siguen el sobre CloudEvents 1.0 para no inventar un formato propio.
+DISEÑO
+Tres streams con retención y política propias: DISCOVERY (hallazgos de inventario, 30 días), CHALLENGE (ciclo de retos y campañas, 90 días) y EVIDENCE (punteros a artefactos sellados —nunca la evidencia misma—, retención ilimitada acotada por tamaño). Sujetos jerárquicos argos.<dominio>.<evento>. Una librería Python común (argos_events) publica y consume con validación de esquema y registro en el diario cuando el evento es relevante para auditoría.
+DESARROLLO
+platform/k8s/core/nats/streams.yaml (job de configuración)
+apiVersion: batch/v1
+kind: Job
+metadata: { name: nats-streams-setup, namespace: argos-core }
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: registry.argos.internal:5000/natsio-nats-box:0.14
+          command: ["/bin/sh","-c"]
+          args:
+            - |
+              nats -s nats://nats.argos-core:4222 stream add DISCOVERY \
+                --subjects 'argos.discovery.>' --storage file --retention limits \
+                --max-age 720h --replicas 1 --defaults
+              nats -s nats://nats.argos-core:4222 stream add CHALLENGE \
+                --subjects 'argos.challenge.>','argos.campaign.>' --storage file \
+                --retention limits --max-age 2160h --replicas 1 --defaults
+              nats -s nats://nats.argos-core:4222 stream add EVIDENCE \
+                --subjects 'argos.evidence.>' --storage file --retention limits \
+                --max-bytes 50GB --replicas 1 --defaults
+ 
+services/_lib/argos_events/__init__.py
+"""argos_events: publicación/consumo CloudEvents sobre JetStream.
+Todo servicio usa esta librería; nadie habla NATS a pelo."""
+import json, uuid, datetime as dt
+import nats
+from nats.js.api import ConsumerConfig, DeliverPolicy
+ 
+NATS_URL = "nats://nats.argos-core:4222"
+ 
+def _envelope(source: str, etype: str, data: dict) -> bytes:
+    return json.dumps({
+        "specversion": "1.0",
+        "id": str(uuid.uuid7()),
+        "source": f"//argos/{source}",
+        "type": f"eu.argos.{etype}",
+        "time": dt.datetime.now(dt.UTC).isoformat(),
+        "datacontenttype": "application/json",
+        "data": data,
+    }).encode()
+ 
+class Bus:
+    def __init__(self, service: str):
+        self.service = service
+        self.nc = None; self.js = None
+ 
+    async def connect(self):
+        self.nc = await nats.connect(NATS_URL, name=self.service)
+        self.js = self.nc.jetstream()
+ 
+    async def publish(self, subject: str, etype: str, data: dict):
+        """p.ej. subject='argos.discovery.table_found',
+                 etype='discovery.table_found.v1'"""
+        ack = await self.js.publish(subject, _envelope(self.service, etype, data))
+        return ack.seq
+ 
+    async def subscribe(self, subject: str, durable: str, handler):
+        """Consumidor duradero con ack explícito y reentrega."""
+        async def _cb(msg):
+            try:
+                evt = json.loads(msg.data)
+                await handler(evt["data"], evt)
+                await msg.ack()
+            except Exception:
+                await msg.nak(delay=30)   # reintento con espera
+        await self.js.subscribe(subject, durable=durable, cb=_cb,
+            config=ConsumerConfig(deliver_policy=DeliverPolicy.ALL,
+                                  max_deliver=5, ack_wait=60))
+ 
+
+ARG-007 · Motor de workflows Temporal
+ANÁLISIS
+Una campaña dura días, sobrevive a reinicios, espera aprobaciones humanas y reintenta sondas fallidas: es la definición de workflow duradero. Programarlo a mano sobre colas y estados en base de datos es la fuente clásica de errores sutiles; Temporal lo resuelve con ejecución determinista reanudable, señales (los puntos de control humanos de ARG-047) y visibilidad completa del historial —que además es, en sí misma, traza auditable de la campaña. Se autoaloja sobre la PostgreSQL del appliance para no añadir otro almacén.
+DISEÑO
+Despliegue mínimo de Temporal (frontend+history+matching+worker en un pod, ui opcional solo en argos-edge) con persistencia en un schema propio de PostgreSQL; un worker Python por dominio (campañas en fase 5, mantenimiento en fase 10). Aquí se entrega el arranque del worker y un workflow de humo que valida la instalación extremo a extremo y deja el patrón de actividades con reintentos.
+DESARROLLO
+platform/k8s/core/temporal/deployment.yaml (extracto esencial)
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: temporal, namespace: argos-core }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: temporal } }
+  template:
+    metadata: { labels: { app: temporal, argos/tier: datastore } }
+    spec:
+      containers:
+        - name: temporal
+          image: registry.argos.internal:5000/temporalio-auto-setup:1.25
+          env:
+            - { name: DB, value: postgres12 }
+            - { name: POSTGRES_SEEDS, value: postgres.argos-core }
+            - { name: DBNAME, value: temporal }
+            - name: POSTGRES_PWD
+              valueFrom: { secretKeyRef: { name: pg-temporal, key: password } }
+          ports: [ { containerPort: 7233 } ]
+          resources: { requests: { cpu: "1", memory: 2Gi } }
+ 
+services/challenge-engine/worker.py — arranque del worker y workflow de humo
+"""Worker Temporal del dominio de campañas (base para ARG-043..049)."""
+import asyncio, datetime as dt
+from temporalio import activity, workflow
+from temporalio.client import Client
+from temporalio.worker import Worker
+from temporalio.common import RetryPolicy
+ 
+TEMPORAL = "temporal.argos-core:7233"
+TASK_QUEUE = "argos-campaigns"
+ 
+@activity.defn
+async def sonda_de_humo(sistema: str) -> dict:
+    """Actividad trivial: valida cadena worker->actividad->resultado."""
+    return {"sistema": sistema, "ok": True,
+            "at": dt.datetime.now(dt.UTC).isoformat()}
+ 
+@workflow.defn
+class CampanaHumo:
+    @workflow.run
+    async def run(self, sistemas: list[str]) -> list[dict]:
+        resultados = []
+        for s in sistemas:
+            r = await workflow.execute_activity(
+                sonda_de_humo, s,
+                start_to_close_timeout=dt.timedelta(seconds=30),
+                retry_policy=RetryPolicy(maximum_attempts=3,
+                    backoff_coefficient=2.0))
+            resultados.append(r)
+        return resultados
+ 
+async def main():
+    client = await Client.connect(TEMPORAL, namespace="default")
+    worker = Worker(client, task_queue=TASK_QUEUE,
+                    workflows=[CampanaHumo], activities=[sonda_de_humo])
+    print(f"worker listo en cola {TASK_QUEUE}")
+    await worker.run()
+ 
+if __name__ == "__main__":
+    asyncio.run(main())
+ 
+
+ARG-008 · Identidad: Keycloak y realm ARGOS
+ANÁLISIS
+El pliego (P-19) exige federación OIDC/SAML con el directorio del organismo, cuatro perfiles y trazabilidad de cada acción de usuario. Implementar OIDC a mano queda descartado por principio (la criptografía de sesión no se reinventa); Keycloak es el intermediario de identidad autoalojable de referencia: federa hacia el IdP del cliente (o hacia su LDAP), emite los tokens internos con los roles de ARGOS y deja al producto un único contrato JWT que validar.
+DISEÑO
+Un realm argos importado declarativamente en el arranque con: los cuatro roles del producto (plataforma_admin, gestor_campanas, revisor_dpo, auditor_lectura), dos clientes (console pública con PKCE, api de servicio con audiencia propia), caducidades cortas de sesión y el mapeo de grupos del IdP cliente a roles ARGOS que la implantación (semana 1) solo tiene que rellenar. La validación del JWT en los servicios queda en una utilidad común de 40 líneas.
+DESARROLLO
+platform/k8s/core/keycloak/realm-argos.json (importado con --import-realm)
+{
+  "realm": "argos",
+  "enabled": true,
+  "sslRequired": "external",
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "roles": { "realm": [
+    { "name": "plataforma_admin",  "description": "Administración del appliance" },
+    { "name": "gestor_campanas",   "description": "Diseño y ejecución de campañas" },
+    { "name": "revisor_dpo",       "description": "Aprobaciones y revisión (A del RACI)" },
+    { "name": "auditor_lectura",   "description": "Solo lectura de expedientes" }
+  ]},
+  "clients": [
+    {
+      "clientId": "argos-console",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "attributes": { "pkce.code.challenge.method": "S256" },
+      "redirectUris": ["https://argos.local/*"],
+      "webOrigins": ["https://argos.local"]
+    },
+    {
+      "clientId": "argos-api",
+      "bearerOnly": true
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "cliente-oidc",
+      "providerId": "oidc",
+      "enabled": false,
+      "config": {
+        "issuer": "RELLENAR_EN_IMPLANTACION",
+        "clientId": "RELLENAR",
+        "clientSecret": "RELLENAR",
+        "defaultScope": "openid profile email groups"
+      }
+    }
+  ]
+}
+ 
+services/_lib/argos_auth/jwt.py — validación común en servicios
+"""Validación de JWT emitidos por Keycloak (realm argos)."""
+import time, httpx, jwt
+from jwt import PyJWKClient
+ 
+ISSUER = "https://keycloak.argos-core:8443/realms/argos"
+_jwks = PyJWKClient(f"{ISSUER}/protocol/openid-connect/certs")
+ 
+class AuthError(Exception): ...
+ 
+def validate(token: str, required_role: str | None = None) -> dict:
+    try:
+        key = _jwks.get_signing_key_from_jwt(token)
+        claims = jwt.decode(token, key.key, algorithms=["RS256"],
+                            audience="argos-api", issuer=ISSUER)
+    except jwt.PyJWTError as e:
+        raise AuthError(f"token inválido: {e}")
+    roles = claims.get("realm_access", {}).get("roles", [])
+    if required_role and required_role not in roles:
+        raise AuthError(f"requiere rol {required_role}")
+    return {"sub": claims["sub"], "roles": roles,
+            "name": claims.get("preferred_username", "")}
+ 
+
+ARG-009 · Secretos y PKI interna con Vault
+ANÁLISIS
+El appliance maneja tres familias de secretos —credenciales de solo lectura hacia sistemas del cliente, contraseñas internas de servicios y las claves de firma— y necesita una CA interna que emita los certificados del mTLS de ARG-083 con rotación automática. Vault resuelve ambas cosas con auditoría propia; el desellado se automatiza contra el TPM del appliance para que un reinicio no exija intervención humana (el sellado por TPM se completa en ARG-082; aquí queda la integración preparada). Alternativa evaluada: cert-manager con CA en secreto plano — rechazada porque deja la clave raíz legible en etcd.
+DISEÑO
+Vault en argos-core con almacenamiento raft local y dos motores: kv-v2 en /argos (secretos de aplicación, con políticas por servicio: cada servicio lee exclusivamente su rama) y pki con una raíz de 10 años y una intermedia de 1 año que emite certificados de 30 días renovados por los propios pods. Un job de inicialización idempotente configura motores, roles y políticas; las credenciales de conectores hacia sistemas del cliente viven en /argos/connectors/<system-id> y solo el SDK de conectores (ARG-011) tiene política para leerlas.
+DESARROLLO
+platform/k8s/core/vault/setup.sh (job de inicialización)
+#!/usr/bin/env bash
+set -euo pipefail
+export VAULT_ADDR=https://vault.argos-core:8200
+ 
+# 1) Motores
+vault secrets enable -path=argos kv-v2         || true
+vault secrets enable pki                        || true
+vault secrets tune -max-lease-ttl=87600h pki    # raíz 10 años
+ 
+# 2) CA raíz interna (solo se genera si no existe)
+if ! vault read -field=certificate pki/cert/ca >/dev/null 2>&1; then
+  vault write -field=certificate pki/root/generate/internal \
+    common_name="ARGOS Appliance Root CA" ttl=87600h \
+    > /etc/argos/pki/ca.crt
+fi
+ 
+# 3) Intermedia para mTLS de servicios (ARG-083 consume el rol)
+vault secrets enable -path=pki_int pki          || true
+vault secrets tune -max-lease-ttl=8760h pki_int
+CSR=$(vault write -field=csr pki_int/intermediate/generate/internal \
+      common_name="ARGOS Services CA")
+CERT=$(vault write -field=certificate pki/root/sign-intermediate \
+      csr="$CSR" format=pem_bundle ttl=8760h)
+vault write pki_int/intermediate/set-signed certificate="$CERT"
+ 
+vault write pki_int/roles/argos-svc \
+  allowed_domains="argos-core,argos-services,argos-edge,argos-ai" \
+  allow_subdomains=true max_ttl=720h ttl=720h
+ 
+# 4) Políticas de mínimo privilegio por servicio
+for svc in inventory ontology challenge evidence credentials api; do
+cat <<EOF | vault policy write svc-$svc -
+path "argos/data/services/$svc/*" { capabilities = ["read"] }
+path "pki_int/issue/argos-svc"    { capabilities = ["update"] }
+EOF
+done
+ 
+# 5) Política EXCLUSIVA de credenciales de conectores (P-04)
+cat <<EOF | vault policy write svc-connector-sdk -
+path "argos/data/connectors/*" { capabilities = ["read"] }
+EOF
+ 
+# 6) Autenticación Kubernetes: cada ServiceAccount -> su política
+vault auth enable kubernetes || true
+vault write auth/kubernetes/config \
+  kubernetes_host=https://kubernetes.default.svc
+for svc in inventory ontology challenge evidence credentials api; do
+  vault write auth/kubernetes/role/$svc \
+    bound_service_account_names=$svc \
+    bound_service_account_namespaces=argos-services,argos-edge \
+    policies=svc-$svc ttl=1h
+done
+vault write auth/kubernetes/role/connector-sdk \
+  bound_service_account_names=connector-sdk \
+  bound_service_account_namespaces=argos-services \
+  policies=svc-connector-sdk ttl=1h
+echo 'Vault configurado'
+ 
+
+ARG-010 · Cadena CI/CD con firma de artefactos
+ANÁLISIS
+La promesa «actualizaciones firmadas, sin túneles» (P-06, P-23) empieza en el pipeline: si la firma se añade al final a mano, tarde o temprano se salta. La cadena debe producir, en cada revisión de main: imágenes reproducibles, pruebas en verde, SBOM por componente y firma cosign con clave custodiada en Vault — y en cada etiqueta de versión, además, el bundle de appliance con su manifiesto firmado que consumirá el actualizador (ARG-086). Se usa un runner autoalojado (el pipeline también debe funcionar sin nubes de CI).
+DISEÑO
+Pipeline de cuatro etapas (verificar → construir → empaquetar → firmar) definido una sola vez; la clave de release nunca sale de Vault (cosign firma vía transit); el manifiesto de release lista cada imagen con su digest y el hash del SBOM, y es el único fichero que el appliance necesita verificar para confiar en todo lo demás. El gate final reservado (★, la auto-verificación de ARG-100) queda declarado como etapa desde el primer día.
+DESARROLLO
+platform/ci/pipeline.yaml (GitLab CI autoalojado; portable a otros runners)
+stages: [verify, build, package, sign, selfcheck]
+ 
+variables:
+  REGISTRY: registry.argos.internal:5000
+  VERSION: ${CI_COMMIT_TAG:-0.0.0-dev.${CI_COMMIT_SHORT_SHA}}
+ 
+verify:
+  stage: verify
+  script:
+    - make test
+    - ruff check services connectors tools
+    - gitleaks detect --no-banner          # ningún secreto en el repo
+ 
+build:
+  stage: build
+  script:
+    - make build VERSION=$VERSION
+    - make sbom  VERSION=$VERSION
+  artifacts: { paths: [dist/sbom/] }
+ 
+package:
+  stage: package
+  rules: [ { if: $CI_COMMIT_TAG } ]        # solo releases etiquetadas
+  script:
+    - tools/make-bundle.sh $VERSION         # genera dist/argos-$VERSION.bundle
+  artifacts: { paths: [dist/*.bundle, dist/release-manifest.json] }
+ 
+sign:
+  stage: sign
+  script:
+    - export COSIGN_KEY=hashivault://argos-release
+    - |
+      for img in $(jq -r '.images[].ref' dist/release-manifest.json); do
+        cosign sign --key $COSIGN_KEY $img
+      done
+    - cosign sign-blob --key $COSIGN_KEY dist/release-manifest.json \
+        --output-signature dist/release-manifest.sig
+ 
+selfcheck:                                  # ★ ARG-100: ARGOS verifica ARGOS
+  stage: selfcheck
+  rules: [ { if: $CI_COMMIT_TAG } ]
+  script:
+    - echo 'reservado: campaña de auto-verificación sobre banco de integración'
+    - exit 0
+ 
+tools/make-bundle.sh — manifiesto de release
+#!/usr/bin/env bash
+# Genera el manifiesto que el actualizador del appliance (ARG-086) verifica.
+set -euo pipefail
+V=$1; REG=registry.argos.internal:5000
+ 
+imgs=$(docker images --format '{{.Repository}}:{{.Tag}}@{{.Digest}}' \
+       | grep "$REG/argos-.*:$V")
+ 
+jq -n --arg v "$V" --arg date "$(date -u +%FT%TZ)" \
+  --argjson images "$(printf '%s\n' $imgs | jq -R '{ref:.}' | jq -s)" \
+  --argjson sboms  "$(cd dist/sbom && sha256sum *.json | \
+                      jq -R 'split("  ")|{sha256:.[0],file:.[1]}' | jq -s)" \
+  '{product:"argos", version:$v, built:$date, images:$images, sboms:$sboms}' \
+  > dist/release-manifest.json
+ 
+tar -C dist -czf dist/argos-$V.bundle release-manifest.json sbom/
+echo "bundle dist/argos-$V.bundle listo"
+ 
+
+Interfaces que esta fase exporta
+Componente
+Interfaz exportada
+Consumidores
+ARG-004/005
+PostgreSQL: esquema argos, grafo 'inventario', roles svc_*, argos.journal_append()
+Todas las fases; el diario lo completa criptográficamente ARG-066
+ARG-006
+Librería argos_events (Bus.publish/subscribe), streams DISCOVERY/CHALLENGE/EVIDENCE
+Fases 2-8
+ARG-007
+Cola Temporal argos-campaigns y patrón worker/actividad
+Fase 5 (ARG-043..049), fase 10
+ARG-008
+Realm argos, roles de producto, librería argos_auth.validate()
+Fase 8 (API y consola), ARG-047 (aprobaciones)
+ARG-009
+Vault: /argos/services/<svc>, /argos/connectors/<id>, pki_int/issue/argos-svc
+Fase 2 (SDK conectores), ARG-083 (mTLS), ARG-064 (firma)
+ARG-010
+release-manifest.json firmado + bundle de appliance
+ARG-086 (actualizador), ARG-087 (SBOM), ARG-100 (gate ★)
+
+Estado del programa: con esta fase el appliance arranca, cifra, orquesta, persiste (relacional+grafo+vector), conversa por eventos, ejecuta workflows duraderos, federa identidades, custodia secretos con PKI propia y produce releases firmadas con SBOM. El terreno queda listo para la fase 2: los conectores de solo lectura, donde ARGOS toca por primera vez —y solo para leer— los sistemas del cliente.

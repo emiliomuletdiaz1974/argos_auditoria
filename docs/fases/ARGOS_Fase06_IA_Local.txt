@@ -1,0 +1,754 @@
+ULLSWATER INVESTMENTS
+ARGOS · Programa de ingeniería en 10 fases
+FASE 6
+IA local — Componentes 51 a 60
+La capa C5 al completo: vLLM sirviendo el modelo abierto cuantizado en la GPU del appliance, el gateway con colas y cuotas que es la única puerta a la inferencia, los embeddings sobre pgvector, el RAG normativo, la clasificación semántica calibrada, la generación asistida de retos, la redacción de dictámenes con marca de texto asistido, el asistente de consola con herramientas, el arnés de evaluación con goldens y los guardarraíles
+Documento técnico 6 de 10 · Madrid, septiembre de 2026 · Versión 1.0 · Confidencial
+
+Índice
+ TOC \h \u \z \t "Heading 1,1,"
+
+
+0. La capa C5 en conjunto
+La IA de ARGOS es un servicio auxiliar con cuatro oficios —clasificar lo ambiguo, proponer retos desde texto normativo, redactar y asistir— y dos prohibiciones estructurales que esta fase implementa, no solo declara: nunca decide conformidad (el evaluador de la fase 5 no tiene rama hacia aquí) y nunca ve datos del cliente en claro (los guardarraíles de ARG-060 depuran cada prompt, y las capas anteriores ya minimizaron: al modelo llegan metadatos, recuentos y hashes). Todo corre en la GPU del appliance: la talla S sirve 8-14B cuantizado, la M 30-70B, la L 70B con concurrencia — cero llamadas al exterior, la promesa P-03 del pliego.
+La arquitectura de la capa: vLLM (ARG-051) expone una API compatible OpenAI que solo escucha en la red interna del namespace argos-ai; el gateway (ARG-052) es el único cliente autorizado por NetworkPolicy y añade lo que un appliance necesita: cola con prioridades, cuotas por servicio, registro y los guardarraíles; sobre el gateway se montan los cuatro oficios (ARG-054..058); y el arnés (ARG-059) mide la calidad de cada oficio contra conjuntos dorados por vertical en cada release — porque «la IA funciona bien» es, en ARGOS, una afirmación con evidencia.
+
+ARG-051 · Servido del modelo: vLLM en la GPU del appliance
+ANÁLISIS
+vLLM es el servidor de inferencia de referencia para pesos abiertos: PagedAttention (memoria KV eficiente: más contexto y concurrencia por GB), batching continuo y API compatible OpenAI que evita inventar cliente. Las decisiones por talla siguen la regla de la memoria: el modelo cuantizado AWQ a 4 bits ocupa ~¼ del FP16, y la VRAM restante es contexto y concurrencia. La talla S (1×48 GB) sirve un 8-14B con contexto largo y holgura; la M elige entre 30-70B según preferencia del cliente por calidad o concurrencia; la L reparte 70B en tensor-paralelismo. El modelo concreto es configuración, no código: se fija por bundle firmado (los pesos viajan como contenido, con hash en el manifiesto), de modo que cambiar de modelo es una actualización, no una release.
+DISEÑO
+Deployment en argos-ai con runtimeClass nvidia, un perfil de arranque por talla (ConfigMap), los pesos en el volumen de datos cifrado, y parámetros conservadores: gpu-memory-utilization 0,90, max-model-len por talla, y --disable-log-requests (los prompts no se escriben en logs: pueden contener metadatos del cliente; el registro auditable lo hace el gateway con hashes). NetworkPolicy: solo el gateway alcanza el puerto 8000.
+DESARROLLO
+platform/k8s/ai/vllm.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata: { name: vllm-profile, namespace: argos-ai }
+data:
+  # Perfil talla M con 2x L40S (tensor-paralelismo 2)
+  ARGS: >-
+    --model /models/current
+    --quantization awq
+    --tensor-parallel-size 2
+    --max-model-len 16384
+    --gpu-memory-utilization 0.90
+    --max-num-seqs 32
+    --disable-log-requests
+    --served-model-name argos-llm
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: { name: vllm, namespace: argos-ai }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: vllm } }
+  template:
+    metadata: { labels: { app: vllm } }
+    spec:
+      runtimeClassName: nvidia
+      containers:
+        - name: vllm
+          image: registry.argos.internal:5000/vllm-openai:v0.8
+          command: ["/bin/sh","-c",
+                    "python -m vllm.entrypoints.openai.api_server $ARGS"]
+          envFrom: [ { configMapRef: { name: vllm-profile } } ]
+          ports: [ { containerPort: 8000 } ]
+          resources:
+            limits: { nvidia.com/gpu: 2, memory: 64Gi, cpu: "8" }
+          volumeMounts:
+            - { name: models, mountPath: /models, readOnly: true }
+          readinessProbe:
+            httpGet: { path: /health, port: 8000 }
+            initialDelaySeconds: 120
+      volumes:
+        - name: models
+          hostPath: { path: /var/lib/argos/models }   # volumen LUKS2
+---
+# Solo el gateway habla con vLLM
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: vllm-only-gateway, namespace: argos-ai }
+spec:
+  podSelector: { matchLabels: { app: vllm } }
+  policyTypes: [Ingress]
+  ingress:
+    - from: [ { podSelector: { matchLabels: { app: ai-gateway } } } ]
+      ports: [ { protocol: TCP, port: 8000 } ]
+ 
+
+ARG-052 · Gateway de IA: la única puerta
+ANÁLISIS
+Si cada servicio hablase con vLLM directamente no habría cuotas (el asistente de consola podría matar de hambre a la clasificación nocturna), ni registro homogéneo, ni un punto donde aplicar guardarraíles. El gateway concentra las cuatro cosas con el objetivo de diseño de la especificación (20 peticiones concurrentes de asistente con primer token <2 s en talla M): cola con dos prioridades (interactiva: asistente y consola; por lotes: clasificación, generación, dictámenes), cuota de tokens por servicio y día, registro en el diario con hash de prompt (nunca el prompt), y la salida JSON forzada con reintento de reparación — el contrato chat_json que las fases 3 y 6 consumen.
+DISEÑO
+FastAPI con dos endpoints internos: /v1/chat_json (system, user, json_schema, prioridad) y /v1/embed (textos → vectores, delega en ARG-053). Semáforos por prioridad (interactiva reserva plazas), presupuesto diario en tabla, guided_json de vLLM para forzar esquema cuando el backend lo soporta con validación jsonschema siempre, y un reintento de reparación con el error como feedback antes de rendirse. Los guardarraíles de ARG-060 se aplican aquí, a la entrada y a la salida.
+DESARROLLO
+services/ai-gateway/main.py
+"""Gateway de IA: colas, cuotas, JSON forzado, registro con hash."""
+import asyncio, hashlib, json
+import httpx, jsonschema
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from guardrails import scrub_input, check_output     # ARG-060
+from argos_db import pool
+ 
+VLLM = "http://vllm.argos-ai:8000/v1/chat/completions"
+app = FastAPI()
+ 
+SLOTS = {"interactiva": asyncio.Semaphore(12),
+         "lotes":       asyncio.Semaphore(8)}
+DAILY_TOKENS = {"inventory": 2_000_000, "challenge": 1_000_000,
+                "reports": 1_000_000, "assistant": 3_000_000}
+ 
+class ChatJson(BaseModel):
+    service: str
+    system: str
+    user: str
+    json_schema: dict
+    priority: str = "lotes"
+    max_tokens: int = 1500
+ 
+def _quota_ok(service: str, tokens: int) -> bool:
+    with pool.connection() as db:
+        used = db.execute("""SELECT coalesce(sum(tokens),0)
+            FROM argos.ai_usage WHERE service=%s
+            AND at::date = current_date""", (service,)).fetchone()[0]
+    return used + tokens <= DAILY_TOKENS.get(service, 0)
+ 
+def _log(service: str, phash: str, tokens: int, ok: bool):
+    with pool.connection() as db:
+        db.execute("""INSERT INTO argos.ai_usage
+            (service, prompt_sha256, tokens, ok, at)
+            VALUES (%s,%s,%s,%s, now())""", (service, phash, tokens, ok))
+        db.commit()
+ 
+async def _complete(messages, schema, max_tokens) -> str:
+    body = {"model": "argos-llm", "messages": messages,
+            "max_tokens": max_tokens, "temperature": 0.1,
+            "guided_json": schema}          # vLLM structured output
+    async with httpx.AsyncClient(timeout=120) as c:
+        r = await c.post(VLLM, json=body)
+        r.raise_for_status()
+        return r.json()["choices"][0]["message"]["content"]
+ 
+@app.post("/v1/chat_json")
+async def chat_json(req: ChatJson):
+    if not _quota_ok(req.service, req.max_tokens):
+        raise HTTPException(429, f"cuota diaria agotada: {req.service}")
+    user_clean, redactions = scrub_input(req.user)      # guardarraíl entrada
+    phash = hashlib.sha256((req.system + user_clean).encode()).hexdigest()[:24]
+    msgs = [{"role": "system", "content": req.system},
+            {"role": "user", "content": user_clean}]
+    async with SLOTS[req.priority]:
+        raw = await _complete(msgs, req.json_schema, req.max_tokens)
+        try:
+            out = json.loads(raw)
+            jsonschema.validate(out, req.json_schema)
+        except (json.JSONDecodeError, jsonschema.ValidationError) as e:
+            msgs.append({"role": "assistant", "content": raw})
+            msgs.append({"role": "user", "content":
+                f"Salida inválida ({e}). Devuelve SOLO el JSON corregido."})
+            raw = await _complete(msgs, req.json_schema, req.max_tokens)
+            out = json.loads(raw)
+            jsonschema.validate(out, req.json_schema)
+    check_output(out)                                    # guardarraíl salida
+    _log(req.service, phash, req.max_tokens, True)
+    return {"data": out, "prompt_sha256": phash,
+            "redactions": redactions, "generated": True}
+ 
+
+ARG-053 · Embeddings y almacén vectorial
+ANÁLISIS
+El RAG normativo y el asistente necesitan búsqueda semántica multilingüe (la norma vive en castellano y en inglés). Un modelo de embeddings compacto (~0,5-1,5B, multilingüe) corre en CPU o comparte una esquina de GPU sin molestar al LLM; los vectores viven en pgvector —la decisión de un solo almacén de la fase 1— con índice HNSW, que a la escala del corpus (decenas de miles de fragmentos) da milisegundos. El corpus indexable: los textos consolidados de las normas del bundle, las guías del observatorio y la documentación del propio cliente que el DPO suba (procedimientos, políticas) — esta última con etiqueta de origen para que el asistente cite con propiedad.
+DISEÑO
+Servicio de embeddings (sentence-transformers servido junto al gateway), tabla argos.rag_chunks (fuente, origen: norma|guia|cliente, referencia citable, texto, vector) e indexador idempotente por hash de fragmento. La troceadura es por estructura jurídica, no por tamaño ciego: artículo y apartado son la unidad natural de cita — un fragmento = un apartado (con su cabecera de contexto), y solo los apartados larguísimos se subdividen.
+DESARROLLO
+services/ai-gateway/rag/indexer.py
+"""Indexador RAG: trocea por estructura jurídica, embebe, upsert en pgvector."""
+import hashlib, re
+from sentence_transformers import SentenceTransformer
+from argos_db import pool
+ 
+MODEL = SentenceTransformer("/models/embeddings")   # multilingüe, local
+DIM = 1024
+ 
+DDL_DOC = """migración 0006_rag.sql:
+CREATE TABLE argos.rag_chunks (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  source text NOT NULL,            -- 'RGPD', 'guia-ehds', 'cliente:pol-01'
+  origin text NOT NULL CHECK (origin IN ('norma','guia','cliente')),
+  ref text NOT NULL,               -- cita: 'RGPD art. 32.1.a'
+  content text NOT NULL,
+  content_sha bytea UNIQUE NOT NULL,
+  embedding vector(1024) NOT NULL);
+CREATE INDEX ON argos.rag_chunks
+  USING hnsw (embedding vector_cosine_ops);"""
+ 
+ART = re.compile(r"^Art[ií]culo\s+(\d+[a-z]?)\.?\s*(.*)$", re.M)
+APT = re.compile(r"^(\d+)\.\s", re.M)
+ 
+def chunk_norm(source: str, text: str):
+    """Un fragmento por apartado, con cabecera de contexto."""
+    arts = list(ART.finditer(text))
+    for i, m in enumerate(arts):
+        body = text[m.end(): arts[i+1].start() if i+1 < len(arts) else None]
+        header = f"{source} art. {m[1]} — {m[2].strip()}"
+        parts = APT.split(body)
+        if len(parts) <= 1:
+            yield f"{source} art. {m[1]}", f"{header}\n{body.strip()}"
+            continue
+        # APT.split: [pre, num, texto, num, texto, ...]
+        for j in range(1, len(parts), 2):
+            apt, cuerpo = parts[j], parts[j+1].strip()
+            yield (f"{source} art. {m[1]}.{apt}",
+                   f"{header}\nApartado {apt}. {cuerpo}")
+ 
+def index_document(source: str, origin: str, text: str) -> int:
+    rows = []
+    for ref, content in chunk_norm(source, text):
+        sha = hashlib.sha256(content.encode()).digest()
+        rows.append((source, origin, ref, content, sha))
+    vecs = MODEL.encode([r[3] for r in rows], normalize_embeddings=True)
+    n = 0
+    with pool.connection() as db:
+        for (source, origin, ref, content, sha), v in zip(rows, vecs):
+            cur = db.execute("""INSERT INTO argos.rag_chunks
+                (source, origin, ref, content, content_sha, embedding)
+                VALUES (%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (content_sha) DO NOTHING""",
+                (source, origin, ref, content, sha, list(map(float, v))))
+            n += cur.rowcount
+        db.commit()
+    return n
+ 
+def search(query: str, k: int = 8, origins: tuple = ("norma","guia","cliente")):
+    qv = MODEL.encode([query], normalize_embeddings=True)[0]
+    with pool.connection() as db:
+        return db.execute("""SELECT source, origin, ref, content,
+                1 - (embedding <=> %s::vector) AS score
+            FROM argos.rag_chunks WHERE origin = ANY(%s)
+            ORDER BY embedding <=> %s::vector LIMIT %s""",
+            (list(map(float, qv)), list(origins),
+             list(map(float, qv)), k)).fetchall()
+ 
+
+ARG-054 · Pipeline RAG normativo
+ANÁLISIS
+El RAG de ARGOS tiene una exigencia por encima de la habitual: la cita exacta. Un asistente que dice «el RGPD exige X» sin apartado es ruido para un DPO; uno que dice «art. 32.1.a» y enlaza el fragmento es una herramienta. El pipeline: recuperación híbrida (vectorial + léxica sobre tsvector para los números de artículo, que los embeddings tratan mal), fusión RRF, reordenación con el propio LLM sobre los 12 candidatos (barata: una llamada corta) y construcción del contexto con referencias numeradas que el prompt obliga a citar. La respuesta sin fragmento de soporte suficiente se rehúsa explícitamente: «no encuentro base normativa en el corpus para afirmarlo» es una respuesta correcta del producto.
+DISEÑO
+answer(question, origins) → recuperar 24 (12 vec + 12 léxicos) → RRF → rerank a 6 → prompt con fragmentos numerados y regla de cita obligatoria → salida JSON {respuesta, citas:[{n, ref}], suficiente:bool}. Si suficiente=false, la consola muestra el rehúso con los fragmentos más cercanos por si el humano quiere juzgar.
+DESARROLLO
+services/ai-gateway/rag/pipeline.py
+"""RAG con cita obligatoria: híbrido + RRF + rerank + rehúso honesto."""
+from .indexer import search
+from gateway_client import chat_json
+from argos_db import pool
+ 
+def _lexical(query: str, k: int = 12):
+    with pool.connection() as db:
+        return db.execute("""SELECT source, origin, ref, content,
+                ts_rank(to_tsvector('spanish', content),
+                        plainto_tsquery('spanish', %s)) AS score
+            FROM argos.rag_chunks
+            WHERE to_tsvector('spanish', content) @@
+                  plainto_tsquery('spanish', %s)
+            ORDER BY score DESC LIMIT %s""", (query, query, k)).fetchall()
+ 
+def _rrf(*lists, k: int = 60):
+    scores: dict[str, float] = {}; byref = {}
+    for lst in lists:
+        for rank, row in enumerate(lst):
+            ref = row[2]
+            scores[ref] = scores.get(ref, 0) + 1.0 / (k + rank + 1)
+            byref[ref] = row
+    return [byref[r] for r, _ in
+            sorted(scores.items(), key=lambda x: -x[1])][:12]
+ 
+RERANK_SCHEMA = {"type":"object","required":["orden"],
+  "properties":{"orden":{"type":"array","items":{"type":"integer"}}}}
+ 
+ANSWER_SCHEMA = {"type":"object",
+  "required":["respuesta","citas","suficiente"],
+  "properties":{"respuesta":{"type":"string"},
+    "citas":{"type":"array","items":{"type":"object",
+      "required":["n","ref"]}},
+    "suficiente":{"type":"boolean"}}}
+ 
+async def answer(question: str, origins=("norma", "guia")):
+    cands = _rrf(search(question, 12, origins), _lexical(question, 12))
+    listado = "\n".join(f"[{i+1}] ({c[2]}) {c[3][:400]}"
+                        for i, c in enumerate(cands))
+    rr = await chat_json(service="assistant", priority="interactiva",
+        system="Ordena los fragmentos por relevancia para la pregunta. "
+               "Devuelve JSON {\"orden\":[índices, el mejor primero]}.",
+        user=f"Pregunta: {question}\n\n{listado}",
+        json_schema=RERANK_SCHEMA, max_tokens=100)
+    top = [cands[i-1] for i in rr["data"]["orden"][:6] if 1 <= i <= len(cands)]
+    ctx = "\n\n".join(f"[{i+1}] ({c[2]})\n{c[3]}" for i, c in enumerate(top))
+    out = await chat_json(service="assistant", priority="interactiva",
+        system=("Responde SOLO con base en los fragmentos. Cada afirmación "
+                "normativa lleva cita [n]. Si los fragmentos no bastan, "
+                "devuelve suficiente=false y explica qué falta. JSON."),
+        user=f"Pregunta: {question}\n\nFragmentos:\n{ctx}",
+        json_schema=ANSWER_SCHEMA, max_tokens=800)
+    d = out["data"]
+    d["citas"] = [c | {"ref_completa": top[c["n"]-1][2]}
+                  for c in d["citas"] if 1 <= c["n"] <= len(top)]
+    return d
+ 
+
+ARG-055 · Servicio de clasificación semántica calibrada
+ANÁLISIS
+La fase 3 (ARG-025) definió el consumidor; aquí vive el servicio: el prompt maestro, el esquema y —lo que convierte una demo en producto— la calibración de confianza. Los modelos declaran confianzas mal calibradas (dicen 0,9 y aciertan 0,7), así que los umbrales de aceptación de ARG-025 serían arbitrarios sin corrección: el servicio mantiene una curva de calibración por categoría, ajustada con las resoluciones de la cola de revisión del DPO (cada revisión humana es una etiqueta gratis), y transforma la confianza declarada en confianza calibrada antes de devolverla. El sistema aprende del cliente sin entrenar nada: es regresión isotónica sobre pares (declarada, acierto).
+DISEÑO
+classify_columns(batch) con el prompt versionado en fichero (el hash viaja en cada respuesta), calibración isotónica por categoría persistida en tabla y reajustada cada noche con las revisiones nuevas, y la métrica de deriva (precisión últimos 30 días por categoría) publicada a ARG-059. Bajo mínimos de datos (menos de 50 pares) la calibración es la identidad con recorte conservador a 0,8.
+DESARROLLO
+services/ai-gateway/classify/service.py
+"""Clasificación semántica con confianza CALIBRADA por revisiones humanas."""
+import json, pathlib
+import numpy as np
+from sklearn.isotonic import IsotonicRegression
+from gateway_client import chat_json
+from argos_db import pool
+ 
+PROMPT = pathlib.Path("/opt/argos/prompts/classify.v3.txt").read_text()
+SCHEMA = json.loads(pathlib.Path(
+    "/opt/argos/prompts/classify.schema.json").read_text())
+MIN_PAIRS = 50
+ 
+_calibrators: dict[str, IsotonicRegression | None] = {}
+ 
+def _fit_calibrators():
+    """Nocturno: pares (confianza declarada, acierto) desde review_queue."""
+    with pool.connection() as db:
+        rows = db.execute("""SELECT proposed_category, confidence,
+                (resolution = proposed_category)::int AS hit
+            FROM argos.review_queue WHERE resolution IS NOT NULL""").fetchall()
+    by_cat: dict[str, list] = {}
+    for cat, conf, hit in rows:
+        by_cat.setdefault(cat, []).append((float(conf), hit))
+    for cat, pairs in by_cat.items():
+        if len(pairs) < MIN_PAIRS:
+            _calibrators[cat] = None
+            continue
+        x, y = zip(*pairs)
+        iso = IsotonicRegression(out_of_bounds="clip", y_min=0.0, y_max=1.0)
+        iso.fit(np.array(x), np.array(y))
+        _calibrators[cat] = iso
+ 
+def _calibrate(cat: str, declared: float) -> float:
+    iso = _calibrators.get(cat)
+    if iso is None:
+        return min(declared, 0.80)      # sin datos: techo conservador
+    return float(iso.predict([declared])[0])
+ 
+async def classify_columns(batch: list[dict]) -> list[dict]:
+    out = await chat_json(service="inventory", priority="lotes",
+        system=PROMPT, user=json.dumps(batch, ensure_ascii=False),
+        json_schema=SCHEMA, max_tokens=1200)
+    items = out["data"]["items"]
+    for it in items:
+        it["confidence_declared"] = it["confidence"]
+        it["confidence"] = round(_calibrate(it["category"],
+                                            it["confidence"]), 3)
+        it["prompt_sha256"] = out["prompt_sha256"]
+    return items
+ 
+
+ARG-056 · Generación asistida de retos
+ANÁLISIS
+El SLA de 30 días norma→reto y el objetivo de 300 retos en GA no salen de escribir YAML a mano: el generador es la herramienta de productividad del equipo normativo. El flujo humano manda: el jurista pega la obligación (o el generador la trae del RAG), el modelo propone el YAML del reto, el validador de ARG-041 lo comprueba en el acto, y el borrador entra en Git como rama de revisión — jamás directo a la biblioteca. La clave técnica: el prompt lleva el esquema del DSL, el catálogo de sondas por conector y dos retos ejemplares completos (few-shot), y la salida pasa por el mismo challenge_lint de la CI antes de mostrarse — el jurista solo ve propuestas que ya compilan.
+DISEÑO
+propose_challenge(obligacion_texto, contexto) → RAG opcional para enriquecer → prompt con esquema+ejemplos → YAML → challenge_lint en memoria → si falla, un ciclo de reparación con los errores → salida {yaml, valido, avisos, prompt_sha256}. La herramienta de línea de comandos del equipo normativo (new-challenge) encadena generación, validación y creación de la rama Git con la plantilla editorial de la obligación (ARG-038) enlazada.
+DESARROLLO
+services/ai-gateway/generate/challenge_gen.py
+"""Generador asistido de retos: propone YAML que ya compila."""
+import io, json, pathlib, subprocess, tempfile
+import yaml as pyyaml
+from gateway_client import chat_json
+from rag.pipeline import answer
+ 
+SCHEMA_TXT = pathlib.Path(
+    "library/challenges/schema/reto.schema.json").read_text()
+EJEMPLOS = "\n---\n".join(
+    pathlib.Path(f).read_text() for f in (
+        "library/challenges/retencion/ret-001.yaml",
+        "library/challenges/seguridad/sec-cifrado-reposo.yaml"))
+ 
+GEN_SCHEMA = {"type": "object", "required": ["yaml"],
+              "properties": {"yaml": {"type": "string"},
+                             "avisos": {"type": "array",
+                                        "items": {"type": "string"}}}}
+ 
+SYSTEM = f"""Eres el asistente del equipo normativo de ARGOS. Propones
+retos en el DSL YAML de 6 bloques. REGLAS: solo sondas de solo lectura;
+evidencia minimizada SIEMPRE justificada; criterio umbral para lo simple,
+OPA para lo parametrizable por cliente; si la obligación no es verificable
+automáticamente, dilo en 'avisos' en vez de inventar una sonda.
+ESQUEMA:\n{SCHEMA_TXT}\nEJEMPLOS:\n{EJEMPLOS}"""
+ 
+def _lint(yaml_text: str) -> list[str]:
+    """Ejecuta challenge_lint sobre el YAML en memoria."""
+    with tempfile.TemporaryDirectory() as td:
+        p = pathlib.Path(td, "draft.yaml"); p.write_text(yaml_text)
+        r = subprocess.run(["python", "tools/challenge_lint.py", str(p)],
+                           capture_output=True, text=True)
+        return [] if r.returncode == 0 else r.stderr.strip().splitlines()
+ 
+async def propose_challenge(obligacion_id: str, obligacion_texto: str,
+                            enriquecer_rag: bool = True) -> dict:
+    contexto = ""
+    if enriquecer_rag:
+        rag = await answer(f"Requisitos verificables de: {obligacion_texto}")
+        if rag["suficiente"]:
+            contexto = "\nContexto normativo:\n" + rag["respuesta"]
+    out = await chat_json(service="challenge", priority="lotes",
+        system=SYSTEM,
+        user=f"Obligación {obligacion_id}: {obligacion_texto}{contexto}",
+        json_schema=GEN_SCHEMA, max_tokens=1600)
+    draft = out["data"]["yaml"]
+    errores = _lint(draft)
+    if errores:                                # un ciclo de reparación
+        out = await chat_json(service="challenge", priority="lotes",
+            system=SYSTEM,
+            user=f"Corrige SOLO estos errores del lint y devuelve el YAML"
+                 f" completo:\n{chr(10).join(errores)}\n\n{draft}",
+            json_schema=GEN_SCHEMA, max_tokens=1600)
+        draft = out["data"]["yaml"]
+        errores = _lint(draft)
+    return {"yaml": draft, "valido": not errores, "errores": errores,
+            "avisos": out["data"].get("avisos", []),
+            "prompt_sha256": out["prompt_sha256"], "generated": True}
+ 
+
+ARG-057 · Redacción de dictámenes con marca de texto asistido
+ANÁLISIS
+El expediente de campaña necesita dos textos que hoy consumen horas de consultor: el resumen ejecutivo (dirección: qué se verificó, qué se encontró, qué significa) y la narrativa por hallazgo (contexto, impacto, recomendación). El modelo redacta ambos desde los datos estructurados —veredictos, hallazgos, cifras— con tres reglas inquebrantables: cada cifra del texto debe existir en los datos de entrada (el verificador de cifras lo comprueba: ninguna cifra alucinada llega al expediente), el texto jamás altera un veredicto (redacta sobre conforme/no conforme, no lo discute) y toda pieza queda marcada generated=true con su prompt_sha256 — la marca que el expediente de la fase 7 muestra y que la especificación prometió al supervisor.
+DISEÑO
+draft_summary(campaign_id) y draft_finding_narrative(finding_id): cargan datos, redactan con esquema JSON (secciones tipadas), verifican cifras (extracción de números del texto ∈ conjunto de números de entrada, con tolerancia de formato) y persisten en argos.report_texts con la marca. El tono lo fija el prompt de estilo de la casa: sobrio, sin adjetivos de alarma, severidades con su nombre.
+DESARROLLO
+services/ai-gateway/reports/writer.py
+"""Redactor de dictámenes: cifras verificadas, veredictos intocables."""
+import json, re
+from gateway_client import chat_json
+from argos_db import pool
+ 
+SUMMARY_SCHEMA = {"type": "object",
+  "required": ["resumen", "alcance", "resultados", "siguientes_pasos"],
+  "properties": {k: {"type": "string"} for k in
+    ("resumen", "alcance", "resultados", "siguientes_pasos")}}
+ 
+SYSTEM = """Redactas para el expediente de ARGOS. Estilo sobrio y preciso.
+REGLAS: usa EXCLUSIVAMENTE cifras presentes en los datos; no valores nada
+como 'grave' o 'alarmante': usa las severidades por su nombre; jamás
+contradigas un veredicto; escribe en castellano claro para dirección."""
+ 
+NUM = re.compile(r"\d[\d.,]*")
+ 
+def _numbers(x) -> set[str]:
+    """Normaliza números de un objeto o texto ('1.234'->'1234')."""
+    raw = json.dumps(x, ensure_ascii=False) if not isinstance(x, str) else x
+    return {re.sub(r"[.,]", "", n) for n in NUM.findall(raw)}
+ 
+class CifraInventada(Exception): ...
+ 
+def _verify_numbers(text_obj: dict, source: dict):
+    allowed = _numbers(source) | {str(i) for i in range(0, 32)}  # ordinales
+    bad = _numbers(text_obj) - allowed
+    if bad:
+        raise CifraInventada(f"cifras sin origen en los datos: {sorted(bad)}")
+ 
+async def draft_summary(campaign_id: str) -> dict:
+    with pool.connection() as db:
+        stats = db.execute("""SELECT count(*) AS total,
+                count(*) FILTER (WHERE conforme)      AS conformes,
+                count(*) FILTER (WHERE NOT conforme)  AS no_conformes
+            FROM argos.verdicts WHERE campaign_id=%s""",
+            (campaign_id,)).fetchone()
+        sev = db.execute("""SELECT severity, count(*) FROM argos.findings
+            WHERE campaign_id=%s GROUP BY severity""",
+            (campaign_id,)).fetchall()
+    source = {"totales": dict(zip(("total","conformes","no_conformes"),
+                                  stats)),
+              "por_severidad": {s: n for s, n in sev}}
+    out = await chat_json(service="reports", priority="lotes",
+        system=SYSTEM, user=json.dumps(source, ensure_ascii=False),
+        json_schema=SUMMARY_SCHEMA, max_tokens=900)
+    _verify_numbers(out["data"], source)      # lanza si hay cifra inventada
+    with pool.connection() as db:
+        db.execute("""INSERT INTO argos.report_texts
+            (campaign_id, kind, content, generated, prompt_sha256)
+            VALUES (%s,'resumen_ejecutivo',%s::jsonb,true,%s)""",
+            (campaign_id, json.dumps(out["data"], ensure_ascii=False),
+             out["prompt_sha256"]))
+        db.commit()
+    return out["data"] | {"generated": True}
+ 
+
+ARG-058 · Asistente de consola con herramientas
+ANÁLISIS
+El asistente responde en la consola preguntas de tres mundos: normativa (¿qué exige el EHDS para uso secundario? → RAG), estado (¿cuántos hallazgos críticos abiertos en el HIS? → SQL/grafo) y mixtas (¿estamos cumpliendo el 32 en las bases de salud? → ambos). El patrón es agente con herramientas cerradas: el modelo elige entre cuatro herramientas de solo lectura con parámetros validados —jamás SQL libre—, itera hasta responder y cita origen por tipo (artículo para norma, recuento con fecha para estado). El presupuesto: máximo 5 llamadas a herramienta por pregunta; si no basta, lo dice.
+DISEÑO
+Herramientas: buscar_normativa(pregunta) [ARG-054], estado_hallazgos(filtros tipados), cobertura_inventario(system_id?), consultar_grafo(selector) [la lista blanca de ARG-029]. Bucle de agente con el formato de tool-calling de vLLM; el historial vive en la sesión de consola (no se persiste el contenido, sí los hashes en ai_usage); y la respuesta final marca qué frases provienen de qué herramienta — la trazabilidad conversacional del producto.
+DESARROLLO
+services/ai-gateway/assistant/agent.py
+"""Asistente de consola: agente con 4 herramientas cerradas de solo lectura."""
+import json
+import httpx
+from rag.pipeline import answer as rag_answer
+from inventory_client import resolve_selector
+from argos_db import pool
+ 
+VLLM = "http://vllm.argos-ai:8000/v1/chat/completions"
+MAX_STEPS = 5
+ 
+TOOLS = [
+ {"type":"function","function":{"name":"buscar_normativa",
+   "description":"Busca en el corpus normativo con cita de artículo",
+   "parameters":{"type":"object","required":["pregunta"],
+     "properties":{"pregunta":{"type":"string"}}}}},
+ {"type":"function","function":{"name":"estado_hallazgos",
+   "description":"Cuenta hallazgos por filtros",
+   "parameters":{"type":"object","properties":{
+     "severity":{"enum":["critica","alta","media","baja"]},
+     "status":{"type":"string"},"system_id":{"type":"string"}}}}},
+ {"type":"function","function":{"name":"cobertura_inventario",
+   "description":"Cobertura de clasificación por sistema",
+   "parameters":{"type":"object","properties":{
+     "system_id":{"type":"string"}}}}},
+ {"type":"function","function":{"name":"consultar_grafo",
+   "description":"Selector de inventario (lista blanca ARG-029)",
+   "parameters":{"type":"object","required":["selector"],
+     "properties":{"selector":{"type":"object"}}}}},
+]
+ 
+async def _run_tool(name: str, args: dict) -> dict:
+    if name == "buscar_normativa":
+        return await rag_answer(args["pregunta"])
+    if name == "estado_hallazgos":
+        conds, vals = ["1=1"], []
+        for k in ("severity", "status", "system_id"):
+            if args.get(k): conds.append(f"{k}=%s"); vals.append(args[k])
+        with pool.connection() as db:
+            n = db.execute("SELECT count(*) FROM argos.findings WHERE "
+                           + " AND ".join(conds), vals).fetchone()[0]
+        return {"hallazgos": n, "filtros": args}
+    if name == "cobertura_inventario":
+        with pool.connection() as db:
+            rows = db.execute("""SELECT system_id, coverage_pct,
+                special_columns FROM argos.catalog_coverage""").fetchall()
+        return {"cobertura": [dict(zip(
+            ("system_id","coverage_pct","special_columns"), r))
+            for r in rows]}
+    if name == "consultar_grafo":
+        nodes = await resolve_selector(args["selector"])
+        return {"total": len(nodes), "muestra": nodes[:10]}
+    return {"error": "herramienta desconocida"}
+ 
+SYSTEM = ("Eres el asistente de ARGOS. Responde con las herramientas; "
+          "cita [ref] para norma y (dato de hoy) para estado. Si en "
+          f"{MAX_STEPS} pasos no puedes responder con datos, dilo.")
+ 
+async def ask(question: str, history: list[dict]) -> dict:
+    msgs = [{"role": "system", "content": SYSTEM}, *history,
+            {"role": "user", "content": question}]
+    used = []
+    async with httpx.AsyncClient(timeout=120) as c:
+        for _ in range(MAX_STEPS):
+            r = await c.post(VLLM, json={"model": "argos-llm",
+                "messages": msgs, "tools": TOOLS,
+                "temperature": 0.1, "max_tokens": 700})
+            m = r.json()["choices"][0]["message"]
+            if not m.get("tool_calls"):
+                return {"answer": m["content"], "tools_used": used}
+            msgs.append(m)
+            for tc in m["tool_calls"]:
+                name = tc["function"]["name"]
+                args = json.loads(tc["function"]["arguments"] or "{}")
+                result = await _run_tool(name, args)
+                used.append(name)
+                msgs.append({"role": "tool",
+                             "tool_call_id": tc["id"],
+                             "content": json.dumps(result,
+                                                   ensure_ascii=False)})
+    return {"answer": "No he podido responder con datos en el límite de "
+                      "pasos; reformula o consulta las vistas.",
+            "tools_used": used}
+ 
+
+ARG-059 · Arnés de evaluación con conjuntos dorados
+ANÁLISIS
+Cada oficio de la capa necesita su métrica y su puerta: clasificación (precisión/cobertura por categoría contra columnas etiquetadas del vertical), generación de retos (¿compila? ¿la sonda es de lectura? ¿el criterio referencia la obligación correcta?), RAG (¿la cita esperada aparece? ¿rehúsa cuando el corpus no cubre?) y redacción (cero cifras inventadas sobre casos con trampa). Los conjuntos dorados son artefactos versionados en el repo —construidos con datos sintéticos del banco de integración, nunca de clientes— y el arnés corre en la CI: una release que degrada la clasificación de salud por debajo del umbral no sale, exactamente igual que si rompiera una prueba unitaria.
+DISEÑO
+goldens/{oficio}/*.jsonl con casos {input, esperado, tipo}; runner que ejecuta cada oficio real (contra el vLLM del banco), calcula métricas por conjunto y compara con los umbrales declarados en goldens/thresholds.yaml; salida JSON para el panel y código de salida para la CI. Los casos con trampa (cifra ausente, pregunta fuera de corpus) valen doble: miden el rehúso, la virtud más difícil.
+DESARROLLO
+tools/ai_eval/run_goldens.py
+#!/usr/bin/env python3
+"""Arnés de goldens: métricas por oficio, umbrales como puerta de CI."""
+import asyncio, json, pathlib, sys
+import yaml
+from classify.service import classify_columns
+from generate.challenge_gen import propose_challenge
+from rag.pipeline import answer
+ 
+G = pathlib.Path("goldens")
+TH = yaml.safe_load((G / "thresholds.yaml").read_text())
+# thresholds.yaml (ejemplo):
+#   classify: { precision_min: 0.90, recall_min: 0.85,
+#               precision_min_salud: 0.95 }
+#   raggen:   { cita_esperada_min: 0.85, rehuso_correcto_min: 0.90 }
+#   challenge:{ compila_min: 0.90 }
+ 
+async def eval_classify() -> dict:
+    casos = [json.loads(l) for l in
+             (G / "classify/columnas.jsonl").read_text().splitlines()]
+    preds = await classify_columns([c["input"] for c in casos])
+    tp = fp = fn = 0; tp_salud = t_salud = 0
+    for caso, pred in zip(casos, preds):
+        hit = pred["category"] == caso["esperado"]
+        tp += hit; fp += not hit
+        fn += (not hit) and caso["esperado"] != "sin_dato_personal"
+        if caso["esperado"] == "categoria_especial.salud":
+            t_salud += 1; tp_salud += hit
+    return {"precision": tp / max(tp + fp, 1),
+            "recall": tp / max(tp + fn, 1),
+            "precision_salud": tp_salud / max(t_salud, 1)}
+ 
+async def eval_rag() -> dict:
+    casos = [json.loads(l) for l in
+             (G / "rag/preguntas.jsonl").read_text().splitlines()]
+    cita_ok = rehuso_ok = n_cita = n_rehuso = 0
+    for c in casos:
+        out = await answer(c["input"])
+        if c["tipo"] == "con_respuesta":
+            n_cita += 1
+            refs = {x["ref_completa"] for x in out["citas"]}
+            cita_ok += any(c["esperado"] in r for r in refs)
+        else:                       # trampa: fuera de corpus
+            n_rehuso += 1
+            rehuso_ok += (out["suficiente"] is False)
+    return {"cita_esperada": cita_ok / max(n_cita, 1),
+            "rehuso_correcto": rehuso_ok / max(n_rehuso, 1)}
+ 
+async def eval_challenge_gen() -> dict:
+    casos = [json.loads(l) for l in
+             (G / "challenge/obligaciones.jsonl").read_text().splitlines()]
+    ok = 0
+    for c in casos:
+        out = await propose_challenge(c["id"], c["input"],
+                                      enriquecer_rag=False)
+        ok += out["valido"]
+    return {"compila": ok / len(casos)}
+ 
+async def main():
+    res = {"classify": await eval_classify(),
+           "rag": await eval_rag(),
+           "challenge": await eval_challenge_gen()}
+    print(json.dumps(res, indent=1))
+    fails = []
+    if res["classify"]["precision"] < TH["classify"]["precision_min"]:
+        fails.append("classify.precision")
+    if res["classify"]["precision_salud"] < TH["classify"]["precision_min_salud"]:
+        fails.append("classify.precision_salud")
+    if res["rag"]["rehuso_correcto"] < TH["raggen"]["rehuso_correcto_min"]:
+        fails.append("rag.rehuso")
+    if res["challenge"]["compila"] < TH["challenge"]["compila_min"]:
+        fails.append("challenge.compila")
+    if fails:
+        print("UMBRAL NO ALCANZADO:", fails, file=sys.stderr); sys.exit(1)
+ 
+if __name__ == "__main__": asyncio.run(main())
+ 
+
+ARG-060 · Guardarraíles de entrada y salida
+ANÁLISIS
+Los guardarraíles son la defensa en profundidad de las dos prohibiciones. Entrada: aunque las capas anteriores minimizan, un nombre de columna puede contener un DNI real (pasa: columnas creadas por error) o un fragmento de documento del cliente puede traer identificadores — el depurador detecta y sustituye patrones de dato personal español (los mismos validadores de ARG-024, reutilizados) por marcadores estables antes de que el texto toque el modelo, y cuenta las sustituciones para la telemetría. Salida: ninguna respuesta del modelo puede contener palabras de veredicto aplicadas a activos («X es conforme») fuera de los oficios de redacción que citan veredictos existentes, ni instrucciones de acción sobre sistemas — el comprobador de salida rechaza y el gateway devuelve error tipificado, que cada oficio maneja (reintento con aviso o rehúso).
+DISEÑO
+scrub_input(text) → (texto limpio, nº sustituciones) con validadores reales (no regex ciegas: solo se sustituye lo que valida, para no destrozar códigos inocentes); check_output(obj) recorre el JSON y aplica dos detectores: veredicto no citado (patrón «es/no es conforme» sin verdict_id adjunto) y verbos de escritura sobre objetivos (DROP/DELETE/UPDATE/modificar la tabla...). Ambos son tablas de patrones versionadas con el prompt-pack — contenido, revisable, ampliable por el equipo sin release.
+DESARROLLO
+services/ai-gateway/guardrails/__init__.py
+"""Guardarraíles: PII fuera de los prompts; veredictos y escrituras fuera
+de las salidas."""
+import json, re
+from classify.validators import valida_dni, valida_nie, valida_nuss, \
+                                valida_iban_es   # ARG-024 reutilizado
+ 
+CANDIDATES = [
+    (re.compile(r"\b\d{8}[A-Za-z]\b"),            valida_dni,    "[DNI]"),
+    (re.compile(r"\b[XYZxyz]\d{7}[A-Za-z]\b"),    valida_nie,    "[NIE]"),
+    (re.compile(r"\b\d{2}[\s/-]?\d{8}[\s/-]?\d{2}\b"),
+                                                   valida_nuss,   "[NUSS]"),
+    (re.compile(r"\bES\d{2}[\s]?(\d{4}[\s]?){5}\b"),
+                                                   valida_iban_es,"[IBAN]"),
+    (re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"),      lambda v: True,"[EMAIL]"),
+]
+ 
+def scrub_input(text: str) -> tuple[str, int]:
+    """Sustituye SOLO lo que valida: no destroza códigos inocentes."""
+    n = 0
+    for rex, valida, marker in CANDIDATES:
+        def _sub(m):
+            nonlocal n
+            if valida(m.group(0)):
+                n += 1
+                return marker
+            return m.group(0)
+        text = rex.sub(_sub, text)
+    return text, n
+ 
+VERDICT_PAT = re.compile(
+    r"\b(es|no es|resulta)\s+(conforme|no conforme)\b", re.I)
+WRITE_PAT = re.compile(
+    r"\b(DROP|DELETE|TRUNCATE|UPDATE|INSERT|ALTER)\b\s+\w"
+    r"|\b(borra|modifica|elimina|actualiza)\s+(la|el)\s+"
+    r"(tabla|columna|sistema|fichero)", re.I)
+ 
+class OutputRejected(Exception):
+    def __init__(self, reason): self.reason = reason
+ 
+def check_output(obj, _cited_verdicts: set | None = None):
+    """Recorre el JSON de salida; rechaza veredictos no citados y escrituras."""
+    text = json.dumps(obj, ensure_ascii=False)
+    if WRITE_PAT.search(text):
+        raise OutputRejected("instruccion_de_escritura")
+    for m in VERDICT_PAT.finditer(text):
+        # permitido solo si el objeto adjunta verdict_id (oficio redacción)
+        if "verdict_id" not in text:
+            raise OutputRejected("veredicto_no_citado")
+    return True
+ 
+
+Interfaces que esta fase exporta
+Componente
+Interfaz exportada
+Consumidores
+ARG-051
+vLLM API compatible OpenAI en argos-ai (solo gateway)
+ARG-052, ARG-058 (tool-calling)
+ARG-052
+chat_json(service, system, user, schema, priority) + ai_usage
+ARG-025/055/056/057; cuotas y registro para ARG-099
+ARG-053
+index_document()/search() sobre argos.rag_chunks
+ARG-054; ingesta del observatorio y docs del cliente
+ARG-054
+answer() con citas y rehúso honesto
+ARG-056 (contexto), ARG-058 (herramienta normativa)
+ARG-055
+classify_columns() con confianza CALIBRADA
+ARG-025; métricas de deriva a ARG-059
+ARG-056
+propose_challenge() → YAML que ya compila
+Equipo normativo (SLA 30 días, 300 retos GA)
+ARG-057
+draft_summary()/narrativas con verificador de cifras y marca generated
+Fase 7: el expediente incrusta los textos marcados
+ARG-058
+ask() con 4 herramientas cerradas
+Fase 8: el chat de la consola
+ARG-059
+run_goldens.py + thresholds.yaml — puerta de CI
+ARG-010 (pipeline), panel de calidad IA
+ARG-060
+scrub_input()/check_output() en el gateway
+Toda inferencia; telemetría de sustituciones
+
+Estado del programa: la IA de ARGOS ya asiste sin mandar: clasifica con confianza calibrada por las revisiones del propio DPO, propone retos que compilan antes de mostrarse, redacta sin inventar una sola cifra, responde citando artículo y dato, rehúsa cuando no sabe, y todo tras un gateway que depura la entrada, vigila la salida y deja registro con hash. Queda convertir el trabajo en verdad oponible: la fase 7 construye la cadena de evidencia y la credencial.

@@ -1,0 +1,771 @@
+ULLSWATER INVESTMENTS
+ARGOS · Programa de ingeniería en 10 fases
+FASE 7
+Evidencia y credencial — Componentes 61 a 70
+La capa C6 al completo: el almacén WORM con retención bloqueada, los artefactos de evidencia minimizada, el árbol de Merkle por campaña con su verificador, la firma Ed25519 custodiada en TPM, el sellado temporal RFC 3161 con cola para entornos aislados, la verificación criptográfica del diario, el expediente con su PDF firmado, la credencial W3C VC 2.0, el comprobador público y el conector EDC hacia los espacios de datos
+Documento técnico 7 de 10 · Madrid, septiembre de 2026 · Versión 1.0 · Confidencial
+
+Índice
+ TOC \h \u \z \t "Heading 1,1,"
+
+
+0. La capa C6 en conjunto
+La evidencia es lo que ARGOS vende y esta fase la construye como la de un notario, con una cadena de cinco eslabones donde cada uno hace inútil atacar el anterior: el artefacto se escribe una sola vez en soporte con retención bloqueada (ARG-061/062), su hash entra en el árbol de Merkle de la campaña (ARG-063), la raíz del árbol se firma con la clave que vive en el TPM y no puede extraerse (ARG-064), la firma recibe sello de tiempo cualificado de una autoridad externa (ARG-065), y el diario de acciones que acompaña todo el proceso es él mismo una cadena verificable anclada en cada campaña (ARG-066). Manipular una evidencia exige romperlo todo a la vez, incluida una autoridad ajena al fabricante y al cliente.
+Sobre la cadena se construyen las tres salidas del producto: el expediente navegable con su PDF firmado (ARG-067), la credencial verificable W3C que cualquier tercero comprueba sin ver un solo dato (ARG-068/069) y la publicación en espacios de datos vía EDC (ARG-070). El principio de minimización gobierna también aquí: la cadena protege recuentos, hashes y configuraciones — jamás contenidos del cliente, que nunca llegaron a esta capa porque las fases 2 y 5 los dejaron atrás.
+
+ARG-061 · Almacén WORM con retención bloqueada
+ANÁLISIS
+La inmutabilidad de la evidencia debe ser técnica, no una promesa de software propio: un almacén S3 local con object lock en modo conformidad (ni el administrador puede borrar antes de vencer la retención) da exactamente la garantía que un perito espera poder citar. Entre las opciones autoalojables, la decisión de la especificación se concreta en un almacén S3 compatible con object lock y versionado, desplegado sobre el volumen cifrado del appliance; la política de retención por bucket sigue el contrato del cliente (por defecto 10 años para evidencia sellada, 1 año para artefactos de trabajo). El acceso de escritura lo tiene solo el servicio de evidencia; el de lectura, evidencia y API — otra NetworkPolicy más una política IAM del propio almacén.
+DISEÑO
+Dos buckets: evidence (object lock COMPLIANCE, retención por defecto de contrato) y working (versionado sin lock, expiración 1 año). El módulo de acceso impone la disciplina: put_immutable() escribe con retención explícita y verifica releyendo el hash; no existe delete en el módulo — la ausencia de la primitiva, como en el conector DICOM, es la garantía. La configuración del almacén es parte de la imagen; aquí se entrega el job de creación de buckets y el módulo cliente.
+DESARROLLO
+platform/k8s/core/objectstore/setup-buckets.py (job de arranque)
+"""Crea los buckets de evidencia con object lock en modo conformidad."""
+import boto3
+from argos_secrets import s3_credentials    # Vault: /argos/services/evidence
+ 
+ENDPOINT = "http://objectstore.argos-core:9000"
+RETENTION_YEARS = 10          # contrato por defecto; configurable
+ 
+s3 = boto3.client("s3", endpoint_url=ENDPOINT, **s3_credentials())
+ 
+def ensure_bucket(name: str, lock: bool):
+    try:
+        kw = {"ObjectLockEnabledForBucket": True} if lock else {}
+        s3.create_bucket(Bucket=name, **kw)
+    except s3.exceptions.BucketAlreadyOwnedByYou:
+        pass
+    if lock:
+        s3.put_object_lock_configuration(
+            Bucket=name,
+            ObjectLockConfiguration={
+                "ObjectLockEnabled": "Enabled",
+                "Rule": {"DefaultRetention": {
+                    "Mode": "COMPLIANCE",
+                    "Years": RETENTION_YEARS}}})
+    else:
+        s3.put_bucket_lifecycle_configuration(
+            Bucket=name,
+            LifecycleConfiguration={"Rules": [{
+                "ID": "expira-trabajo", "Status": "Enabled",
+                "Filter": {}, "Expiration": {"Days": 365}}]})
+ 
+ensure_bucket("evidence", lock=True)
+ensure_bucket("working",  lock=False)
+print("buckets listos: evidence (COMPLIANCE 10a), working (365d)")
+ 
+services/evidence/store/worm.py
+"""Cliente WORM: put_immutable con verificación; delete NO EXISTE aquí."""
+import datetime as dt, hashlib
+import boto3
+from argos_secrets import s3_credentials
+ 
+ENDPOINT = "http://objectstore.argos-core:9000"
+_s3 = boto3.client("s3", endpoint_url=ENDPOINT, **s3_credentials())
+ 
+class WormWriteError(Exception): ...
+ 
+def put_immutable(key: str, data: bytes,
+                  retention_years: int = 10) -> str:
+    """Escribe en 'evidence' con lock y verifica releyendo. Devuelve sha256."""
+    sha = hashlib.sha256(data).hexdigest()
+    until = dt.datetime.now(dt.UTC) + dt.timedelta(days=365*retention_years)
+    _s3.put_object(Bucket="evidence", Key=key, Body=data,
+                   ObjectLockMode="COMPLIANCE",
+                   ObjectLockRetainUntilDate=until,
+                   ChecksumSHA256=hashlib.sha256(data).digest().hex())
+    back = _s3.get_object(Bucket="evidence", Key=key)["Body"].read()
+    if hashlib.sha256(back).hexdigest() != sha:
+        raise WormWriteError(f"verificación de relectura fallida: {key}")
+    return sha
+ 
+def get(key: str) -> bytes:
+    return _s3.get_object(Bucket="evidence", Key=key)["Body"].read()
+ 
+def exists(key: str) -> bool:
+    try:
+        _s3.head_object(Bucket="evidence", Key=key); return True
+    except _s3.exceptions.ClientError:
+        return False
+ 
+
+ARG-062 · Artefactos de evidencia
+ANÁLISIS
+El artefacto es la unidad probatoria: el resultado minimizado de una sonda con todo su contexto de ejecución. Su esquema debe responder por sí solo, años después, a las preguntas del perito: qué se preguntó (el journal_seq enlaza la consulta literal del diario de ARG-012), a qué sistema, con qué reto y versión, qué se obtuvo, cuándo, y con qué declaración muestral si la hubo. La forma canónica importa: la serialización debe ser determinista (claves ordenadas, sin espacios variables) porque su hash entra en el árbol — dos serializaciones del mismo contenido deben dar el mismo hash siempre.
+DISEÑO
+write_artifact(campaign_id, verdict) construye el JSON canónico (json.dumps con sort_keys y separadores fijos), lo escribe con put_immutable bajo la clave campañas/{cid}/artefactos/{verdict_id}.json, registra el índice en argos.evidence_index (para búsqueda sin tocar el WORM) y publica el puntero en el stream EVIDENCE — el evento que el constructor de Merkle consume. El artefacto incluye su propio sha256 autoexcluido para verificación aislada.
+DESARROLLO
+services/evidence/artifacts/write.py
+"""Artefactos: JSON canónico, WORM, índice y evento."""
+import datetime as dt, hashlib, json
+from store.worm import put_immutable
+from argos_db import pool
+from argos_events import Bus
+ 
+def canonical(obj: dict) -> bytes:
+    """Serialización determinista: mismo contenido -> mismo hash, siempre."""
+    return json.dumps(obj, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":")).encode()
+ 
+async def write_artifact(campaign_id: str, verdict_row: dict) -> dict:
+    art = {
+        "tipo": "evidencia_sonda",
+        "esquema": "argos/evidencia/1",
+        "campaign_id": campaign_id,
+        "verdict_id": verdict_row["id"],
+        "challenge": {"id": verdict_row["challenge_id"],
+                       "version": verdict_row["challenge_version"]},
+        "obligation": verdict_row["obligation"],
+        "system_id": verdict_row["system_id"],
+        "node_key": verdict_row["node_key"],
+        "conforme": verdict_row["conforme"],
+        "detalle": verdict_row["detail"],          # ya minimizado (ARG-044)
+        "query_journal_seq": verdict_row["probe_journal_seq"],
+        "emitido": dt.datetime.now(dt.UTC).isoformat(),
+    }
+    body = canonical(art)
+    sha = hashlib.sha256(body).hexdigest()
+    key = f"campanas/{campaign_id}/artefactos/{art['verdict_id']}.json"
+    stored_sha = put_immutable(key, body)
+    assert stored_sha == sha
+    with pool.connection() as db:
+        db.execute("""INSERT INTO argos.evidence_index
+            (campaign_id, verdict_id, s3_key, sha256, emitted_at)
+            VALUES (%s,%s,%s,%s, now())""",
+            (campaign_id, art["verdict_id"], key, sha))
+        db.commit()
+    bus = Bus("evidence"); await bus.connect()
+    await bus.publish("argos.evidence.artifact_written",
+                      "evidence.artifact_written.v1",
+                      {"campaign_id": campaign_id, "key": key,
+                       "sha256": sha})
+    return {"key": key, "sha256": sha}
+ 
+
+ARG-063 · Árbol de Merkle por campaña
+ANÁLISIS
+El árbol encadena todos los artefactos de la campaña en una sola raíz de 32 bytes: probar que un artefacto pertenece a la campaña —o detectar que uno cambió— cuesta log(n) hashes. Implementación clásica con dos decisiones de rigor: hojas y nodos internos se hashean con prefijos de dominio distintos (0x00/0x01, el remedio estándar contra ataques de segunda preimagen entre niveles) y con número impar de nodos el último se promociona sin duplicar (duplicarlo permite árboles distintos con la misma raíz). El verificador debe poder correr fuera del appliance: es un fichero sin dependencias que se entrega junto al expediente.
+DISEÑO
+build_tree(hashes) → raíz + niveles; proof(index) → camino de verificación; verify_proof(leaf, path, root) independiente. Al cierre de campaña, el constructor lee el índice ordenado por verdict_id (orden estable y documentado), construye, guarda el árbol completo como artefacto propio en el WORM y entrega la raíz a la firma (ARG-064). La tabla argos.campaign_roots ancla raíz, nº de hojas y clave del árbol.
+DESARROLLO
+services/evidence/merkle/tree.py — también se entrega como verificador aislado
+"""Árbol de Merkle con separación de dominio. Sin dependencias: el mismo
+fichero se entrega al cliente como verificador independiente."""
+import hashlib
+ 
+LEAF, NODE = b"\x00", b"\x01"
+ 
+def _h(prefix: bytes, *parts: bytes) -> bytes:
+    return hashlib.sha256(prefix + b"".join(parts)).digest()
+ 
+def build_tree(leaf_hashes: list[bytes]) -> tuple[bytes, list[list[bytes]]]:
+    """Devuelve (raíz, niveles) con hojas ya hasheadas (sha256 del artefacto)."""
+    if not leaf_hashes:
+        raise ValueError("campaña sin artefactos")
+    level = [_h(LEAF, lh) for lh in leaf_hashes]
+    levels = [level]
+    while len(level) > 1:
+        nxt = []
+        for i in range(0, len(level) - 1, 2):
+            nxt.append(_h(NODE, level[i], level[i + 1]))
+        if len(level) % 2 == 1:
+            nxt.append(level[-1])          # promoción sin duplicar
+        level = nxt
+        levels.append(level)
+    return level[0], levels
+ 
+def proof(levels: list[list[bytes]], index: int) -> list[tuple[str, bytes]]:
+    """Camino de verificación: [('L'|'R', hash_hermano), ...]."""
+    path = []
+    for level in levels[:-1]:
+        sib = index ^ 1
+        if sib < len(level):
+            path.append(("L" if sib < index else "R", level[sib]))
+        index //= 2
+    return path
+ 
+def verify_proof(artifact_sha256: bytes,
+                 path: list[tuple[str, bytes]], root: bytes) -> bool:
+    cur = _h(LEAF, artifact_sha256)
+    for side, sib in path:
+        cur = _h(NODE, sib, cur) if side == "L" else _h(NODE, cur, sib)
+    return cur == root
+ 
+if __name__ == "__main__":     # uso aislado: verifica un artefacto
+    import json, sys
+    art = open(sys.argv[1], "rb").read()
+    prf = json.load(open(sys.argv[2]))     # {path:[[side,hex]..], root:hex}
+    ok = verify_proof(hashlib.sha256(art).digest(),
+                      [(s, bytes.fromhex(h)) for s, h in prf["path"]],
+                      bytes.fromhex(prf["root"]))
+    print("VÁLIDO" if ok else "MANIPULADO"); sys.exit(0 if ok else 1)
+ 
+
+ARG-064 · Firma Ed25519 custodiada en TPM
+ANÁLISIS
+La raíz de campaña se firma con la clave del appliance, y la propiedad que lo cambia todo es dónde vive esa clave: generada dentro del TPM 2.0 y marcada no exportable, firmar es posible y extraer es físicamente imposible — robar el disco no roba la identidad del appliance. El TPM 2.0 firma Ed25519 según perfil del fabricante, con ECDSA P-256 como respaldo homologado (el formato de firma lo declara el propio objeto firmado); la talla L puede delegar en HSM de red con la misma interfaz. La clave pública se registra en el alta del appliance y viaja en el documento DID de ARG-068 — el eslabón con el mundo verificable.
+DISEÑO
+Interfaz Signer con dos implementaciones: TpmSigner (tpm2-pytss: crea la clave primaria sellada si no existe, firma con ella) y SoftSigner solo para el banco de desarrollo (marcada como no productiva en cada firma). sign_campaign_root() construye el objeto de firma canónico (raíz, campaña, momento, algoritmo, id de clave), firma, guarda en WORM y encola el sellado temporal (ARG-065).
+DESARROLLO
+services/evidence/signing/signer.py
+"""Firma de raíces: la clave vive en el TPM y no sale jamás."""
+import datetime as dt, hashlib, json
+from abc import ABC, abstractmethod
+from artifacts.write import canonical
+from store.worm import put_immutable
+from argos_db import pool
+ 
+class Signer(ABC):
+    key_id: str
+    algorithm: str
+    @abstractmethod
+    def sign(self, data: bytes) -> bytes: ...
+    @abstractmethod
+    def public_key_pem(self) -> str: ...
+ 
+class TpmSigner(Signer):
+    """tpm2-pytss: primaria ECC sellada, persistente en 0x81010001."""
+    HANDLE = 0x81010001
+    algorithm = "ES256"          # ECDSA P-256 (perfil TPM homologado)
+ 
+    def __init__(self):
+        from tpm2_pytss import ESAPI, TPM2B_PUBLIC
+        self.esys = ESAPI()
+        self._ensure_key()
+        pub = self.esys.read_public(self._handle)[0]
+        self.key_id = hashlib.sha256(bytes(pub)).hexdigest()[:16]
+ 
+    def _ensure_key(self):
+        from tpm2_pytss import ESYS_TR
+        try:
+            self._handle = self.esys.tr_from_tpmpublic(self.HANDLE)
+        except Exception:
+            # crear primaria ECC-P256 restringida a firma, y persistirla
+            self._handle = self.esys.create_primary(
+                in_sensitive=None,
+                in_public="ecc:ecdsa-sha256",  # plantilla firma
+            )[0]
+            self.esys.evict_control(ESYS_TR.OWNER, self._handle,
+                                    self.HANDLE)
+ 
+    def sign(self, data: bytes) -> bytes:
+        from tpm2_pytss import TPM2B_DIGEST, TPMT_SIG_SCHEME
+        digest = TPM2B_DIGEST(hashlib.sha256(data).digest())
+        sig = self.esys.sign(self._handle, digest,
+                             TPMT_SIG_SCHEME(scheme="ecdsa"),
+                             validation=None)
+        return bytes(sig)
+ 
+    def public_key_pem(self) -> str:
+        return self.esys.read_public(self._handle)[0].to_pem().decode()
+ 
+def get_signer() -> Signer:
+    try:
+        return TpmSigner()
+    except Exception:
+        from .soft import SoftSigner        # SOLO banco de desarrollo
+        return SoftSigner()
+ 
+async def sign_campaign_root(campaign_id: str, root: bytes,
+                             leaves: int, tree_key: str) -> dict:
+    signer = get_signer()
+    payload = {"tipo": "firma_raiz_campana",
+               "campaign_id": campaign_id,
+               "merkle_root": root.hex(),
+               "hojas": leaves, "arbol": tree_key,
+               "algoritmo": signer.algorithm,
+               "key_id": signer.key_id,
+               "momento": dt.datetime.now(dt.UTC).isoformat()}
+    body = canonical(payload)
+    signature = signer.sign(body)
+    envelope = {"payload": payload, "firma": signature.hex(),
+                "clave_publica_pem": signer.public_key_pem()}
+    key = f"campanas/{campaign_id}/firma-raiz.json"
+    put_immutable(key, canonical(envelope))
+    with pool.connection() as db:
+        db.execute("""UPDATE argos.campaign_roots
+            SET signature_key=%s, signed_at=now() WHERE campaign_id=%s""",
+            (key, campaign_id))
+        db.execute("SELECT argos.journal_append(%s,%s,%s::jsonb)",
+            ("system:evidence", "campaign.root_signed",
+             json.dumps({"campaign": campaign_id,
+                         "root": root.hex()[:16]})))
+        db.commit()
+    return envelope
+ 
+
+ARG-065 · Sellado temporal RFC 3161 con cola para aislados
+ANÁLISIS
+La firma del appliance prueba quién; el sello de tiempo cualificado prueba cuándo, y lo prueba una autoridad ajena a fabricante y cliente — el eslabón que un perito contrario no puede atribuir a connivencia. El protocolo es RFC 3161 sobre HTTPS contra una TSA cualificada eIDAS (configurable; los organismos pueden usar la suya). El diseño asume la realidad del pliego (P-02): el appliance puede estar aislado, así que el sellado es asíncrono por contrato — la firma queda válida al instante y el sello se adquiere cuando hay ventana de conectividad (o vía TSA interna del cliente), con la cola persistente y el estado visible en consola: una campaña «firmada, sello en cola» dice la verdad de su situación.
+DISEÑO
+Tabla argos.tsa_queue (objeto, digest, estado, intentos, tsr); worker que procesa la cola con rfc3161ng contra la TSA configurada, verifica el token recibido (nonce, digest y certificado contra el almacén de confianza) y adjunta el .tsr al WORM junto al objeto sellado; y modo import para aislados: exportar solicitudes .tsq a soporte, sellarlas fuera, importar los .tsr — el mismo verificador decide.
+DESARROLLO
+services/evidence/tsa/worker.py
+"""Sellado RFC 3161: cola persistente, verificación, modo aislado."""
+import hashlib, secrets
+import rfc3161ng
+from store.worm import put_immutable, get
+from argos_db import pool
+ 
+TSA_URL = None      # se lee de argos.settings['tsa_url'] en arranque
+CERTS = "/etc/argos/pki/tsa-trust.pem"
+ 
+def enqueue(object_key: str):
+    digest = hashlib.sha256(get(object_key)).digest()
+    with pool.connection() as db:
+        db.execute("""INSERT INTO argos.tsa_queue
+            (object_key, digest, status) VALUES (%s,%s,'pendiente')
+            ON CONFLICT (object_key) DO NOTHING""",
+            (object_key, digest))
+        db.commit()
+ 
+def process_queue(batch: int = 20) -> dict:
+    if not TSA_URL:
+        return {"estado": "sin TSA configurada (modo aislado)"}
+    tsa = rfc3161ng.RemoteTimestamper(TSA_URL,
+            certificate=open(CERTS, "rb").read(), hashname="sha256")
+    ok = ko = 0
+    with pool.connection() as db:
+        rows = db.execute("""SELECT object_key, digest FROM argos.tsa_queue
+            WHERE status='pendiente' AND attempts < 10
+            ORDER BY created_at LIMIT %s""", (batch,)).fetchall()
+        for key, digest in rows:
+            nonce = secrets.randbits(64)
+            try:
+                tsr = tsa.timestamp(digest=bytes(digest), nonce=nonce)
+                # verificación local del token antes de aceptarlo
+                rfc3161ng.check_timestamp(tsr, digest=bytes(digest),
+                    certificate=open(CERTS, "rb").read(), nonce=nonce)
+                put_immutable(key + ".tsr", bytes(tsr))
+                db.execute("""UPDATE argos.tsa_queue SET status='sellado',
+                    sealed_at=now() WHERE object_key=%s""", (key,))
+                ok += 1
+            except Exception as e:
+                db.execute("""UPDATE argos.tsa_queue SET
+                    attempts=attempts+1, last_error=%s
+                    WHERE object_key=%s""", (str(e)[:200], key))
+                ko += 1
+        db.commit()
+    return {"sellados": ok, "fallidos": ko}
+ 
+# --- modo aislado: exportar solicitudes / importar tokens ---
+def export_requests(dest_dir: str) -> int:
+    from rfc3161ng import make_timestamp_request, encode_timestamp_request
+    n = 0
+    with pool.connection() as db:
+        for key, digest in db.execute("""SELECT object_key, digest
+            FROM argos.tsa_queue WHERE status='pendiente'"""):
+            req = make_timestamp_request(digest=bytes(digest),
+                                         hashname="sha256")
+            open(f"{dest_dir}/{hashlib.sha256(key.encode()).hexdigest()}"
+                 ".tsq", "wb").write(encode_timestamp_request(req))
+            n += 1
+    return n
+ 
+
+ARG-066 · Verificación criptográfica del diario
+ANÁLISIS
+El diario encadenado de la fase 1 registra cada acción con hash del asiento anterior; este componente cierra el círculo: el verificador recomputa la cadena completa (o un rango) y detecta cualquier asiento alterado, insertado o suprimido, y el anclaje une diario y campaña — al sellar una campaña, el hash de cabeza del diario en ese instante entra en el objeto firmado, de modo que el sello temporal de la campaña también fija el estado del diario: reescribir la historia posterior a cualquier campaña sellada es detectable con la matemática, no con la confianza.
+DISEÑO
+verify_chain(desde, hasta) recomputa fila a fila con la misma función de asiento que journal_append (SQL idéntico documentado en la migración: hash = sha256(prev_hash || actor || action || payload || at)); anchor_head(campaign_id) lee la cabeza y la añade al objeto de firma de ARG-064 (campo journal_head); y el informe de verificación —él mismo un artefacto WORM— se genera en cada cierre de campaña y bajo demanda desde consola. La verificación de un millón de asientos corre en segundos: es un bucle de hashes.
+DESARROLLO
+services/evidence/journal/verify.py
+"""Verificador del diario encadenado + anclaje en campañas."""
+import hashlib, json
+from argos_db import pool
+from artifacts.write import canonical
+from store.worm import put_immutable
+ 
+def _entry_hash(prev: bytes, actor: str, action: str,
+                payload: str, at: str) -> bytes:
+    """DEBE ser idéntico al de argos.journal_append (migración 0001)."""
+    h = hashlib.sha256()
+    h.update(prev); h.update(actor.encode()); h.update(action.encode())
+    h.update(payload.encode()); h.update(at.encode())
+    return h.digest()
+ 
+def verify_chain(from_seq: int = 1, to_seq: int | None = None) -> dict:
+    bad = []
+    with pool.connection() as db:
+        prev = b"\x00" * 32
+        if from_seq > 1:
+            prev = bytes(db.execute("""SELECT hash FROM argos.audit_journal
+                WHERE seq=%s""", (from_seq - 1,)).fetchone()[0])
+        q = """SELECT seq, actor, action, payload::text,
+                      at::text, hash FROM argos.audit_journal
+               WHERE seq >= %s""" + (" AND seq <= %s" if to_seq else "") + \
+            " ORDER BY seq"
+        args = (from_seq, to_seq) if to_seq else (from_seq,)
+        last_seq, count = from_seq - 1, 0
+        for seq, actor, action, payload, at, stored in db.execute(q, args):
+            if seq != last_seq + 1:
+                bad.append({"seq": seq, "error": "salto de secuencia"})
+            expect = _entry_hash(prev, actor, action, payload, at)
+            if bytes(stored) != expect:
+                bad.append({"seq": seq, "error": "hash no coincide"})
+            prev = bytes(stored); last_seq = seq; count += 1
+    return {"verificados": count, "cabeza": prev.hex(),
+            "integro": not bad, "anomalias": bad[:20]}
+ 
+def head() -> tuple[int, str]:
+    with pool.connection() as db:
+        seq, h = db.execute("""SELECT seq, hash FROM argos.audit_journal
+            ORDER BY seq DESC LIMIT 1""").fetchone()
+    return seq, bytes(h).hex()
+ 
+def write_verification_report(campaign_id: str) -> dict:
+    rep = verify_chain()
+    seq, head_hex = head()
+    rep |= {"campaign_id": campaign_id, "head_seq": seq}
+    put_immutable(f"campanas/{campaign_id}/verificacion-diario.json",
+                  canonical(rep))
+    return rep    # su 'cabeza' se incrusta en el payload de firma (ARG-064)
+ 
+
+ARG-067 · El expediente de campaña
+ANÁLISIS
+El expediente es el producto que el DPO enseña: la campaña completa, navegable y exportable. Sus piezas ya existen —veredictos, artefactos, aprobaciones con sus usuarios, la declaración muestral, los textos redactados con su marca generated, el árbol, la firma, el sello, el informe del diario—; el componente las ensambla en dos formas: el expediente navegable de la consola (una estructura JSON que la fase 8 renderiza) y el PDF de entrega para terceros, firmado con la clave del appliance, con la portada de verificación (raíz, sello, instrucciones y el verificador aislado adjunto). La regla editorial: los textos generados aparecen siempre con su marca visible («texto asistido por IA, revisado por…» si hubo revisión) — la transparencia prometida al supervisor, impresa.
+DISEÑO
+assemble(campaign_id) → dossier.json (secciones: resumen, alcance y aprobaciones, resultados por obligación, hallazgos, metodología muestral, cadena de evidencia) escrito en WORM; render_pdf(dossier) con weasyprint sobre plantilla HTML de la casa (portada navy, dorado solo en el veredicto global), firmado como los demás objetos y sellado en cola. El PDF incluye códigos QR con la URL del comprobador público (ARG-069) y el hash del propio expediente.
+DESARROLLO
+services/evidence/dossier/assemble.py
+"""Expediente: ensamblado navegable + PDF firmado de entrega."""
+import json
+from artifacts.write import canonical
+from store.worm import put_immutable, get
+from signing.signer import get_signer
+from tsa.worker import enqueue
+from argos_db import pool
+ 
+def assemble(campaign_id: str) -> dict:
+    with pool.connection() as db:
+        camp = db.execute("""SELECT name, scope, started_at, finished_at
+            FROM argos.campaigns WHERE id=%s""", (campaign_id,)).fetchone()
+        stats = db.execute("""SELECT count(*),
+                count(*) FILTER (WHERE conforme),
+                count(*) FILTER (WHERE NOT conforme)
+            FROM argos.verdicts WHERE campaign_id=%s""",
+            (campaign_id,)).fetchone()
+        approvals = db.execute("""SELECT gate, approved_by, approved_at::text
+            FROM argos.approvals WHERE campaign_id=%s ORDER BY approved_at""",
+            (campaign_id,)).fetchall()
+        findings = db.execute("""SELECT id, challenge_id, obligation,
+                severity, status, occurrences
+            FROM argos.findings WHERE campaign_id=%s
+            ORDER BY array_position(
+              ARRAY['critica','alta','media','baja'], severity)""",
+            (campaign_id,)).fetchall()
+        texts = db.execute("""SELECT kind, content, generated, prompt_sha256
+            FROM argos.report_texts WHERE campaign_id=%s""",
+            (campaign_id,)).fetchall()
+        root = db.execute("""SELECT merkle_root, leaves, tree_key,
+                signature_key FROM argos.campaign_roots
+            WHERE campaign_id=%s""", (campaign_id,)).fetchone()
+        arts = db.execute("""SELECT verdict_id, s3_key, sha256
+            FROM argos.evidence_index WHERE campaign_id=%s
+            ORDER BY verdict_id""", (campaign_id,)).fetchall()
+    dossier = {
+      "esquema": "argos/expediente/1",
+      "campaign": {"id": campaign_id, "nombre": camp[0],
+                    "ambito": camp[1], "inicio": str(camp[2]),
+                    "fin": str(camp[3])},
+      "resultados": {"verificaciones": stats[0], "conformes": stats[1],
+                      "no_conformes": stats[2]},
+      "aprobaciones": [dict(zip(("compuerta","usuario","momento"), a))
+                        for a in approvals],
+      "hallazgos": [dict(zip(("id","reto","obligacion","severidad",
+                              "estado","ocurrencias"), f))
+                     for f in findings],
+      "textos": [dict(zip(("seccion","contenido","generated",
+                            "prompt_sha256"), t)) for t in texts],
+      "cadena": {"merkle_root": root[0], "artefactos": root[1],
+                  "arbol": root[2], "firma": root[3],
+                  "indice": [dict(zip(("verdict_id","clave","sha256"), a))
+                              for a in arts]},
+    }
+    body = canonical(dossier)
+    key = f"campanas/{campaign_id}/expediente.json"
+    put_immutable(key, body)
+    enqueue(key)                       # el expediente también se sella
+    return dossier
+ 
+services/evidence/dossier/pdf.py (esencial)
+"""PDF de entrega: plantilla de la casa, marca de texto asistido, QR."""
+import io
+import qrcode, weasyprint
+from jinja2 import Environment, FileSystemLoader
+from store.worm import put_immutable
+ 
+env = Environment(loader=FileSystemLoader("/opt/argos/templates"))
+ 
+def render_pdf(dossier: dict, verifier_url: str) -> bytes:
+    qr = qrcode.make(f"{verifier_url}/c/{dossier['campaign']['id']}")
+    buf = io.BytesIO(); qr.save(buf, format="PNG")
+    html = env.get_template("expediente.html").render(
+        d=dossier,
+        qr_b64=__import__("base64").b64encode(buf.getvalue()).decode(),
+        marca_ia=("Texto asistido por IA conforme al registro de "
+                  "prompts; los veredictos son deterministas."))
+    pdf = weasyprint.HTML(string=html).write_pdf()
+    put_immutable(f"campanas/{dossier['campaign']['id']}/expediente.pdf",
+                  pdf)
+    return pdf
+ 
+
+ARG-068 · La credencial verificable W3C
+ANÁLISIS
+La credencial es el resumen firmado que viaja: qué organización, qué ámbito, qué campaña, qué resultado agregado, cuándo, verificado por qué appliance — y ni un dato más: el que quiera detalle pide el expediente al titular. El formato es W3C Verifiable Credentials 2.0 con firma del appliance (el DID del emisor resuelve a la clave pública del TPM registrada en el alta) y alineación Gaia-X: la credencial incluye los atributos que los catálogos federados esperan para que un participante la presente en un espacio de datos. El estado de revocación es una lista publicable (StatusList): una credencial emitida sobre una campaña luego impugnada debe poder revocarse sin tocar la credencial emitida.
+DISEÑO
+issue_credential(campaign_id, dossier) construye el VC 2.0 (issuer did:web del appliance o did del catálogo del cliente, credentialSubject con el resumen agregado, evidence apuntando a raíz+sello, credentialStatus con la posición en la StatusList), firma con Data Integrity (la firma del TPM sobre la forma canónica) y ancla el hash de la credencial en Pontus-X cuando el appliance participa en el espacio (vía ARG-070). La StatusList vive en el comprobador (ARG-069).
+DESARROLLO
+services/evidence/credential/issue.py
+"""Emisión de credencial W3C VC 2.0 firmada por el appliance."""
+import datetime as dt, hashlib, json, uuid
+from artifacts.write import canonical
+from signing.signer import get_signer
+from store.worm import put_immutable
+from argos_db import pool
+ 
+def _did(appliance_id: str) -> str:
+    return f"did:web:{appliance_id}.argos.local"   # o did del catálogo
+ 
+def issue_credential(campaign_id: str, dossier: dict,
+                     appliance_id: str, org_legal_name: str) -> dict:
+    signer = get_signer()
+    with pool.connection() as db:
+        pos = db.execute("""INSERT INTO argos.credential_status (issued_at)
+            VALUES (now()) RETURNING idx""").fetchone()[0]
+    r = dossier["resultados"]
+    vc = {
+      "@context": ["https://www.w3.org/ns/credentials/v2",
+                    "https://ns.argos.eu/credentials/v1"],
+      "id": f"urn:uuid:{uuid.uuid7()}",
+      "type": ["VerifiableCredential", "ArgosComplianceCredential"],
+      "issuer": {"id": _did(appliance_id),
+                  "name": f"ARGOS appliance {appliance_id}"},
+      "validFrom": dt.datetime.now(dt.UTC).isoformat(),
+      "validUntil": (dt.datetime.now(dt.UTC)
+                     + dt.timedelta(days=365)).isoformat(),
+      "credentialSubject": {
+        "legalName": org_legal_name,
+        "scope": dossier["campaign"]["ambito"],
+        "campaign": campaign_id,
+        "verifications": r["verificaciones"],
+        "conformant": r["conformes"],
+        "nonConformant": r["no_conformes"],
+        "period": {"from": dossier["campaign"]["inicio"],
+                    "to": dossier["campaign"]["fin"]},
+      },
+      "evidence": [{
+        "type": "ArgosEvidenceChain",
+        "merkleRoot": dossier["cadena"]["merkle_root"],
+        "artifacts": dossier["cadena"]["artefactos"],
+        "timestamped": True}],
+      "credentialStatus": {
+        "type": "BitstringStatusListEntry",
+        "statusListIndex": str(pos),
+        "statusListCredential":
+          f"https://{appliance_id}.argos.local/status/1"},
+    }
+    unsigned = canonical(vc)
+    proof = {
+      "type": "DataIntegrityProof",
+      "cryptosuite": "ecdsa-rdfc-2019",
+      "created": dt.datetime.now(dt.UTC).isoformat(),
+      "verificationMethod": f"{_did(appliance_id)}#key-1",
+      "proofPurpose": "assertionMethod",
+      "proofValue": signer.sign(unsigned).hex(),
+    }
+    vc["proof"] = proof
+    body = canonical(vc)
+    put_immutable(f"campanas/{campaign_id}/credencial.json", body)
+    with pool.connection() as db:
+        db.execute("""UPDATE argos.credential_status
+            SET campaign_id=%s, vc_sha256=%s WHERE idx=%s""",
+            (campaign_id, hashlib.sha256(body).hexdigest(), pos))
+        db.commit()
+    return vc
+ 
+
+ARG-069 · El comprobador público
+ANÁLISIS
+La promesa «cualquier tercero verifica sin ver un dato» necesita su herramienta: un servicio mínimo, desplegable fuera del appliance (en la DMZ del cliente o como página del catálogo del espacio), que recibe una credencial —o un artefacto con su prueba de Merkle— y responde válido/no válido con el porqué: firma contra el DID, vigencia, estado de revocación en la StatusList, y para artefactos la prueba contra la raíz y el sello temporal contra la TSA. El comprobador no tiene base de datos del cliente ni la necesita: todo lo que comprueba viaja en lo comprobado o es público (claves, StatusList).
+DISEÑO
+FastAPI de tres endpoints: POST /verify/credential (el VC completo), POST /verify/artifact (artefacto + prueba + raíz firmada) y GET /status/1 (la StatusList como credencial firmada, con la lista de bits comprimida). Sin sesiones, sin datos, contenedor mínimo — el mismo binario sirve la página con el formulario y el QR de los expedientes apunta aquí.
+DESARROLLO
+services/verifier/main.py
+"""Comprobador público: verifica sin ver datos. Sin BD del cliente."""
+import base64, gzip, hashlib, json
+from fastapi import FastAPI
+from pydantic import BaseModel
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
+from cryptography.hazmat.primitives.asymmetric.ec import ECDSA
+from cryptography.hazmat.primitives.hashes import SHA256
+from merkle.tree import verify_proof     # el fichero aislado de ARG-063
+ 
+app = FastAPI(title="Comprobador ARGOS")
+ 
+def canonical(obj) -> bytes:
+    return json.dumps(obj, ensure_ascii=False, sort_keys=True,
+                      separators=(",", ":")).encode()
+ 
+def _resolve_key(verification_method: str) -> bytes:
+    """did:web -> clave pública PEM publicada en el well-known del DID."""
+    import httpx
+    domain = verification_method.split(":")[2].split("#")[0]
+    doc = httpx.get(f"https://{domain}/.well-known/did.json",
+                    timeout=10).json()
+    for vm in doc["verificationMethod"]:
+        if vm["id"].endswith(verification_method.split("#")[1]):
+            return vm["publicKeyPem"].encode()
+    raise ValueError("clave no encontrada en el documento DID")
+ 
+class VC(BaseModel):
+    credential: dict
+ 
+@app.post("/verify/credential")
+def verify_credential(body: VC):
+    vc = dict(body.credential)
+    proof = vc.pop("proof", None)
+    checks = {"estructura": bool(proof and vc.get("credentialSubject"))}
+    try:
+        pem = _resolve_key(proof["verificationMethod"])
+        pub = load_pem_public_key(pem)
+        pub.verify(bytes.fromhex(proof["proofValue"]),
+                   canonical(vc), ECDSA(SHA256()))
+        checks["firma"] = True
+    except Exception as e:
+        checks["firma"] = False; checks["firma_error"] = str(e)[:120]
+    import datetime as dt
+    now = dt.datetime.now(dt.UTC).isoformat()
+    checks["vigencia"] = vc.get("validFrom", "") <= now <= \
+                          vc.get("validUntil", "9999")
+    st = vc.get("credentialStatus", {})
+    if st:
+        import httpx
+        sl = httpx.get(st["statusListCredential"], timeout=10).json()
+        bits = gzip.decompress(base64.b64decode(
+            sl["credentialSubject"]["encodedList"]))
+        idx = int(st["statusListIndex"])
+        checks["no_revocada"] = not (bits[idx // 8] >> (idx % 8)) & 1
+    valido = all(v for k, v in checks.items() if isinstance(v, bool))
+    return {"valido": valido, "comprobaciones": checks}
+ 
+class Artifact(BaseModel):
+    artifact: dict
+    proof_path: list          # [["L"|"R", hex], ...]
+    signed_root: dict         # envelope de ARG-064
+ 
+@app.post("/verify/artifact")
+def verify_artifact(body: Artifact):
+    sha = hashlib.sha256(canonical(body.artifact)).digest()
+    root = bytes.fromhex(body.signed_root["payload"]["merkle_root"])
+    path = [(s, bytes.fromhex(h)) for s, h in body.proof_path]
+    in_tree = verify_proof(sha, path, root)
+    pub = load_pem_public_key(
+        body.signed_root["clave_publica_pem"].encode())
+    try:
+        pub.verify(bytes.fromhex(body.signed_root["firma"]),
+                   canonical(body.signed_root["payload"]),
+                   ECDSA(SHA256()))
+        firma_ok = True
+    except Exception:
+        firma_ok = False
+    return {"valido": in_tree and firma_ok,
+            "en_arbol": in_tree, "raiz_firmada": firma_ok}
+ 
+
+ARG-070 · Conector EDC hacia los espacios de datos
+ANÁLISIS
+El cierre del círculo estratégico: la credencial no solo se enseña — se publica como activo en el espacio de datos, con su política ODRL de acceso, y se negocia por el protocolo estándar (Dataspace Protocol) que el Eclipse Dataspace Connector implementa. El appliance despliega un EDC mínimo (control plane + data plane) cuyo único activo publicable son credenciales y expedientes; las políticas ODRL que gobiernan su acceso son las mismas que ARG-035 sabe leer — ARGOS habla el idioma en las dos direcciones: verifica las políticas que recibe y adjunta políticas a lo que publica. El anclaje Pontus-X (la red Gaia-X operativa de los demostradores) registra el hash de la credencial en cadena: la existencia y el momento quedan atestiguados fuera del appliance.
+DISEÑO
+Cliente de la Management API del EDC: publish_credential() crea asset (el VC como contenido direccionable), policy (ODRL: uso con atribución, sin redistribución, o la que el DPO elija de la biblioteca de políticas) y contract definition; y anchor_pontusx() envía el hash a la red con la cuenta del participante. El EDC corre en argos-services con su NetworkPolicy propia (la única pieza con salida controlada al espacio); en modo aislado el componente queda inactivo y la publicación se hace desde el catálogo del cliente con el export del expediente.
+DESARROLLO
+services/dataspace/edc_client.py
+"""Publicación de credenciales en el espacio de datos vía EDC."""
+import hashlib, json
+import httpx
+from artifacts.write import canonical
+ 
+EDC_MGMT = "http://edc-control.argos-services:8181/management"
+HDRS = {"x-api-key": None}    # de Vault: /argos/services/edc
+ 
+CTX = {"@context": {"@vocab": "https://w3id.org/edc/v0.0.1/ns/",
+                     "odrl": "http://www.w3.org/ns/odrl/2/"}}
+ 
+async def publish_credential(vc: dict, policy_choice: str = "atribucion"):
+    cid = vc["credentialSubject"]["campaign"]
+    asset_id = f"argos-credential-{cid}"
+    async with httpx.AsyncClient(timeout=30, headers=HDRS) as c:
+        # 1) asset: la credencial como contenido direccionable
+        await c.post(f"{EDC_MGMT}/v3/assets", json=CTX | {
+            "@id": asset_id,
+            "properties": {"name": f"Credencial ARGOS {cid}",
+                            "contenttype": "application/vc+json"},
+            "dataAddress": {"type": "HttpData",
+                "baseUrl": f"http://api.argos-services:8080"
+                           f"/public/credentials/{cid}"}})
+        # 2) política ODRL de acceso (biblioteca de políticas del DPO)
+        policies = {
+          "atribucion": [{"action": "use",
+             "duty": [{"action": "attribute"}]}],
+          "sin_redistribucion": [{"action": "use",
+             "prohibition": [{"action": "distribute"}]}],
+        }
+        await c.post(f"{EDC_MGMT}/v3/policydefinitions", json=CTX | {
+            "@id": f"pol-{asset_id}",
+            "policy": {"@type": "odrl:Set",
+                        "odrl:permission": policies[policy_choice]}})
+        # 3) contract definition: el activo bajo la política
+        await c.post(f"{EDC_MGMT}/v3/contractdefinitions", json=CTX | {
+            "@id": f"cd-{asset_id}",
+            "accessPolicyId": f"pol-{asset_id}",
+            "contractPolicyId": f"pol-{asset_id}",
+            "assetsSelector": [{"operandLeft": "id",
+                "operator": "=", "operandRight": asset_id}]})
+    return {"asset": asset_id, "policy": policy_choice}
+ 
+async def anchor_pontusx(vc: dict) -> dict:
+    """Ancla el hash de la credencial en Pontus-X (red Gaia-X operativa)."""
+    vc_hash = hashlib.sha256(canonical(vc)).hexdigest()
+    async with httpx.AsyncClient(timeout=60) as c:
+        r = await c.post("http://pontusx-agent.argos-services:8090/anchor",
+                         json={"hash": vc_hash,
+                               "tag": vc["id"]})
+        r.raise_for_status()
+        return {"vc_sha256": vc_hash, "tx": r.json().get("tx")}
+ 
+
+Interfaces que esta fase exporta
+Componente
+Interfaz exportada
+Consumidores
+ARG-061/062
+put_immutable()/get() + write_artifact() + evidence_index
+ARG-063..067; consola (navegación de evidencia)
+ARG-063
+build_tree/proof/verify_proof — verificador sin dependencias
+Se entrega con cada expediente; ARG-069
+ARG-064
+sign_campaign_root() con clave TPM no extraíble
+ARG-067/068; el DID publica su clave pública
+ARG-065
+Cola TSA con verificación y modo aislado import/export
+Todo objeto sellable; estado visible en consola
+ARG-066
+verify_chain()/head() + informe por campaña
+El payload de firma incluye journal_head; consola
+ARG-067
+assemble() → expediente.json + PDF firmado con QR
+Fase 8 (render navegable), entrega a terceros
+ARG-068
+issue_credential() → VC 2.0 con StatusList
+ARG-069/070; catálogos Gaia-X
+ARG-069
+/verify/credential, /verify/artifact, /status/1
+Terceros: peritos, supervisores, contrapartes
+ARG-070
+publish_credential() + anchor_pontusx()
+Espacios de datos; GDC/PROCUREDATA/EcoDataNet
+
+Estado del programa: el ciclo del valor está cerrado: lo que las fases 2 a 5 midieron y la 6 redactó es ahora inmutable, encadenado, firmado por una clave que no puede robarse, sellado por una autoridad ajena y verificable por cualquiera sin ver un dato — en un PDF, en una credencial W3C o publicado en el espacio de datos. Quedan las capas que lo hacen usable y operable: la consola y las APIs (fase 8), el blindaje de la plataforma (fase 9) y la operación (fase 10).

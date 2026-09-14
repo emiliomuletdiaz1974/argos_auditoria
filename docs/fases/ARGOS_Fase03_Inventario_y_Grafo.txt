@@ -1,0 +1,769 @@
+ULLSWATER INVESTMENTS
+ARGOS · Programa de ingeniería en 10 fases
+FASE 3
+Inventario y grafo de conocimiento — Componentes 21 a 30
+La capa C2 al completo: el modelo del grafo sobre Apache AGE, la ingesta idempotente desde el bus, el versionado temporal que responde «qué ha aparecido desde la última campaña», los dos clasificadores (determinista y asistido), el catálogo, la detección de flujos, el descubrimiento de la IA en uso, la API GraphQL y el planificador de reexploración
+Documento técnico 3 de 10 · Madrid, septiembre de 2026 · Versión 1.0 · Confidencial
+
+Índice
+ TOC \h \u \z \t "Heading 1,1,"
+
+
+0. La capa C2 en conjunto
+Todo lo que la fase 2 descubre son hechos sueltos: una tabla aquí, una cuenta allá, un estudio DICOM antiguo. La capa C2 los convierte en conocimiento: un grafo donde cada activo está conectado con su sistema, sus columnas, sus identidades con acceso, sus flujos y —cuando la fase 4 entre en juego— sus obligaciones. El diseño persigue tres propiedades: idempotencia (reexplorar nunca duplica), temporalidad (el grafo sabe qué cambió y cuándo, porque «qué ha aparecido desde la última campaña» es la pregunta que ningún registro manual contesta) y honestidad de la clasificación (toda etiqueta lleva su método y su confianza; lo determinista manda sobre lo asistido).
+El flujo de la capa: los conectores publican eventos de descubrimiento en el stream DISCOVERY (ARG-006) → la ingesta (ARG-022) los materializa en el grafo (ARG-021) con versionado (ARG-023) → los clasificadores (ARG-024, ARG-025) etiquetan → el catálogo, los flujos y el descubrimiento de IA (ARG-026..028) enriquecen → la API (ARG-029) lo sirve a consola y motor de retos → y el planificador (ARG-030) decide qué toca reexplorar y cuándo, cerrando el ciclo continuo.
+
+ARG-021 · Modelo del grafo de conocimiento
+ANÁLISIS
+El modelo debe representar cinco mundos y sus cruces: activos técnicos (sistema→esquema→tabla→columna; recurso de ficheros→carpeta), identidades (cuentas, grupos, roles), tratamientos declarados (el registro de actividades del RGPD que el DPO ya mantiene), sistemas de IA y flujos. La decisión de vocabulario es más importante que la técnica: pocas etiquetas de nodo (9) y de arista (8), con la variabilidad en propiedades, porque cada etiqueta nueva es una etiqueta que la ontología (fase 4) y los retos (fase 5) deben conocer. La clasificación NO es una etiqueta del nodo sino una arista hacia un nodo Category: así una columna puede tener varias clasificaciones con métodos y confianzas distintas sin mutar el activo.
+DISEÑO
+Grafo 'inventario' en AGE. Nodos: System, Schema, Table, Column, FileArea, Identity, Group, AISystem, Treatment, Category. Aristas: CONTAINS (jerarquía), CAN_ACCESS (identidad→activo, con propiedad privilege), MEMBER_OF (identidad→grupo, con transitive), FLOWS_TO (activo→activo, con evidencia), CLASSIFIED_AS (activo→categoría, con method/confidence/at), DECLARED_IN (activo→tratamiento), USES_MODEL (sistema→AISystem), OBSERVED (metadatos de última observación — la base del versionado ARG-023). Toda entidad lleva key natural determinista (p. ej. sha1 de system_id+schema+table+column) para el upsert idempotente.
+DESARROLLO
+services/inventory/graph/model.py — vocabulario y claves
+"""Vocabulario del grafo: la lista cerrada que toda capa comparte."""
+import hashlib
+ 
+NODE_LABELS = ["System", "Schema", "Table", "Column", "FileArea",
+               "Identity", "Group", "AISystem", "Treatment", "Category"]
+ 
+EDGE_LABELS = ["CONTAINS", "CAN_ACCESS", "MEMBER_OF", "FLOWS_TO",
+               "CLASSIFIED_AS", "DECLARED_IN", "USES_MODEL", "OBSERVED"]
+ 
+# Categorías raíz (la fase 4 las enlaza a obligaciones)
+CATEGORIES = [
+    "dato_personal", "categoria_especial.salud", "categoria_especial.otro",
+    "identificador_oficial", "dato_financiero", "dato_contacto",
+    "dato_localizacion", "credencial_tecnica", "sin_dato_personal",
+]
+ 
+def nkey(*parts: str) -> str:
+    """Clave natural determinista de un nodo (idempotencia del upsert)."""
+    return hashlib.sha1("\x1f".join(parts).encode()).hexdigest()
+ 
+def table_key(system_id, schema, table):   return nkey("T", system_id, schema, table)
+def column_key(system_id, schema, table, col):
+    return nkey("C", system_id, schema, table, col)
+def identity_key(system_id, name):         return nkey("I", system_id, name)
+def filearea_key(system_id, path):         return nkey("F", system_id, path)
+ 
+services/inventory/graph/cypher.py — acceso a AGE con parámetros seguros
+"""Capa fina sobre Apache AGE: cypher() con parámetros y filas dict."""
+import json
+from psycopg.rows import dict_row
+from argos_db import pool   # rol svc_inventory
+ 
+SETUP = "LOAD 'age'; SET search_path = ag_catalog, argos, public;"
+ 
+def cypher(query: str, params: dict | None = None, cols: str = "v agtype"):
+    """Ejecuta openCypher sobre el grafo 'inventario'.
+    Los parámetros van como tercer argumento de cypher(): AGE los
+    interpola de forma segura (nunca formateo de cadenas)."""
+    sql = (f"SELECT * FROM cypher('inventario', $$ {query} $$, %s)"
+           f" AS ({cols});")
+    with pool.connection() as conn:
+        conn.execute(SETUP)
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(sql, (json.dumps(params or {}),))
+            return [ {k: json.loads(str(v).removesuffix('::vertex')
+                                         .removesuffix('::edge'))
+                      if isinstance(v, str) and v.startswith('{') else v
+                      for k, v in r.items()} for r in cur.fetchall() ]
+ 
+def cypher_write(query: str, params: dict | None = None):
+    with pool.connection() as conn:
+        conn.execute(SETUP)
+        conn.execute(
+            f"SELECT * FROM cypher('inventario', $$ {query} $$, %s) AS (v agtype);",
+            (json.dumps(params or {}),))
+        conn.commit()
+ 
+services/inventory/graph/bootstrap.py — índices y categorías
+"""Arranque del grafo: índices sobre las tablas de AGE y nodos Category."""
+from .cypher import cypher_write
+from .model import CATEGORIES
+from argos_db import pool
+ 
+# AGE guarda cada etiqueta en una tabla; indexamos la clave natural
+INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_table_key
+  ON inventario."Table"  (agtype_access_operator(properties, '"key"'));
+CREATE INDEX IF NOT EXISTS idx_column_key
+  ON inventario."Column" (agtype_access_operator(properties, '"key"'));
+CREATE INDEX IF NOT EXISTS idx_identity_key
+  ON inventario."Identity" (agtype_access_operator(properties, '"key"'));
+"""
+ 
+def bootstrap():
+    with pool.connection() as conn:
+        conn.execute("LOAD 'age'; SET search_path=ag_catalog,public;")
+        conn.execute(INDEXES)
+        conn.commit()
+    for c in CATEGORIES:
+        cypher_write(
+            "MERGE (:Category {name: $name})", {"name": c})
+    print("grafo listo:", len(CATEGORIES), "categorías")
+ 
+
+ARG-022 · Servicio de ingesta del inventario
+ANÁLISIS
+La ingesta traduce eventos de descubrimiento en mutaciones del grafo, y su propiedad crítica es la idempotencia: los conectores reexploran a diario y el mismo hallazgo llegará mil veces; MERGE por clave natural garantiza que mil llegadas son un nodo. La segunda propiedad es la trazabilidad temporal: cada upsert marca first_seen/last_seen (la materia prima de ARG-023). La tercera: la ingesta no interpreta —no clasifica, no deduce flujos—; solo materializa hechos, porque mezclar ingesta e inferencia es la receta clásica del inventario incoherente.
+DISEÑO
+Un consumidor duradero del stream DISCOVERY (sujeto argos.discovery.>) con un manejador por tipo de evento: table_found, column_found, filearea_scanned, identity_found, access_found, api_route_found, study_batch_found. Cada manejador es un MERGE + SET de propiedades observadas. Al final de cada lote publica argos.discovery.ingested para que clasificadores y detectores (ARG-024..028) trabajen sobre grafo ya consistente.
+DESARROLLO
+services/inventory/ingest/main.py
+"""Ingesta: eventos DISCOVERY -> grafo, con MERGE idempotente."""
+import asyncio, datetime as dt
+from argos_events import Bus
+from graph.cypher import cypher_write
+from graph.model import table_key, column_key, identity_key, filearea_key
+ 
+def now(): return dt.datetime.now(dt.UTC).isoformat()
+ 
+async def on_table_found(d, evt):
+    cypher_write("""
+      MERGE (s:System {id: $sid})
+      MERGE (sch:Schema {key: $skey}) SET sch.name = $schema
+      MERGE (t:Table {key: $tkey})
+        ON CREATE SET t.first_seen = $now
+      SET t.name = $table, t.est_rows = $rows, t.bytes = $bytes,
+          t.last_seen = $now
+      MERGE (s)-[:CONTAINS]->(sch)
+      MERGE (sch)-[:CONTAINS]->(t)
+    """, {"sid": d["system_id"], "schema": d["schema"],
+          "skey": table_key(d["system_id"], d["schema"], ""),
+          "tkey": table_key(d["system_id"], d["schema"], d["table"]),
+          "table": d["table"], "rows": d.get("est_rows", -1),
+          "bytes": d.get("bytes", -1), "now": now()})
+ 
+async def on_column_found(d, evt):
+    cypher_write("""
+      MATCH (t:Table {key: $tkey})
+      MERGE (c:Column {key: $ckey})
+        ON CREATE SET c.first_seen = $now
+      SET c.name = $col, c.type = $type, c.nullable = $nullable,
+          c.last_seen = $now
+      MERGE (t)-[:CONTAINS]->(c)
+    """, {"tkey": table_key(d["system_id"], d["schema"], d["table"]),
+          "ckey": column_key(d["system_id"], d["schema"], d["table"], d["column"]),
+          "col": d["column"], "type": d["type"],
+          "nullable": d.get("nullable", True), "now": now()})
+ 
+async def on_access_found(d, evt):
+    cypher_write("""
+      MERGE (i:Identity {key: $ikey}) SET i.name=$name, i.last_seen=$now
+      WITH i MATCH (t:Table {key: $tkey})
+      MERGE (i)-[a:CAN_ACCESS]->(t)
+      SET a.privilege = $priv, a.last_seen = $now
+    """, {"ikey": identity_key(d["system_id"], d["grantee"]),
+          "name": d["grantee"], "priv": d["privilege"],
+          "tkey": table_key(d["system_id"], d["schema"], d["table"]),
+          "now": now()})
+ 
+HANDLERS = {"eu.argos.discovery.table_found.v1":    on_table_found,
+            "eu.argos.discovery.column_found.v1":   on_column_found,
+            "eu.argos.discovery.access_found.v1":   on_access_found}
+            # filearea/identity/api_route/study_batch: mismo patrón
+ 
+async def main():
+    bus = Bus("inventory-ingest"); await bus.connect()
+    async def route(data, evt):
+        h = HANDLERS.get(evt["type"])
+        if h: await h(data, evt)
+    await bus.subscribe("argos.discovery.>", durable="ingest", handler=route)
+    await asyncio.Event().wait()
+ 
+if __name__ == "__main__": asyncio.run(main())
+ 
+
+ARG-023 · Versionado temporal del grafo
+ANÁLISIS
+El valor diferencial del inventario continuo es responder al tiempo: qué apareció, qué desapareció, qué creció de forma anómala. Versionar el grafo entero por snapshot sería carísimo; el análisis muestra que bastan tres mecanismos baratos: first_seen/last_seen en cada nodo y arista (ya lo pone la ingesta), un registro de exploraciones por sistema (scan_runs) que da los cortes temporales, y una tabla de deltas materializada al cierre de cada exploración comparando last_seen contra el corte anterior — los nodos no vistos son desapariciones candidatas (no se borran: se marcan, porque en un producto de evidencia borrar inventario es destruir contexto).
+DISEÑO
+Tabla relacional argos.scan_runs (sistema, inicio, fin, contadores) y argos.inventory_deltas (run, tipo: aparecido|desaparecido|crecimiento_anomalo, referencia al nodo, detalle). El cálculo corre al evento discovery.scan_completed: dos consultas Cypher (nuevos: first_seen dentro del run; no vistos: last_seen anterior al inicio del run) y una heurística de crecimiento (est_rows que crece más del umbral configurado entre runs). Publica argos.discovery.delta_ready — el evento que la fase 5 usa para proponer retos sobre lo nuevo.
+DESARROLLO
+services/inventory/versioning/deltas.py
+"""Deltas del inventario: aparecidos, desaparecidos y crecimientos anómalos."""
+import json, uuid, datetime as dt
+from argos_db import pool
+from graph.cypher import cypher
+from argos_events import Bus
+ 
+DDL_DOC = """migración 0003_inventario.sql:
+CREATE TABLE argos.scan_runs (
+  id uuid PRIMARY KEY, system_id uuid NOT NULL,
+  started_at timestamptz NOT NULL, finished_at timestamptz,
+  nodes_seen int, prev_run uuid);
+CREATE TABLE argos.inventory_deltas (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  run_id uuid NOT NULL REFERENCES argos.scan_runs(id),
+  kind text NOT NULL CHECK (kind IN
+       ('aparecido','desaparecido','crecimiento_anomalo')),
+  node_label text NOT NULL, node_key text NOT NULL,
+  detail jsonb NOT NULL DEFAULT '{}');"""
+ 
+GROWTH_FACTOR = 3.0   # x3 entre exploraciones = anómalo (configurable)
+ 
+async def compute_deltas(system_id: str, run_id: str,
+                         started_at: str, prev_started: str | None):
+    deltas = []
+    # 1) aparecidos: first_seen dentro de este run
+    for r in cypher("""
+        MATCH (s:System {id: $sid})-[:CONTAINS*1..3]->(n)
+        WHERE n.first_seen >= $t0
+        RETURN labels(n)[0] AS lbl, n.key AS key, n.name AS name""",
+        {"sid": system_id, "t0": started_at},
+        cols="lbl agtype, key agtype, name agtype"):
+        deltas.append(("aparecido", r["lbl"], r["key"], {"name": r["name"]}))
+    # 2) desaparecidos: last_seen anterior al inicio de este run
+    if prev_started:
+        for r in cypher("""
+            MATCH (s:System {id: $sid})-[:CONTAINS*1..3]->(n)
+            WHERE n.last_seen < $t0 AND coalesce(n.missing, false) = false
+            SET n.missing = true, n.missing_since = $t0
+            RETURN labels(n)[0] AS lbl, n.key AS key, n.name AS name""",
+            {"sid": system_id, "t0": started_at},
+            cols="lbl agtype, key agtype, name agtype"):
+            deltas.append(("desaparecido", r["lbl"], r["key"],
+                           {"name": r["name"]}))
+    # 3) crecimiento anómalo de tablas (est_rows_prev lo fija la ingesta)
+    for r in cypher("""
+        MATCH (s:System {id:$sid})-[:CONTAINS*2]->(t:Table)
+        WHERE t.est_rows_prev > 1000 AND t.est_rows > t.est_rows_prev * $f
+        RETURN t.key AS key, t.name AS name,
+               t.est_rows_prev AS before, t.est_rows AS now""",
+        {"sid": system_id, "f": GROWTH_FACTOR},
+        cols="key agtype, name agtype, before agtype, now agtype"):
+        deltas.append(("crecimiento_anomalo", "Table", r["key"],
+                       {"name": r["name"], "before": r["before"],
+                        "now": r["now"]}))
+    with pool.connection() as conn:
+        for kind, lbl, key, detail in deltas:
+            conn.execute("""INSERT INTO argos.inventory_deltas
+                (run_id, kind, node_label, node_key, detail)
+                VALUES (%s,%s,%s,%s,%s::jsonb)""",
+                (run_id, kind, lbl, key, json.dumps(detail)))
+        conn.commit()
+    bus = Bus("inventory-deltas"); await bus.connect()
+    await bus.publish("argos.discovery.delta_ready",
+                      "discovery.delta_ready.v1",
+                      {"system_id": system_id, "run_id": run_id,
+                       "counts": {k: sum(1 for d in deltas if d[0] == k)
+                                  for k in ("aparecido", "desaparecido",
+                                            "crecimiento_anomalo")}})
+ 
+
+ARG-024 · Clasificador determinista
+ANÁLISIS
+La clasificación empieza por lo que se puede afirmar sin modelo: nombres de columna reveladores (diccionario ES/EN por categoría), y validación de contenido sobre las muestras hasheadas... que no sirven para validar formato — por eso el SDK permite al clasificador pedir una sonda sample con validación en origen: el validador viaja al conector, valida en memoria y devuelve solo tasas de acierto, nunca valores. Los validadores españoles son el diferencial local: letra del DNI/NIE, dígitos de control del NUSS, IBAN, NHC configurables por cliente. Regla de precedencia: un validador de contenido con tasa alta manda sobre el diccionario; el diccionario manda sobre nada.
+DISEÑO
+Librería pura de validadores + servicio que reacciona a discovery.ingested: para cada columna nueva/renombrada aplica diccionario (fase A, gratis) y, si la campaña lo permite, solicita muestreo validado (fase B) vía una sonda sample con parámetro validators. Escribe aristas CLASSIFIED_AS con method='dict'|'validator', confidence y tasa. El umbral de confianza para considerar clasificada una columna sin revisión humana: 0,9 con validador; con solo diccionario queda 'candidata' para ARG-025.
+DESARROLLO
+services/inventory/classify/validators.py
+"""Validadores deterministas de identificadores españoles (puros, sin E/S)."""
+import re
+ 
+DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
+ 
+def valida_dni(v: str) -> bool:
+    m = re.fullmatch(r"(\d{8})([A-Z])", v.strip().upper())
+    return bool(m) and DNI_LETTERS[int(m[1]) % 23] == m[2]
+ 
+def valida_nie(v: str) -> bool:
+    m = re.fullmatch(r"([XYZ])(\d{7})([A-Z])", v.strip().upper())
+    if not m: return False
+    n = int({"X":"0","Y":"1","Z":"2"}[m[1]] + m[2])
+    return DNI_LETTERS[n % 23] == m[3]
+ 
+def valida_nuss(v: str) -> bool:
+    d = re.sub(r"\D", "", v)
+    if len(d) != 12: return False
+    base, ctrl = d[:10], int(d[10:])
+    prov, num = int(base[:2]), int(base[2:])
+    n = int(f"{prov}{num:08d}") if num < 10_000_000 else int(base)
+    return n % 97 == ctrl
+ 
+def valida_iban_es(v: str) -> bool:
+    s = re.sub(r"\s", "", v.upper())
+    if not re.fullmatch(r"ES\d{22}", s): return False
+    rearranged = s[4:] + "1428" + s[2:4]   # E=14, S=28
+    return int(rearranged) % 97 == 1
+ 
+VALIDATORS = {"dni": valida_dni, "nie": valida_nie,
+              "nuss": valida_nuss, "iban_es": valida_iban_es}
+ 
+DICT = {  # nombre de columna -> categoría candidata
+  "categoria_especial.salud": ["diagnostico", "cie10", "historia_clinica",
+      "nhc", "patologia", "tratamiento", "alergia"],
+  "identificador_oficial": ["dni", "nif", "nie", "documento", "nuss",
+      "num_seg_social", "passport", "pasaporte"],
+  "dato_contacto": ["email", "correo", "telefono", "phone", "movil"],
+  "dato_financiero": ["iban", "cuenta_bancaria", "tarjeta", "card_number"],
+  "dato_localizacion": ["direccion", "domicilio", "lat", "lng", "gps"],
+}
+ 
+def dict_match(column_name: str) -> str | None:
+    n = column_name.lower()
+    for cat, words in DICT.items():
+        if any(w in n for w in words):
+            return cat
+    return None
+ 
+services/inventory/classify/deterministic.py
+"""Servicio de clasificación determinista: diccionario + validación en origen."""
+from graph.cypher import cypher, cypher_write
+from .validators import dict_match, VALIDATORS
+from connector_client import run_probe    # invoca la sonda vía ARG-011
+ 
+CONF_VALIDATOR = 0.95   # tasa mínima de la muestra para afirmar
+ 
+async def classify_new_columns(system_id: str):
+    cols = cypher("""
+      MATCH (s:System {id:$sid})-[:CONTAINS*2]->(t:Table)-[:CONTAINS]->(c:Column)
+      WHERE NOT (c)-[:CLASSIFIED_AS]->(:Category)
+      RETURN c.key AS key, c.name AS name, t.name AS tbl""",
+      {"sid": system_id}, cols="key agtype, name agtype, tbl agtype")
+    for c in cols:
+        # Fase A: diccionario (gratis)
+        cat = dict_match(c["name"])
+        if cat:
+            _classify(c["key"], cat, "dict", 0.6)
+        # Fase B: validación en origen si hay validador candidato
+        vname = next((v for v in VALIDATORS
+                      if v in c["name"].lower()), None)
+        if vname:
+            res = await run_probe(system_id, kind="sample",
+                target=c["tbl"], params={"columns": [c["name"]], "k": 200,
+                                          "validators": [vname]})
+            rate = res.data.get("validator_rates", {}).get(vname, 0.0)
+            if rate >= CONF_VALIDATOR:
+                _classify(c["key"], "identificador_oficial",
+                          f"validator:{vname}", rate)
+ 
+def _classify(col_key: str, category: str, method: str, confidence: float):
+    cypher_write("""
+      MATCH (c:Column {key:$k}), (cat:Category {name:$cat})
+      MERGE (c)-[r:CLASSIFIED_AS]->(cat)
+      SET r.method=$m, r.confidence=$conf, r.at=timestamp()""",
+      {"k": col_key, "cat": category, "m": method, "conf": confidence})
+ 
+
+ARG-025 · Clasificador semántico asistido
+ANÁLISIS
+Queda la zona gris: columnas de texto libre, nombres crípticos (campo07, obs_txt), comentarios de tabla en jerga interna. Aquí el modelo local aporta lo que el diccionario no puede: leer el contexto (nombre de tabla, columnas hermanas, comentario) y proponer categoría. Los límites son estrictos y heredan la frontera del producto: el modelo solo ve metadatos y, si la campaña aprobó muestreo, fragmentos ya minimizados; su salida es una propuesta con confianza que jamás cierra la clasificación por sí sola por encima del umbral de revisión — las propuestas de alta confianza se aceptan con marca method='ai', las medias van a la cola de revisión del DPO en consola.
+DISEÑO
+Cliente del gateway de IA (ARG-052, aquí se usa su contrato) con prompt de sistema fijo, salida JSON forzada y validada contra esquema; lotes de hasta 20 columnas por petición para amortizar contexto. Política de aceptación: confianza ≥0,85 → arista CLASSIFIED_AS method='ai'; 0,5-0,85 → tabla review_queue; <0,5 → sin_clasificar visible en el mapa de cobertura. Toda propuesta guarda el prompt_hash para reproducibilidad.
+DESARROLLO
+services/inventory/classify/assisted.py
+"""Clasificación asistida: el modelo propone, con umbrales y cola de revisión."""
+import hashlib, json
+from ai_gateway_client import chat_json    # contrato de ARG-052
+from graph.cypher import cypher, cypher_write
+from argos_db import pool
+ 
+SYSTEM_PROMPT = """Eres el clasificador de datos de ARGOS. Recibes columnas de
+bases de datos españolas (nombre, tipo, tabla, columnas hermanas, comentario).
+Asigna a cada una UNA categoría de esta lista exacta:
+dato_personal, categoria_especial.salud, categoria_especial.otro,
+identificador_oficial, dato_financiero, dato_contacto, dato_localizacion,
+credencial_tecnica, sin_dato_personal.
+Responde SOLO JSON: {"items":[{"key":..., "category":..., 
+"confidence":0..1, "reason": "<15 palabras"}]}"""
+ 
+SCHEMA = {"type":"object","required":["items"],"properties":{"items":{
+  "type":"array","items":{"type":"object",
+  "required":["key","category","confidence"]}}}}
+ 
+ACCEPT, REVIEW = 0.85, 0.50
+ 
+async def classify_grey_zone(system_id: str):
+    cols = cypher("""
+      MATCH (s:System {id:$sid})-[:CONTAINS*2]->(t:Table)-[:CONTAINS]->(c:Column)
+      WHERE NOT (c)-[:CLASSIFIED_AS]->(:Category)
+      OPTIONAL MATCH (t)-[:CONTAINS]->(sib:Column)
+      RETURN c.key AS key, c.name AS name, c.type AS type,
+             t.name AS tbl, collect(sib.name)[..8] AS siblings""",
+      {"sid": system_id},
+      cols="key agtype,name agtype,type agtype,tbl agtype,siblings agtype")
+    for i in range(0, len(cols), 20):
+        batch = cols[i:i+20]
+        payload = json.dumps([{k: c[k] for k in
+                   ("key","name","type","tbl","siblings")} for c in batch],
+                   ensure_ascii=False)
+        out = await chat_json(system=SYSTEM_PROMPT, user=payload,
+                              json_schema=SCHEMA, max_tokens=1200)
+        phash = hashlib.sha256((SYSTEM_PROMPT+payload).encode()).hexdigest()[:16]
+        for item in out["items"]:
+            conf = float(item["confidence"])
+            if conf >= ACCEPT:
+                cypher_write("""
+                  MATCH (c:Column {key:$k}), (cat:Category {name:$cat})
+                  MERGE (c)-[r:CLASSIFIED_AS]->(cat)
+                  SET r.method='ai', r.confidence=$conf,
+                      r.prompt_hash=$ph, r.at=timestamp()""",
+                  {"k": item["key"], "cat": item["category"],
+                   "conf": conf, "ph": phash})
+            elif conf >= REVIEW:
+                with pool.connection() as conn:
+                    conn.execute("""INSERT INTO argos.review_queue
+                      (node_key, proposed_category, confidence, reason,
+                       prompt_hash) VALUES (%s,%s,%s,%s,%s)
+                      ON CONFLICT (node_key) DO UPDATE
+                        SET proposed_category=EXCLUDED.proposed_category,
+                            confidence=EXCLUDED.confidence""",
+                      (item["key"], item["category"], conf,
+                       item.get("reason",""), phash))
+                    conn.commit()
+ 
+
+ARG-026 · Catálogo de metadatos y cobertura
+ANÁLISIS
+El grafo es potente para la máquina pero el DPO trabaja con preguntas planas: ¿cuántas columnas de salud hay, dónde, cuánto está clasificado, qué tratamiento las ampara? El catálogo es la proyección relacional del grafo que responde eso en milisegundos: vistas materializadas refrescadas al cierre de cada exploración, con la métrica de cobertura de clasificación —el porcentaje del parque con etiqueta— que la consola muestra como el termómetro del inventario y el pliego (visado del inventario, P-26) usa como criterio de hito.
+DISEÑO
+Tres vistas materializadas: catalog_columns (columna+tabla+sistema+categoría+método+confianza, denormalizado), catalog_sensitive (solo categorías especiales, con identidades con acceso agregadas) y catalog_coverage (por sistema: total, clasificadas, por método). Refresco CONCURRENTLY tras delta_ready; enlace con los tratamientos declarados que el DPO importa desde su registro de actividades (CSV normalizado) creando nodos Treatment y aristas DECLARED_IN.
+DESARROLLO
+services/inventory/catalog/views.sql (migración 0004)
+-- Proyección relacional del grafo para consola y hitos de implantación
+CREATE MATERIALIZED VIEW argos.catalog_columns AS
+SELECT
+  (s.properties->>'id')::uuid                 AS system_id,
+  sch.properties->>'name'                     AS schema_name,
+  t.properties->>'name'                       AS table_name,
+  c.properties->>'name'                       AS column_name,
+  c.properties->>'key'                        AS column_key,
+  cat.properties->>'name'                     AS category,
+  r.properties->>'method'                     AS method,
+  (r.properties->>'confidence')::float        AS confidence
+FROM inventario."System" s
+JOIN inventario."CONTAINS" e1 ON e1.start_id = s.id
+JOIN inventario."Schema" sch  ON sch.id = e1.end_id
+JOIN inventario."CONTAINS" e2 ON e2.start_id = sch.id
+JOIN inventario."Table" t     ON t.id = e2.end_id
+JOIN inventario."CONTAINS" e3 ON e3.start_id = t.id
+JOIN inventario."Column" c    ON c.id = e3.end_id
+LEFT JOIN inventario."CLASSIFIED_AS" r ON r.start_id = c.id
+LEFT JOIN inventario."Category" cat    ON cat.id = r.end_id;
+ 
+CREATE UNIQUE INDEX ON argos.catalog_columns (column_key, category);
+ 
+CREATE MATERIALIZED VIEW argos.catalog_coverage AS
+SELECT system_id,
+       count(*)                                   AS columns_total,
+       count(category)                            AS columns_classified,
+       round(100.0*count(category)/count(*), 1)   AS coverage_pct,
+       count(*) FILTER (WHERE category LIKE 'categoria_especial%')
+                                                  AS special_columns
+FROM argos.catalog_columns GROUP BY system_id;
+ 
+-- Refresco tras cada delta (lo invoca el servicio de catálogo)
+CREATE OR REPLACE FUNCTION argos.refresh_catalog() RETURNS void AS $$
+BEGIN
+  REFRESH MATERIALIZED VIEW CONCURRENTLY argos.catalog_columns;
+  REFRESH MATERIALIZED VIEW argos.catalog_coverage;
+END $$ LANGUAGE plpgsql;
+ 
+services/inventory/catalog/treatments.py — importación del registro de actividades
+"""Importa el registro de actividades del DPO (CSV) y enlaza activos."""
+import csv, io
+from graph.cypher import cypher_write
+ 
+# Columnas esperadas: id;nombre;base_juridica;plazo_conservacion;sistemas
+def import_treatments(csv_bytes: bytes):
+    n = 0
+    for row in csv.DictReader(io.StringIO(csv_bytes.decode("utf-8")),
+                              delimiter=";"):
+        cypher_write("""
+          MERGE (tr:Treatment {id: $id})
+          SET tr.name=$name, tr.legal_basis=$base,
+              tr.retention=$ret""",
+          {"id": row["id"], "name": row["nombre"],
+           "base": row["base_juridica"], "ret": row["plazo_conservacion"]})
+        for sid in row["sistemas"].split(","):
+            cypher_write("""
+              MATCH (s:System {id:$sid}), (tr:Treatment {id:$tid})
+              MERGE (s)-[:DECLARED_IN]->(tr)""",
+              {"sid": sid.strip(), "tid": row["id"]})
+        n += 1
+    return n   # el reto 'tratamiento sin sistema' y su inverso salen gratis
+ 
+
+ARG-027 · Detección de flujos entre sistemas
+ANÁLISIS
+Los flujos son la evidencia de las cesiones y transferencias: qué sistema alimenta a cuál. Sin agentes en los sistemas del cliente, ARGOS los infiere de tres fuentes de solo lectura ordenadas por fiabilidad: enlaces declarados en los propios motores (foreign data wrappers, linked servers, dblink — catálogo), configuración observable de integración (cadenas de conexión en tablas de configuración de aplicaciones, jobs programados) y coincidencia estructural (misma firma de columnas clasificadas en dos sistemas: candidato a copia, confianza baja, a confirmar por el DPO). Cada arista FLOWS_TO lleva su fuente y confianza — un flujo inferido jamás se presenta como constatado.
+DISEÑO
+Detector por fuente con contrato común emit_flow(src, dst, method, confidence, evidence). Se implementa el de catálogo (el fiable) completo para PostgreSQL/SQL Server y el estructural (firma de tabla = multiconjunto de pares nombre-normalizado/categoría con similitud de Jaccard ≥0,8 y al menos una categoría especial en común). El cruce con el mapa de transferencias del capítulo V (destinos fuera de la UE) queda como propiedad cross_border derivada de los metadatos de sistema.
+DESARROLLO
+services/inventory/flows/detect.py
+"""Detección de flujos: catálogo del motor + similitud estructural."""
+from graph.cypher import cypher, cypher_write
+from connector_client import run_probe
+ 
+Q_LINKS = {  # enlaces declarados en el propio motor (fiables)
+  "rdbms.postgresql":
+    "SELECT srvname AS dst, srvoptions FROM pg_foreign_server",
+  "rdbms.mssql":
+    "SELECT name AS dst, data_source FROM sys.servers WHERE is_linked=1",
+}
+ 
+async def detect_engine_links(system_id: str, kind: str):
+    q = Q_LINKS.get(kind)
+    if not q: return
+    res = await run_probe(system_id, kind="check_config",
+                          target="engine_links", statement=q)
+    for row in res.data.get("rows", []):
+        emit_flow(system_id, row["dst"], method="engine_catalog",
+                  confidence=0.95, evidence=row)
+ 
+def detect_structural():
+    """Misma firma de columnas clasificadas en dos sistemas -> copia candidata."""
+    sigs = cypher("""
+      MATCH (s:System)-[:CONTAINS*2]->(t:Table)-[:CONTAINS]->
+            (c:Column)-[:CLASSIFIED_AS]->(cat:Category)
+      WITH s, t, collect(DISTINCT c.name + '|' + cat.name) AS sig
+      WHERE size(sig) >= 4
+      RETURN s.id AS sid, t.key AS tkey, t.name AS tname, sig""",
+      cols="sid agtype, tkey agtype, tname agtype, sig agtype")
+    for i, a in enumerate(sigs):
+        for b in sigs[i+1:]:
+            if a["sid"] == b["sid"]: continue
+            sa, sb = set(a["sig"]), set(b["sig"])
+            j = len(sa & sb) / len(sa | sb)
+            especial = any("categoria_especial" in x for x in sa & sb)
+            if j >= 0.8 and especial:
+                emit_flow(a["sid"], b["sid"], method="structural",
+                          confidence=round(j * 0.6, 2),   # nunca >0.6
+                          evidence={"tables": [a["tname"], b["tname"]],
+                                    "jaccard": round(j, 2)})
+ 
+def emit_flow(src_sid, dst, method, confidence, evidence):
+    cypher_write("""
+      MATCH (a:System {id:$src})
+      MERGE (b:System {id:$dst})
+      MERGE (a)-[f:FLOWS_TO]->(b)
+      SET f.method=$m, f.confidence=$c, f.evidence=$ev,
+          f.last_seen=timestamp(),
+          f.confirmed = coalesce(f.confirmed, false)""",
+      {"src": str(src_sid), "dst": str(dst), "m": method,
+       "c": confidence, "ev": str(evidence)[:500]})
+ 
+
+ARG-028 · Descubrimiento de sistemas de IA
+ANÁLISIS
+El registro del AI Act empieza por saber qué IA hay, y la experiencia dice que la mitad no está registrada: módulos de proveedor con «scoring» activado, llamadas a APIs de inferencia desde aplicaciones internas, modelos en carpetas de proyectos. Sin tocar el tráfico (ARGOS no es un sniffer), las señales de solo lectura disponibles son: dependencias ML en los inventarios de paquetes de las aplicaciones conectadas, endpoints con rutas características (/predict, /v1/chat, /inference) en los descriptores REST, ficheros de modelo por firma (.onnx, .pt, .safetensors, .pkl) en las áreas de ficheros, y tablas con columnas delatoras (score_, _pred, probability). Cada señal crea o refuerza un candidato con su confianza; la confirmación es humana.
+DISEÑO
+Cuatro detectores que emiten señales a un acumulador: un candidato AISystem por (sistema, nombre inferido) con lista de señales y confianza agregada 1-∏(1-ci). Umbral 0,5 para aparecer en el registro provisional de la consola con estado 'pendiente de confirmación'; al confirmar, el DPO completa los campos del AI Act (finalidad, clasificación de riesgo) y el nodo queda listo para los retos de la familia de gobierno de IA.
+DESARROLLO
+services/inventory/ai_discovery/detect.py
+"""Descubrimiento de IA en uso: señales débiles, acumulación honesta."""
+import re
+from graph.cypher import cypher, cypher_write
+ 
+AI_ROUTES = re.compile(r"/(predict|inference|score|v1/(chat|completions)|"
+                       r"embeddings|classify)", re.I)
+MODEL_EXT = (".onnx", ".pt", ".pth", ".safetensors", ".pkl", ".h5", ".gguf")
+SCORE_COLS = re.compile(r"(score|_pred|probability|riesgo_mod|propension)", re.I)
+ML_PKGS = {"torch", "tensorflow", "sklearn", "xgboost", "lightgbm",
+           "transformers", "onnxruntime"}
+ 
+def signal(system_id: str, name: str, kind: str, conf: float, detail: str):
+    cypher_write("""
+      MATCH (s:System {id:$sid})
+      MERGE (a:AISystem {key: $key})
+        ON CREATE SET a.name=$name, a.status='pendiente', a.signals=[]
+      SET a.signals = a.signals + [$sig],
+          a.confidence = 1 - reduce(p=1.0, s IN a.signals + [$sig] |
+                                    p * (1 - toFloat(split(s,'|')[1]))),
+          a.last_seen = timestamp()
+      MERGE (s)-[:USES_MODEL]->(a)""",
+      {"sid": system_id, "key": f"{system_id}:{name}", "name": name,
+       "sig": f"{kind}|{conf}|{detail[:120]}"})
+ 
+def detect_from_routes():
+    for r in cypher("""
+        MATCH (s:System {kind:'api'})   // rutas guardadas por ARG-019
+        RETURN s.id AS sid, s.routes AS routes""",
+        cols="sid agtype, routes agtype"):
+        for route in (r["routes"] or []):
+            if AI_ROUTES.search(route):
+                signal(r["sid"], f"api:{route}", "route", 0.5, route)
+ 
+def detect_from_files():
+    for r in cypher("""
+        MATCH (s:System)-[:CONTAINS]->(f:FileArea)
+        WHERE f.by_ext IS NOT NULL RETURN s.id AS sid, f.by_ext AS ext""",
+        cols="sid agtype, ext agtype"):
+        hits = [e for e in (r["ext"] or {}) if ("." + e) in MODEL_EXT]
+        for e in hits:
+            signal(r["sid"], f"files:*.{e}", "model_file", 0.4, e)
+ 
+def detect_from_columns():
+    for r in cypher("""
+        MATCH (s:System)-[:CONTAINS*2]->(t:Table)-[:CONTAINS]->(c:Column)
+        WHERE c.name =~ '(?i).*(score|_pred|probability).*'
+        RETURN DISTINCT s.id AS sid, t.name AS tbl""",
+        cols="sid agtype, tbl agtype"):
+        signal(r["sid"], f"table:{r['tbl']}", "score_column", 0.3, r["tbl"])
+ 
+
+ARG-029 · API GraphQL del inventario
+ANÁLISIS
+Consola (fase 8) y motor de retos (fase 5) consultan el inventario con formas distintas: la consola navega (vecindario de un nodo, expandir), el motor selecciona (todos los activos que cumplen un selector del DSL). GraphQL encaja porque el cliente pide la forma exacta y el servidor traduce a Cypher una sola vez; el objetivo <2 s hasta un millón de nodos se protege con paginación obligatoria, profundidad máxima 4 y coste por consulta. Los selectores del DSL de retos se exponen como una consulta dedicada resolveSelector para que fase 5 no acople Cypher.
+DISEÑO
+Strawberry (GraphQL para Python) sobre FastAPI, esquema con tipos que calcan el vocabulario de ARG-021, autenticación con argos_auth (rol auditor_lectura basta para leer), y dos resolvers estrella: node(key) con vecindario paginado y resolveSelector(selector) que compila el selector JSON del DSL a Cypher parametrizado con lista blanca de campos — la única puerta del motor de retos al grafo.
+DESARROLLO
+services/inventory/api/graphql_app.py
+"""API GraphQL del inventario (Strawberry + FastAPI)."""
+import strawberry
+from strawberry.fastapi import GraphQLRouter
+from fastapi import FastAPI, Depends
+from graph.cypher import cypher
+from argos_auth.fastapi import require_role
+ 
+@strawberry.type
+class Node:
+    key: str; label: str; name: str
+    props: strawberry.scalars.JSON
+ 
+@strawberry.type
+class Neighbor:
+    edge: str; direction: str; node: "Node"
+ 
+ALLOWED_SELECTOR_FIELDS = {"label", "category", "system_kind",
+                           "min_confidence", "missing", "name_like"}
+ 
+def _selector_to_cypher(sel: dict) -> tuple[str, dict]:
+    if not set(sel) <= ALLOWED_SELECTOR_FIELDS:
+        raise ValueError(f"selector con campos no permitidos: {set(sel)}")
+    where, params = ["true"], {}
+    match = f"MATCH (n:{sel.get('label','Column')})"
+    if "category" in sel:
+        match += "-[r:CLASSIFIED_AS]->(cat:Category)"
+        where.append("cat.name STARTS WITH $cat")
+        params["cat"] = sel["category"]
+        if "min_confidence" in sel:
+            where.append("r.confidence >= $conf")
+            params["conf"] = float(sel["min_confidence"])
+    if sel.get("missing") is not None:
+        where.append("coalesce(n.missing,false) = $missing")
+        params["missing"] = bool(sel["missing"])
+    if "name_like" in sel:
+        where.append("n.name =~ $rex"); params["rex"] = sel["name_like"]
+    q = (f"{match} WHERE {' AND '.join(where)} "
+         "RETURN n.key AS key, labels(n)[0] AS label, n.name AS name "
+         "LIMIT 10000")
+    return q, params
+ 
+@strawberry.type
+class Query:
+    @strawberry.field
+    def node(self, key: str) -> list[Neighbor]:
+        rows = cypher("""
+          MATCH (n {key:$k})-[e]-(m)
+          RETURN type(e) AS edge,
+                 CASE WHEN startNode(e)=n THEN 'out' ELSE 'in' END AS dir,
+                 m.key AS key, labels(m)[0] AS label, m.name AS name
+          LIMIT 200""", {"k": key},
+          cols="edge agtype, dir agtype, key agtype, label agtype, name agtype")
+        return [Neighbor(edge=r["edge"], direction=r["dir"],
+                node=Node(key=r["key"], label=r["label"],
+                          name=r["name"] or "", props={})) for r in rows]
+ 
+    @strawberry.field
+    def resolve_selector(self, selector: strawberry.scalars.JSON) -> list[Node]:
+        q, params = _selector_to_cypher(dict(selector))
+        rows = cypher(q, params, cols="key agtype, label agtype, name agtype")
+        return [Node(key=r["key"], label=r["label"],
+                     name=r["name"] or "", props={}) for r in rows]
+ 
+schema = strawberry.Schema(Query)
+app = FastAPI(dependencies=[Depends(require_role("auditor_lectura"))])
+app.include_router(GraphQLRouter(schema), prefix="/graphql")
+ 
+
+ARG-030 · Planificador de reexploración incremental
+ANÁLISIS
+El inventario continuo no significa explorar todo cada noche: significa que cada activo tiene su cadencia justa. La estructura cambia despacio (diaria basta), los contenidos muestreados menos (semanal), y los sistemas con deltas recientes o señales de IA merecen prioridad. El planificador convierte esta política en trabajo concreto respetando las ventanas y el presupuesto de cada sistema — el objetivo de diseño de la especificación (reexploración incremental <2 h en talla M) depende de que no se reexplore lo que no toca.
+DISEÑO
+Un workflow Temporal de cron (cada hora) que puntúa cada sistema: score = urgencia(deltas recientes, nunca_explorado, señales) × antigüedad(desde última exploración vs cadencia de su clase) y lanza las N exploraciones de mayor puntuación cuyo sistema esté en ventana, como workflows hijos que encadenan las sondas scan_schema del conector correspondiente, registran scan_run y disparan el cálculo de deltas (ARG-023). N se autolimita por la carga observada del appliance.
+DESARROLLO
+services/inventory/scheduler/rescan.py
+"""Planificador de reexploración: cadencia justa por sistema."""
+import datetime as dt, uuid
+from temporalio import workflow, activity
+from argos_db import pool
+ 
+CADENCE_H = {"estructura": 24, "contenido": 168}   # horas
+MAX_PARALLEL = 4                                    # talla M
+ 
+@activity.defn
+async def score_systems() -> list[dict]:
+    q = """
+    SELECT s.id, s.name, s.kind,
+           EXTRACT(EPOCH FROM (now() - max(r.finished_at)))/3600 AS h_since,
+           count(d.*) FILTER (WHERE d.kind='aparecido'
+                              AND r2.finished_at > now()-interval '7 days')
+             AS recent_new
+    FROM argos.systems s
+    LEFT JOIN argos.scan_runs r  ON r.system_id = s.id
+    LEFT JOIN argos.scan_runs r2 ON r2.system_id = s.id
+    LEFT JOIN argos.inventory_deltas d ON d.run_id = r2.id
+    GROUP BY s.id, s.name, s.kind"""
+    out = []
+    with pool.connection() as conn:
+        for sid, name, kind, h_since, recent_new in conn.execute(q):
+            never = h_since is None
+            age = 999 if never else h_since / CADENCE_H["estructura"]
+            urgency = 2.0 if never else 1.0 + min(recent_new or 0, 5) * 0.2
+            out.append({"system_id": str(sid), "name": name,
+                        "score": round(age * urgency, 2)})
+    return sorted(out, key=lambda x: -x["score"])
+ 
+@workflow.defn
+class RescanPlanner:
+    @workflow.run
+    async def run(self):
+        ranked = await workflow.execute_activity(
+            score_systems, start_to_close_timeout=dt.timedelta(minutes=2))
+        launched = 0
+        for s in ranked:
+            if launched >= MAX_PARALLEL or s["score"] < 1.0:
+                break
+            await workflow.start_child_workflow(
+                "ScanSystem",              # encadena scan_schema + deltas
+                args=[s["system_id"], str(uuid.uuid7())],
+                id=f"scan-{s['system_id']}-{workflow.now().date()}")
+            launched += 1
+        return {"launched": launched}
+ 
+# Registro del cron (en el arranque del worker de inventario):
+#   client.start_workflow(RescanPlanner.run, id="rescan-planner",
+#                         cron_schedule="0 * * * *",
+#                         task_queue="argos-inventory")
+ 
+
+Interfaces que esta fase exporta
+Componente
+Interfaz exportada
+Consumidores
+ARG-021
+Vocabulario cerrado (9 nodos, 8 aristas), claves naturales, cypher()/cypher_write()
+Fases 4-8: todo el producto habla este vocabulario
+ARG-022/023
+Grafo poblado con first/last_seen + argos.inventory_deltas + evento delta_ready
+ARG-043 (retos sobre lo nuevo), consola (línea temporal)
+ARG-024/025
+Aristas CLASSIFIED_AS con method/confidence + argos.review_queue
+Fase 4 (aplicabilidad por categoría), consola (cola de revisión DPO)
+ARG-026
+catalog_columns / catalog_coverage / nodos Treatment
+Hito de visado del inventario (P-26), retos art. 30
+ARG-027/028
+Aristas FLOWS_TO con confianza + candidatos AISystem
+Retos cap. V y familia gobierno de IA (fase 5)
+ARG-029
+GraphQL: node(), resolveSelector() — la puerta única al grafo
+ARG-042 (compilador de retos), fase 8 (consola)
+ARG-030
+Workflows RescanPlanner/ScanSystem y tabla scan_runs
+ARG-094 (salud), objetivo <2 h de incremental
+
+Estado del programa: el inventario ya vive: se puebla solo, sabe qué cambió, clasifica con honestidad declarada, dibuja flujos, delata la IA sin registrar y se deja consultar en la forma exacta que cada consumidor necesita. La fase 4 le da el segundo cerebro: la ontología normativa que decide, para cada nodo de este grafo, qué obligaciones le aplican y qué retos lo verifican.
