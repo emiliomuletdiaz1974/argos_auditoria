@@ -12,6 +12,7 @@ from .diario import (
     exigir_integridad,
     verificar_asientos,
 )
+from .diario_pg import DiarioPostgres
 from .errors import ArgosError, ConfiguracionError, IntegridadError
 from .logs import configurar_logging, get_logger
 
@@ -31,6 +32,7 @@ __all__ = [
     "canonizar",
     "exigir_integridad",
     "verificar_asientos",
+    "DiarioPostgres",
     "ArgosError",
     "IntegridadError",
     "ConfiguracionError",

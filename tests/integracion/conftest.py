@@ -30,3 +30,9 @@ def bd_vacia() -> Iterator[str]:
             conn.execute(
                 sql.SQL("DROP DATABASE IF EXISTS {} WITH (FORCE)").format(sql.Identifier(nombre))
             )
+
+
+@pytest.fixture
+def bd_migrada(bd_vacia: str) -> str:
+    aplicar(bd_vacia, MIGRACIONES)
+    return bd_vacia

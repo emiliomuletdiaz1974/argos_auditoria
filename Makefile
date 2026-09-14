@@ -10,7 +10,7 @@ help:
 	@echo "make dev-down  lo detiene"
 	@echo "make test      tests unitarios"
 	@echo "make check     lint + tipos + secretos + todos los tests (necesita make dev)"
-	@echo "make cover     unitarios con umbral de cobertura"
+	@echo "make cover     todos los tests con umbral de cobertura (necesita make dev)"
 
 dev:
 	$(COMPOSE) up -d --build --wait
@@ -35,4 +35,4 @@ check: lint tipos secretos
 	uv run pytest
 
 cover:
-	uv run pytest -m "not integracion" --cov=argos_comun --cov-report=term-missing --cov-fail-under=80
+	uv run pytest --cov=argos_comun --cov-report=term-missing --cov-fail-under=80
