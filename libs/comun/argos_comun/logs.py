@@ -1,44 +1,65 @@
-"""Logging estructurado JSON con correlación para Loki y el diario (ARG-001)."""
+"""Logging estructurado JSON con campos obligatorios (ARG-001; lo consume Loki en ARG-093)."""
 
 import json
 import logging
+import re
 import sys
+from collections.abc import MutableMapping
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, TextIO
+
+CAMPOS_OPCIONALES = ("journal_seq", "trace_id", "campana_id")
+_MARCA = "_argos_manejador"
+_COMPONENTE = re.compile(r"^ARG-\d{3}$")
 
 
-class JSONFormatter(logging.Formatter):
-    """Formateador de logs que emite cada evento como una única línea JSON."""
+class FormateadorJSON(logging.Formatter):
+    def __init__(self, servicio: str) -> None:
+        super().__init__()
+        self.servicio = servicio
 
     def format(self, record: logging.LogRecord) -> str:
-        log_entry: dict[str, Any] = {
-            "timestamp": datetime.now(UTC).isoformat(),
+        entrada: dict[str, Any] = {
+            "timestamp": datetime.fromtimestamp(record.created, UTC).isoformat(
+                timespec="microseconds"
+            ),
             "level": record.levelname,
+            "servicio": self.servicio,
+            "componente": getattr(record, "componente", "sin-componente"),
             "logger": record.name,
             "message": record.getMessage(),
-            "module": record.module,
-            "line": record.lineno,
         }
-
-        # Metadatos ARGOS añadidos mediante el argumento extra
-        for attr in ("componente", "journal_seq", "trace_id", "campana_id"):
-            val = getattr(record, attr, None)
-            if val is not None:
-                log_entry[attr] = val
-
+        for campo in CAMPOS_OPCIONALES:
+            valor = getattr(record, campo, None)
+            if valor is not None:
+                entrada[campo] = valor
         if record.exc_info:
-            log_entry["exception"] = self.formatException(record.exc_info)
+            entrada["exception"] = self.formatException(record.exc_info)
+        return json.dumps(entrada, ensure_ascii=False, default=str)
 
-        return json.dumps(log_entry, ensure_ascii=False)
+
+class _AdaptadorArgos(logging.LoggerAdapter[logging.Logger]):
+    """Combina el componente fijo con el `extra` de cada llamada (3.12 lo descartaría)."""
+
+    def process(
+        self, msg: Any, kwargs: MutableMapping[str, Any]
+    ) -> tuple[Any, MutableMapping[str, Any]]:
+        kwargs["extra"] = {**(self.extra or {}), **kwargs.get("extra", {})}
+        return msg, kwargs
 
 
-def get_logger(nombre: str, componente: str | None = None) -> logging.Logger:
-    """Configura y devuelve un logger estructurado."""
-    logger = logging.getLogger(nombre)
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setFormatter(JSONFormatter())
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-        logger.propagate = False
-    return logger
+def configurar_logging(servicio: str, nivel: str = "INFO", flujo: TextIO | None = None) -> None:
+    raiz = logging.getLogger()
+    for manejador in [h for h in raiz.handlers if getattr(h, _MARCA, False)]:
+        raiz.removeHandler(manejador)
+    nuevo = logging.StreamHandler(flujo or sys.stdout)
+    nuevo.setFormatter(FormateadorJSON(servicio))
+    setattr(nuevo, _MARCA, True)
+    raiz.addHandler(nuevo)
+    raiz.setLevel(str(nivel).upper())
+
+
+def get_logger(nombre: str, componente: str) -> logging.LoggerAdapter[logging.Logger]:
+    if not _COMPONENTE.match(componente):
+        raise ValueError(f"componente debe tener formato ARG-NNN, recibido {componente!r}")
+    return _AdaptadorArgos(logging.getLogger(nombre), {"componente": componente})

@@ -3,6 +3,7 @@
 from .config import ArgosConfig, Entorno, NivelLog, TallaAppliance, cargar_config, get_config
 from .diario import AsientoDiario, DiarioInmutable, VerificacionDiarioError
 from .errors import ArgosError, ConfiguracionError, IntegridadError
+from .logs import configurar_logging, get_logger
 
 __all__ = [
     "ArgosConfig",
@@ -17,4 +18,6 @@ __all__ = [
     "ArgosError",
     "IntegridadError",
     "ConfiguracionError",
+    "configurar_logging",
+    "get_logger",
 ]
