@@ -15,6 +15,7 @@ from .diario import (
 from .diario_pg import DiarioPostgres
 from .errors import ArgosError, ConfiguracionError, IntegridadError
 from .logs import configurar_logging, get_logger
+from .salud import montar_salud
 
 __all__ = [
     "ArgosConfig",
@@ -38,4 +39,5 @@ __all__ = [
     "ConfiguracionError",
     "configurar_logging",
     "get_logger",
+    "montar_salud",
 ]

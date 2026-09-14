@@ -9,6 +9,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "cryptography>=43",
     "hvac>=2.3",
+    "fastapi>=0.115",
 ]
 
 [build-system]

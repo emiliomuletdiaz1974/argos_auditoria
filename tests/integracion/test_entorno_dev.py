@@ -27,6 +27,7 @@ def test_postgres_tiene_age_y_pgvector() -> None:
         ("prometheus", 9090),
         ("loki", 3100),
         ("grafana", 3000),
+        ("ejemplo", 8001),
     ],
 )
 def test_servicio_escucha(servicio: str, puerto: int) -> None:

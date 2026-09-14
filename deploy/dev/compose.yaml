@@ -96,6 +96,22 @@ services:
     volumes: ["./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/argos.yaml:ro"]
     ports: ["127.0.0.1:3000:3000"]
 
+  ejemplo:
+    build:
+      context: ../..
+      dockerfile: services/ejemplo/Dockerfile
+    environment:
+      ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos
+      ARGOS_LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports: ["127.0.0.1:8001:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/salud/viva', timeout=2)"]
+      interval: 5s
+      retries: 30
+
 volumes:
   pg-datos:
   nats-datos:

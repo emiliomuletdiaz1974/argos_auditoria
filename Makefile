@@ -15,6 +15,7 @@ help:
 dev:
 	$(COMPOSE) up -d --build --wait
 	$(COMPOSE) exec -T -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN=root vault sh -s < deploy/dev/vault/setup.sh
+	uv run --env-file .env.ejemplo python tools/migrate.py
 
 dev-down:
 	$(COMPOSE) down
