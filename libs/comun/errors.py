@@ -1,0 +1,41 @@
+"""Jerarquía de excepciones tipadas para la plataforma ARGOS (Componente ARG-001)."""
+
+from typing import Any, Optional
+
+
+class ArgosError(Exception):
+    """Excepción raíz de todos los errores controlados de la plataforma ARGOS."""
+
+    def __init__(self, mensaje: str, codigo: str = "ARGOS_GENERIC_ERROR", detalles: Optional[dict[str, Any]] = None) -> None:
+        super().__init__(mensaje)
+        self.mensaje = mensaje
+        self.codigo = codigo
+        self.detalles = detalles or {}
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "error": self.codigo,
+            "mensaje": self.mensaje,
+            "detalles": self.detalles,
+        }
+
+
+class ConfiguracionError(ArgosError):
+    """Lanzada cuando un parámetro o secreto de configuración es inválido o no existe."""
+
+    def __init__(self, mensaje: str, detalles: Optional[dict[str, Any]] = None) -> None:
+        super().__init__(mensaje, codigo="CONFIGURACION_ERROR", detalles=detalles)
+
+
+class IntegridadError(ArgosError):
+    """Lanzada ante la corrupción de un hash, firma o asiento encadenado."""
+
+    def __init__(self, mensaje: str, detalles: Optional[dict[str, Any]] = None) -> None:
+        super().__init__(mensaje, codigo="INTEGRIDAD_ERROR", detalles=detalles)
+
+
+class SoloLecturaError(ArgosError):
+    """Lanzada si un conector o actividad intenta realizar una operación de escritura."""
+
+    def __init__(self, mensaje: str, detalles: Optional[dict[str, Any]] = None) -> None:
+        super().__init__(mensaje, codigo="VIOLACION_SOLO_LECTURA", detalles=detalles)
