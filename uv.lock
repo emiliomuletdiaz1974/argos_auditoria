@@ -11,6 +11,7 @@ members = [
     "argos-auth",
     "argos-challenge-engine",
     "argos-common",
+    "argos-connector-sdk",
     "argos-events",
     "argos-example",
     "argos-platform",
@@ -101,6 +102,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "argos-connector-sdk"
+version = "0.1.0a0"
+source = { editable = "connectors/sdk" }
+dependencies = [
+    { name = "argos-common" },
+    { name = "sqlglot" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-common", editable = "libs/common" },
+    { name = "sqlglot", specifier = ">=30.18,<31" },
+]
+
+[[package]]
 name = "argos-events"
 version = "0.1.0a0"
 source = { editable = "libs/events" }
@@ -140,6 +156,7 @@ dependencies = [
     { name = "argos-auth" },
     { name = "argos-challenge-engine" },
     { name = "argos-common" },
+    { name = "argos-connector-sdk" },
     { name = "argos-events" },
     { name = "argos-example" },
 ]
@@ -160,6 +177,7 @@ requires-dist = [
     { name = "argos-auth", editable = "libs/auth" },
     { name = "argos-challenge-engine", editable = "services/challenge-engine" },
     { name = "argos-common", editable = "libs/common" },
+    { name = "argos-connector-sdk", editable = "connectors/sdk" },
     { name = "argos-events", editable = "libs/events" },
     { name = "argos-example", editable = "services/example" },
 ]
@@ -1307,6 +1325,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/5f/ea/7f9b938a63ece4bec677ad7f9f7fa02df3383db1949ed93a382441c09a87/ruff-0.16.7-py3-none-win32.whl", hash = "sha256:2ea3470fcebcbc5df2fb0c6f3b90333fa9084c534e0111c038fa4a6ab9f1c4b7", size = 10059082, upload-time = "2026-09-10T18:03:59.632Z" },
     { url = "https://files.pythonhosted.org/packages/39/11/480a6973a927aa653e1cead6a6416008640e03a99d05b34c0434b8c6c366/ruff-0.16.7-py3-none-win_amd64.whl", hash = "sha256:7ac26aca826e9e21d0f1cb25b54ac660760a9fdd094d3e4df9848232be98cfc6", size = 10593368, upload-time = "2026-09-10T18:04:01.999Z" },
     { url = "https://files.pythonhosted.org/packages/8b/4b/51327018d056f0dad2c2238f26d1fb0f53707a9d91b75dea6d1b3039f136/ruff-0.16.7-py3-none-win_arm64.whl", hash = "sha256:aab7f39e2c9df6c596216070f98eef1207b94f8516cca20c808826974971855b", size = 10412401, upload-time = "2026-09-10T18:04:04.098Z" },
+]
+
+[[package]]
+name = "sqlglot"
+version = "30.18.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/73/5b5ce3e23b3ded3ea1986c2c2991217460d5fd5161b3e00a8425f5dcb8a3/sqlglot-30.18.0.tar.gz", hash = "sha256:e57e1b205e341979d1df5b1212c1435c598a0437e4619e3f428b15d5bc3a5cc6", size = 6018496, upload-time = "2026-09-03T13:12:58.206Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/08/9f/3dd2ec8dd84a33e0092f1c815267bc055073f9e833b93e389c59c10f62cc/sqlglot-30.18.0-py3-none-any.whl", hash = "sha256:ee0f9a9f3e2193e763c326e52dfb377b96fdb4292f6305c3ff2d9a220e71c601", size = 748788, upload-time = "2026-09-03T13:12:56.467Z" },
 ]
 
 [[package]]

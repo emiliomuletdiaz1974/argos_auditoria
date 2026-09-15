@@ -27,7 +27,7 @@ lint:
 	uv run ruff format --check .
 
 typecheck:
-	uv run mypy libs services
+	uv run mypy libs services connectors
 
 secrets:
 	gitleaks detect --no-banner --redact
@@ -39,7 +39,7 @@ check: lint typecheck secrets
 	uv run pytest
 
 cover:
-	uv run pytest --cov=argos_common --cov=argos_events --cov=argos_auth --cov-report=term-missing --cov-fail-under=80
+	uv run pytest --cov=argos_common --cov=argos_events --cov=argos_auth --cov=argos_connector --cov-report=term-missing --cov-fail-under=80
 
 build:
 	docker build -f services/example/Dockerfile --label org.argos.component=ARG-001 --label org.argos.version=$(VERSION) -t argos-example:$(VERSION) .
