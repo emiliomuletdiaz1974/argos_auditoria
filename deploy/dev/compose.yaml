@@ -15,6 +15,8 @@
 #   source-smb       servercontainers/samba@sha256:de2f1c141e497ea287ba099788cb4526859f0b0336214a7e7dcf89d1f90525b7 (latest, 2026-09-15)
 #   source-s3        versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499 (v1.8.0)
 #   source-ldap      osixia/openldap@sha256:18742e9c449c9c1afe129d3f2f3ee15fb34cc43e5f940a20f3399728f41d7c28 (1.5.0)
+#   source-fhir      hapiproject/hapi@sha256:55213612779ab3eeec919226b7bad378f0061ade823393a61d7dd46dd5087a3d (v8.10.0-3)
+#   source-dicom     orthancteam/orthanc@sha256:1ca07ad4a70f67f815e55a558e76718d572ed9d0571268a3fbc1516a9155c5ca (26.9.0)
 #   source-mssql     mcr.microsoft.com/mssql/server:2022-latest (heavy profile; pin the digest after the first pull)
 #   source-oracle    gvenzl/oracle-free:23-slim (heavy profile; pin the digest after the first pull)
 name: argos-dev
@@ -189,6 +191,29 @@ services:
       - "./sources/certs:/container/service/slapd/assets/certs:ro"
       - "./sources/ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom:ro"
     ports: ["127.0.0.1:1636:636"]
+
+  # ── Clinical sources (F02-12). Seeded by tools/seed_dev_clinical.py. ──
+  source-fhir:
+    image: hapiproject/hapi:v8.10.0-3
+    profiles: ["sources"]
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xmx768m"
+    ports: ["127.0.0.1:8090:8080"]
+
+  source-dicom:
+    image: orthancteam/orthanc:26.9.0
+    profiles: ["sources"]
+    environment:
+      ORTHANC__NAME: argos-dev-pacs
+      ORTHANC__AUTHENTICATION_ENABLED: "false"
+      ORTHANC__DICOM_AET: ORTHANC
+      ORTHANC__DICOM_CHECK_CALLED_AET: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_ECHO: "true"
+      ORTHANC__DICOM_ALWAYS_ALLOW_FIND: "true"
+      ORTHANC__DICOM_ALWAYS_ALLOW_STORE: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_MOVE: "false"
+      ORTHANC__DICOM_ALWAYS_ALLOW_GET: "false"
+    ports: ["127.0.0.1:4242:4242", "127.0.0.1:8042:8042"]
 
   # ── Heavy sources: make dev-heavy only (several GB of images and RAM). ──
   source-mssql:

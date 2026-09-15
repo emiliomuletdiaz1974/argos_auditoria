@@ -23,6 +23,7 @@ dev:
 	$(COMPOSE) exec -T -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN=root vault sh -s < deploy/dev/vault/setup.sh
 	uv run --env-file .env.example python tools/migrate.py
 	uv run --env-file .env.example python tools/register_dev_sources.py
+	uv run python tools/seed_dev_clinical.py
 
 dev-heavy: dev
 	$(COMPOSE_HEAVY) up -d --wait

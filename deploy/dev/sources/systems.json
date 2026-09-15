@@ -88,6 +88,24 @@
           ]
         }
       }
+    },
+    {
+      "id": "01920000-0000-7000-8000-00000000e001",
+      "name": "dev-clinical-fhir",
+      "kind": "clinical",
+      "connector": "argos_fhir.connector:FhirConnector",
+      "profile": "sources",
+      "credentials": {"base_url": "http://127.0.0.1:8090/fhir"},
+      "config": {}
+    },
+    {
+      "id": "01920000-0000-7000-8000-00000000e002",
+      "name": "dev-clinical-dicom",
+      "kind": "clinical",
+      "connector": "argos_dicom.connector:DicomConnector",
+      "profile": "sources",
+      "credentials": {"host": "127.0.0.1", "port": "4242", "called_ae": "ORTHANC"},
+      "config": {"ae_title": "ARGOS_QR"}
     }
   ]
 }
