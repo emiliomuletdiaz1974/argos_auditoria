@@ -1,0 +1,16 @@
+[project]
+name = "argos-connector-ldap"
+version = "0.1.0-alpha"
+description = "ARGOS LDAP and Active Directory connector (ARG-018)"
+requires-python = ">=3.12"
+dependencies = ["argos-connector-sdk", "ldap3>=2.9.1"]
+
+[tool.uv.sources]
+argos-connector-sdk = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["argos_ldap"]

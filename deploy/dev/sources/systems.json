@@ -70,7 +70,7 @@
       "connector": "argos_ldap.connector:LdapConnector",
       "profile": "sources",
       "credentials": {"host": "127.0.0.1", "port": "1636", "bind_dn": "cn=argos_ro,dc=hosp,dc=local", "password": "dev-only-ldap"},
-      "config": {"base_dn": "dc=hosp,dc=local", "ca_file": "deploy/dev/sources/certs/ca.crt", "user_filter": "(objectClass=inetOrgPerson)", "group_filter": "(objectClass=groupOfNames)"}
+      "config": {"base_dn": "dc=hosp,dc=local", "ca_file": "deploy/dev/sources/certs/ca.crt", "tls_valid_names": ["localhost"], "user_filter": "(objectClass=inetOrgPerson)", "group_filter": "(objectClass=groupOfNames)"}
     },
     {
       "id": "01920000-0000-7000-8000-00000000d001",

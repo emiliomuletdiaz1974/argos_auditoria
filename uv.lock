@@ -12,6 +12,7 @@ members = [
     "argos-challenge-engine",
     "argos-common",
     "argos-connector-files",
+    "argos-connector-ldap",
     "argos-connector-rest",
     "argos-connector-sdk",
     "argos-connector-sql",
@@ -122,6 +123,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "argos-connector-ldap"
+version = "0.1.0a0"
+source = { editable = "connectors/ldap" }
+dependencies = [
+    { name = "argos-connector-sdk" },
+    { name = "ldap3" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-connector-sdk", editable = "connectors/sdk" },
+    { name = "ldap3", specifier = ">=2.9.1" },
+]
+
+[[package]]
 name = "argos-connector-rest"
 version = "0.1.0a0"
 source = { editable = "connectors/rest" }
@@ -215,6 +231,7 @@ dependencies = [
     { name = "argos-challenge-engine" },
     { name = "argos-common" },
     { name = "argos-connector-files" },
+    { name = "argos-connector-ldap" },
     { name = "argos-connector-rest" },
     { name = "argos-connector-sdk" },
     { name = "argos-connector-sql" },
@@ -245,6 +262,7 @@ requires-dist = [
     { name = "argos-challenge-engine", editable = "services/challenge-engine" },
     { name = "argos-common", editable = "libs/common" },
     { name = "argos-connector-files", editable = "connectors/files" },
+    { name = "argos-connector-ldap", editable = "connectors/ldap" },
     { name = "argos-connector-rest", editable = "connectors/rest" },
     { name = "argos-connector-sdk", editable = "connectors/sdk" },
     { name = "argos-connector-sql", editable = "connectors/sql" },
