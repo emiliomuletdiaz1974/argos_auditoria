@@ -2,8 +2,9 @@
 # Recipes are plain commands that behave the same under sh (CI) and cmd (Windows):
 # SHELL is not set because on Windows "bash" may resolve to the WSL launcher.
 COMPOSE := docker compose -f deploy/dev/compose.yaml
+VERSION := $(strip $(file < VERSION))
 
-.PHONY: help dev dev-down lint typecheck secrets test check cover
+.PHONY: help dev dev-down lint typecheck secrets test check cover build manifest
 
 help:
 	@echo "make dev        start the development environment (docker)"
@@ -11,6 +12,7 @@ help:
 	@echo "make test       unit tests"
 	@echo "make check      lint + typecheck + secrets + all tests (needs make dev)"
 	@echo "make cover      all tests with coverage threshold (needs make dev)"
+	@echo "make manifest   build images and write dist/release-manifest.json"
 
 dev:
 	$(COMPOSE) up -d --build --wait
@@ -38,3 +40,9 @@ check: lint typecheck secrets
 
 cover:
 	uv run pytest --cov=argos_common --cov=argos_events --cov=argos_auth --cov-report=term-missing --cov-fail-under=80
+
+build:
+	docker build -f services/example/Dockerfile --label org.argos.component=ARG-001 --label org.argos.version=$(VERSION) -t argos-example:$(VERSION) .
+
+manifest: build
+	uv run python tools/release.py build --version $(VERSION)

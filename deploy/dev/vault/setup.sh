@@ -36,4 +36,8 @@ done
 # EXCLUSIVE policy for connector credentials (P-04)
 printf 'path "argos/data/connectors/*" { capabilities = ["read"] }\n' | vault policy write svc-connector-sdk - >/dev/null
 
+# ARG-010 · release signing key: Ed25519, not exportable
+mounted transit || vault secrets enable transit
+vault read transit/keys/argos-release >/dev/null 2>&1 || vault write -f transit/keys/argos-release type=ed25519 >/dev/null
+
 echo "development vault configured"
