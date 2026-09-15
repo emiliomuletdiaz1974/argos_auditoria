@@ -21,11 +21,13 @@ VECTORS: dict[str, Any] = json.loads(
 
 
 def test_applies_once_and_is_idempotent(empty_db: str) -> None:
-    assert apply_migrations(empty_db, MIGRATIONS_DIR) == [1]
+    assert apply_migrations(empty_db, MIGRATIONS_DIR) == [1, 2]
     assert apply_migrations(empty_db, MIGRATIONS_DIR) == []
     with psycopg.connect(empty_db) as c:
-        assert c.execute("SELECT count(*) FROM argos.schema_version").fetchone() == (1,)
-        row = c.execute("SELECT seq, actor, action, payload FROM argos.audit_journal").fetchone()
+        assert c.execute("SELECT count(*) FROM argos.schema_version").fetchone() == (2,)
+        row = c.execute(
+            "SELECT seq, actor, action, payload FROM argos.audit_journal ORDER BY seq"
+        ).fetchone()
     assert row is not None
     assert row[:3] == (1, "system:migrator", "schema.migrate")
     assert row[3]["version"] == 1
@@ -88,7 +90,7 @@ def test_service_role_can_only_write_through_journal_append(empty_db: str) -> No
     with psycopg.connect(empty_db) as c:
         c.execute("SET ROLE svc_test")
         seq = c.execute("SELECT argos.journal_append('system:svc', 'test.ok', '{}')").fetchone()
-        assert seq == (2,)
+        assert seq == (3,)
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             c.execute(
                 "INSERT INTO argos.audit_journal VALUES "
