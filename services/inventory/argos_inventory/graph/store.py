@@ -50,7 +50,8 @@ class GraphStore:
         if not columns or any(not _IDENTIFIER.match(c) for c in columns):
             raise ValueError(f"invalid result columns: {list(columns)!r}")
         body = cypher.replace("%", "%%")  # psycopg placeholders: a literal % must be doubled
-        typed = ", ".join(f"{c} agtype" for c in columns)
+        # Quoted: result columns such as "table" or "column" are reserved words in SQL.
+        typed = ", ".join(f'"{c}" agtype' for c in columns)
         return f"SELECT * FROM cypher('{self.graph}', $$ {body} $$, %s) AS ({typed})"  # noqa: S608
 
     def query(

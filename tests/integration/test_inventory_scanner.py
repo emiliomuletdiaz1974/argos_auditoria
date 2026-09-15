@@ -1,7 +1,6 @@
 """ARG-022 · the discovery scanner runs read-only probes and records every run (F03-02)."""
 
 import asyncio
-import json
 import uuid
 from typing import Any
 
@@ -12,7 +11,7 @@ from argos_common.secret_stores import VaultSecretStore
 from argos_events import Bus
 from argos_inventory.discovery.scanner import scan_system
 
-from .sources import VAULT, catalog_system, connector_token
+from .sources import VAULT, connector_token, register_catalog_system
 
 pytestmark = pytest.mark.integration
 
@@ -31,27 +30,12 @@ class RecordingBus:
         return len(self.events)
 
 
-def _register(dsn: str, name: str, connector: str | None = None) -> str:
-    system = catalog_system(name)
-    connection = {
-        "secret": f"connectors/{system['id']}",
-        "connector": connector or system["connector"],
-        "config": system.get("config", {}),
-    }
-    with psycopg.connect(dsn) as conn:
-        conn.execute(
-            "INSERT INTO argos.systems (id, name, kind, connection) VALUES (%s, %s, %s, %s::jsonb)",
-            (system["id"], system["name"], system["kind"], json.dumps(connection)),
-        )
-    return str(system["id"])
-
-
 def _store() -> VaultSecretStore:
     return VaultSecretStore(VAULT, connector_token())
 
 
 def test_scans_postgres_tables_and_grants(migrated_db: str) -> None:
-    system_id = _register(migrated_db, "dev-source-postgres")
+    system_id = register_catalog_system(migrated_db, "dev-source-postgres")
     bus = RecordingBus()
     summary = asyncio.run(scan_system(migrated_db, _store(), bus, system_id))
     assert summary.status == "completed" and summary.failed_probes == 0, summary
@@ -103,7 +87,7 @@ def test_scans_postgres_tables_and_grants(migrated_db: str) -> None:
     ],
 )
 def test_scans_every_other_source_kind(migrated_db: str, name: str, event_type: str) -> None:
-    system_id = _register(migrated_db, name)
+    system_id = register_catalog_system(migrated_db, name)
     bus = RecordingBus()
     summary = asyncio.run(scan_system(migrated_db, _store(), bus, system_id))
     assert summary.status == "completed", summary
@@ -111,7 +95,7 @@ def test_scans_every_other_source_kind(migrated_db: str, name: str, event_type: 
 
 
 def test_second_run_links_the_previous_completed_run(migrated_db: str) -> None:
-    system_id = _register(migrated_db, "dev-api-keycloak")
+    system_id = register_catalog_system(migrated_db, "dev-api-keycloak")
     store = _store()
     first = asyncio.run(scan_system(migrated_db, store, RecordingBus(), system_id))
     second = asyncio.run(scan_system(migrated_db, store, RecordingBus(), system_id))
@@ -123,7 +107,7 @@ def test_second_run_links_the_previous_completed_run(migrated_db: str) -> None:
 
 
 def test_a_failing_discovery_marks_the_run_failed_without_raising(migrated_db: str) -> None:
-    system_id = _register(migrated_db, "dev-api-keycloak", connector="os:system")
+    system_id = register_catalog_system(migrated_db, "dev-api-keycloak", connector="os:system")
     bus = RecordingBus()
     summary = asyncio.run(scan_system(migrated_db, _store(), bus, system_id))
     assert (summary.status, summary.error, summary.events) == ("failed", "ValueError", 0)
@@ -137,7 +121,7 @@ def test_a_failing_discovery_marks_the_run_failed_without_raising(migrated_db: s
 
 
 def test_scan_completed_reaches_the_discovery_stream(migrated_db: str) -> None:
-    system_id = _register(migrated_db, "dev-api-keycloak")
+    system_id = register_catalog_system(migrated_db, "dev-api-keycloak")
 
     async def scan_and_listen() -> dict[str, Any]:
         bus = Bus("inventory-scanner-test", NATS)

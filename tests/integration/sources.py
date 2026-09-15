@@ -52,3 +52,19 @@ def open_source_connector[C: Connector](name: str, cls: type[C], dsn: str, **bud
     connector = cls(system["id"], system.get("config", {}), context)
     connector.open()
     return connector
+
+
+def register_catalog_system(dsn: str, name: str, connector: str | None = None) -> str:
+    """Insert the catalog system into argos.systems the way register_dev_sources.py does."""
+    system = catalog_system(name)
+    connection = {
+        "secret": f"connectors/{system['id']}",
+        "connector": connector or system["connector"],
+        "config": system.get("config", {}),
+    }
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "INSERT INTO argos.systems (id, name, kind, connection) VALUES (%s, %s, %s, %s::jsonb)",
+            (system["id"], system["name"], system["kind"], json.dumps(connection)),
+        )
+    return str(system["id"])

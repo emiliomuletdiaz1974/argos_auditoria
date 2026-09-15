@@ -69,7 +69,10 @@ def test_statement_builder_guards_the_dollar_quote_and_columns() -> None:
     store = GraphStore("postgresql://unused@127.0.0.1:1/unused")
     sql = store.statement("MATCH (t:Table) WHERE t.name =~ '.*50%' RETURN t.key", ["key"])
     assert sql.startswith("SELECT * FROM cypher('inventory', $$ MATCH")
-    assert "50%%" in sql and sql.endswith("AS (key agtype)")
+    assert "50%%" in sql and sql.endswith('AS ("key" agtype)')
+    assert store.statement("RETURN 1", ["table", "column"]).endswith(
+        'AS ("table" agtype, "column" agtype)'
+    )
     with pytest.raises(ValueError, match=r"\$\$"):
         store.statement("RETURN 1 $$) AS (v agtype); DROP TABLE argos.systems; --", ["v"])
     with pytest.raises(ValueError, match="columns"):
