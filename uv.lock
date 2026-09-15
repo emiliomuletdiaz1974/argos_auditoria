@@ -12,6 +12,7 @@ members = [
     "argos-challenge-engine",
     "argos-common",
     "argos-connector-files",
+    "argos-connector-rest",
     "argos-connector-sdk",
     "argos-connector-sql",
     "argos-events",
@@ -121,6 +122,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "argos-connector-rest"
+version = "0.1.0a0"
+source = { editable = "connectors/rest" }
+dependencies = [
+    { name = "argos-connector-sdk" },
+    { name = "httpx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-connector-sdk", editable = "connectors/sdk" },
+    { name = "httpx", specifier = ">=0.28" },
+]
+
+[[package]]
 name = "argos-connector-sdk"
 version = "0.1.0a0"
 source = { editable = "connectors/sdk" }
@@ -199,6 +215,7 @@ dependencies = [
     { name = "argos-challenge-engine" },
     { name = "argos-common" },
     { name = "argos-connector-files" },
+    { name = "argos-connector-rest" },
     { name = "argos-connector-sdk" },
     { name = "argos-connector-sql" },
     { name = "argos-events" },
@@ -228,6 +245,7 @@ requires-dist = [
     { name = "argos-challenge-engine", editable = "services/challenge-engine" },
     { name = "argos-common", editable = "libs/common" },
     { name = "argos-connector-files", editable = "connectors/files" },
+    { name = "argos-connector-rest", editable = "connectors/rest" },
     { name = "argos-connector-sdk", editable = "connectors/sdk" },
     { name = "argos-connector-sql", editable = "connectors/sql" },
     { name = "argos-events", editable = "libs/events" },
