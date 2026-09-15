@@ -3,10 +3,28 @@ name = "argos-inventory"
 version = "0.1.0-alpha"
 description = "ARGOS inventory and knowledge graph on PostgreSQL + Apache AGE (ARG-021..030)"
 requires-python = ">=3.12"
-dependencies = ["argos-common"]
+dependencies = [
+    "argos-common",
+    "argos-events",
+    "argos-connector-sdk",
+    "argos-connector-sql",
+    "argos-connector-files",
+    "argos-connector-rest",
+    "argos-connector-ldap",
+    "argos-connector-fhir",
+    "argos-connector-dicom",
+]
 
 [tool.uv.sources]
 argos-common = { workspace = true }
+argos-events = { workspace = true }
+argos-connector-sdk = { workspace = true }
+argos-connector-sql = { workspace = true }
+argos-connector-files = { workspace = true }
+argos-connector-rest = { workspace = true }
+argos-connector-ldap = { workspace = true }
+argos-connector-fhir = { workspace = true }
+argos-connector-dicom = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

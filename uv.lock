@@ -259,10 +259,28 @@ version = "0.1.0a0"
 source = { editable = "services/inventory" }
 dependencies = [
     { name = "argos-common" },
+    { name = "argos-connector-dicom" },
+    { name = "argos-connector-fhir" },
+    { name = "argos-connector-files" },
+    { name = "argos-connector-ldap" },
+    { name = "argos-connector-rest" },
+    { name = "argos-connector-sdk" },
+    { name = "argos-connector-sql" },
+    { name = "argos-events" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "argos-common", editable = "libs/common" }]
+requires-dist = [
+    { name = "argos-common", editable = "libs/common" },
+    { name = "argos-connector-dicom", editable = "connectors/dicom" },
+    { name = "argos-connector-fhir", editable = "connectors/fhir" },
+    { name = "argos-connector-files", editable = "connectors/files" },
+    { name = "argos-connector-ldap", editable = "connectors/ldap" },
+    { name = "argos-connector-rest", editable = "connectors/rest" },
+    { name = "argos-connector-sdk", editable = "connectors/sdk" },
+    { name = "argos-connector-sql", editable = "connectors/sql" },
+    { name = "argos-events", editable = "libs/events" },
+]
 
 [[package]]
 name = "argos-platform"

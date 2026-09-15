@@ -5,7 +5,7 @@ from functools import lru_cache
 from pathlib import PurePosixPath, PureWindowsPath
 from typing import Self
 
-from pydantic import Field, ValidationError, model_validator
+from pydantic import Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .errors import ConfigurationError
@@ -52,6 +52,8 @@ class ArgosConfig(BaseSettings):
     LOG_LEVEL: LogLevel = LogLevel.INFO
     LOG_FORMAT_JSON: bool = True
     LLM_LOCAL_ENDPOINT: str | None = "http://127.0.0.1:8000/v1"
+    VAULT_ADDR: str = "http://127.0.0.1:8200"
+    VAULT_TOKEN: SecretStr | None = None  # services that open connectors: svc-connector-sdk policy
 
     @model_validator(mode="after")
     def _production_rules(self) -> Self:

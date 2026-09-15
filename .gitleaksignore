@@ -1,2 +1,11 @@
 # False positive: the attribute name "self._key" held the Vault transit key name, not a secret.
 4b4c056cee1718d6fd5e393554f72a4844c90e7e:libs/common/argos_common/release.py:generic-api-key:72
+# False positive: natural keys of the root categories, sha256("K\x1f" + name)[:40], not secrets.
+eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:55
+eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:61
+eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:64
+eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:67
+eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:70
+eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:73
+eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:76
+eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:79
