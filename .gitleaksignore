@@ -1,0 +1,2 @@
+# False positive: the attribute name "self._key" held the Vault transit key name, not a secret.
+4b4c056cee1718d6fd5e393554f72a4844c90e7e:libs/common/argos_common/release.py:generic-api-key:72

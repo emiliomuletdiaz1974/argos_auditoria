@@ -54,12 +54,12 @@ class VaultTransitSigner:
         self, url: str, token: str, key: str = "argos-release", mount: str = "transit"
     ) -> None:
         self._client = hvac.Client(url=url, token=token)
-        self._key = key
+        self._key_name = key
         self._mount = mount
 
     def sign(self, data: bytes) -> bytes:
         response = self._client.secrets.transit.sign_data(  # type: ignore[no-untyped-call]
-            name=self._key,
+            name=self._key_name,
             hash_input=base64.b64encode(data).decode("ascii"),
             mount_point=self._mount,
         )
@@ -69,7 +69,7 @@ class VaultTransitSigner:
     def public_key(self) -> bytes:
         transit = self._client.secrets.transit
         response = transit.read_key(  # type: ignore[no-untyped-call]
-            name=self._key, mount_point=self._mount
+            name=self._key_name, mount_point=self._mount
         )
         versions = response["data"]["keys"]
         latest = versions[str(max(int(v) for v in versions))]
