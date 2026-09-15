@@ -18,6 +18,7 @@ help:
 	@echo "make manifest   build images and write dist/release-manifest.json"
 
 dev:
+	uv run python tools/prepare_dev_sources.py
 	$(COMPOSE) up -d --build --wait
 	$(COMPOSE) exec -T -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN=root vault sh -s < deploy/dev/vault/setup.sh
 	uv run --env-file .env.example python tools/migrate.py

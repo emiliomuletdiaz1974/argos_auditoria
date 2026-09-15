@@ -35,6 +35,42 @@
       "profile": "heavy",
       "credentials": {"url": "oracle+oracledb://argos_ro:dev-only-ro@127.0.0.1:51521/?service_name=FREEPDB1"},
       "config": {"statement_timeout_ms": 5000}
+    },
+    {
+      "id": "01920000-0000-7000-8000-00000000b001",
+      "name": "dev-files-local",
+      "kind": "files",
+      "connector": "argos_files.connector:FilesConnector",
+      "profile": "sources",
+      "credentials": {"note": "local mount, no credentials"},
+      "config": {"protocol": "local", "mount": "deploy/dev/sources/files/clinical"}
+    },
+    {
+      "id": "01920000-0000-7000-8000-00000000b002",
+      "name": "dev-files-smb",
+      "kind": "files",
+      "connector": "argos_files.connector:FilesConnector",
+      "profile": "sources",
+      "credentials": {"server": "127.0.0.1", "port": "1445", "share": "clinical", "username": "argos_ro", "password": "dev-only-smb"},
+      "config": {"protocol": "smb"}
+    },
+    {
+      "id": "01920000-0000-7000-8000-00000000b003",
+      "name": "dev-files-s3",
+      "kind": "files",
+      "connector": "argos_files.connector:FilesConnector",
+      "profile": "sources",
+      "credentials": {"endpoint_url": "http://127.0.0.1:7070", "access_key": "dev-only-access", "secret_key": "dev-only-secret-key", "bucket": "clinical-archive", "region": "us-east-1"},
+      "config": {"protocol": "s3"}
+    },
+    {
+      "id": "01920000-0000-7000-8000-00000000c001",
+      "name": "dev-directory-ldap",
+      "kind": "directory",
+      "connector": "argos_ldap.connector:LdapConnector",
+      "profile": "sources",
+      "credentials": {"host": "127.0.0.1", "port": "1636", "bind_dn": "cn=argos_ro,dc=hosp,dc=local", "password": "dev-only-ldap"},
+      "config": {"base_dn": "dc=hosp,dc=local", "ca_file": "deploy/dev/sources/certs/ca.crt", "user_filter": "(objectClass=inetOrgPerson)", "group_filter": "(objectClass=groupOfNames)"}
     }
   ]
 }

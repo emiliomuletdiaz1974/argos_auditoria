@@ -30,6 +30,9 @@ def test_postgres_has_age_and_pgvector() -> None:
         ("example", 8001),
         ("source-postgres", 55433),
         ("source-mariadb", 53306),
+        ("source-smb", 1445),
+        ("source-s3", 7070),
+        ("source-ldap", 1636),
     ],
 )
 def test_service_is_listening(service: str, port: int) -> None:

@@ -32,6 +32,9 @@ dev = [
     "pymysql>=1.2",
     "pymssql>=2.4",
     "oracledb>=3",
+    "smbprotocol>=1.17",
+    "boto3>=1.43",
+    "ldap3>=2.9.1",
 ]
 
 [tool.pytest.ini_options]
@@ -58,3 +61,7 @@ known-first-party = ["argos_auth", "argos_challenges", "argos_common", "argos_co
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["smbclient.*", "smbprotocol.*", "boto3.*", "botocore.*", "ldap3.*"]
+ignore_missing_imports = true
