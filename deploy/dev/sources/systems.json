@@ -7,7 +7,7 @@
       "connector": "argos_sql.postgres:PostgresConnector",
       "profile": "sources",
       "credentials": {"url": "postgresql+psycopg://argos_ro@127.0.0.1:55433/clinic"},
-      "config": {"statement_timeout_ms": 5000}
+      "config": {"statement_timeout_ms": 5000, "host_aliases": ["source-postgres"]}
     },
     {
       "id": "01920000-0000-7000-8000-00000000a002",
@@ -16,7 +16,7 @@
       "connector": "argos_sql.generic:SqlConnector",
       "profile": "sources",
       "credentials": {"url": "mysql+pymysql://argos_ro:@127.0.0.1:53306/billing"},
-      "config": {"statement_timeout_ms": 5000}
+      "config": {"statement_timeout_ms": 5000, "host_aliases": ["source-mariadb"]}
     },
     {
       "id": "01920000-0000-7000-8000-00000000a003",

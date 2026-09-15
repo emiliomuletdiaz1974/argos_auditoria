@@ -42,6 +42,8 @@ dev = [
     "ldap3>=2.9.1",
     "pydicom>=3.0.2",
     "pynetdicom>=3.0.4",
+    "pyyaml>=6.0",
+    "types-PyYAML>=6.0",
 ]
 
 [tool.pytest.ini_options]

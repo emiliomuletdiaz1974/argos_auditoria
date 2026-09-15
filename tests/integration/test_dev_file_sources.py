@@ -38,7 +38,7 @@ def test_generated_trees_are_deterministic() -> None:
     prepare = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(prepare)
     files = SOURCES / "files" / "clinical"
-    assert len(prepare.tree_manifest(files)) == 120
+    assert len(prepare.tree_manifest(files)) == 121
     assert len(prepare.tree_manifest(SOURCES / "s3" / "clinical-archive")) == 60
 
 

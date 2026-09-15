@@ -30,6 +30,7 @@ PAYLOADS: dict[str, bytes] = {
     "dcm": b"\x00" * 128 + b"DICMsynthetic",
     "txt": b"synthetic note without signature\n",
 }
+MODEL_PAYLOAD = b"\x08\x07\x12\x07synthetic-onnx"
 DEPARTMENTS = ("radiology", "cardiology", "admin")
 
 
@@ -49,6 +50,8 @@ def build_file_tree(root: Path, count: int = 120) -> None:
         year = 2012 + i % 14
         name = f"SYN{i % 40:08d}_{'report' if i % 2 else 'scan'}.{ext}"
         _write(root / department / str(year) / name, PAYLOADS[ext] + str(i).encode(), i % 15)
+    # A model file for the AI discovery detector (F03-00): only its extension is a signal.
+    _write(root / "admin" / "models" / "readmission_v3.onnx", MODEL_PAYLOAD, 1)
 
 
 def build_bucket(root: Path, count: int = 60) -> None:

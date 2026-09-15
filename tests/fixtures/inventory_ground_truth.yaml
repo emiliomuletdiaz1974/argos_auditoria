@@ -1,0 +1,93 @@
+# Ground truth of the Phase 3 inventory, maintained by hand (F03-00).
+# What a full scan of the `sources` profile of make dev must put in the graph, and what a second
+# scan after `provoked_changes` must report. Every value refers to synthetic data.
+version: 1
+
+systems:
+  dev-source-postgres:
+    kind: rdbms
+    tables:
+      clinic.appointments: [id, patient_id, starts_at, department]
+      clinic.consents: [patient_id, purpose, granted, updated_at]
+      clinic.patient_documents: [patient_id, dni_number, iban, diagnosis_code, email]
+      clinic.patients: [id, national_id, full_name, birth_date, created_at]
+      clinic.readmission_risk: [patient_id, risk_score, predicted_at]
+    identities: [argos_ro, clinic_admin]
+  dev-source-mariadb:
+    kind: rdbms
+    tables:
+      billing.invoices: [id, patient_ref, amount_cents, issued_at, status]
+      billing.patient_mirror: [id, dni_number, iban, diagnosis_code, email]
+  dev-files-local:
+    kind: files
+    file_area: {total: 121, extensions: [dcm, docx, jpg, onnx, pdf, png, txt]}
+  dev-files-smb:
+    kind: files
+    file_area: {total: 121, extensions: [dcm, docx, jpg, onnx, pdf, png, txt]}
+  dev-files-s3:
+    kind: files
+    file_area: {total: 60, extensions: [dcm, docx, jpg, pdf, png, txt]}
+  dev-directory-ldap:
+    kind: directory
+    directory: {min_users: 300, groups: 3}
+  dev-api-keycloak:
+    kind: api
+    routes:
+      - /realms/{realm}
+      - /realms/{realm}/.well-known/openid-configuration
+      - /realms/{realm}/protocol/openid-connect/certs
+  dev-clinical-fhir:
+    kind: clinical
+    fhir_resources: [Condition, Consent, DocumentReference, Observation, Patient]
+  dev-clinical-dicom:
+    kind: clinical
+    dicom: {min_studies: 40, modalities: [CT, MR, US]}
+
+classifications:
+  - {system: dev-source-postgres, column: clinic.patients.national_id, category: official_identifier, method: dict}
+  - {system: dev-source-postgres, column: clinic.patients.full_name, category: personal_data, method: dict}
+  - {system: dev-source-postgres, column: clinic.patients.birth_date, category: personal_data, method: dict}
+  - {system: dev-source-postgres, column: clinic.patient_documents.dni_number, category: official_identifier, method: "validator:dni"}
+  - {system: dev-source-postgres, column: clinic.patient_documents.iban, category: financial_data, method: "validator:iban_es"}
+  - {system: dev-source-postgres, column: clinic.patient_documents.diagnosis_code, category: special_category.health, method: dict}
+  - {system: dev-source-postgres, column: clinic.patient_documents.email, category: contact_data, method: dict}
+  - {system: dev-source-mariadb, column: billing.patient_mirror.dni_number, category: official_identifier, method: "validator:dni"}
+  - {system: dev-source-mariadb, column: billing.patient_mirror.iban, category: financial_data, method: "validator:iban_es"}
+  - {system: dev-source-mariadb, column: billing.patient_mirror.diagnosis_code, category: special_category.health, method: dict}
+  - {system: dev-source-mariadb, column: billing.patient_mirror.email, category: contact_data, method: dict}
+
+unclassified:
+  - {system: dev-source-postgres, column: clinic.appointments.department}
+  - {system: dev-source-postgres, column: clinic.consents.purpose}
+  - {system: dev-source-mariadb, column: billing.invoices.amount_cents}
+  - {system: dev-source-mariadb, column: billing.invoices.status}
+
+flows:
+  - {source: dev-source-postgres, target: dev-source-mariadb, method: engine_catalog, undirected: false, min_confidence: 0.9}
+  - {source: dev-source-postgres, target: dev-source-mariadb, method: structural, undirected: true, max_confidence: 0.6}
+
+ai_candidates:
+  - {system: dev-source-postgres, signal_kind: score_column, detail_contains: readmission_risk}
+  - {system: dev-files-local, signal_kind: model_file, detail_contains: onnx}
+  - {system: dev-files-smb, signal_kind: model_file, detail_contains: onnx}
+
+provoked_changes:
+  dev-source-postgres:
+    owner_dsn: postgresql://owner@127.0.0.1:55433/clinic
+    sql:
+      - CREATE TABLE clinic.referrals (id bigint PRIMARY KEY, patient_id bigint NOT NULL, referred_at timestamptz NOT NULL)
+      - GRANT SELECT ON clinic.referrals TO argos_ro
+      - DROP TABLE clinic.readmission_risk
+      - INSERT INTO clinic.appointments SELECT g, 1 + (g % 5000), timestamptz '2016-01-01' + make_interval(hours => g * 3), 'radiology' FROM generate_series(20001, 70000) AS g
+      - ANALYZE clinic.appointments
+
+expected_deltas:
+  - {system: dev-source-postgres, kind: appeared, label: Table, qualified_name: clinic.referrals}
+  - {system: dev-source-postgres, kind: appeared, label: Column, qualified_name: clinic.referrals.id}
+  - {system: dev-source-postgres, kind: appeared, label: Column, qualified_name: clinic.referrals.patient_id}
+  - {system: dev-source-postgres, kind: appeared, label: Column, qualified_name: clinic.referrals.referred_at}
+  - {system: dev-source-postgres, kind: disappeared, label: Table, qualified_name: clinic.readmission_risk}
+  - {system: dev-source-postgres, kind: disappeared, label: Column, qualified_name: clinic.readmission_risk.patient_id}
+  - {system: dev-source-postgres, kind: disappeared, label: Column, qualified_name: clinic.readmission_risk.risk_score}
+  - {system: dev-source-postgres, kind: disappeared, label: Column, qualified_name: clinic.readmission_risk.predicted_at}
+  - {system: dev-source-postgres, kind: anomalous_growth, label: Table, qualified_name: clinic.appointments}
