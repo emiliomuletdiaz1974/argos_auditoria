@@ -10,6 +10,10 @@
 #   temporal-db  postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
 #   vault        hashicorp/vault@sha256:74a4ab138ab5d64725e89cd9a9c73f7040c7fe49e98b71697b275ca9a69919df
 #   postgres     built locally from ./postgres (base apache/age:release_PG16_1.5.0 + postgresql-16-pgvector)
+#   source-postgres  postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685 (postgres:16-alpine)
+#   source-mariadb   mariadb@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1 (mariadb:11.4)
+#   source-mssql     mcr.microsoft.com/mssql/server:2022-latest (heavy profile; pin the digest after the first pull)
+#   source-oracle    gvenzl/oracle-free:23-slim (heavy profile; pin the digest after the first pull)
 name: argos-dev
 
 services:
