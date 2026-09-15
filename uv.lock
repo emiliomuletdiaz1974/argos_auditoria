@@ -11,6 +11,7 @@ members = [
     "argos-auth",
     "argos-challenge-engine",
     "argos-common",
+    "argos-connector-dicom",
     "argos-connector-files",
     "argos-connector-ldap",
     "argos-connector-rest",
@@ -103,6 +104,23 @@ requires-dist = [
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.10" },
     { name = "pydantic-settings", specifier = ">=2.7" },
+]
+
+[[package]]
+name = "argos-connector-dicom"
+version = "0.1.0a0"
+source = { editable = "connectors/dicom" }
+dependencies = [
+    { name = "argos-connector-sdk" },
+    { name = "pydicom" },
+    { name = "pynetdicom" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-connector-sdk", editable = "connectors/sdk" },
+    { name = "pydicom", specifier = ">=3.0.2" },
+    { name = "pynetdicom", specifier = ">=3.0.4" },
 ]
 
 [[package]]
@@ -230,6 +248,7 @@ dependencies = [
     { name = "argos-auth" },
     { name = "argos-challenge-engine" },
     { name = "argos-common" },
+    { name = "argos-connector-dicom" },
     { name = "argos-connector-files" },
     { name = "argos-connector-ldap" },
     { name = "argos-connector-rest" },
@@ -263,6 +282,7 @@ requires-dist = [
     { name = "argos-auth", editable = "libs/auth" },
     { name = "argos-challenge-engine", editable = "services/challenge-engine" },
     { name = "argos-common", editable = "libs/common" },
+    { name = "argos-connector-dicom", editable = "connectors/dicom" },
     { name = "argos-connector-files", editable = "connectors/files" },
     { name = "argos-connector-ldap", editable = "connectors/ldap" },
     { name = "argos-connector-rest", editable = "connectors/rest" },
