@@ -68,6 +68,7 @@ def _production(monkeypatch: pytest.MonkeyPatch, **extra: str) -> None:
     monkeypatch.setenv("ARGOS_ENVIRONMENT", "production")
     monkeypatch.setenv("ARGOS_DATABASE_URL", "postgresql://svc_api@db.argos.internal:5432/argos")
     monkeypatch.setenv("ARGOS_WORM_STORAGE_PATH", "/srv/argos/worm")
+    monkeypatch.setenv("ARGOS_OIDC_ISSUER", "https://id.argos.internal/realms/argos")
     for key, value in extra.items():
         monkeypatch.setenv(key, value)
 
@@ -87,6 +88,19 @@ def test_production_requires_absolute_worm_path(monkeypatch: pytest.MonkeyPatch)
     _production(monkeypatch, ARGOS_WORM_STORAGE_PATH="./data/worm")
     with pytest.raises(ConfigurationError):
         load_config()
+
+
+def test_production_requires_https_issuer(monkeypatch: pytest.MonkeyPatch) -> None:
+    _production(monkeypatch, ARGOS_OIDC_ISSUER="http://id.argos.internal/realms/argos")
+    with pytest.raises(ConfigurationError):
+        load_config()
+
+
+def test_development_oidc_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ARGOS_DATABASE_URL", DSN)
+    cfg = load_config()
+    assert cfg.OIDC_ISSUER == "http://127.0.0.1:8180/realms/argos"
+    assert cfg.OIDC_AUDIENCE == "argos-api"
 
 
 def test_production_requires_json_logs(monkeypatch: pytest.MonkeyPatch) -> None:

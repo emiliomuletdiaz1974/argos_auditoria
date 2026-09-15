@@ -62,7 +62,8 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
-    command: ["start-dev", "--health-enabled=true"]
+    command: ["start-dev", "--health-enabled=true", "--import-realm"]
+    volumes: ["./keycloak:/opt/keycloak/data/import:ro"]
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin

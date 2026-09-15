@@ -46,6 +46,8 @@ class ArgosConfig(BaseSettings):
     DATABASE_URL: str = Field(min_length=1)
     NATS_URL: str = "nats://127.0.0.1:4222"
     TEMPORAL_ADDRESS: str = "127.0.0.1:7233"
+    OIDC_ISSUER: str = "http://127.0.0.1:8180/realms/argos"
+    OIDC_AUDIENCE: str = "argos-api"
     WORM_STORAGE_PATH: str = "./data/worm"
     LOG_LEVEL: LogLevel = LogLevel.INFO
     LOG_FORMAT_JSON: bool = True
@@ -62,6 +64,8 @@ class ArgosConfig(BaseSettings):
             raise ValueError("WORM_STORAGE_PATH must be absolute in production")
         if not self.LOG_FORMAT_JSON:
             raise ValueError("LOG_FORMAT_JSON must be true in production")
+        if not self.OIDC_ISSUER.startswith("https://"):
+            raise ValueError("OIDC_ISSUER must use https in production")
         return self
 
 

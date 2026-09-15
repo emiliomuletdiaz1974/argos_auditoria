@@ -37,4 +37,4 @@ check: lint typecheck secrets
 	uv run pytest
 
 cover:
-	uv run pytest --cov=argos_common --cov=argos_events --cov-report=term-missing --cov-fail-under=80
+	uv run pytest --cov=argos_common --cov=argos_events --cov=argos_auth --cov-report=term-missing --cov-fail-under=80
