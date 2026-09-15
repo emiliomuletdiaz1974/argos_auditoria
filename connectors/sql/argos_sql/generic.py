@@ -2,7 +2,7 @@
 
 import copy
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import Decimal
@@ -27,6 +27,7 @@ from sqlalchemy.sql import Select
 
 from argos_connector.base import Connector
 from argos_connector.probes import ProbeSpec
+from argos_connector.validators import acceptance_rates, resolve_validators
 
 SQLGLOT_DIALECTS = {
     "postgresql": "postgres",
@@ -166,6 +167,7 @@ class SqlConnector(Connector):
         if spec.kind == "count":
             return self._compiled(spec, self._count_statement(spec))
         if spec.kind == "sample":
+            self._sample_validators(spec)  # unknown validators are refused before journaling
             return self._compiled(spec, self._sample_statement(spec))
         if spec.kind == "check_config":
             name = spec.params.get("check")
@@ -210,6 +212,11 @@ class SqlConnector(Connector):
         rendered_limit = literal(limit, type_=Integer, literal_execute=True)
         return select(*[source.c[c] for c in columns]).select_from(source).limit(rendered_limit)
 
+    def _sample_validators(self, spec: ProbeSpec) -> dict[str, Callable[[object], bool]]:
+        names = [str(name) for name in spec.params.get("validators", [])]
+        pattern = self.config.get("mrn_pattern")
+        return resolve_validators(names, str(pattern) if pattern else None)
+
     # ---------- probes ----------
     def _rows(self, spec: ProbeSpec) -> list[Row[Any]]:
         if spec.statement is None:
@@ -245,7 +252,18 @@ class SqlConnector(Connector):
         rows = self._rows(spec)
         hasher = self.context.hasher
         digests = [[hasher.digest(value) for value in row] for row in rows]  # never clear values
-        data = {"columns": list(spec.params["columns"]), "n": len(rows), "cell_digests": digests}
+        columns = list(spec.params["columns"])
+        data: dict[str, Any] = {"columns": columns, "n": len(rows), "cell_digests": digests}
+        validators = self._sample_validators(spec)
+        if validators:  # validated in memory: only acceptance rates leave the connector
+            rates: dict[str, dict[str, float]] = {}
+            validated: dict[str, int] = {}
+            for index, column_name in enumerate(columns):
+                rates[column_name], validated[column_name] = acceptance_rates(
+                    (row[index] for row in rows), validators
+                )
+            data["validator_rates"] = rates
+            data["validated"] = validated
         return data, len(rows)
 
     def _do_check_config(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
