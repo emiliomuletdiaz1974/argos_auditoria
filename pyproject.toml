@@ -3,18 +3,19 @@ name = "argos-platform"
 version = "0.1.0-alpha"
 description = "Sovereign regulatory compliance verification platform (GDPR, EHDS, AI Act, ENS)"
 requires-python = ">=3.12"
-dependencies = ["argos-auth", "argos-challenge-engine", "argos-common", "argos-connector-sdk", "argos-connector-sql", "argos-events", "argos-example"]
+dependencies = ["argos-auth", "argos-challenge-engine", "argos-common", "argos-connector-files", "argos-connector-sdk", "argos-connector-sql", "argos-events", "argos-example"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["connectors/sdk", "connectors/sql", "libs/auth", "libs/common", "libs/events", "services/challenge-engine", "services/example"]
+members = ["connectors/files", "connectors/sdk", "connectors/sql", "libs/auth", "libs/common", "libs/events", "services/challenge-engine", "services/example"]
 
 [tool.uv.sources]
 argos-auth = { workspace = true }
 argos-challenge-engine = { workspace = true }
 argos-common = { workspace = true }
+argos-connector-files = { workspace = true }
 argos-connector-sdk = { workspace = true }
 argos-connector-sql = { workspace = true }
 argos-events = { workspace = true }
@@ -52,7 +53,7 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["argos_auth", "argos_challenges", "argos_common", "argos_connector", "argos_events", "argos_example", "argos_sql"]
+known-first-party = ["argos_auth", "argos_challenges", "argos_common", "argos_connector", "argos_events", "argos_example", "argos_files", "argos_sql"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106"]
