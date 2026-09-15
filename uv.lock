@@ -107,12 +107,14 @@ version = "0.1.0a0"
 source = { editable = "connectors/sdk" }
 dependencies = [
     { name = "argos-common" },
+    { name = "argos-events" },
     { name = "sqlglot" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "argos-common", editable = "libs/common" },
+    { name = "argos-events", editable = "libs/events" },
     { name = "sqlglot", specifier = ">=30.18,<31" },
 ]
 

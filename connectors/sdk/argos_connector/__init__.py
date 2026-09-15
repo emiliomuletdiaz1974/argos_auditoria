@@ -1,6 +1,7 @@
 """ARGOS connector SDK (ARG-011..013)."""
 
 from .base import Connector
+from .budget import LoadBudget
 from .context import ConnectorContext, ProbeBudget, ProbeJournal
 from .credentials import load_credentials
 from .errors import BudgetExceededError, CircuitOpenError
@@ -13,6 +14,7 @@ __all__ = [
     "PROBE_KINDS",
     "SAFE_HTTP_METHODS",
     "BudgetExceededError",
+    "LoadBudget",
     "CircuitOpenError",
     "Connector",
     "ConnectorContext",

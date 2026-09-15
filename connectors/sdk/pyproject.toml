@@ -3,10 +3,11 @@ name = "argos-connector-sdk"
 version = "0.1.0-alpha"
 description = "ARGOS connector SDK: read-only contract, query journal and load budget (ARG-011..013)"
 requires-python = ">=3.12"
-dependencies = ["argos-common", "sqlglot>=30.18,<31"]
+dependencies = ["argos-common", "argos-events", "sqlglot>=30.18,<31"]
 
 [tool.uv.sources]
 argos-common = { workspace = true }
+argos-events = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
