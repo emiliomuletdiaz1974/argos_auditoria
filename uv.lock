@@ -12,6 +12,7 @@ members = [
     "argos-challenge-engine",
     "argos-common",
     "argos-connector-dicom",
+    "argos-connector-fhir",
     "argos-connector-files",
     "argos-connector-ldap",
     "argos-connector-rest",
@@ -122,6 +123,17 @@ requires-dist = [
     { name = "pydicom", specifier = ">=3.0.2" },
     { name = "pynetdicom", specifier = ">=3.0.4" },
 ]
+
+[[package]]
+name = "argos-connector-fhir"
+version = "0.1.0a0"
+source = { editable = "connectors/fhir" }
+dependencies = [
+    { name = "argos-connector-rest" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "argos-connector-rest", editable = "connectors/rest" }]
 
 [[package]]
 name = "argos-connector-files"
@@ -249,6 +261,7 @@ dependencies = [
     { name = "argos-challenge-engine" },
     { name = "argos-common" },
     { name = "argos-connector-dicom" },
+    { name = "argos-connector-fhir" },
     { name = "argos-connector-files" },
     { name = "argos-connector-ldap" },
     { name = "argos-connector-rest" },
@@ -283,6 +296,7 @@ requires-dist = [
     { name = "argos-challenge-engine", editable = "services/challenge-engine" },
     { name = "argos-common", editable = "libs/common" },
     { name = "argos-connector-dicom", editable = "connectors/dicom" },
+    { name = "argos-connector-fhir", editable = "connectors/fhir" },
     { name = "argos-connector-files", editable = "connectors/files" },
     { name = "argos-connector-ldap", editable = "connectors/ldap" },
     { name = "argos-connector-rest", editable = "connectors/rest" },
