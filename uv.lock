@@ -20,6 +20,7 @@ members = [
     "argos-connector-sql",
     "argos-events",
     "argos-example",
+    "argos-inventory",
     "argos-platform",
 ]
 
@@ -253,6 +254,17 @@ requires-dist = [
 ]
 
 [[package]]
+name = "argos-inventory"
+version = "0.1.0a0"
+source = { editable = "services/inventory" }
+dependencies = [
+    { name = "argos-common" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "argos-common", editable = "libs/common" }]
+
+[[package]]
 name = "argos-platform"
 version = "0.1.0a0"
 source = { virtual = "." }
@@ -269,6 +281,7 @@ dependencies = [
     { name = "argos-connector-sql" },
     { name = "argos-events" },
     { name = "argos-example" },
+    { name = "argos-inventory" },
 ]
 
 [package.dev-dependencies]
@@ -306,6 +319,7 @@ requires-dist = [
     { name = "argos-connector-sql", editable = "connectors/sql" },
     { name = "argos-events", editable = "libs/events" },
     { name = "argos-example", editable = "services/example" },
+    { name = "argos-inventory", editable = "services/inventory" },
 ]
 
 [package.metadata.requires-dev]

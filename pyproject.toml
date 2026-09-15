@@ -3,13 +3,13 @@ name = "argos-platform"
 version = "0.1.0-alpha"
 description = "Sovereign regulatory compliance verification platform (GDPR, EHDS, AI Act, ENS)"
 requires-python = ">=3.12"
-dependencies = ["argos-auth", "argos-challenge-engine", "argos-common", "argos-connector-dicom", "argos-connector-fhir", "argos-connector-files", "argos-connector-ldap", "argos-connector-rest", "argos-connector-sdk", "argos-connector-sql", "argos-events", "argos-example"]
+dependencies = ["argos-auth", "argos-challenge-engine", "argos-common", "argos-connector-dicom", "argos-connector-fhir", "argos-connector-files", "argos-connector-ldap", "argos-connector-rest", "argos-connector-sdk", "argos-connector-sql", "argos-events", "argos-example", "argos-inventory"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["connectors/dicom", "connectors/fhir", "connectors/files", "connectors/ldap", "connectors/rest", "connectors/sdk", "connectors/sql", "libs/auth", "libs/common", "libs/events", "services/challenge-engine", "services/example"]
+members = ["connectors/dicom", "connectors/fhir", "connectors/files", "connectors/ldap", "connectors/rest", "connectors/sdk", "connectors/sql", "libs/auth", "libs/common", "libs/events", "services/challenge-engine", "services/example", "services/inventory"]
 
 [tool.uv.sources]
 argos-auth = { workspace = true }
@@ -24,6 +24,7 @@ argos-connector-sdk = { workspace = true }
 argos-connector-sql = { workspace = true }
 argos-events = { workspace = true }
 argos-example = { workspace = true }
+argos-inventory = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -47,7 +48,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["libs", "connectors", "tests"]
+testpaths = ["libs", "connectors", "services", "tests"]
 addopts = "-q --strict-markers"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
@@ -61,7 +62,7 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["argos_auth", "argos_challenges", "argos_common", "argos_connector", "argos_dicom", "argos_events", "argos_example", "argos_fhir", "argos_files", "argos_ldap", "argos_rest", "argos_sql"]
+known-first-party = ["argos_auth", "argos_challenges", "argos_common", "argos_connector", "argos_dicom", "argos_events", "argos_example", "argos_fhir", "argos_files", "argos_inventory", "argos_ldap", "argos_rest", "argos_sql"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106"]

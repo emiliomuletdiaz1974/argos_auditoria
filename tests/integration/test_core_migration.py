@@ -9,7 +9,7 @@ import psycopg
 import pytest
 
 from argos_common.errors import IntegrityError
-from argos_common.migrations import apply_migrations
+from argos_common.migrations import apply_migrations, list_migrations
 
 from .conftest import MIGRATIONS_DIR
 
@@ -18,13 +18,15 @@ pytestmark = pytest.mark.integration
 VECTORS: dict[str, Any] = json.loads(
     (Path(__file__).parents[1] / "vectors" / "journal_v1.json").read_text(encoding="utf-8")
 )
+EXPECTED_VERSIONS = [version for version, _ in list_migrations(MIGRATIONS_DIR)]
 
 
 def test_applies_once_and_is_idempotent(empty_db: str) -> None:
-    assert apply_migrations(empty_db, MIGRATIONS_DIR) == [1, 2]
+    assert apply_migrations(empty_db, MIGRATIONS_DIR) == EXPECTED_VERSIONS
     assert apply_migrations(empty_db, MIGRATIONS_DIR) == []
     with psycopg.connect(empty_db) as c:
-        assert c.execute("SELECT count(*) FROM argos.schema_version").fetchone() == (2,)
+        count = c.execute("SELECT count(*) FROM argos.schema_version").fetchone()
+        assert count == (len(EXPECTED_VERSIONS),)
         row = c.execute(
             "SELECT seq, actor, action, payload FROM argos.audit_journal ORDER BY seq"
         ).fetchone()
@@ -90,7 +92,7 @@ def test_service_role_can_only_write_through_journal_append(empty_db: str) -> No
     with psycopg.connect(empty_db) as c:
         c.execute("SET ROLE svc_test")
         seq = c.execute("SELECT argos.journal_append('system:svc', 'test.ok', '{}')").fetchone()
-        assert seq == (3,)
+        assert seq == (len(EXPECTED_VERSIONS) + 1,)
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             c.execute(
                 "INSERT INTO argos.audit_journal VALUES "
