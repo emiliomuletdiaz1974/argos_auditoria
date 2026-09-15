@@ -25,7 +25,7 @@ lint:
 	uv run ruff format --check .
 
 typecheck:
-	uv run mypy libs
+	uv run mypy libs services
 
 secrets:
 	gitleaks detect --no-banner --redact
@@ -37,4 +37,4 @@ check: lint typecheck secrets
 	uv run pytest
 
 cover:
-	uv run pytest --cov=argos_common --cov-report=term-missing --cov-fail-under=80
+	uv run pytest --cov=argos_common --cov=argos_events --cov-report=term-missing --cov-fail-under=80
