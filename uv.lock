@@ -125,6 +125,8 @@ version = "0.1.0a0"
 source = { editable = "connectors/sql" }
 dependencies = [
     { name = "argos-connector-sdk" },
+    { name = "oracledb" },
+    { name = "pymssql" },
     { name = "pymysql" },
     { name = "sqlalchemy" },
 ]
@@ -132,6 +134,8 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "argos-connector-sdk", editable = "connectors/sdk" },
+    { name = "oracledb", specifier = ">=3" },
+    { name = "pymssql", specifier = ">=2.4" },
     { name = "pymysql", specifier = ">=1.2" },
     { name = "sqlalchemy", specifier = ">=2.0.53,<2.1" },
 ]
