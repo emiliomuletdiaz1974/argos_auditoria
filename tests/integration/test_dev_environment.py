@@ -28,6 +28,8 @@ def test_postgres_has_age_and_pgvector() -> None:
         ("loki", 3100),
         ("grafana", 3000),
         ("example", 8001),
+        ("source-postgres", 55433),
+        ("source-mariadb", 53306),
     ],
 )
 def test_service_is_listening(service: str, port: int) -> None:

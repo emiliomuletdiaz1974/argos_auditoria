@@ -1,0 +1,8 @@
+title = "argos"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Trivial development-only credentials of the simulated sources, marked dev-only on purpose"
+regexes = ['''(?i)dev-only''']

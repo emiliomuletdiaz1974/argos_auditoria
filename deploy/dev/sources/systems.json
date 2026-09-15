@@ -1,0 +1,40 @@
+{
+  "systems": [
+    {
+      "id": "01920000-0000-7000-8000-00000000a001",
+      "name": "dev-source-postgres",
+      "kind": "rdbms",
+      "connector": "argos_sql.postgres:PostgresConnector",
+      "profile": "sources",
+      "credentials": {"url": "postgresql+psycopg://argos_ro@127.0.0.1:55433/clinic"},
+      "config": {"statement_timeout_ms": 5000}
+    },
+    {
+      "id": "01920000-0000-7000-8000-00000000a002",
+      "name": "dev-source-mariadb",
+      "kind": "rdbms",
+      "connector": "argos_sql.generic:SqlConnector",
+      "profile": "sources",
+      "credentials": {"url": "mysql+pymysql://argos_ro:@127.0.0.1:53306/billing"},
+      "config": {"statement_timeout_ms": 5000}
+    },
+    {
+      "id": "01920000-0000-7000-8000-00000000a003",
+      "name": "dev-source-mssql",
+      "kind": "rdbms",
+      "connector": "argos_sql.mssql:MssqlConnector",
+      "profile": "heavy",
+      "credentials": {"url": "mssql+pymssql://argos_ro:Dev-Only-Ro-2026@127.0.0.1:51433/erp"},
+      "config": {"statement_timeout_ms": 5000, "isolation_level": "SNAPSHOT"}
+    },
+    {
+      "id": "01920000-0000-7000-8000-00000000a004",
+      "name": "dev-source-oracle",
+      "kind": "rdbms",
+      "connector": "argos_sql.oracle:OracleConnector",
+      "profile": "heavy",
+      "credentials": {"url": "oracle+oracledb://argos_ro:dev-only-ro@127.0.0.1:51521/?service_name=FREEPDB1"},
+      "config": {"statement_timeout_ms": 5000}
+    }
+  ]
+}

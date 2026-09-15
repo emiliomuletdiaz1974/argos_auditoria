@@ -113,6 +113,65 @@ services:
       interval: 5s
       retries: 30
 
+  # ── Simulated customer sources (F02-04). Profile "sources" is part of make dev. ──
+  source-postgres:
+    image: postgres:16-alpine
+    profiles: ["sources"]
+    command: ["postgres", "-c", "log_statement=all", "-c", "log_line_prefix=%m [%p] user=%u db=%d "]
+    environment:
+      POSTGRES_USER: owner
+      POSTGRES_DB: clinic
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes: ["./sources/postgres:/docker-entrypoint-initdb.d:ro"]
+    ports: ["127.0.0.1:55433:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U owner -d clinic"]
+      interval: 5s
+      retries: 30
+
+  source-mariadb:
+    image: mariadb:11.4
+    profiles: ["sources"]
+    command: ["--general-log=1", "--log-output=TABLE"]
+    environment:
+      MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"
+      MARIADB_DATABASE: billing
+    volumes: ["./sources/mariadb:/docker-entrypoint-initdb.d:ro"]
+    ports: ["127.0.0.1:53306:3306"]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      retries: 30
+
+  # ── Heavy sources: make dev-heavy only (several GB of images and RAM). ──
+  source-mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    profiles: ["heavy"]
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: "Dev-Only-Sa-2026"
+    volumes: ["./sources/mssql:/init:ro"]
+    ports: ["127.0.0.1:51433:1433"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      retries: 30
+
+  source-oracle:
+    image: gvenzl/oracle-free:23-slim
+    profiles: ["heavy"]
+    environment:
+      ORACLE_PASSWORD: "dev-only-oracle"
+      APP_USER: his_owner
+      APP_USER_PASSWORD: "dev-only-his"
+    volumes: ["./sources/oracle:/container-entrypoint-initdb.d:ro"]
+    ports: ["127.0.0.1:51521:1521"]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      retries: 60
+
 volumes:
   pg-data:
   nats-data:

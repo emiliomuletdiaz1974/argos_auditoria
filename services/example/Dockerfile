@@ -5,6 +5,7 @@ COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 COPY libs ./libs
+COPY connectors ./connectors
 COPY services ./services
 RUN uv sync --locked --no-dev --package argos-example
 USER 10001

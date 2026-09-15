@@ -28,6 +28,9 @@ dev = [
     "ruff>=0.8",
     "mypy>=1.13",
     "types-hvac>=2.4.0.20260731",
+    "pymysql>=1.2",
+    "pymssql>=2.4",
+    "oracledb>=3",
 ]
 
 [tool.pytest.ini_options]
@@ -35,7 +38,7 @@ testpaths = ["libs", "connectors", "tests"]
 addopts = "-q --strict-markers"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-markers = ["integration: requires the make dev environment"]
+markers = ["integration: requires the make dev environment", "heavy: requires make dev-heavy (SQL Server and Oracle)"]
 
 [tool.ruff]
 line-length = 100
