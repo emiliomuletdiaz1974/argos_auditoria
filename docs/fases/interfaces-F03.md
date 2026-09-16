@@ -41,12 +41,13 @@ Detalle y sondas en `docs/desviaciones/ARG-021-023.md`.
 
 Coste propio de ARGOS (ingesta, deltas, clasificación por diccionario, instantánea y selector) sobre metadatos sintéticos, sin la latencia de las fuentes. Portátil Intel i7-1355U, 12 hilos, 15,7 GB, Windows 11, Python 3.12.10.
 
-| Perfil | Tablas | Nodos | Tablas/s (base · reexploración) | Extrapolado a 50 000 tablas (completo · reexploración) | Selector p50 · p95 | Instantánea |
-|---|---|---|---|---|---|---|
-| `smoke` (cierre de fase) | 100 | 745 | 10,8 · 19,3 | 1,3 h · 0,7 h | 1,8 ms · 5,0 ms | 708 nodos en 0,14 s |
-| `s` (F03-14) | 5 000 | 55 659 | 1,5 · 0,9 | 9,5 h · **14,9 h** | 59 ms · 60 ms | 55 100 nodos en 4,8 s |
+| Perfil | Tablas | Nodos | Tablas/s (base · reexploración) | Extrapolado a 50 000 tablas (completo · reexploración) | Selector p50 |
+|---|---|---|---|---|---|
+| `smoke` (F03-15) | 100 | 745 | 30,6 · 26,1 | — | 1,9 ms |
+| `xs` (F03-15) | 1 000 | 11 269 | 18,1 · 19,6 | — | 13,7 ms |
+| `s` antes (F03-14) | 5 000 | 55 659 | 1,5 · 0,9 | 9,5 h · 14,9 h | 59 ms |
+| `s` después (F03-15) | 5 000 | 55 659 | 11,9 · 13,6 | **1,17 h · 1,02 h** | 62 ms |
 
-- **Objetivos de §3.10:** el inventario completo (< 24 h) y el selector (< 2 s) se cumplen en la extrapolación; **la reexploración diaria (< 2 h) no**.
-- **Coste dominante:** la ingesta en el grafo (4 697 s de los 5 380 s de la reexploración con `s`).
-- **El coste por tabla no es lineal:** con más tablas cae el rendimiento, así que la extrapolación subestima la talla M.
-- **Perfil `m`:** no se ejecutó en esta máquina; la cifra real se mide en el hardware del appliance. Ambos puntos figuran en pendientes.
+- **Objetivos de §3.10** en esta máquina y por extrapolación: inventario completo (< 24 h), reexploración diaria (< 2 h) y selector (< 2 s) se cumplen tras F03-15. La cifra real se mide en el hardware del appliance (pendiente).
+- **Cómo escala tras F03-15:** ya no quedan consultas con coste lineal en el tamaño del grafo. El coste por tabla crece de forma sublineal (unos 30, 51 y 74 ms de ingesta con 745, 11 269 y 55 659 nodos), y hay un coste fijo de unos 11 ms por evento al abrir conexión con `LOAD 'age'`.
+- **Perfil `m`:** no se ha ejecutado en esta máquina.
