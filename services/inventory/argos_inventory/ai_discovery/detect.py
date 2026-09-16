@@ -41,8 +41,8 @@ _FILE_AREAS = (
     "MATCH (s:System)-[:CONTAINS]->(f:FileArea) WHERE f.by_ext IS NOT NULL RETURN s.id, f.by_ext"
 )
 _COLUMNS = (
-    "MATCH (s:System)-[:CONTAINS*2]->(t:Table)-[:CONTAINS]->(c:Column) "
-    "WHERE coalesce(c.missing, false) = false RETURN s.id, t.name, c.name"
+    "MATCH (t:Table)-[:CONTAINS]->(c:Column) "
+    "WHERE coalesce(c.missing, false) = false RETURN t.system_id, t.name, c.name"
 )
 _REGISTER = (
     "MATCH (s:System)-[:USES_MODEL]->(a:AISystem) "

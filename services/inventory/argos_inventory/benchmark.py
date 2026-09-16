@@ -76,6 +76,7 @@ class BenchmarkProfile:
 
 PROFILES = {
     "smoke": BenchmarkProfile("smoke", 4, 25, 6, 0.04),
+    "xs": BenchmarkProfile("xs", 20, 50, 10, 0.02),
     "s": BenchmarkProfile("s", 50, 100, 10, 0.01),
     "m": BenchmarkProfile("m", 200, 250, 12, 0.01),
 }

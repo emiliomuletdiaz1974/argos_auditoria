@@ -21,20 +21,34 @@ GROWTH_MIN_ROWS = 1000
 DELTA_KINDS = ("appeared", "disappeared", "anomalous_growth")
 JOURNAL_ACTOR = "system:inventory"
 
-_APPEARED = (
-    "MATCH (s:System {id: $sid})-[:CONTAINS*1..3]->(n) WHERE n.first_seen >= $t0 "
-    "RETURN DISTINCT labels(n)[0], n.key, n.name, n.qualified_name"
-)
-_DISAPPEARED = (
-    "MATCH (s:System {id: $sid})-[:CONTAINS*1..3]->(n) "
-    "WHERE n.last_seen < $t0 AND coalesce(n.missing, false) = false "
-    "RETURN DISTINCT labels(n)[0], n.key, n.name, n.qualified_name"
-)
-_MARK_MISSING = (
-    "UNWIND $keys AS k MATCH (n {key: k}) SET n.missing = true SET n.missing_since = $t0"
-)
-_GROWTH = (
-    "MATCH (s:System {id: $sid})-[:CONTAINS*2]->(t:Table) "
+# Labels a System reaches through CONTAINS; every one stores system_id. The deltas ask per label
+# with an indexed property map instead of walking CONTAINS*1..3 from the System, which AGE 1.5.0
+# plans as a scan of the whole graph (1.5 s per system with 10 200 columns; task F03-15).
+CONTAINED_LABELS = ("Schema", "Table", "Column", "FileArea")
+APPEARED_BY_LABEL = {
+    label: (
+        f"MATCH (n:{label} {{system_id: $sid}}) WHERE n.first_seen >= $t0 "
+        "RETURN n.key, n.name, n.qualified_name"
+    )
+    for label in CONTAINED_LABELS
+}
+DISAPPEARED_BY_LABEL = {
+    label: (
+        f"MATCH (n:{label} {{system_id: $sid}}) "
+        "WHERE n.last_seen < $t0 AND coalesce(n.missing, false) = false "
+        "RETURN n.key, n.name, n.qualified_name"
+    )
+    for label in CONTAINED_LABELS
+}
+MARK_MISSING_BY_LABEL = {
+    label: (
+        f"UNWIND $keys AS k MATCH (n:{label} {{key: k}}) "
+        "SET n.missing = true SET n.missing_since = $t0"
+    )
+    for label in CONTAINED_LABELS
+}
+GROWTH = (
+    "MATCH (t:Table {system_id: $sid}) "
     "WHERE t.last_seen >= $t0 AND t.est_rows_prev IS NOT NULL "
     "RETURN t.key, t.name, t.qualified_name, t.est_rows_prev, t.est_rows"
 )
@@ -43,7 +57,7 @@ _INSERT_DELTA = (
     "VALUES (%s, %s, %s, %s, %s::jsonb) "
     "ON CONFLICT (run_id, kind, node_key) DO NOTHING"
 )
-_COLUMNS = ("label", "key", "name", "qualified_name")
+_COLUMNS = ("key", "name", "qualified_name")
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,9 +109,9 @@ def _record(dsn: str, report: DeltaReport) -> None:
         journal.append(JOURNAL_ACTOR, "inventory.delta", payload, conn=conn)
 
 
-def _node_delta(kind: str, row: dict[str, Any]) -> Delta:
+def _node_delta(kind: str, label: str, row: dict[str, Any]) -> Delta:
     detail = {"name": row["name"], "qualified_name": row["qualified_name"] or row["name"]}
-    return Delta(kind, str(row["label"]), str(row["key"]), detail)
+    return Delta(kind, label, str(row["key"]), detail)
 
 
 def compute_deltas(
@@ -116,13 +130,23 @@ def compute_deltas(
         return DeltaReport(run_id, system_id, True, empty, ())
     t0 = iso_utc(started_at)
     params = {"sid": system_id, "t0": t0}
-    deltas = [_node_delta("appeared", r) for r in store.query(_APPEARED, params, _COLUMNS)]
-    gone = [_node_delta("disappeared", r) for r in store.query(_DISAPPEARED, params, _COLUMNS)]
-    if gone:
-        store.execute(_MARK_MISSING, {"keys": [d.node_key for d in gone], "t0": t0})
-    deltas += gone
+    deltas: list[Delta] = []
+    gone: list[Delta] = []
     growth_columns = ("key", "name", "qualified_name", "before", "now")
-    for row in store.query(_GROWTH, params, growth_columns):
+    with store.connection() as conn:
+        for label in CONTAINED_LABELS:
+            appeared = store.query(APPEARED_BY_LABEL[label], params, _COLUMNS, conn)
+            deltas += [_node_delta("appeared", label, r) for r in appeared]
+        for label in CONTAINED_LABELS:
+            missing = store.query(DISAPPEARED_BY_LABEL[label], params, _COLUMNS, conn)
+            found = [_node_delta("disappeared", label, r) for r in missing]
+            if found:
+                keys = {"keys": [d.node_key for d in found], "t0": t0}
+                store.execute(MARK_MISSING_BY_LABEL[label], keys, conn)
+            gone += found
+        growth = store.query(GROWTH, params, growth_columns, conn)
+    deltas += gone
+    for row in growth:
         if is_anomalous_growth(row["before"], int(row["now"]), growth_factor):
             detail = {
                 "name": row["name"],

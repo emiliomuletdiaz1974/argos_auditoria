@@ -30,11 +30,11 @@ SYSTEM_PROMPT = (
 )
 
 _ALL_COLUMNS = (
-    "MATCH (:System {id: $sid})-[:CONTAINS*2]->(t:Table)-[:CONTAINS]->(c:Column) "
+    "MATCH (t:Table {system_id: $sid})-[:CONTAINS]->(c:Column) "
     "WHERE coalesce(c.missing, false) = false RETURN c.key, c.name, c.type, t.qualified_name"
 )
 _UNCLASSIFIED_KEYS = (
-    "MATCH (:System {id: $sid})-[:CONTAINS*2]->(t:Table)-[:CONTAINS]->(c:Column) "
+    "MATCH (t:Table {system_id: $sid})-[:CONTAINS]->(c:Column) "
     "WHERE NOT exists((c)-[:CLASSIFIED_AS]->()) AND coalesce(c.missing, false) = false "
     "RETURN c.key"
 )

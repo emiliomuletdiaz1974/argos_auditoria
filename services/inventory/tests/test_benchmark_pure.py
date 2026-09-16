@@ -14,6 +14,12 @@ from argos_inventory.benchmark import (
 )
 
 
+def test_xs_profile_is_small_enough_to_iterate() -> None:
+    xs = PROFILES["xs"]
+    assert (xs.systems, xs.tables) == (20, 1000)
+    assert xs.changed_per_system == 1
+
+
 def test_m_profile_matches_the_capacity_target() -> None:
     m = PROFILES["m"]
     assert (m.systems, m.tables) == (200, 50_000)

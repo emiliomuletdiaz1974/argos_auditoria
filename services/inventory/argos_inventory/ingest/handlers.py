@@ -49,18 +49,26 @@ TABLE_UPSERT = (
     "SET t.journal_seq = $journal_seq "
     "MERGE (h)-[:CONTAINS]->(t)"
 )
-COLUMN_NODES_UPSERT = (
-    "UNWIND $columns AS c "
-    "MERGE (col:Column {key: c.key}) SET col.name = c.name "
-    "SET col.qualified_name = c.qualified_name "
-    "SET col.type = c.type SET col.nullable = c.nullable SET col.system_id = $system_id "
-    "SET col.first_seen = coalesce(col.first_seen, $at) SET col.last_seen = $at "
-    "SET col.missing = false SET col.missing_since = null "
-    "SET col.probe_id = $probe_id SET col.journal_seq = $journal_seq"
+# Columns are split into known and new ones in the same transaction (task F03-15). MERGE with ten
+# SET clauses per row rewrote each column ten times and merged its edge by scanning every CONTAINS
+# edge; one SET += per known column and a CREATE for new columns and their edges stay flat as the
+# graph grows. A known column always has its CONTAINS edge: both are created together.
+COLUMN_KEYS_KNOWN = "UNWIND $keys AS k MATCH (col:Column {key: k}) RETURN col.key"
+COLUMN_NODES_UPDATE = (
+    "UNWIND $columns AS c MATCH (col:Column {key: c.key}) "
+    "SET col += {name: c.name, qualified_name: c.qualified_name, type: c.type, "
+    "nullable: c.nullable, system_id: $system_id, last_seen: $at, missing: false, "
+    "missing_since: null, probe_id: $probe_id, journal_seq: $journal_seq}"
 )
-COLUMN_EDGES_MERGE = (
+COLUMN_NODES_CREATE = (
+    "UNWIND $columns AS c "
+    "CREATE (:Column {key: c.key, name: c.name, qualified_name: c.qualified_name, type: c.type, "
+    "nullable: c.nullable, system_id: $system_id, first_seen: $at, last_seen: $at, "
+    "missing: false, probe_id: $probe_id, journal_seq: $journal_seq})"
+)
+COLUMN_EDGES_CREATE = (
     "UNWIND $columns AS c MATCH (t:Table {key: $table_key}) MATCH (col:Column {key: c.key}) "
-    "MERGE (t)-[:CONTAINS]->(col)"
+    "CREATE (t)-[:CONTAINS]->(col)"
 )
 IDENTITIES_UPSERT = (
     "UNWIND $grants AS g "
@@ -127,8 +135,18 @@ def ingest_table_found(
         store.execute(SYSTEM_UPSERT, system_parameters(meta, params["at"]), conn)
         store.execute(SCHEMA_UPSERT, params, conn)
         store.execute(TABLE_UPSERT, params, conn)
-        store.execute(COLUMN_NODES_UPSERT, params, conn)
-        store.execute(COLUMN_EDGES_MERGE, params, conn)
+        columns = params["columns"]
+        keys = [c["key"] for c in columns]
+        known = {
+            str(r["key"]) for r in store.query(COLUMN_KEYS_KNOWN, {"keys": keys}, ("key",), conn)
+        }
+        seen = [c for c in columns if c["key"] in known]
+        fresh = [c for c in columns if c["key"] not in known]
+        if seen:
+            store.execute(COLUMN_NODES_UPDATE, {**params, "columns": seen}, conn)
+        if fresh:
+            store.execute(COLUMN_NODES_CREATE, {**params, "columns": fresh}, conn)
+            store.execute(COLUMN_EDGES_CREATE, {**params, "columns": fresh}, conn)
 
 
 def ingest_access_found(

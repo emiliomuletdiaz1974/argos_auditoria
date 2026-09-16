@@ -4,7 +4,7 @@ Generada a partir del código de `main` al cerrar la Fase 3 (tag `fase-03`). Los
 
 | Componente | Interfaz | Consumidores |
 |---|---|---|
-| ARG-021 | `argos_inventory.graph.model`: vocabulario cerrado `NODE_LABELS` (10: `System`, `Schema`, `Table`, `Column`, `FileArea`, `Identity`, `Group`, `AISystem`, `Treatment`, `Category`), `EDGE_LABELS` (8: `CONTAINS`, `CAN_ACCESS`, `MEMBER_OF`, `FLOWS_TO`, `CLASSIFIED_AS`, `DECLARED_IN`, `USES_MODEL`, `OBSERVED`), `CATEGORIES` (9), `natural_key` y claves por etiqueta (`system_key`, `column_key`, `ai_system_key`…); `argos_inventory.graph.store.GraphStore(dsn)` con `query`, `execute` y `connection`; grafo AGE `inventory` (migración 0003) | Fases 4–8: todo el producto habla este vocabulario |
+| ARG-021 | `argos_inventory.graph.model`: vocabulario cerrado `NODE_LABELS` (10: `System`, `Schema`, `Table`, `Column`, `FileArea`, `Identity`, `Group`, `AISystem`, `Treatment`, `Category`), `EDGE_LABELS` (8: `CONTAINS`, `CAN_ACCESS`, `MEMBER_OF`, `FLOWS_TO`, `CLASSIFIED_AS`, `DECLARED_IN`, `USES_MODEL`, `OBSERVED`), `CATEGORIES` (9), `natural_key` y claves por etiqueta (`system_key`, `column_key`, `ai_system_key`…); `argos_inventory.graph.store.GraphStore(dsn)` con `query`, `execute` y `connection`; grafo AGE `inventory` (migraciones 0003 y 0008, índices GIN sobre `properties`) | Fases 4–8: todo el producto habla este vocabulario |
 | ARG-022 | `argos_inventory.discovery`: `scan_system`, eventos `discovery.*.v1` con procedencia (`source_connector`, `probe_id`, `journal_seq`, `observed_at`); `argos.scan_runs` (0004); `argos_inventory.ingest.handlers.Ingestor` y el servicio `argos_inventory.ingest.main` (consumidor duradero `inventory-ingest`) | ARG-044 (sondas de campaña), consola |
 | ARG-023 | `argos.inventory_deltas` y `compute_deltas` (evento `discovery.delta_ready.v1`, asiento `inventory.delta`); instantáneas inmutables `argos.inventory_snapshots` e `inventory_snapshot_nodes` (0005) con `take_snapshot`, `verify_snapshot` y `snapshot_nodes` | ARG-043 (retos sobre lo nuevo), Fase 5 (campañas contra instantánea), Fase 7 |
 | ARG-024 | `argos_connector.validators` (DNI, NIE, NUSS, IBAN y `resolve_validators`); `classify_new_columns` con aristas `CLASSIFIED_AS {method, confidence, rate, validated}` | Fase 4 (aplicabilidad por categoría) |
@@ -26,12 +26,16 @@ Detalle y sondas en `docs/desviaciones/ARG-021-023.md`.
 - **Sin `reduce`:** los agregados (por ejemplo, la confianza de los candidatos de IA) se calculan en Python.
 - **Parámetros:** el tercer argumento de `cypher()` tiene que ser un parámetro de psycopg (`%s`), nunca un literal.
 - **Índices por clave natural:** `agtype_access_operator(VARIADIC ARRAY[properties, '"key"'::agtype])`, también como `UNIQUE`.
-- **Lotes `UNWIND`:** una cláusula `SET` por propiedad, y nodos y aristas en sentencias separadas (si no, `vertex assigned to variable … was deleted`).
+- **Lotes `UNWIND`:** nunca varias asignaciones con `coalesce` en una misma cláusula `SET` (dejó filas sin `first_seen`); una cláusula por propiedad o, mejor, un único `SET n += {mapa}` (F03-15). Nodos y aristas en sentencias separadas (si no, `vertex assigned to variable … was deleted`).
 - **Nombres de columna del resultado:** entre comillas (`"table" agtype`), por las palabras reservadas de SQL.
 - **Etiquetas:** AGE crea la tabla de cada etiqueta en la primera escritura; una vista o un índice sobre una etiqueta inexistente falla.
 - **Migraciones que unen vértices y aristas:** necesitan `LOAD 'age'` y `SET LOCAL search_path = ag_catalog, "$user", public`.
 - **`ORDER BY` (F03-12):** no admite alias del `RETURN` ni combinarse con `WITH DISTINCT`; la página se corta con `WITH DISTINCT n WITH n ORDER BY n.key LIMIT …` antes del `RETURN`, y el vecindario ordena por expresiones.
 - **Propiedades en el patrón de una arista dentro de `MERGE`** (`-[f:FLOWS_TO {method: $method}]->`) sí funcionan (F03-10).
+- **Índices que AGE usa (F03-15):** `MATCH`/`MERGE` con mapa de propiedades (`{key: $k}`) se planifica como contención sobre `properties` y **no usa** el btree sobre `agtype_access_operator(key)` de la migración 0003: recorría la etiqueta entera y dentro de `UNWIND` el coste era cuadrático. Tampoco basta `WHERE n.key = k` dentro de `UNWIND`. Un **índice GIN sobre `properties`** (migración `0008_graph_indexes.sql`) sí sirve la contención; el btree se conserva porque garantiza la clave única.
+- **Sin recorridos de longitud variable en consultas calientes:** `[:CONTAINS*1..3]` desde un `System` tardaba 1,5 s por sistema con 10 200 columnas; preguntar por etiqueta con la propiedad indexada `{system_id: $sid}` tarda milisegundos. Un test puro vigila todas las consultas del inventario.
+- **`SET n += {mapa}`** funciona en lotes `UNWIND` y escribe cada nodo una sola vez (16 ms frente a 114 ms con diez `SET` por fila), conservando las propiedades que no están en el mapa (`first_seen`).
+- **`MERGE` de arista** recorre la tabla de aristas de la etiqueta (sin usar `start_id`/`end_id`): cuando se sabe que la arista es nueva, `CREATE` en una sentencia aparte (tras crear sus nodos) es plano con el tamaño del grafo.
 
 ## Resultados del benchmark
 

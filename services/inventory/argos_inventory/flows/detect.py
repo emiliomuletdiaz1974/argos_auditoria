@@ -33,9 +33,9 @@ ProbeRunner = Callable[[str, ProbeSpec], ProbeResult]
 
 _PG_HOST = re.compile(r"(?:^|[\s,'\"{\[])host=([A-Za-z0-9._-]+)")
 _SIGNATURES = (
-    "MATCH (s:System)-[:CONTAINS*2]->(t:Table)-[:CONTAINS]->(c:Column)"
-    "-[:CLASSIFIED_AS]->(k:Category) WHERE coalesce(c.missing, false) = false "
-    "RETURN s.id, t.qualified_name, c.name, k.name"
+    "MATCH (t:Table)-[:CONTAINS]->(c:Column)-[:CLASSIFIED_AS]->(k:Category) "
+    "WHERE coalesce(c.missing, false) = false "
+    "RETURN t.system_id, t.qualified_name, c.name, k.name"
 )
 _SOURCE = "MATCH (a:System {key: $source_key}) SET a.id = $source_id"
 _TARGET_INTERNAL = "MERGE (b:System {key: $target_key}) SET b.id = $target_id"
