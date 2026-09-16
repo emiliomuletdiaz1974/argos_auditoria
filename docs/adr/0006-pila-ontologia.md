@@ -1,6 +1,6 @@
 # ADR-0006 · Pila de la ontología normativa (Fase 04)
 
-**Estado:** Propuesta · 2026-09-16 · Aaron Escobar
+**Estado:** Aceptado · 2026-09-16 · Aaron Escobar (con un cambio sobre la propuesta: capa de traducción en lugar de excepción a ADR-0005)
 
 ## Contexto
 La Fase 04 (ARG-031…040) convierte la norma en datos: un esquema OWL de tres planos, un almacén RDF versionado, formas SHACL, políticas ODRL 2.2, reglas OPA/Rego, una matriz de trazabilidad, un flujo editorial con cinco puertas de CI y una publicación firmada. El documento de fase asume varias piezas que no existen en la plataforma o que chocan con decisiones vigentes:
@@ -23,14 +23,15 @@ Sondas del 2026-09-16 en un entorno aislado con Python 3.12: rdflib 7.6.0 resuel
 - **Idioma:**
   - el vocabulario, las clases, las propiedades, los identificadores (`OBL-*`, `AC-*`, `CH-*`), los valores enumerados (`critical`, `high`, `medium`, `low`), los paquetes Rego y los selectores van **en inglés** y usan las categorías reales del grafo (`special_category.health`);
   - las **etiquetas legibles** (`rdfs:label`, mensajes SHACL) van con etiqueta de idioma, al menos `@es`;
-  - la **plantilla editorial YAML** es contenido para juristas, no código: sus **claves van en castellano** (`norma`, `articulo`, `titulo`, `vigente_desde`, `severidad`, `aplica_a`, `verificado_por`, `equivalencias`, `pendiente_verificacion`) y el generador las traduce al vocabulario en inglés. Es una excepción acotada a ADR-0005 que solo afecta a `library/ontology/editorial/*.yaml`.
+  - **sin excepciones a ADR-0005:** el esquema, los modelos y los parsers internos trabajan solo con claves y valores en inglés (`norm`, `article`, `title`, `in_force_from`, `severity`, `applies_to`, `verified_by`, `equivalences`, `verification_pending`);
+  - **capa de traducción para juristas:** un módulo aparte (`argos_ontology.editorial.translation`) traduce los campos de la plantilla que edita un jurista (`norma`, `articulo`, `titulo`, `vigente_desde`, `severidad`, `aplica_a`, `verificado_por`, `equivalencias`, `pendiente_verificacion`) a las claves internas en inglés antes de validar, y de vuelta al generar una plantilla para editar. El mapeo es una tabla cerrada y biyectiva: una clave que no está en ella es un error, nunca se ignora. El núcleo no conoce ninguna clave en castellano.
 - **Paquete:** servicio `services/ontology` con distribución `argos-ontology` y paquete `argos_ontology`; contenido editorial en `library/ontology/` y `library/policies/`.
 
 ## Consecuencias
 - Nuevas dependencias en `argos-ontology`: `rdflib`, `pyshacl`, `pyyaml` y `httpx` (las dos últimas ya están en el workspace).
 - Un contenedor más en `make dev` (OPA, unas decenas de MB de RAM).
 - En Vault de desarrollo, una clave de transit `argos-content`; el script de siembra de Vault la crea igual que `argos-release`.
-- La plantilla editorial es la única excepción a ADR-0005; el resto del contenido de `library/` sigue la regla general.
+- ADR-0005 se cumple sin excepciones: el castellano de la plantilla editorial vive solo en la capa de traducción, que tiene sus propios tests (ida y vuelta, claves desconocidas y claves duplicadas).
 - Cuando cosign llegue (ARG-086/087), la firma de contenidos podrá migrar sin cambiar el formato del bundle: el manifiesto firmado es el mismo.
 
 ## Alternativas descartadas
@@ -38,4 +39,5 @@ Sondas del 2026-09-16 en un entorno aislado con Python 3.12: rdflib 7.6.0 resuel
 - **Reglas operativas en Python o en SHACL:** Python las saca del ciclo editorial; SHACL no encaja con decisiones parametrizadas por cliente.
 - **OPA embebido vía WebAssembly:** añade una cadena de compilación de Rego a Wasm y un runtime; el servidor es la forma documentada y más fácil de depurar.
 - **cosign ya en la Fase 04:** exigiría el binario en el appliance y un registro; se hereda la firma Ed25519 que ya verifica el appliance.
-- **Plantilla editorial con claves en inglés:** cumple ADR-0005 al pie de la letra, pero rompe el requisito de producto de que un jurista la lea y la edite sin ayuda.
+- **Plantilla editorial con claves en inglés y sin traducción:** rompe el requisito de producto de que un jurista la lea y la edite sin ayuda.
+- **Excepción a ADR-0005 para las claves de la plantilla** (propuesta inicial): rechazada en la aprobación; el castellano mezclado en el núcleo del parser se sustituye por la capa de traducción.
