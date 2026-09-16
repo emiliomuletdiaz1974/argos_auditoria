@@ -13,10 +13,15 @@ dependencies = [
     "argos-connector-ldap",
     "argos-connector-fhir",
     "argos-connector-dicom",
+    "argos-auth",
+    "fastapi>=0.115",
+    "strawberry-graphql>=0.327,<0.328",
+    "uvicorn[standard]>=0.32",
 ]
 
 [tool.uv.sources]
 argos-common = { workspace = true }
+argos-auth = { workspace = true }
 argos-events = { workspace = true }
 argos-connector-sdk = { workspace = true }
 argos-connector-sql = { workspace = true }
