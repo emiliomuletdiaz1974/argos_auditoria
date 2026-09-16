@@ -47,3 +47,18 @@ def scan_and_ingest(dsn: str, name: str) -> str:
 
     asyncio.run(go())
     return system_id
+
+
+class IngestingBus(RecordingBus):
+    """Records every event and hands it straight to the ingestor, as the ingest service would."""
+
+    def __init__(self, dsn: str) -> None:
+        super().__init__()
+        self._ingestor = Ingestor(GraphStore(dsn), dsn, RecordingBus())
+
+    async def publish(
+        self, subject: str, event_type: str, data: dict[str, Any], audit: bool = False
+    ) -> int:
+        seq = await super().publish(subject, event_type, data, audit)
+        await self._ingestor.handle(data, {"type": f"eu.argos.{event_type}"})
+        return seq

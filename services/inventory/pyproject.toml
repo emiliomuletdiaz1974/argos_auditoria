@@ -17,6 +17,7 @@ dependencies = [
     "fastapi>=0.115",
     "strawberry-graphql>=0.327,<0.328",
     "uvicorn[standard]>=0.32",
+    "temporalio>=1.8",
 ]
 
 [tool.uv.sources]

@@ -270,6 +270,7 @@ dependencies = [
     { name = "argos-events" },
     { name = "fastapi" },
     { name = "strawberry-graphql" },
+    { name = "temporalio" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -287,6 +288,7 @@ requires-dist = [
     { name = "argos-events", editable = "libs/events" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "strawberry-graphql", specifier = ">=0.327,<0.328" },
+    { name = "temporalio", specifier = ">=1.8" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
