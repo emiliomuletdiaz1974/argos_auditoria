@@ -5,7 +5,7 @@ COMPOSE := docker compose -f deploy/dev/compose.yaml --profile sources
 COMPOSE_HEAVY := docker compose -f deploy/dev/compose.yaml --profile sources --profile heavy
 VERSION := $(strip $(file < VERSION))
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -16,6 +16,7 @@ help:
 	@echo "make cover      all tests with coverage threshold (needs make dev)"
 	@echo "make check-heavy tests that need make dev-heavy"
 	@echo "make manifest   build images and write dist/release-manifest.json"
+	@echo "make docs-check     technical documentation covers every module and closed phase"
 
 dev:
 	uv run python tools/prepare_dev_sources.py
@@ -59,3 +60,6 @@ build:
 
 manifest: build
 	uv run python tools/release.py build --version $(VERSION)
+
+docs-check:
+	uv run python tools/docs_pack.py --check

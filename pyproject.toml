@@ -45,6 +45,7 @@ dev = [
     "pynetdicom>=3.0.4",
     "pyyaml>=6.0",
     "types-PyYAML>=6.0",
+    "markdown-pdf>=1.13,<2",
 ]
 
 [tool.pytest.ini_options]
