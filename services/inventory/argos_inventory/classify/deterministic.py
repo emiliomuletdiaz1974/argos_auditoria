@@ -14,7 +14,9 @@ from argos_inventory.graph.store import GraphStore
 
 from .dictionary import (
     DEFAULT_VALIDATORS,
+    TABLE_CONTEXT_METHOD,
     VALIDATOR_CATEGORY,
+    match_column_in_table,
     match_column_name,
     validator_hints,
 )
@@ -136,9 +138,13 @@ def classify_new_columns(
     # Phase A: dictionary, free of charge; every edge in one batch.
     dictionary_rows = []
     for column in columns:
+        method = "dict"
         category = match_column_name(column.name)
+        if category is None:
+            category = match_column_in_table(column.name, column.table)
+            method = TABLE_CONTEXT_METHOD
         if category is not None:
-            dictionary_rows.append(_edge_row(column, category, "dict", DICTIONARY_CONFIDENCE))
+            dictionary_rows.append(_edge_row(column, category, method, DICTIONARY_CONFIDENCE))
     if dictionary_rows:
         _write_edges(store, dictionary_rows, written, at)
     dictionary = len(dictionary_rows)

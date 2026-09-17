@@ -6,6 +6,7 @@ from argos_inventory.classify.deterministic import ColumnRef, best_validation
 from argos_inventory.classify.dictionary import (
     NAME_DICTIONARY,
     VALIDATOR_CATEGORY,
+    match_column_in_table,
     match_column_name,
     name_tokens,
     validator_hints,
@@ -33,6 +34,9 @@ def test_name_tokens(name: str, expected: tuple[str, ...]) -> None:
         ("dni_number", "official_identifier"),
         ("full_name", "personal_data"),
         ("birth_date", "personal_data"),
+        ("patient_id", "personal_data"),
+        ("patient_ref", "personal_data"),
+        ("id_paciente", "personal_data"),
         ("fecha_nacimiento", "personal_data"),
         ("diagnosis_code", "special_category.health"),
         ("email", "contact_data"),
@@ -56,7 +60,7 @@ def test_dictionary_classifies_revealing_names(name: str, category: str) -> None
         "platform",
         "unified_id",
         "id",
-        "patient_ref",
+        "staff_id",
         "risk_score",
         "created_at",
         "admin",
@@ -64,6 +68,23 @@ def test_dictionary_classifies_revealing_names(name: str, category: str) -> None
 )
 def test_dictionary_does_not_match_substrings(name: str) -> None:
     assert match_column_name(name) is None
+
+
+@pytest.mark.parametrize(
+    ("name", "table", "category"),
+    [
+        ("risk_score", "clinic.readmission_risk", "special_category.health"),
+        ("probability", "icu.mortality_model", "special_category.health"),
+        ("pred", "er.triaje_urgencias", "special_category.health"),
+        ("risk_score", "bank.credit_risk", None),
+        ("created_at", "clinic.readmission_risk", None),
+        ("patient_id", "clinic.readmission_risk", "personal_data"),
+    ],
+)
+def test_score_columns_of_clinical_inference_tables_are_health_data(
+    name: str, table: str, category: str | None
+) -> None:
+    assert match_column_in_table(name, table) == category
 
 
 def test_dictionary_uses_only_known_categories() -> None:

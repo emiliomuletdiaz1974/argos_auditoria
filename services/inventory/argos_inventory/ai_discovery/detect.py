@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any, Self
 
 from argos_common.journal_pg import PostgresJournal
-from argos_inventory.classify.dictionary import name_tokens
+from argos_inventory.classify.dictionary import SCORE_TOKENS, name_tokens
 from argos_inventory.graph.model import ai_system_key, system_key
 from argos_inventory.graph.store import GraphStore
 
@@ -21,7 +21,6 @@ AI_ROUTES = re.compile(
     r"/(predict|inference|score|v1/(chat|completions)|embeddings|classify)(/|$|\?)", re.I
 )
 MODEL_EXTENSIONS = frozenset({"onnx", "pt", "pth", "safetensors", "pkl", "h5", "gguf"})
-SCORE_TOKENS = frozenset({"score", "pred", "prediction", "probability", "propensity", "propension"})
 ROUTE_CONFIDENCE = 0.5
 MODEL_FILE_CONFIDENCE = 0.4
 SCORE_COLUMN_CONFIDENCE = 0.3

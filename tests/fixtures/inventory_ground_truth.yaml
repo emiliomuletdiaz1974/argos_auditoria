@@ -55,6 +55,14 @@ classifications:
   - {system: dev-source-mariadb, column: billing.patient_mirror.iban, category: financial_data, method: "validator:iban_es"}
   - {system: dev-source-mariadb, column: billing.patient_mirror.diagnosis_code, category: special_category.health, method: dict}
   - {system: dev-source-mariadb, column: billing.patient_mirror.email, category: contact_data, method: dict}
+  # Pseudonymous references to a patient are personal data (GDPR recital 26); a score in a table of
+  # clinical inferences is health data (GDPR art. 4.15). Decision of 2026-09-17, pending legal validation.
+  - {system: dev-source-postgres, column: clinic.appointments.patient_id, category: personal_data, method: dict}
+  - {system: dev-source-postgres, column: clinic.consents.patient_id, category: personal_data, method: dict}
+  - {system: dev-source-postgres, column: clinic.patient_documents.patient_id, category: personal_data, method: dict}
+  - {system: dev-source-postgres, column: clinic.readmission_risk.patient_id, category: personal_data, method: dict}
+  - {system: dev-source-postgres, column: clinic.readmission_risk.risk_score, category: special_category.health, method: "dict:table"}
+  - {system: dev-source-mariadb, column: billing.invoices.patient_ref, category: personal_data, method: dict}
 
 unclassified:
   - {system: dev-source-postgres, column: clinic.appointments.department}

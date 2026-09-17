@@ -42,7 +42,10 @@ def test_structural_pair_shares_its_classified_signature() -> None:
 
     postgres = signature("dev-source-postgres", "clinic.patient_documents")
     mariadb = signature("dev-source-mariadb", "billing.patient_mirror")
-    assert postgres == mariadb and len(postgres) >= 4
+    # Same rule as the structural detector (ARG-027): at least 4 shared pairs and Jaccard >= 0.8.
+    # clinic.patient_documents also classifies its patient_id; billing.patient_mirror has none.
+    assert len(postgres & mariadb) >= 4
+    assert len(postgres & mariadb) / len(postgres | mariadb) >= 0.8
     assert any(category.startswith("special_category") for _, category in postgres)
 
 

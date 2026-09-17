@@ -11,8 +11,13 @@ snapshot:
 # Nodes each asset class must resolve to on the snapshot, as "<system> <qualified name>".
 asset_classes:
   AC-stored-personal-data:
+    - dev-source-mariadb billing.invoices.patient_ref
+    - dev-source-postgres clinic.appointments.patient_id
+    - dev-source-postgres clinic.consents.patient_id
+    - dev-source-postgres clinic.patient_documents.patient_id
     - dev-source-postgres clinic.patients.birth_date
     - dev-source-postgres clinic.patients.full_name
+    - dev-source-postgres clinic.readmission_risk.patient_id
   AC-stored-identifier-data:
     - dev-source-mariadb billing.patient_mirror.dni_number
     - dev-source-postgres clinic.patient_documents.dni_number
@@ -26,28 +31,23 @@ asset_classes:
   AC-stored-health-data: &health
     - dev-source-mariadb billing.patient_mirror.diagnosis_code
     - dev-source-postgres clinic.patient_documents.diagnosis_code
+    - dev-source-postgres clinic.readmission_risk.risk_score
   AC-stored-special-category-data: *health
   AC-unclassified-column:
     - dev-source-mariadb billing.invoices.amount_cents
     - dev-source-mariadb billing.invoices.id
     - dev-source-mariadb billing.invoices.issued_at
-    - dev-source-mariadb billing.invoices.patient_ref
     - dev-source-mariadb billing.invoices.status
     - dev-source-mariadb billing.patient_mirror.id
     - dev-source-postgres clinic.appointments.department
     - dev-source-postgres clinic.appointments.id
-    - dev-source-postgres clinic.appointments.patient_id
     - dev-source-postgres clinic.appointments.starts_at
     - dev-source-postgres clinic.consents.granted
-    - dev-source-postgres clinic.consents.patient_id
     - dev-source-postgres clinic.consents.purpose
     - dev-source-postgres clinic.consents.updated_at
-    - dev-source-postgres clinic.patient_documents.patient_id
     - dev-source-postgres clinic.patients.created_at
     - dev-source-postgres clinic.patients.id
-    - dev-source-postgres clinic.readmission_risk.patient_id
     - dev-source-postgres clinic.readmission_risk.predicted_at
-    - dev-source-postgres clinic.readmission_risk.risk_score
   AC-pending-ai-system:
     - dev-source-postgres table:readmission_risk
   AC-confirmed-ai-system: []

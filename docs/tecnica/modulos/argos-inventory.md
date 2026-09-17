@@ -5,7 +5,7 @@ title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
 version: 0.1.0-alpha
-commit: 79e21cb
+commit: 6f46fe4
 date: 2026-09-17
 status: current
 confidentiality: client
@@ -31,7 +31,7 @@ Construye y mantiene el **inventario vivo** de los sistemas del cliente en un gr
 | Escáner (ARG-022) | `discovery` | Traduce las sondas de los conectores en eventos `DISCOVERY` con procedencia (conector, sonda, asiento del diario, momento); registro de exploraciones |
 | Ingesta (ARG-022) | `ingest` | Consumidor duradero del stream `DISCOVERY` que escribe el grafo de forma idempotente y en lotes |
 | Versionado (ARG-023) | `versioning` | Deltas entre exploraciones (aparecido, desaparecido, crecimiento anómalo) e **instantáneas inmutables** verificables |
-| Clasificación determinista (ARG-024) | `classify` | Diccionario de nombres y validación de identificadores en origen (DNI, NIE, NUSS, IBAN, NHC) |
+| Clasificación determinista (ARG-024) | `classify` | Diccionario de nombres por palabras completas, contexto de tabla para inferencias clínicas y validación de identificadores en origen (DNI, NIE, NUSS, IBAN, NHC) |
 | Clasificación asistida (ARG-025) | `classify.assisted` | Interfaz de modelo y **cola de revisión** del DPD con decisión auditada |
 | Catálogo (ARG-026) | `catalog` | Vistas de catálogo, cobertura y frescura; importación del registro de tratamientos; informe legible del inventario |
 | Flujos (ARG-027) | `flows` | Detección de flujos entre sistemas por catálogo del motor (enlaces de base de datos) y por coincidencia estructural |
@@ -39,6 +39,15 @@ Construye y mantiene el **inventario vivo** de los sistemas del cliente en un gr
 | API (ARG-029) | `api` | API GraphQL de solo lectura con selector restringido y paginación |
 | Planificador (ARG-030) | `scheduler` | Reexploración priorizada con Temporal |
 | Capacidad | `benchmark` | Banco de pruebas reproducible de rendimiento |
+
+**Reglas del clasificador determinista** (confianza 0,6 para el diccionario y 1,0 para un validador aceptado):
+- **Diccionario (`dict`):** secuencias de palabras completas del nombre de la columna, en castellano e inglés, nunca subcadenas.
+  - Desde la Fase 04, las referencias a un paciente (`patient_id`, `patient_ref`, `paciente_id`, `id_paciente`) son `personal_data`: un identificador seudonimizado sigue siendo dato personal (RGPD, considerando 26).
+- **Contexto de tabla (`dict:table`, Fase 04):** una columna de puntuación (`score`, `pred`, `prediction`, `probability`, `propensity`) en una tabla de inferencias clínicas (`readmission`, `reingreso`, `mortality`, `mortalidad`, `sepsis`, `triage`, `triaje`) es `special_category.health`.
+  - Una inferencia sobre la salud es dato de salud (RGPD, art. 4.15).
+  - La misma puntuación en otra tabla, por ejemplo un riesgo de crédito, queda sin clasificar.
+- **Validadores en origen (`validator:<nombre>`):** ganan al diccionario cuando la tasa de aceptación alcanza 0,9.
+- Estas reglas están **pendientes de validación jurídica**.
 
 Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk` y los conectores; PostgreSQL 16 con Apache AGE 1.5.0; NATS JetStream; Temporal.
 
@@ -108,3 +117,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.1.0-alpha | 2026-09-16 | Inventario, grafo, versionado, clasificación, catálogo, flujos, IA, API GraphQL y planificador | Fase 03 (ARG-021…030) |
 | 0.1.0-alpha | 2026-09-16 | Índices GIN, consultas por etiqueta y escrituras en lote: la reexploración extrapolada pasa de 14,9 h a 1,02 h | Fase 03 (rendimiento) |
 | 0.1.0-alpha | 2026-09-17 | Selector ampliado con `unclassified` y `status` para el plano de aplicabilidad de la ontología | Fase 04 (ARG-033) |
+| 0.1.0-alpha | 2026-09-17 | Clasificador: referencias a pacientes como dato personal y puntuaciones de tablas clínicas como dato de salud (`dict:table`) | Fase 04 (ARG-024) |

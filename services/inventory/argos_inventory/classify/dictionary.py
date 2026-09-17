@@ -47,6 +47,11 @@ NAME_DICTIONARY: Mapping[str, tuple[tuple[str, ...], ...]] = {
         ("dob",),
         ("fecha", "nacimiento"),
         ("nacimiento",),
+        # A pseudonymous reference to a patient still identifies a person (GDPR recital 26).
+        ("patient", "id"),
+        ("patient", "ref"),
+        ("paciente", "id"),
+        ("id", "paciente"),
     ),
     "contact_data": (
         ("email",),
@@ -96,6 +101,20 @@ VALIDATOR_CATEGORY: Mapping[str, str] = {
     "mrn": "special_category.health",
 }
 DEFAULT_VALIDATORS = frozenset({"dni", "nie", "nuss", "iban_es"})
+# Score-like column names, shared with the AI discovery (ARG-028).
+SCORE_TOKENS = frozenset({"score", "pred", "prediction", "probability", "propensity", "propension"})
+# Tables whose scores are inferences about a patient's health (GDPR art. 4.15): the score alone is
+# not health data (a credit risk score is not), the table gives the context.
+CLINICAL_INFERENCE_TABLES: tuple[tuple[str, ...], ...] = (
+    ("readmission",),
+    ("reingreso",),
+    ("mortality",),
+    ("mortalidad",),
+    ("sepsis",),
+    ("triage",),
+    ("triaje",),
+)
+TABLE_CONTEXT_METHOD = "dict:table"
 _CAMEL = re.compile(r"([a-z0-9])([A-Z])")
 _SEPARATORS = re.compile(r"[^a-z0-9]+")
 
@@ -115,6 +134,19 @@ def match_column_name(name: str) -> str | None:
     for category, sequences in NAME_DICTIONARY.items():
         if any(_contains(tokens, sequence) for sequence in sequences):
             return category
+    return None
+
+
+def match_column_in_table(name: str, table: str) -> str | None:
+    """The dictionary category of a column, or health data for a score of a clinical inference."""
+    category = match_column_name(name)
+    if category is not None:
+        return category
+    table_tokens = name_tokens(table.rsplit(".", 1)[-1])
+    if any(token in SCORE_TOKENS for token in name_tokens(name)) and any(
+        _contains(table_tokens, sequence) for sequence in CLINICAL_INFERENCE_TABLES
+    ):
+        return "special_category.health"
     return None
 
 
