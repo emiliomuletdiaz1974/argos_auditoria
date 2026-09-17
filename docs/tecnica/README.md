@@ -11,8 +11,14 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 
 | Fase | Documento | Estado |
 |---|---|---|
+| 01 · Cimientos de la plataforma | [F01-cimientos.md](fases/F01-cimientos.md) | Cerrada (`fase-01`) |
 
 ## Módulos
 
 | Paquete | Documento | Fases |
 |---|---|---|
+| `argos-auth` | [argos-auth.md](modulos/argos-auth.md) | 01 |
+| `argos-challenge-engine` | [argos-challenge-engine.md](modulos/argos-challenge-engine.md) | 01 (base; completo en 05) |
+| `argos-common` | [argos-common.md](modulos/argos-common.md) | 01, 03 |
+| `argos-events` | [argos-events.md](modulos/argos-events.md) | 01 |
+| `argos-example` | [argos-example.md](modulos/argos-example.md) | 01 (interno) |

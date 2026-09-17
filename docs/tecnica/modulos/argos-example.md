@@ -1,0 +1,68 @@
+---
+id: MOD-argos-example
+kind: module
+title: Servicio de ejemplo (argos-example)
+module: argos-example
+phases: ["01"]
+version: 0.1.0-alpha
+commit: 1aadd28
+date: 2026-09-17
+status: current
+confidentiality: internal
+---
+
+# Servicio de ejemplo (argos-example)
+
+## 1. Propósito
+
+Servicio de referencia interno de la Fase 01 (ARG-001). Demuestra el patrón que siguen todos los servicios:
+- arranque con la configuración común;
+- salud uniforme;
+- escritura y verificación del diario de auditoría;
+- imagen de contenedor incluida en el manifiesto de release firmado.
+
+No forma parte del producto que se entrega al cliente.
+
+## 2. Alcance y límites
+
+Solo demostración y pruebas: no trata datos del cliente ni se despliega en el appliance.
+
+## 3. Arquitectura
+
+Aplicación FastAPI con ciclo de vida que abre el diario y monta las rutas de salud de `argos-common`.
+
+## 4. Interfaces
+
+| Tipo | Nombre | Descripción |
+|---|---|---|
+| HTTP | `GET /health/live`, `GET /health` | Salud uniforme (comprobación de la base de datos) |
+| HTTP | `POST /demo/entries?n=1..1000` | Escribe `n` asientos de demostración en el diario |
+| HTTP | `GET /journal/verification` | Verifica la cadena completa y devuelve anomalías con su posición |
+| Imagen | `argos-example:<versión>` | Construida con `make build` e incluida en `make manifest` |
+
+## 5. Configuración
+
+`ARGOS_DATABASE_URL`; en desarrollo escucha en `127.0.0.1:8001`.
+
+## 6. Seguridad y tratamiento de datos
+
+Solo escribe asientos sintéticos de demostración en el diario.
+
+## 7. Operación
+
+Arranca con el entorno de desarrollo y se detiene limpiamente: registra `clean shutdown` en JSON y sale con código 0.
+
+## 8. Verificación
+
+- **Test de integración:** `tests/integration/test_example_service.py`.
+- **Prueba de la Fase 1:** `tests/e2e/test_phase1_acceptance.py`. Se escriben 100 asientos a través del servicio; la corrupción en disco se detecta con su posición y, restaurada, la cadena vuelve a estar íntegra.
+
+## 9. Limitaciones conocidas y pendientes
+
+Ninguna: es un servicio de referencia.
+
+## 10. Historial
+
+| Versión | Fecha | Cambio | Tarea |
+|---|---|---|---|
+| 0.1.0-alpha | 2026-09-14 | Servicio de ejemplo con salud, diario y verificación | Fase 01 |
