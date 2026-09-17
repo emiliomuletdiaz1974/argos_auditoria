@@ -17,9 +17,6 @@ from argos_common.journal import canonicalize
 CASES_DIR = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "determinism"
 CASES = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(CASES_DIR.glob("*.json"))]
 RESULTS = {"compliant", "non_compliant", "not_demonstrated", "inconclusive"}
-PENDING = pytest.mark.xfail(
-    raises=ModuleNotFoundError, strict=True, reason="argos_challenges.evaluator arrives in F05-09"
-)
 
 
 def _ids(case: dict[str, Any]) -> str:
@@ -51,7 +48,6 @@ def test_expected_bytes_are_canonical_float_free_and_hashed(case: dict[str, Any]
     assert digest == case["expected_hash"]
 
 
-@PENDING
 @pytest.mark.parametrize("case", CASES, ids=_ids)
 def test_the_evaluator_reproduces_the_expected_bytes(case: dict[str, Any]) -> None:
     evaluator = importlib.import_module("argos_challenges.evaluator")
