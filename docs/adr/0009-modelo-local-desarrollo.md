@@ -1,8 +1,8 @@
 # ADR-0009 · Modelo local y servidor de inferencia en desarrollo
 
-- **Estado:** Propuesta
+- **Estado:** Aceptado
 - **Fecha:** 2026-09-17
-- **Decide:** el usuario (tarea F06-00)
+- **Decide:** el usuario (tarea F06-00) · **Aprobado:** 2026-09-17
 - **Contexto:** Fase 06 · IA local (ARG-051…060) · Pliego P-03 · Especificación Técnica §3.5 y §5
 
 > El plan de la Fase 06 pedía este ADR con el número 0006, que ya está ocupado por la pila de la ontología. Se numera 0009.
