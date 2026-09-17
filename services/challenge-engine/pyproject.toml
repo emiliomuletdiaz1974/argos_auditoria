@@ -9,6 +9,7 @@ dependencies = [
     "temporalio>=1.8",
     "argos-auth",
     "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
     "jsonschema>=4.23,<5",
     "pyyaml>=6.0",
 ]

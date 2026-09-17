@@ -83,6 +83,7 @@ dependencies = [
     { name = "jsonschema" },
     { name = "pyyaml" },
     { name = "temporalio" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
@@ -94,6 +95,7 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "temporalio", specifier = ">=1.8" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
 [[package]]

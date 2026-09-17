@@ -45,8 +45,10 @@ jobs:
       - name: sbom
         run: |
           mkdir -p dist/sbom
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/dist/sbom:/out" \
-            anchore/syft:v1.14.0 "argos-example:$(cat VERSION)" -o spdx-json=/out/argos-example.spdx.json
+          for image in argos-example argos-challenge-engine; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/dist/sbom:/out" \
+              anchore/syft:v1.14.0 "$image:$(cat VERSION)" -o spdx-json="/out/$image.spdx.json"
+          done
       - uses: actions/upload-artifact@v4
         with: { name: sbom, path: dist/sbom }
 

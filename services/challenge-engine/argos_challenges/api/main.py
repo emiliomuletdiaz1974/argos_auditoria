@@ -1,5 +1,7 @@
 """Run the campaign API in development: uv run python -m argos_challenges.api.main."""
 
+import os
+
 import uvicorn
 from temporalio.client import Client
 
@@ -47,7 +49,11 @@ def main() -> None:  # pragma: no cover - process entry point
         signal_campaign=signal,
         start_remediation=remediate,
     )
-    uvicorn.run(app, host=DEV_HOST, port=DEV_PORT, log_config=None)
+    # Inside a container the loopback address would hide the API from the published port;
+    # the compose service sets ARGOS_API_BIND and docker keeps the port on 127.0.0.1.
+    uvicorn.run(
+        app, host=os.environ.get("ARGOS_API_BIND", DEV_HOST), port=DEV_PORT, log_config=None
+    )
 
 
 if __name__ == "__main__":  # pragma: no cover

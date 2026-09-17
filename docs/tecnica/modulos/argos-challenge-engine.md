@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: 7e6ae1f
+commit: ed532bb
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -202,7 +202,9 @@ El cierre de un hallazgo no lo declara el cliente: lo confirma **el mismo reto q
 
 ## 5. Configuración
 
-`ARGOS_TEMPORAL_ADDRESS`, `ARGOS_DATABASE_URL`, `ARGOS_VAULT_ADDR`, `ARGOS_VAULT_TOKEN` y `ARGOS_OPA_URL` (por defecto `http://127.0.0.1:8181`), desde `argos-common`.
+`ARGOS_TEMPORAL_ADDRESS`, `ARGOS_DATABASE_URL`, `ARGOS_NATS_URL`, `ARGOS_VAULT_ADDR`, `ARGOS_VAULT_TOKEN`, `ARGOS_OPA_URL` (por defecto `http://127.0.0.1:8181`), `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, desde `argos-common`.
+
+`ARGOS_API_BIND` es propia del proceso de la API: la dirección a la que se ata uvicorn. Por defecto `127.0.0.1`; el contenedor la pone a `0.0.0.0` porque el puerto publicado ya limita el acceso al bucle local del anfitrión.
 
 Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema` 4.23 y PyYAML.
 
@@ -210,11 +212,15 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
 
 - Cada actividad que produce un resultado relevante lo anota en el diario de auditoría encadenado.
 - El workflow de humo no accede a sistemas del cliente.
+- La imagen no lleva secretos: ninguna instrucción `ENV` ni `ARG` define credenciales, y las que necesita el entorno de desarrollo las pone el compose. Corre como el usuario sin privilegios `10001`.
 
 ## 7. Operación
 
 - Temporal en desarrollo en `127.0.0.1:7233`.
-- El worker se arranca con `uv run python -m argos_challenges.worker`; aún no tiene contenedor propio en el entorno de desarrollo (ver §9).
+- Una sola imagen, `argos-challenge-engine`, con dos puntos de entrada: `python -m argos_challenges.worker` (cola `argos-campaigns`) y `python -m argos_challenges.api.main` (API en el puerto 8003).
+- `make dev` levanta los servicios `challenge-worker` y `challenge-api` de `deploy/dev/compose.yaml`; la API publica `127.0.0.1:8003` y tiene healthcheck sobre `/health`.
+- `make build` construye la imagen etiquetada con `org.argos.component=ARG-043` y `org.argos.version`; el CI genera su SBOM junto al de `argos-example`.
+- Fuera del contenedor, ambos procesos se arrancan igual con `uv run python -m …`.
 
 ## 8. Verificación
 
@@ -275,7 +281,7 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 ## 9. Limitaciones conocidas y pendientes
 
 - El motor de retos completo se construye en la Fase 05.
-- El worker no tiene contenedor en `deploy/dev/compose.yaml` (pendiente para la Fase 05).
+- El contenedor de la API valida los tokens emitidos por Keycloak en su dirección interna (`http://keycloak:8080/realms/argos`); desde el anfitrión, Keycloak responde en `127.0.0.1:8180` y los emisores no coinciden. Para ejercer la API autenticada desde el anfitrión se usa el proceso local, como hacen los tests de F05-15.
 
 ## 10. Historial
 
@@ -298,3 +304,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Actividades de sonda con minimización, ventanas, sondas internas y evaluación persistida | Fase 05 (ARG-044) |
 | 0.1.0-alpha | 2026-09-17 | Ciclo de vida de los hallazgos con deduplicación, escalado y riesgo aceptado con caducidad | Fase 05 (ARG-048) |
 | 0.1.0-alpha | 2026-09-17 | Workflow de campaña con compuertas y pausa por cortacircuitos, y sello verificable | Fase 05 (ARG-043) |
+| 0.1.0-alpha | 2026-09-17 | Contenedores del worker y de la API en el entorno de desarrollo, con SBOM en el CI | Fase 05 (F05-17) |

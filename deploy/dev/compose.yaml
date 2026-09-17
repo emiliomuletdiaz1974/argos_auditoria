@@ -129,6 +129,57 @@ services:
       interval: 5s
       retries: 30
 
+  # ── Campaign engine (F05-17): one image, the worker and the API as two entry points. ──
+  challenge-worker:
+    build: &challenge_engine_build
+      context: ../..
+      dockerfile: services/challenge-engine/Dockerfile
+    image: argos-challenge-engine:dev
+    command: ["/app/.venv/bin/python", "-m", "argos_challenges.worker"]
+    environment: &challenge_engine_env
+      ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos
+      ARGOS_TEMPORAL_ADDRESS: temporal:7233
+      ARGOS_NATS_URL: nats://nats:4222
+      ARGOS_OPA_URL: http://opa:8181
+      ARGOS_VAULT_ADDR: http://vault:8200
+      ARGOS_VAULT_TOKEN: root   # development Vault started with -dev-root-token-id=root
+      # The container validates tokens issued through the internal address; from the host,
+      # Keycloak answers on 127.0.0.1:8180 and the issuers would not match.
+      ARGOS_OIDC_ISSUER: http://keycloak:8080/realms/argos
+      ARGOS_OIDC_AUDIENCE: argos-api
+      ARGOS_LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+      vault:
+        condition: service_healthy
+      opa:
+        condition: service_started
+
+  challenge-api:
+    build: *challenge_engine_build
+    image: argos-challenge-engine:dev
+    command: ["/app/.venv/bin/python", "-m", "argos_challenges.api.main"]
+    environment:
+      <<: *challenge_engine_env
+      ARGOS_API_BIND: 0.0.0.0   # published below on 127.0.0.1 only
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+      keycloak:
+        condition: service_started
+      vault:
+        condition: service_healthy
+    ports: ["127.0.0.1:8003:8003"]
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health', timeout=2)"]
+      interval: 5s
+      retries: 30
+
   # ── Simulated customer sources (F02-04). Profile "sources" is part of make dev. ──
   source-postgres:
     image: postgres:16-alpine
