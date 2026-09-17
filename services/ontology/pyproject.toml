@@ -3,7 +3,7 @@ name = "argos-ontology"
 version = "0.1.0-alpha"
 description = "ARGOS normative ontology: three planes, editorial pipeline and applicability (ARG-031..040)"
 requires-python = ">=3.12"
-dependencies = ["argos-common", "argos-inventory", "rdflib>=7.6,<8", "pyyaml>=6.0"]
+dependencies = ["argos-common", "argos-inventory", "rdflib>=7.6,<8", "pyyaml>=6.0", "pyshacl>=0.40,<0.41"]
 
 [tool.uv.sources]
 argos-common = { workspace = true }

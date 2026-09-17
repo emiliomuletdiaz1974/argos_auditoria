@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: 20b0e0e
+commit: 62cfb3d
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -23,7 +23,7 @@ Convierte la normativa (RGPD, EHDS, AI Act) en **datos verificables**. Cada obli
 - los retos que la verifican;
 - el tipo de evidencia que producen.
 
-Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-033 (aplicabilidad), ARG-037 (trazabilidad), ARG-040 (publicación firmada) y ARG-038 (flujo editorial y cinco puertas).
+Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-033 (aplicabilidad), ARG-034 (SHACL), ARG-037 (trazabilidad), ARG-040 (publicación firmada) y ARG-038 (flujo editorial y cinco puertas).
 
 ## 2. Alcance y límites
 
@@ -144,7 +144,20 @@ Nada llega a una publicación sin pasar las cinco puertas del Plan Director. Se 
 
 Si la sintaxis falla, las demás puertas se marcan como omitidas en lugar de ejecutarse sobre un grafo roto. Cada puerta tiene en los tests un caso que pasa y al menos un error plantado que la hace fallar.
 
-Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6 y PyYAML.
+### Formas SHACL de coherencia (ARG-034)
+
+Algunas obligaciones no sondean los sistemas del cliente, sino la coherencia de lo que ARGOS sabe de ellos. La parte relevante del grafo del inventario se exporta, con un mapeo fijo, a un grafo RDF efímero, y se valida en memoria con pySHACL (sin razonador ni red). Formas en `library/ontology/shapes/inventory-coherence.ttl`:
+
+| Forma | Regla | Severidad | Mensaje para el DPD |
+|---|---|---|---|
+| `TreatmentShape` | Todo tratamiento declara base jurídica | Violación | Tratamiento sin base jurídica declarada |
+| `TreatmentShape` | Todo tratamiento declara plazo de conservación | Aviso | Tratamiento sin plazo de conservación |
+| `HealthDataSystemShape` | Todo sistema con columnas vivas de datos de salud figura en el registro de actividades | Violación | Sistema con datos de salud fuera del registro de actividades |
+| `ConfirmedAISystemShape` | Todo sistema de IA confirmado tiene una única clase de riesgo del AI Act (`prohibited`, `high`, `limited`, `minimal`) | Violación | Sistema de IA confirmado sin clasificación de riesgo válida del AI Act |
+
+Cada incumplimiento es un hallazgo `ShapeFinding(node, shape, message, severity)`, ordenado y determinista. Un valor vacío cuenta como ausente.
+
+Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML y pySHACL 0.40.
 
 ## 4. Interfaces
 
@@ -172,6 +185,8 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6 y PyYAML.
 | Funciones | `load_challenge_catalog(path)`, `library_graph(library_dir)`, `build_matrix(graph, catalog)`, `matrix_json(rows)`, `matrix_csv(rows)` | Matriz de trazabilidad y sus errores |
 | Herramienta | `tools/ontology_traceability.py [--library DIR] [--output DIR]` | Escribe la matriz en JSON y CSV; termina con código 1 si hay errores |
 | Funciones | `gate_syntax`, `gate_consistency`, `gate_coverage`, `gate_traceability`, `gate_signature`, `run_gates(library_dir)` y `GateResult(name, ok, errors)` | Las cinco puertas |
+| Fichero | `library/ontology/shapes/inventory-coherence.ttl` | Formas SHACL de coherencia del inventario |
+| Funciones | `export_graph(store)`, `load_shapes(shapes_dir)`, `validate_graph(data, shapes)`, `run_shapes(store, shapes=None)` | Exportación del grafo y validación SHACL |
 | Herramienta | `tools/ontology_gates.py [--library DIR]` y `make ontology-gates` | Imprime `PASS`/`FAIL` por puerta; código 1 si alguna falla; paso del job `verify` del CI |
 
 ## 5. Configuración
@@ -214,6 +229,12 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
   - validación del catálogo (ids, tipos de evidencia y duplicados);
   - salidas deterministas en JSON y CSV.
 - **`test_gates_pure.py`:** una biblioteca sana pasa las cinco puertas, la biblioteca que se entrega también, y cada puerta rechaza su error plantado; incluye la herramienta y su código de salida.
+- **`test_shacl_pure.py` y `tests/integration/test_ontology_shacl.py`:**
+  - inventario coherente sin hallazgos;
+  - cada hueco con su forma, mensaje y severidad;
+  - sobre el grafo real, tratamientos sin base jurídica ni plazo y sistema de salud sin declarar;
+  - declaración completa sin hallazgos;
+  - sistema de IA confirmado sin clase de riesgo.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -232,3 +253,4 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
 | 0.1.0-alpha | 2026-09-17 | Plano de aplicabilidad con clases de activo base y selectores validados | Fase 04 (ARG-033) |
 | 0.1.0-alpha | 2026-09-17 | Matriz de trazabilidad obligación–reto y catálogo provisional de retos | Fase 04 (ARG-037) |
 | 0.1.0-alpha | 2026-09-17 | Cinco puertas editoriales con errores plantados y paso de CI | Fase 04 (ARG-038) |
+| 0.1.0-alpha | 2026-09-17 | Formas SHACL de coherencia del inventario validadas con pySHACL | Fase 04 (ARG-034) |

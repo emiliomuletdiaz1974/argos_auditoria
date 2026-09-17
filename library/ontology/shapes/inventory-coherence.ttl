@@ -1,0 +1,36 @@
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix g:  <urn:argos:graph:> .
+
+# Coherence shapes over the inventory graph exported to RDF (ARG-034, deviation note ARG-034-040).
+# The export (argos_ontology.shacl.export_graph) types nodes with these classes and properties;
+# messages are what the DPO reads, so they are written in Spanish.
+
+g:TreatmentShape a sh:NodeShape ;
+  sh:targetClass g:Treatment ;
+  sh:property [
+    sh:path g:legal_basis ; sh:minCount 1 ;
+    sh:severity sh:Violation ;
+    sh:message "Tratamiento sin base jurídica declarada"@es
+  ] ;
+  sh:property [
+    sh:path g:retention ; sh:minCount 1 ;
+    sh:severity sh:Warning ;
+    sh:message "Tratamiento sin plazo de conservación"@es
+  ] .
+
+g:HealthDataSystemShape a sh:NodeShape ;
+  sh:targetClass g:HealthDataSystem ;
+  sh:property [
+    sh:path g:declared_in ; sh:minCount 1 ;
+    sh:severity sh:Violation ;
+    sh:message "Sistema con datos de salud fuera del registro de actividades"@es
+  ] .
+
+g:ConfirmedAISystemShape a sh:NodeShape ;
+  sh:targetClass g:ConfirmedAISystem ;
+  sh:property [
+    sh:path g:risk_class ; sh:minCount 1 ; sh:maxCount 1 ;
+    sh:in ( "prohibited" "high" "limited" "minimal" ) ;
+    sh:severity sh:Violation ;
+    sh:message "Sistema de IA confirmado sin clasificación de riesgo válida del AI Act"@es
+  ] .
