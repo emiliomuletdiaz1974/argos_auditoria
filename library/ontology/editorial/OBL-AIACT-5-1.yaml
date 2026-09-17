@@ -1,0 +1,12 @@
+# Población AIACT del v1 (F04-16). Pendiente de validación jurídica (F04-17).
+id: OBL-AIACT-5-1
+norma: AIACT
+articulo: "5.1"
+titulo: "Ningún sistema de IA de práctica prohibida en uso"
+vigente_desde: 2025-02-02
+severidad: critical
+texto_resumen: "Ningún sistema de IA confirmado en el inventario está clasificado como práctica prohibida y sigue en uso."
+aplica_a:
+  - AC-confirmed-ai-system
+verificado_por:
+  - coh-no-prohibited-ai-in-use

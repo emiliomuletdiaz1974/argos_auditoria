@@ -1,0 +1,12 @@
+# Población AIACT del v1 (F04-16). Pendiente de validación jurídica (F04-17).
+id: OBL-AIACT-26-1
+norma: AIACT
+articulo: "26.2"
+titulo: "Supervisión humana encomendada a personas competentes"
+vigente_desde: 2026-08-02
+severidad: medium
+texto_resumen: "El responsable del despliegue ha asignado la supervisión humana de cada sistema de IA de alto riesgo a personas con la competencia, la formación y la autoridad necesarias."
+aplica_a:
+  - AC-confirmed-ai-system
+verificado_por:
+  - doc-ai-human-oversight

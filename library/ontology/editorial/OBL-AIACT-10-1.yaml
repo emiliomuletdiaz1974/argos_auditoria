@@ -1,0 +1,12 @@
+# Población AIACT del v1 (F04-16). Pendiente de validación jurídica (F04-17).
+id: OBL-AIACT-10-1
+norma: AIACT
+articulo: "10.2.b"
+titulo: "Origen y finalidad de los datos de entrenamiento"
+vigente_desde: 2026-08-02
+severidad: high
+texto_resumen: "Para un sistema de IA de alto riesgo desarrollado por la organización, los conjuntos de datos de entrenamiento, validación y prueba tienen documentados su origen y, si contienen datos personales, la finalidad original de la recogida."
+aplica_a:
+  - AC-confirmed-ai-system
+verificado_por:
+  - coh-ai-training-data-governance

@@ -1,0 +1,27 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Reglamento (UE) 2024/1689 de Inteligencia Artificial and the articles cited by the v1 population (F04-16).
+# Pending legal validation (F04-17).
+
+n:AIACT a argos:Norm ;
+  rdfs:label "Reglamento (UE) 2024/1689 de Inteligencia Artificial"@es ;
+  argos:eli "http://data.europa.eu/eli/reg/2024/1689/oj"^^xsd:anyURI ;
+  argos:inForceFrom "2024-08-01"^^xsd:date .
+
+n:AIACT-5-1 a argos:Article ; argos:partOf n:AIACT ;
+  rdfs:label "Artículo 5.1. Prácticas de IA prohibidas"@es .
+n:AIACT-6 a argos:Article ; argos:partOf n:AIACT ;
+  rdfs:label "Artículo 6. Reglas de clasificación de los sistemas de IA de alto riesgo"@es .
+n:AIACT-10-2-b a argos:Article ; argos:partOf n:AIACT ;
+  rdfs:label "Artículo 10.2.b. Origen de los datos y finalidad original de la recogida"@es .
+n:AIACT-11-1 a argos:Article ; argos:partOf n:AIACT ;
+  rdfs:label "Artículo 11.1. Documentación técnica"@es .
+n:AIACT-12-1 a argos:Article ; argos:partOf n:AIACT ;
+  rdfs:label "Artículo 12.1. Registro automático de acontecimientos"@es .
+n:AIACT-26-2 a argos:Article ; argos:partOf n:AIACT ;
+  rdfs:label "Artículo 26.2. Supervisión humana encomendada por el responsable del despliegue"@es .
+n:AIACT-26-6 a argos:Article ; argos:partOf n:AIACT ;
+  rdfs:label "Artículo 26.6. Conservación de los archivos de registro por el responsable del despliegue"@es .

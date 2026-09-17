@@ -1,0 +1,12 @@
+# Población AIACT del v1 (F04-16). Pendiente de validación jurídica (F04-17).
+id: OBL-AIACT-12-1
+norma: AIACT
+articulo: "12.1"
+titulo: "Registro automático de acontecimientos del sistema de IA"
+vigente_desde: 2026-08-02
+severidad: high
+texto_resumen: "El sistema de IA de alto riesgo tiene activado el registro automático de acontecimientos durante su funcionamiento."
+aplica_a:
+  - AC-confirmed-ai-system
+verificado_por:
+  - sec-ai-event-logging

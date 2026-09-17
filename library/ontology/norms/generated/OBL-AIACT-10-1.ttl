@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-AIACT-10-1 a argos:Obligation ;
+    rdfs:label "Origen y finalidad de los datos de entrenamiento"@es ;
+    rdfs:comment "Para un sistema de IA de alto riesgo desarrollado por la organización, los conjuntos de datos de entrenamiento, validación y prueba tienen documentados su origen y, si contienen datos personales, la finalidad original de la recogida."@es ;
+    argos:appliesTo n:AC-confirmed-ai-system ;
+    argos:derivesFrom n:AIACT-10-2-b ;
+    argos:inForceFrom "2026-08-02"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-coh-ai-training-data-governance .
+
+n:CH-coh-ai-training-data-governance a argos:Challenge ;
+    argos:challengeId "coh-ai-training-data-governance" .
+

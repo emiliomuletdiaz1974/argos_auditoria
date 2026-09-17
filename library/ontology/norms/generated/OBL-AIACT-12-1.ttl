@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-AIACT-12-1 a argos:Obligation ;
+    rdfs:label "Registro automático de acontecimientos del sistema de IA"@es ;
+    rdfs:comment "El sistema de IA de alto riesgo tiene activado el registro automático de acontecimientos durante su funcionamiento."@es ;
+    argos:appliesTo n:AC-confirmed-ai-system ;
+    argos:derivesFrom n:AIACT-12-1 ;
+    argos:inForceFrom "2026-08-02"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-sec-ai-event-logging .
+
+n:CH-sec-ai-event-logging a argos:Challenge ;
+    argos:challengeId "sec-ai-event-logging" .
+

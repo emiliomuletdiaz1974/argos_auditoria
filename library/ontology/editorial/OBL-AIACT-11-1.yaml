@@ -1,0 +1,12 @@
+# Población AIACT del v1 (F04-16). Pendiente de validación jurídica (F04-17).
+id: OBL-AIACT-11-1
+norma: AIACT
+articulo: "11.1"
+titulo: "Documentación técnica del sistema de IA de alto riesgo"
+vigente_desde: 2026-08-02
+severidad: high
+texto_resumen: "Para un sistema de IA de alto riesgo desarrollado por la organización existe documentación técnica elaborada antes de su puesta en servicio y actualizada."
+aplica_a:
+  - AC-confirmed-ai-system
+verificado_por:
+  - doc-ai-technical-documentation

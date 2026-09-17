@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-AIACT-5-1 a argos:Obligation ;
+    rdfs:label "Ningún sistema de IA de práctica prohibida en uso"@es ;
+    rdfs:comment "Ningún sistema de IA confirmado en el inventario está clasificado como práctica prohibida y sigue en uso."@es ;
+    argos:appliesTo n:AC-confirmed-ai-system ;
+    argos:derivesFrom n:AIACT-5-1 ;
+    argos:inForceFrom "2025-02-02"^^xsd:date ;
+    argos:severity "critical" ;
+    argos:verifiedBy n:CH-coh-no-prohibited-ai-in-use .
+
+n:CH-coh-no-prohibited-ai-in-use a argos:Challenge ;
+    argos:challengeId "coh-no-prohibited-ai-in-use" .
+

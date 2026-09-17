@@ -55,6 +55,11 @@ n:AC-pending-ai-system a argos:AssetClass ;
   argos:graphLabel "AISystem" ;
   argos:selectorJson """{"label": "AISystem", "status": "pending"}""" .
 
+n:AC-confirmed-ai-system a argos:AssetClass ;
+  rdfs:label "Sistema de IA confirmado"@es ;
+  argos:graphLabel "AISystem" ;
+  argos:selectorJson """{"label": "AISystem", "status": "confirmed"}""" .
+
 n:AC-missing-table a argos:AssetClass ;
   rdfs:label "Tabla desaparecida del inventario"@es ;
   argos:graphLabel "Table" ;

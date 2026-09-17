@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-AIACT-6-2 a argos:Obligation ;
+    rdfs:label "Sistemas de IA descubiertos revisados y clasificados"@es ;
+    rdfs:comment "Los sistemas de IA descubiertos en el inventario y pendientes de confirmación se revisan y clasifican; un candidato sin revisar es IA en la sombra sin clasificación de riesgo."@es ;
+    argos:appliesTo n:AC-pending-ai-system ;
+    argos:derivesFrom n:AIACT-6 ;
+    argos:inForceFrom "2026-08-02"^^xsd:date ;
+    argos:severity "medium" ;
+    argos:verifiedBy n:CH-coh-ai-pending-review .
+
+n:CH-coh-ai-pending-review a argos:Challenge ;
+    argos:challengeId "coh-ai-pending-review" .
+

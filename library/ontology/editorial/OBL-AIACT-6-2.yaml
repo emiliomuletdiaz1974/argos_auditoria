@@ -1,0 +1,12 @@
+# Población AIACT del v1 (F04-16). Pendiente de validación jurídica (F04-17).
+id: OBL-AIACT-6-2
+norma: AIACT
+articulo: "6"
+titulo: "Sistemas de IA descubiertos revisados y clasificados"
+vigente_desde: 2026-08-02
+severidad: medium
+texto_resumen: "Los sistemas de IA descubiertos en el inventario y pendientes de confirmación se revisan y clasifican; un candidato sin revisar es IA en la sombra sin clasificación de riesgo."
+aplica_a:
+  - AC-pending-ai-system
+verificado_por:
+  - coh-ai-pending-review

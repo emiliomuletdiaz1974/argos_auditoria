@@ -22,10 +22,26 @@ challenges:
     family: breach
     evidence_type: document
     description: "Registro documental de brechas con hechos, efectos y medidas correctoras"
+  - id: coh-ai-pending-review
+    family: coherence
+    evidence_type: query_result
+    description: "Sistemas de IA descubiertos que siguen pendientes de confirmación y clasificación"
+  - id: coh-ai-risk-class-declared
+    family: coherence
+    evidence_type: query_result
+    description: "Sistemas de IA confirmados con una clase de riesgo válida (forma SHACL)"
+  - id: coh-ai-training-data-governance
+    family: coherence
+    evidence_type: query_result
+    description: "Conjuntos de datos de entrenamiento del sistema de IA con origen y finalidad documentados"
   - id: coh-dataset-description-current
     family: coherence
     evidence_type: query_result
     description: "Descripción de conjuntos de datos comparada con el inventario vivo y su fecha de revisión"
+  - id: coh-no-prohibited-ai-in-use
+    family: coherence
+    evidence_type: query_result
+    description: "Sistemas de IA confirmados como práctica prohibida que siguen activos en el inventario"
   - id: coh-priority-categories-located
     family: coherence
     evidence_type: query_result
@@ -46,6 +62,14 @@ challenges:
     family: coherence
     evidence_type: query_result
     description: "Columnas vivas del inventario sin categoría de datos asignada"
+  - id: doc-ai-human-oversight
+    family: documentation
+    evidence_type: document
+    description: "Designación de las personas a cargo de la supervisión humana del sistema de IA"
+  - id: doc-ai-technical-documentation
+    family: documentation
+    evidence_type: document
+    description: "Documentación técnica del sistema de IA de alto riesgo y su fecha de actualización"
   - id: dsr-access-request-term
     family: data_subject_rights
     evidence_type: log_extract
@@ -74,6 +98,14 @@ challenges:
     family: security
     evidence_type: configuration
     description: "Registro de accesos activado en el almacén de datos"
+  - id: sec-ai-event-logging
+    family: security
+    evidence_type: configuration
+    description: "Registro automático de acontecimientos activado en el sistema de IA"
+  - id: sec-ai-log-retention
+    family: security
+    evidence_type: configuration
+    description: "Archivos de registro del sistema de IA conservados al menos seis meses"
   - id: sec-encryption-at-rest
     family: security
     evidence_type: configuration

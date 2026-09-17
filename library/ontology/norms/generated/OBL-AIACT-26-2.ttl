@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-AIACT-26-2 a argos:Obligation ;
+    rdfs:label "Conservación de los archivos de registro al menos seis meses"@es ;
+    rdfs:comment "Los archivos de registro que genera el sistema de IA de alto riesgo bajo control del responsable del despliegue se conservan durante al menos seis meses."@es ;
+    argos:appliesTo n:AC-confirmed-ai-system ;
+    argos:derivesFrom n:AIACT-26-6 ;
+    argos:inForceFrom "2026-08-02"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-sec-ai-log-retention .
+
+n:CH-sec-ai-log-retention a argos:Challenge ;
+    argos:challengeId "sec-ai-log-retention" .
+

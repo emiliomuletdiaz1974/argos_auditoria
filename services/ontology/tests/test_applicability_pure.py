@@ -22,6 +22,7 @@ EXPECTED = {
     "AC-stored-special-category-data",
     "AC-unclassified-column",
     "AC-pending-ai-system",
+    "AC-confirmed-ai-system",
     "AC-missing-table",
     "AC-cross-border-flow",
 }

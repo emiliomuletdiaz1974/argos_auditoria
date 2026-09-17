@@ -1,0 +1,12 @@
+# Población AIACT del v1 (F04-16). Pendiente de validación jurídica (F04-17).
+id: OBL-AIACT-6-1
+norma: AIACT
+articulo: "6"
+titulo: "Clasificación de riesgo de los sistemas de IA confirmados"
+vigente_desde: 2026-08-02
+severidad: high
+texto_resumen: "Todo sistema de IA confirmado tiene asignada una única clase de riesgo del Reglamento (prohibida, alta, limitada o mínima), que determina las obligaciones que le aplican."
+aplica_a:
+  - AC-confirmed-ai-system
+verificado_por:
+  - coh-ai-risk-class-declared

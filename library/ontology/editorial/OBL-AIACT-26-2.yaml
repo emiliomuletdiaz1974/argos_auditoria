@@ -1,0 +1,12 @@
+# Población AIACT del v1 (F04-16). Pendiente de validación jurídica (F04-17).
+id: OBL-AIACT-26-2
+norma: AIACT
+articulo: "26.6"
+titulo: "Conservación de los archivos de registro al menos seis meses"
+vigente_desde: 2026-08-02
+severidad: high
+texto_resumen: "Los archivos de registro que genera el sistema de IA de alto riesgo bajo control del responsable del despliegue se conservan durante al menos seis meses."
+aplica_a:
+  - AC-confirmed-ai-system
+verificado_por:
+  - sec-ai-log-retention

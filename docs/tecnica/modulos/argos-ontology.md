@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: a2f91e5
+commit: 0722444
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -109,6 +109,7 @@ Clases base (`library/ontology/asset-classes/base.ttl`):
 | `AC-stored-special-category-data` | Columnas con cualquier categoría especial |
 | `AC-unclassified-column` | Columnas vivas sin clasificar |
 | `AC-pending-ai-system` | Sistemas de IA descubiertos pendientes de confirmar |
+| `AC-confirmed-ai-system` | Sistemas de IA confirmados (`{"label": "AISystem", "status": "confirmed"}`) |
 | `AC-missing-table` | Tablas desaparecidas del origen |
 | `AC-cross-border-flow` | Pendiente de verificación: el grafo aún no registra el país de destino de los flujos |
 
@@ -272,6 +273,46 @@ Quedan fuera de esta población, a la espera de la validación jurídica:
 
 El catálogo provisional queda así en 19 retos.
 
+#### AI Act
+
+> **Pendiente de validación jurídica**, igual que las poblaciones anteriores.
+
+Reglamento (UE) 2024/1689, ELI `http://data.europa.eu/eli/reg/2024/1689/oj`. El alcance aprobado son los requisitos demostrables sobre sistemas: prohibiciones, clasificación, gobernanza de datos, documentación técnica, registro de eventos y obligaciones del responsable del despliegue.
+- La norma y sus artículos se declaran en `library/ontology/norms/AIACT.ttl`.
+- Las 8 plantillas están en `library/ontology/editorial/OBL-AIACT-*.yaml`.
+
+**Fechas de aplicación (art. 113):**
+- el reglamento está en vigor desde el 1-8-2024;
+- la obligación sobre prácticas prohibidas aplica desde el 2-2-2025;
+- las demás aplican desde el 2-8-2026, la fecha de aplicación general;
+- si el sistema es componente de un producto del anexo I (por ejemplo, un producto sanitario), el artículo 6.1 aplica desde el 2-8-2027, punto que queda para la validación jurídica.
+
+| Bloque | Obligación | Artículo | Desde | Severidad | Clase | Reto |
+|---|---|---|---|---|---|---|
+| Prohibiciones | `OBL-AIACT-5-1` ningún sistema de práctica prohibida en uso | 5.1 | 2025-02-02 | critical | `AC-confirmed-ai-system` | `coh-no-prohibited-ai-in-use` |
+| Clasificación | `OBL-AIACT-6-1` clase de riesgo de los sistemas confirmados | 6 | 2026-08-02 | high | `AC-confirmed-ai-system` | `coh-ai-risk-class-declared` (SHACL) |
+| Clasificación | `OBL-AIACT-6-2` sistemas descubiertos revisados (IA en la sombra) | 6 | 2026-08-02 | medium | `AC-pending-ai-system` | `coh-ai-pending-review` |
+| Alto riesgo (proveedor) | `OBL-AIACT-10-1` origen y finalidad de los datos de entrenamiento | 10.2.b | 2026-08-02 | high | `AC-confirmed-ai-system` | `coh-ai-training-data-governance` |
+| Alto riesgo (proveedor) | `OBL-AIACT-11-1` documentación técnica | 11.1 | 2026-08-02 | high | `AC-confirmed-ai-system` | `doc-ai-technical-documentation` |
+| Alto riesgo (proveedor) | `OBL-AIACT-12-1` registro automático de acontecimientos | 12.1 | 2026-08-02 | high | `AC-confirmed-ai-system` | `sec-ai-event-logging` |
+| Responsable del despliegue | `OBL-AIACT-26-1` supervisión humana asignada | 26.2 | 2026-08-02 | medium | `AC-confirmed-ai-system` | `doc-ai-human-oversight` |
+| Responsable del despliegue | `OBL-AIACT-26-2` registros conservados al menos seis meses | 26.6 | 2026-08-02 | high | `AC-confirmed-ai-system` | `sec-ai-log-retention` |
+
+Quién soporta cada bloque:
+- las obligaciones de proveedor aplican cuando la organización desarrolla el sistema;
+- las de responsable del despliegue, cuando lo usa.
+
+**Limitación: filtro por clase de riesgo.** El selector de la API del inventario no filtra por `risk_class`.
+- Por eso las obligaciones de alto riesgo aplican a todos los sistemas de IA confirmados, y es el reto el que comprueba que el sistema es de alto riesgo antes de exigir el requisito.
+- Filtrar ya en la aplicabilidad exigiría ampliar el selector con una nota de desviación, y es una decisión pendiente de la validación jurídica.
+
+Quedan fuera de esta población, a la espera de la validación jurídica:
+- la gestión de riesgos (art. 9), la transparencia (art. 13), la precisión y ciberseguridad (art. 15) y el sistema de calidad (art. 17);
+- la evaluación de impacto en derechos fundamentales (art. 27);
+- la alfabetización en IA (art. 4) y la transparencia ante usuarios (art. 50).
+
+El catálogo provisional queda en 27 retos para 28 obligaciones.
+
 Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.40 y httpx 0.28.
 
 ## 4. Interfaces
@@ -384,12 +425,14 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
   - ejecuciones inmutables.
 - **`test_population_gdpr.py`:** plantillas con nombre igual a su id y dentro del alcance aprobado, todos los bloques poblados, artículos declarados como parte de la norma, retos presentes en el catálogo y solo la notificación de brechas pendiente de verificación.
 - **`test_population_ehds.py`:** plantillas dentro del alcance, ambos usos poblados, fechas de aplicación del artículo 105 (no de la entrada en vigor), artículos declarados, retos en el catálogo y solo el plazo del organismo de acceso pendiente.
+- **`test_population_ai_act.py`:** plantillas dentro del alcance, bloques poblados, fechas de aplicación del artículo 113, artículos declarados, retos en el catálogo y la clase `AC-confirmed-ai-system`.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
 
 - **Componentes de la fase aún sin documentar:** se añaden con sus tareas.
-- **Poblaciones normativas:** las poblaciones RGPD y EHDS están pendientes de validación jurídica; la población AI Act se añade con su tarea.
+- **Poblaciones normativas:** las poblaciones RGPD, EHDS y AI Act están pendientes de validación jurídica.
+- **Clase de riesgo de IA:** la aplicabilidad no filtra por `risk_class`; lo comprueba cada reto.
 
 ## 10. Historial
 
@@ -408,3 +451,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | Resolutor de aplicabilidad por fecha de campaña con ejecuciones inmutables, asiento y evento | Fase 04 (ARG-039) |
 | 0.1.0-alpha | 2026-09-17 | Población RGPD del v1: 13 obligaciones y 13 retos, pendiente de validación jurídica | Fase 04 (ARG-031) |
 | 0.1.0-alpha | 2026-09-17 | Población EHDS del v1: 7 obligaciones aplicables desde 2029 y 6 retos, pendiente de validación jurídica | Fase 04 (ARG-031) |
+| 0.1.0-alpha | 2026-09-17 | Población AI Act del v1: 8 obligaciones, 8 retos y clase `AC-confirmed-ai-system`, pendiente de validación jurídica | Fase 04 (ARG-031, ARG-033) |
