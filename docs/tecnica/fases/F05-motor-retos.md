@@ -4,7 +4,7 @@ kind: phase
 title: Fase 05 · Motor de retos
 phase: "05"
 version: 0.1.0-alpha
-commit: pendiente
+commit: df46b33
 date: 2026-09-17
 status: current
 confidentiality: client
@@ -70,4 +70,4 @@ Resultado, 2026-09-17: los seis criterios en verde.
 
 ## 8. Identificación del cierre
 
-Tag `fase-05`.
+Tag `fase-05`, commit `df46b33`, 2026-09-17.

@@ -5,7 +5,7 @@ title: Conectores de bases de datos (argos-connector-sql)
 module: argos-connector-sql
 phases: ["02", "03"]
 version: 0.1.0-alpha
-commit: pendiente
+commit: df46b33
 date: 2026-09-17
 status: current
 confidentiality: client
