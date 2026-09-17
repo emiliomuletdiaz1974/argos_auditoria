@@ -46,7 +46,7 @@ secrets:
 test:
 	uv run pytest -m "not integration"
 
-check: lint typecheck secrets
+check: lint typecheck secrets docs-check
 	uv run pytest -m "not heavy"
 
 check-heavy:

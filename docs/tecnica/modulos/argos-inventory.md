@@ -1,0 +1,109 @@
+---
+id: MOD-argos-inventory
+kind: module
+title: Inventario y grafo de conocimiento (argos-inventory)
+module: argos-inventory
+phases: ["03"]
+version: 0.1.0-alpha
+commit: dfe330f
+date: 2026-09-17
+status: current
+confidentiality: client
+---
+
+# Inventario y grafo de conocimiento (argos-inventory)
+
+## 1. Propósito
+
+Construye y mantiene el **inventario vivo** de los sistemas del cliente en un grafo de conocimiento: sistemas, esquemas, tablas, columnas, repositorios de ficheros, identidades, grupos, tratamientos y sistemas de IA. También registra qué categoría de dato contiene cada columna, cómo fluyen los datos entre sistemas y qué ha cambiado desde la última exploración. Implementa ARG-021 a ARG-030.
+
+## 2. Alcance y límites
+
+- Se alimenta exclusivamente de las sondas de solo lectura de los conectores (ver `argos-connector-sdk`); nunca accede directamente a los sistemas del cliente.
+- La clasificación asistida por modelo tiene hoy su interfaz y su cola de revisión humana. El modelo real se incorpora con la IA local (Fase 06).
+- El inventario describe estructura y metadatos. Las muestras solo se usan para validar identificadores en origen y nunca se almacenan en claro.
+
+## 3. Arquitectura
+
+| Componente | Paquete | Qué hace |
+|---|---|---|
+| Modelo del grafo (ARG-021) | `graph` | Vocabulario cerrado: 10 etiquetas de nodo, 8 de arista y 9 categorías de dato; claves naturales; `GraphStore` sobre PostgreSQL y Apache AGE |
+| Escáner (ARG-022) | `discovery` | Traduce las sondas de los conectores en eventos `DISCOVERY` con procedencia (conector, sonda, asiento del diario, momento); registro de exploraciones |
+| Ingesta (ARG-022) | `ingest` | Consumidor duradero del stream `DISCOVERY` que escribe el grafo de forma idempotente y en lotes |
+| Versionado (ARG-023) | `versioning` | Deltas entre exploraciones (aparecido, desaparecido, crecimiento anómalo) e **instantáneas inmutables** verificables |
+| Clasificación determinista (ARG-024) | `classify` | Diccionario de nombres y validación de identificadores en origen (DNI, NIE, NUSS, IBAN, NHC) |
+| Clasificación asistida (ARG-025) | `classify.assisted` | Interfaz de modelo y **cola de revisión** del DPD con decisión auditada |
+| Catálogo (ARG-026) | `catalog` | Vistas de catálogo, cobertura y frescura; importación del registro de tratamientos; informe legible del inventario |
+| Flujos (ARG-027) | `flows` | Detección de flujos entre sistemas por catálogo del motor (enlaces de base de datos) y por coincidencia estructural |
+| IA (ARG-028) | `ai_discovery` | Descubrimiento de candidatos a sistema de IA (columnas de puntuación, ficheros de modelo); confirmación humana con clase de riesgo |
+| API (ARG-029) | `api` | API GraphQL de solo lectura con selector restringido y paginación |
+| Planificador (ARG-030) | `scheduler` | Reexploración priorizada con Temporal |
+| Capacidad | `benchmark` | Banco de pruebas reproducible de rendimiento |
+
+Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk` y los conectores; PostgreSQL 16 con Apache AGE 1.5.0; NATS JetStream; Temporal.
+
+## 4. Interfaces
+
+| Tipo | Nombre | Descripción |
+|---|---|---|
+| Grafo | `inventory` (AGE) | Nodos `System`, `Schema`, `Table`, `Column`, `FileArea`, `Identity`, `Group`, `AISystem`, `Treatment` y `Category`; aristas `CONTAINS`, `CAN_ACCESS`, `MEMBER_OF`, `FLOWS_TO`, `CLASSIFIED_AS`, `DECLARED_IN`, `USES_MODEL` y `OBSERVED` |
+| Eventos | `discovery.*.v1`, `discovery.ingested.v1`, `discovery.delta_ready.v1` | Descubrimiento, ingesta confirmada y deltas listos |
+| Tablas | `argos.scan_runs`, `inventory_deltas`, `inventory_snapshots`, `inventory_snapshot_nodes`, `review_queue`, `catalog_columns`, `catalog_coverage` y `catalog_freshness` | Migraciones `0003` a `0008` |
+| Funciones | `scan_system`, `compute_deltas`, `take_snapshot`, `verify_snapshot`, `classify_new_columns`, `decide_review`, `refresh_catalog`, `import_treatments`, `detect_engine_links`, `detect_structural`, `discover_ai` y `confirm_ai_system` | Operaciones del inventario |
+| API GraphQL | `/graphql`: `node(key, first, after)`, `resolveSelector(selector, first, after)` y `snapshot(id, first, after)` | Solo lectura; sin mutaciones |
+| Herramientas | `tools/inventory_report.py` y `tools/inventory_benchmark.py` | Informe del inventario y banco de capacidad |
+| Procesos | `python -m argos_inventory.ingest.main`, `...api.main` y `...scheduler.worker` | Ingesta (consumidor `inventory-ingest`), API (desarrollo `127.0.0.1:8002`) y planificador (cola `argos-inventory`) |
+
+## 5. Configuración
+
+- Variables comunes de `argos-common`: base de datos, NATS, Temporal, OIDC y Vault para los servicios que abren conectores.
+- **Parámetros de la API:**
+  - página máxima de 500 elementos;
+  - profundidad máxima de consulta 4;
+  - campos del selector limitados a una lista cerrada (`ALLOWED_SELECTOR_FIELDS`).
+- **Parámetros del planificador:**
+  - cadencia estructural de 24 h;
+  - hasta 4 exploraciones en paralelo;
+  - prioridad por antigüedad, deltas recientes y candidatos de IA pendientes.
+
+## 6. Seguridad y tratamiento de datos
+
+- **Procedencia:** cada hecho del grafo es trazable hasta la sonda, el conector y el asiento del diario de consultas que lo produjo.
+- **Decisiones humanas auditadas:** las revisiones de clasificación y la confirmación de sistemas de IA quedan en el diario encadenado (`inventory.review`, `inventory.ai_confirm`). Un sistema de IA solo se confirma con una clase de riesgo válida y una persona identificada.
+- **Instantáneas inmutables:** una instantánea no cambia aunque el grafo vivo sí, y `verify_snapshot` comprueba su integridad. Es la base de campañas reproducibles.
+- **API de solo lectura:** requiere un token válido del realm con cualquiera de sus roles. El selector no admite texto libre en la consulta: los valores viajan como parámetros y las etiquetas salen del vocabulario cerrado.
+- **Minimización:** la validación de identificadores produce tasas de aceptación, no valores.
+- **Decisiones aplicables:** notas de desviación ARG-021-023, ARG-024-025, ARG-026-028 y ARG-029-030.
+
+## 7. Operación
+
+- Tres procesos: ingesta, API y worker del planificador.
+- El Schedule de Temporal `inventory-rescan-hourly` se crea con la política de solapamiento `SKIP`. En desarrollo está en pausa y se reactiva en el despliegue.
+- **Capacidad medida** en un portátil de desarrollo (Intel i7-1355U, 15,7 GB), coste propio de ARGOS sin la latencia de las fuentes, perfil de 5000 tablas:
+  - 11,9 tablas/s en la exploración inicial y 13,6 en la reexploración;
+  - extrapolado a 50 000 tablas: 1,17 h el inventario completo y 1,02 h la reexploración (objetivos: menos de 24 h y menos de 2 h);
+  - mediana de 62 ms en el selector (objetivo: menos de 2 s).
+  - La cifra definitiva se mide en el hardware del appliance.
+
+## 8. Verificación
+
+- **Tests unitarios** en `services/inventory/tests`, entre ellos uno que vigila que ninguna consulta del inventario tenga coste lineal en el tamaño del grafo.
+- **Tests de integración** `tests/integration/test_inventory_*.py`: grafo, escáner, ingesta, versionado, clasificación, catálogo, informe, flujos, IA, GraphQL, planificador, verdad terreno y benchmark; además, `test_graph_performance.py`.
+- **Prueba de la Fase 03:**
+  - el inventario de las fuentes simuladas coincide **exactamente** con la verdad terreno mantenida a mano;
+  - los cambios provocados producen exactamente los deltas esperados;
+  - la instantánea previa sigue íntegra y servida igual por la API.
+
+## 9. Limitaciones conocidas y pendientes
+
+- **Capacidad** en el hardware real del appliance (perfil `m`): sin medir.
+- **Remuestreo de contenidos** con IA local: Fase 06.
+- **Detectores basados en registros** y en inventarios de paquetes: aplazados.
+- **Schedule de reexploración:** en pausa en desarrollo.
+
+## 10. Historial
+
+| Versión | Fecha | Cambio | Tarea |
+|---|---|---|---|
+| 0.1.0-alpha | 2026-09-16 | Inventario, grafo, versionado, clasificación, catálogo, flujos, IA, API GraphQL y planificador | Fase 03 (ARG-021…030) |
+| 0.1.0-alpha | 2026-09-16 | Índices GIN, consultas por etiqueta y escrituras en lote: la reexploración extrapolada pasa de 14,9 h a 1,02 h | Fase 03 (rendimiento) |

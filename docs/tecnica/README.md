@@ -13,6 +13,7 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 |---|---|---|
 | 01 · Cimientos de la plataforma | [F01-cimientos.md](fases/F01-cimientos.md) | Cerrada (`fase-01`) |
 | 02 · Conectores de solo lectura | [F02-conectores.md](fases/F02-conectores.md) | Cerrada (`fase-02`) |
+| 03 · Inventario y grafo de conocimiento | [F03-inventario-grafo.md](fases/F03-inventario-grafo.md) | Cerrada (`fase-03`) |
 
 ## Módulos
 
@@ -30,3 +31,4 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | `argos-connector-sql` | [argos-connector-sql.md](modulos/argos-connector-sql.md) | 02, 03 |
 | `argos-events` | [argos-events.md](modulos/argos-events.md) | 01 |
 | `argos-example` | [argos-example.md](modulos/argos-example.md) | 01 (interno) |
+| `argos-inventory` | [argos-inventory.md](modulos/argos-inventory.md) | 03 |
