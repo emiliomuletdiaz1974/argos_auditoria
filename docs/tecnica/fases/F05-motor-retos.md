@@ -70,4 +70,4 @@ Resultado, 2026-09-17: los seis criterios en verde.
 
 ## 8. Identificación del cierre
 
-Tag `fase-05`, commit `df46b33`, 2026-09-17.
+Tag `fase-05`, 2026-09-17. El commit de la prueba de la fase es `df46b33`; el tag se pone sobre el commit de documentación que lo sigue.
