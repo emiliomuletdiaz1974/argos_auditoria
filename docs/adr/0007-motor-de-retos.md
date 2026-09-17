@@ -1,6 +1,6 @@
 # ADR-0007 · Motor de retos y campañas: DSL, veredictos, campañas y sello (Fase 05)
 
-**Estado:** Propuesta · 2026-09-17 · Aaron Escobar
+**Estado:** Aceptado · 2026-09-17 · Aaron Escobar (con un cambio sobre la propuesta: capa de traducción en castellano para el DSL, como en ADR-0006)
 
 ## Contexto
 La Fase 05 (ARG-041…050) construye el motor que comprueba: el DSL de retos, el compilador, los workflows de campaña, las actividades de sonda, el muestreo, el evaluador determinista, los puntos de control humanos, los hallazgos, la reejecución de subsanación y la biblioteca empaquetada. El Plan Director (§8.2, Fase 05) añade dos bloques que el documento de fase no desarrolla: el **sujeto sintético** (ADR-0008) y el **sello de campaña**.
@@ -18,7 +18,12 @@ El documento de fase asume piezas que no existen o que chocan con lo construido 
 ## Decisión
 - **DSL de retos:**
   - YAML validado con **JSON Schema 2020-12** mediante la librería `jsonschema`, en CI y en carga;
-  - **claves y valores en inglés** (`objective`, `selector`, `probe`, `criterion`, `threshold`, `evidence`, `severity`, `sampling`, `approval_required`), porque lo escribe el ingeniero normativo, no el jurista;
+  - **claves y valores en inglés en el núcleo** (`objective`, `selector`, `probe`, `criterion`, `threshold`, `evidence`, `severity`, `sampling`, `approval_required`): el esquema, el lint, el compilador y el evaluador solo conocen el inglés (ADR-0005);
+  - **capa de traducción en castellano** (`argos_challenges.library.translation`), como la de la plantilla editorial de ADR-0006:
+    - quien edita un reto puede usar las claves en castellano (`objetivo`, `sonda`, `criterio`, `umbral`, `evidencia`, `severidad`, `muestreo`, `aprobacion_requerida`…) y los valores enumerados en castellano (`critica`, `recuentos`…);
+    - la capa los traduce a inglés con una tabla cerrada y biyectiva antes de validar, y de vuelta al generar un reto para editar;
+    - una clave o un valor fuera de la tabla es un error, nunca se ignora;
+    - tiene tests propios de ida y vuelta, claves desconocidas y claves duplicadas;
   - `title` es texto libre en castellano;
   - los **ids son los del catálogo** de la Fase 04 y las severidades las de la ontología (`critical`, `high`, `medium`, `low`);
   - campos opcionales del modelo de reto del Plan Director: `preconditions` (por ejemplo, un sujeto sintético inyectado) y `estimated_cost` (sondas y filas previstas).
@@ -56,7 +61,8 @@ El documento de fase asume piezas que no existen o que chocan con lo construido 
 - **Migraciones:** a partir de `0011`, para campañas, veredictos, solicitudes de aprobación, aprobaciones, hallazgos y sujetos sintéticos (ADR-0008).
 
 ## Consecuencias
-- Nueva dependencia: `jsonschema`. `fastapi`, `httpx`, `temporalio` y `psycopg` ya están en el workspace.
+- Nueva dependencia: `jsonschema`.
+- ADR-0005 se cumple sin excepciones: el castellano del DSL vive solo en la capa de traducción. `fastapi`, `httpx`, `temporalio` y `psycopg` ya están en el workspace.
 - Un contenedor más en `make dev`: el worker de campañas. Resuelve el pendiente abierto en F1-08.
 - La prueba de la fase se vuelve reproducible por construcción: los veredictos dependen de la instantánea fijada y de resultados de sonda capturados, no del reloj ni del grafo vivo.
 - El expediente de la Fase 07 recibe veredictos ya canónicos y un sello verificable que solo tendrá que envolver.
@@ -64,7 +70,7 @@ El documento de fase asume piezas que no existen o que chocan con lo construido 
 
 ## Alternativas descartadas
 - **DSL con gramática propia:** coste de herramienta alto y sin validación gratuita; el documento de fase ya lo descarta.
-- **DSL con claves en castellano y capa de traducción, como ADR-0006:** el autor es el ingeniero normativo, no el jurista; una segunda capa de traducción duplica esquema y tests sin beneficio. *Queda a decisión en F05-00.*
+- **DSL solo en inglés, sin capa de traducción** (propuesta inicial): rechazada en la aprobación del 2026-09-17; los retos se editan también en castellano, como la plantilla editorial.
 - **Veredicto binario del documento:** con muestras insuficientes absuelve o condena sin base estadística, en contra del Plan Director.
 - **Sello solo en la Fase 07:** la prueba de la Fase 05 quedaría sin su criterio «el sello verifica».
 - **Resolver contra el grafo vivo:** dos ejecuciones con la misma campaña no serían comparables.

@@ -1,6 +1,6 @@
 # ADR-0008 · Sujeto sintético sin romper el solo-lectura (Fase 05)
 
-**Estado:** Propuesta · 2026-09-17 · Aaron Escobar
+**Estado:** Aceptado · 2026-09-17 · Aaron Escobar
 
 ## Contexto
 El Plan Director (§8.2, Fase 05, bloque 1) pone el **sujeto sintético** en el centro del producto:
@@ -14,7 +14,7 @@ El documento de la Fase 05 no tiene componente para el sujeto sintético, y el c
 - **Solo-lectura por construcción (§7.2 del Plan Director, ARG-011):** los conectores no pueden escribir; el arnés de escritura de F02-01 lo prueba. Inyectar un sujeto en el sistema del cliente es una escritura.
 - **Ejercicio del derecho:** la supresión la ejecuta el cliente por su canal (portal, formulario, procedimiento interno). Si ARGOS la ejecutara, no verificaría el proceso del cliente, sino el suyo.
 
-## Decisión (propuesta)
+## Decisión
 - **ARGOS genera y registra; el cliente inyecta y ejercita.** Ningún paquete del producto escribe en sistemas del cliente, y los conectores siguen siendo de solo lectura.
 - **Generación (`argos_challenges.synthetic`):** identidades con **marcas verificables**:
   - DNI y NIE en rangos no expedidos, con letra de control válida;
