@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: f5de17b
+commit: 20b0e0e
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -23,7 +23,7 @@ Convierte la normativa (RGPD, EHDS, AI Act) en **datos verificables**. Cada obli
 - los retos que la verifican;
 - el tipo de evidencia que producen.
 
-Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-033 (aplicabilidad), ARG-037 (trazabilidad), ARG-040 (publicación firmada) y el flujo editorial de ARG-038.
+Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-033 (aplicabilidad), ARG-037 (trazabilidad), ARG-040 (publicación firmada) y ARG-038 (flujo editorial y cinco puertas).
 
 ## 2. Alcance y límites
 
@@ -130,6 +130,20 @@ La promesa «cada reto trazado a la obligación que verifica» se comprueba tamb
   - reto del catálogo que ninguna obligación usa.
 - **Salidas:** `traceability.json` para la consola y `traceability.csv` (separado por `;`) como anexo contractual.
 
+### Las cinco puertas editoriales (ARG-038)
+
+Nada llega a una publicación sin pasar las cinco puertas del Plan Director. Se ejecutan en local (`make ontology-gates`) y en cada envío y pull request (job `verify` del CI):
+
+| Puerta | Qué comprueba |
+|---|---|
+| **Sintaxis** | Cada plantilla compila; el Turtle generado está al día, sin plantillas sin generar ni generados sin plantilla; todo el Turtle de `ontology/` se parsea |
+| **Consistencia** | Dominios y rangos de las propiedades del núcleo; solo términos `argos:` del vocabulario cerrado; severidades válidas; clases de activo con selector válido para la API del inventario |
+| **Cobertura** | Toda obligación tiene reto o motivo pendiente (no ambos) y aplica al menos a una clase de activo |
+| **Trazabilidad** | Toda obligación cita su artículo, y ese artículo es parte de una norma declarada (`library/ontology/norms/<NORMA>.ttl`); todo reto referenciado está en el catálogo; no hay retos huérfanos |
+| **Firma** | El bundle se construye dos veces con los mismos bytes, se firma con una clave Ed25519 efímera, se verifica y su grafo se carga en seco, sin necesitar Vault |
+
+Si la sintaxis falla, las demás puertas se marcan como omitidas en lugar de ejecutarse sobre un grafo roto. Cada puerta tiene en los tests un caso que pasa y al menos un error plantado que la hace fallar.
+
 Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6 y PyYAML.
 
 ## 4. Interfaces
@@ -157,6 +171,8 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6 y PyYAML.
 | Fichero | `library/challenges/catalog.yaml` | Catálogo provisional de retos (id, familia, tipo de evidencia, descripción) |
 | Funciones | `load_challenge_catalog(path)`, `library_graph(library_dir)`, `build_matrix(graph, catalog)`, `matrix_json(rows)`, `matrix_csv(rows)` | Matriz de trazabilidad y sus errores |
 | Herramienta | `tools/ontology_traceability.py [--library DIR] [--output DIR]` | Escribe la matriz en JSON y CSV; termina con código 1 si hay errores |
+| Funciones | `gate_syntax`, `gate_consistency`, `gate_coverage`, `gate_traceability`, `gate_signature`, `run_gates(library_dir)` y `GateResult(name, ok, errors)` | Las cinco puertas |
+| Herramienta | `tools/ontology_gates.py [--library DIR]` y `make ontology-gates` | Imprime `PASS`/`FAIL` por puerta; código 1 si alguna falla; paso del job `verify` del CI |
 
 ## 5. Configuración
 
@@ -197,6 +213,7 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
   - cada error de publicación;
   - validación del catálogo (ids, tipos de evidencia y duplicados);
   - salidas deterministas en JSON y CSV.
+- **`test_gates_pure.py`:** una biblioteca sana pasa las cinco puertas, la biblioteca que se entrega también, y cada puerta rechaza su error plantado; incluye la herramienta y su código de salida.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -214,3 +231,4 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
 | 0.1.0-alpha | 2026-09-17 | Bundle determinista firmado con `argos-content` y verificación antes de cargar | Fase 04 (ARG-040) |
 | 0.1.0-alpha | 2026-09-17 | Plano de aplicabilidad con clases de activo base y selectores validados | Fase 04 (ARG-033) |
 | 0.1.0-alpha | 2026-09-17 | Matriz de trazabilidad obligación–reto y catálogo provisional de retos | Fase 04 (ARG-037) |
+| 0.1.0-alpha | 2026-09-17 | Cinco puertas editoriales con errores plantados y paso de CI | Fase 04 (ARG-038) |
