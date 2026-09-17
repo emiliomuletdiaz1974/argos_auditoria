@@ -11,7 +11,7 @@ probe:
   by_connector:
     rdbms.postgresql:
       params: {check: encryption_at_rest}
-    rdbms.mariadb:
+    rdbms.generic:
       statement: SHOW GLOBAL VARIABLES LIKE 'innodb_encrypt_tables'
 criterion:
   threshold:

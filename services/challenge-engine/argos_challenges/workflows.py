@@ -1,4 +1,10 @@
-"""Campaign workflows (ARG-007): deterministic and I/O-free; I/O goes into activities."""
+"""Campaign workflows (ARG-007, ARG-043): deterministic and I/O-free.
+
+The campaign is a process of days with people inside: it survives restarts (Temporal does that), it
+stops at the gates until a DPO approves, it steps aside when a client system opens its circuit
+breaker, and it ends by sealing what it measured. Everything it does goes through activities; the
+workflow itself only decides and waits.
+"""
 
 from datetime import timedelta
 from typing import Any
@@ -43,3 +49,136 @@ class SmokeCampaign:
             retry_policy=RETRY_POLICY,
         )
         return results
+
+
+CAMPAIGN_TIMEOUT = timedelta(minutes=30)
+GATE_TIMEOUT = timedelta(hours=72)
+PROBE_TIMEOUT = timedelta(minutes=30)
+START_GATE = "start"
+SAMPLING_GATE = "sampling"
+PROBE_RETRY = RetryPolicy(
+    maximum_attempts=3,
+    backoff_coefficient=2.0,
+    initial_interval=timedelta(seconds=1),
+    non_retryable_error_types=["ReadOnlyViolation", "UnknownQuery"],
+)
+
+
+@workflow.defn
+class SystemRun:
+    """The units of one system, one after another: the budget already limits the pace."""
+
+    @workflow.run
+    async def run(
+        self, campaign_id: str, system_id: str, units: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        done = findings = 0
+        for unit in units:
+            await workflow.execute_activity(
+                "wait_window", system_id, start_to_close_timeout=timedelta(hours=24)
+            )
+            probe_result = await workflow.execute_activity(
+                "probe",
+                unit,
+                start_to_close_timeout=PROBE_TIMEOUT,
+                retry_policy=PROBE_RETRY,
+            )
+            verdict = await workflow.execute_activity(
+                "evaluate",
+                {"unit": unit, "probe_result": probe_result},
+                start_to_close_timeout=_TIMEOUT,
+                retry_policy=RETRY_POLICY,
+            )
+            done += 1
+            findings += 1 if verdict.get("finding") else 0
+        return {"system_id": system_id, "done": done, "findings": findings}
+
+
+@workflow.defn
+class CampaignWorkflow:
+    """Prepare, ask the gates, run the systems and seal."""
+
+    def __init__(self) -> None:
+        self._approved: set[str] = set()
+        self._paused: set[str] = set()
+        self._progress: dict[str, Any] = {"status": "preparing", "done": 0, "findings": 0}
+
+    @workflow.signal
+    def approve(self, gate: str) -> None:
+        self._approved.add(gate)
+
+    @workflow.signal
+    def circuit_open(self, system_id: str) -> None:
+        self._paused.add(system_id)
+
+    @workflow.signal
+    def circuit_closed(self, system_id: str) -> None:
+        self._paused.discard(system_id)
+
+    @workflow.query
+    def progress(self) -> dict[str, Any]:
+        return dict(self._progress)
+
+    async def _gate(self, campaign_id: str, gate: str, payload: dict[str, Any]) -> None:
+        await workflow.execute_activity(
+            "request_approval",
+            {"campaign_id": campaign_id, "gate": gate, "payload": payload},
+            start_to_close_timeout=_TIMEOUT,
+            retry_policy=RETRY_POLICY,
+        )
+        self._progress["status"] = f"awaiting:{gate}"
+        await workflow.wait_condition(lambda: gate in self._approved, timeout=GATE_TIMEOUT)
+
+    async def _run_system(
+        self, campaign_id: str, system_id: str, units: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        # A paused system does not spin: it waits until its circuit closes again.
+        await workflow.wait_condition(lambda: system_id not in self._paused)
+        result: dict[str, Any] = await workflow.execute_child_workflow(
+            SystemRun.run,
+            args=[campaign_id, system_id, units],
+            id=f"{workflow.info().workflow_id}-{system_id}",
+        )
+        self._progress["done"] += result["done"]
+        self._progress["findings"] += result["findings"]
+        return result
+
+    @workflow.run
+    async def run(self, campaign_id: str) -> dict[str, Any]:
+        prepared = await workflow.execute_activity(
+            "prepare_campaign",
+            campaign_id,
+            start_to_close_timeout=CAMPAIGN_TIMEOUT,
+            retry_policy=RETRY_POLICY,
+        )
+        units: list[dict[str, Any]] = prepared["units"]
+        self._progress["total"] = len(units)
+        await self._gate(
+            campaign_id,
+            START_GATE,
+            {"units": len(units), "unverifiable": prepared["unverifiable"]},
+        )
+        if prepared["needs_sampling"]:
+            await self._gate(campaign_id, SAMPLING_GATE, {"units": len(units)})
+        await workflow.execute_activity(
+            "set_campaign_status",
+            {"campaign_id": campaign_id, "status": "running"},
+            start_to_close_timeout=_TIMEOUT,
+            retry_policy=RETRY_POLICY,
+        )
+        self._progress["status"] = "running"
+
+        by_system: dict[str, list[dict[str, Any]]] = {}
+        for unit in units:
+            by_system.setdefault(str(unit["system_id"]), []).append(unit)
+        for system_id, system_units in sorted(by_system.items()):
+            await self._run_system(campaign_id, system_id, system_units)
+
+        sealed = await workflow.execute_activity(
+            "seal_campaign",
+            campaign_id,
+            start_to_close_timeout=CAMPAIGN_TIMEOUT,
+            retry_policy=RetryPolicy(maximum_attempts=5),
+        )
+        self._progress["status"] = "sealed"
+        return {"campaign_id": campaign_id, "seal": sealed["seal"], **self._progress}

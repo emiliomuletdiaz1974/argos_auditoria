@@ -18,10 +18,22 @@ import psycopg
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
+from argos_challenges.client import client_parameters
+from argos_challenges.compiler import compile_campaign
 from argos_challenges.evaluator import evaluate
 from argos_challenges.findings import announce, open_or_recur
+from argos_challenges.library.catalog import load_library
 from argos_challenges.probes import INVENTORY_QUERIES, minimise, probe_spec
-from argos_challenges.store import persist_verdict
+from argos_challenges.seal import announce_seal, seal_campaign
+from argos_challenges.snapshot_resolver import SnapshotSelectorResolver
+from argos_challenges.store import (
+    campaign_record,
+    persist_verdict,
+    pin_campaign,
+    request_approval,
+    save_units,
+    set_status,
+)
 from argos_common.config import get_config
 from argos_common.errors import ReadOnlyViolationError
 from argos_common.journal_pg import PostgresJournal
@@ -29,11 +41,36 @@ from argos_common.secret_stores import SecretStore
 from argos_connector.errors import BudgetExceededError, CircuitOpenError
 from argos_inventory.discovery.probes import run_probe
 from argos_inventory.graph.store import GraphStore
+from argos_inventory.versioning.snapshots import take_snapshot
+from argos_ontology.library_hash import library_fingerprint
 from argos_ontology.opa import OpaError
 from argos_ontology.opa import evaluate as opa_evaluate
+from argos_ontology.resolver import resolve as resolve_applicability
 from argos_ontology.shacl import run_shapes
+from argos_ontology.store import OntologyStore, version_in_force
+from argos_ontology.traceability import load_challenge_catalog
 
 INTERNAL_PROBES = frozenset({"shacl", "inventory_query"})
+_SYSTEMS = (
+    "SELECT id::text, name, kind, connection->>'connector', connection->'config' FROM argos.systems"
+)
+
+
+def _registered_systems(dsn: str) -> dict[str, dict[str, Any]]:
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(_SYSTEMS).fetchall()
+    return {
+        str(row[0]): {
+            "id": str(row[0]),
+            "name": row[1],
+            "kind": row[2],
+            "connector": row[3],
+            "config": row[4] or {},
+        }
+        for row in rows
+    }
+
+
 WINDOW_POLL_SECONDS = 300
 
 
@@ -76,6 +113,80 @@ class ChallengeActivities:
         self._secrets = secrets
         self._opa_url = opa_url or get_config().OPA_URL
         self._bus = bus
+
+    # ---------- preparation ----------
+
+    def _prepare(self, campaign_id: str) -> dict[str, Any]:
+        store = GraphStore(self._dsn)
+        snapshot = take_snapshot(store, self._dsn, f"campaign-{campaign_id}")
+        ontology_version = version_in_force(self._dsn)
+        library_version, library_sha256 = library_fingerprint()
+        pin_campaign(
+            self._dsn,
+            campaign_id,
+            snapshot_id=snapshot.id,
+            snapshot_hash=snapshot.content_hash,
+            ontology_version=ontology_version,
+            library_version=library_version,
+            library_sha256=library_sha256,
+            applicability_run=None,
+        )
+        resolver = SnapshotSelectorResolver(self._dsn, snapshot.id)
+        ontology = OntologyStore(self._dsn, ontology_version)
+        campaign = campaign_record(self._dsn, campaign_id)
+        run = resolve_applicability(
+            self._dsn, ontology, resolver, campaign["scope"] or {}, campaign_id=campaign_id
+        )
+        nodes = {str(node["node_key"]): node for node in resolver.nodes}
+        systems = _registered_systems(self._dsn)
+        library = load_library()
+        reserved = frozenset(load_challenge_catalog()) - frozenset(library)
+        compiled = compile_campaign(
+            campaign_id,
+            run.plan,
+            library,
+            nodes,
+            systems,
+            {"campaign": {"snapshot_id": snapshot.id}, "client": client_parameters()},
+            reserved=reserved,
+        )
+        save_units(self._dsn, campaign_id, compiled.units)
+        return {
+            "campaign_id": campaign_id,
+            "snapshot_id": snapshot.id,
+            "ontology_version": ontology_version,
+            "library_version": library_version,
+            "units": compiled.units,
+            "unverifiable": compiled.unverifiable,
+            "needs_sampling": any(unit["needs_approval"] for unit in compiled.units),
+        }
+
+    @activity.defn(name="prepare_campaign")
+    async def prepare_campaign(self, campaign_id: str) -> dict[str, Any]:
+        return await asyncio.to_thread(self._prepare, campaign_id)
+
+    @activity.defn(name="request_approval")
+    async def request_approval(self, payload: dict[str, Any]) -> None:
+        await asyncio.to_thread(
+            request_approval,
+            self._dsn,
+            str(payload["campaign_id"]),
+            str(payload["gate"]),
+            dict(payload.get("payload", {})),
+        )
+
+    @activity.defn(name="set_campaign_status")
+    async def set_campaign_status(self, payload: dict[str, Any]) -> None:
+        await asyncio.to_thread(
+            set_status, self._dsn, str(payload["campaign_id"]), str(payload["status"])
+        )
+
+    @activity.defn(name="seal_campaign")
+    async def seal(self, campaign_id: str) -> dict[str, Any]:
+        sealed = await asyncio.to_thread(seal_campaign, self._dsn, campaign_id)
+        if self._bus is not None:
+            await announce_seal(self._bus, sealed)
+        return sealed
 
     # ---------- probes ----------
 

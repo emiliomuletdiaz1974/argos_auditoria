@@ -34,6 +34,8 @@ CONNECTOR_IDS: Mapping[str, str] = {
     "argos_dicom.connector:DicomConnector": "clinical.dicom",
 }
 REFERENCES = ("$node", "$client", "$campaign", "$subject")
+# Derived from the qualified name of a node, because a count is run on a table, not on a column.
+DERIVED_NODE_FIELDS = ("table", "column")
 INTERNAL_PROBES = frozenset({"shacl", "inventory_query"})
 INTERNAL_CONNECTOR = "argos.internal"
 
@@ -60,6 +62,17 @@ def connector_id(system: Mapping[str, Any]) -> str:
         raise CompilerError(f"unknown connector: {system.get('connector')!r}")
     protocol = (system.get("config") or {}).get("protocol")
     return f"{base}.{protocol}" if base == "files" and protocol else base
+
+
+def node_properties(node: Mapping[str, Any]) -> dict[str, Any]:
+    """The properties a challenge can reference, with `table` and `column` derived."""
+    properties = dict(node)
+    qualified = str(node.get("qualified_name") or "")
+    if str(node.get("label")) == "Column" and "." in qualified:
+        table, _, column = qualified.rpartition(".")
+        properties.setdefault("table", table)
+        properties.setdefault("column", column)
+    return properties
 
 
 def _resolve(value: Any, node: Mapping[str, Any], context: Mapping[str, Any], where: str) -> Any:
@@ -99,14 +112,18 @@ def _unit(
 ) -> dict[str, Any]:
     node_key = str(node["node_key"])
     where = f"{spec.id} on {node_key}"
-    target = node.get("qualified_name") or node.get("name")
+    properties = node_properties(node)
+    if spec.probe_target is not None:
+        target = _resolve(spec.probe_target, properties, context, where)
+    else:
+        target = properties.get("qualified_name") or properties.get("name")
     if not target:
         raise CompilerError(f"{where}: $node qualified_name is not available")
     probe = {
         "kind": spec.probe_kind,
         "target": str(target),
         "statement": variant.get("statement"),
-        "params": _resolve(dict(variant.get("params", {})), node, context, where),
+        "params": _resolve(dict(variant.get("params", {})), properties, context, where),
     }
     return {
         "unit_id": unit_id(campaign_id, spec.id, spec.version, node_key),
@@ -133,6 +150,7 @@ def compile_campaign(
     nodes: Mapping[str, Mapping[str, Any]],
     systems: Mapping[str, Mapping[str, Any]],
     context: Mapping[str, Any] | None = None,
+    reserved: frozenset[str] = frozenset(),
 ) -> CompiledCampaign:
     """Work units for the campaign, sorted by system and unit, and what cannot be verified."""
     resolved_context = dict(context or {})
@@ -142,7 +160,21 @@ def compile_campaign(
         challenge_id = str(row["challenge_id"])
         spec = challenges.get(challenge_id)
         if spec is None:
-            raise CompilerError(f"unknown challenge in the plan: {challenge_id}")
+            if challenge_id not in reserved:
+                raise CompilerError(f"unknown challenge in the plan: {challenge_id}")
+            # The obligation cites an id the library has reserved but not written yet: honest about
+            # it, one entry per node, instead of pretending the obligation is verified.
+            unverifiable.extend(
+                {
+                    "challenge_id": challenge_id,
+                    "connector": None,
+                    "node_key": str(node_key),
+                    "reason": "the challenge is reserved in the catalog but not written yet",
+                    "system_id": str((nodes.get(str(node_key)) or {}).get("system_id", "")),
+                }
+                for node_key in row["node_keys"]
+            )
+            continue
         obligation = str(row["obligation"])
         for raw_key in row["node_keys"]:
             node_key = str(raw_key)

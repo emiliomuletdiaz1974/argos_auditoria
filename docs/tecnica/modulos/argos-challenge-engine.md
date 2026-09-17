@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: d6418f8
+commit: e9b37fd
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -129,6 +129,18 @@ Un hallazgo no es una línea de registro: es una **no conformidad con dueño, se
 - **Aceptar el riesgo** exige justificación y fecha de caducidad, y la base lo impone con un `CHECK`. Al caducar, `expire_risk_acceptances` lo devuelve a `reopened` con asiento del sistema.
 - Cada paso deja asiento (`finding.open`, `finding.recur`, `finding.transition`) y la apertura publica `challenge.finding_opened.v1` para la consola y los webhooks.
 
+### Workflow de campaña y sello (ARG-043)
+
+Una campaña es un proceso de días con personas dentro: sobrevive a reinicios, se detiene en las compuertas, cede el paso cuando un sistema del cliente abre su cortacircuitos y termina sellando lo que midió.
+- **`CampaignWorkflow`:** prepara (instantánea, versión de ontología, versión y hash de la biblioteca, aplicabilidad sobre la instantánea y compilación), pide la compuerta `start`, pide `sampling` si alguna unidad la necesita, lanza un hijo `SystemRun` por sistema y sella.
+- **`SystemRun`** recorre las unidades de su sistema en serie: espera de ventana, sonda y evaluación. El presupuesto de carga ya marca el ritmo.
+- **Señales y consulta:** `approve(gate)`, `circuit_open(system_id)`, `circuit_closed(system_id)` y `progress`. Un sistema pausado **espera**, no gira en vacío.
+- **Sin entrada/salida en el workflow:** todo pasa por actividades, así que Temporal puede reejecutar su historial.
+- **Sello (`argos_challenges.seal`):** un SHA-256 canónico sobre los veredictos, la instantánea, la versión de ontología y la de la biblioteca; se guarda en la campaña y se ancla en el diario (`campaign.seal`). `verify_seal` lo recalcula desde las tablas y comprueba el asiento; tocar un veredicto lo rompe.
+  - Una campaña **no se sella** con sujetos sintéticos inyectados y sin revertir.
+  - La Fase 07 lo envolverá con Merkle y firma sin cambiar lo que se sella.
+- **Parámetros del cliente:** el calendario de conservación y sus columnas de referencia son del cliente; viven junto a los datos de OPA y el compilador resuelve `{$client: …}` desde ahí.
+
 ## 4. Interfaces
 
 | Tipo | Nombre | Descripción |
@@ -146,6 +158,9 @@ Un hallazgo no es una línea de registro: es una **no conformidad con dueño, se
 | Tabla | `argos.findings` (migración `0014`) | Hallazgos con huella única, contador, severidad y caducidad del riesgo aceptado |
 | Funciones | `open_or_recur`, `transition`, `expire_risk_acceptances`, `fingerprint`, `escalate`, `announce`; `FindingError`, `STATUSES`, `TRANSITIONS` | Ciclo de vida de los hallazgos |
 | Asientos y evento | `finding.open`, `finding.recur`, `finding.transition`; `challenge.finding_opened.v1` en `argos.challenge.finding_opened` | Trazabilidad y aviso de hallazgos |
+| Workflows | `CampaignWorkflow` (señales `approve`, `circuit_open`, `circuit_closed`; consulta `progress`) y `SystemRun` | Orquestación de la campaña |
+| Funciones | `seal_payload`, `compute_seal`, `seal_campaign`, `verify_seal`, `announce_seal`; `SealError`; evento `challenge.campaign_sealed.v1`; asiento `campaign.seal` | Sello de campaña |
+| Funciones | `client_parameters()`, `client_data()`; `library_fingerprint()` | Parámetros del cliente y huella de la biblioteca |
 | Clase | `ChallengeActivities(dsn, secrets, opa_url, bus)` con las actividades `probe`, `wait_window` y `evaluate`; `campaign_activities(cfg)` | Actividades de campaña |
 | Funciones | `minimise(data, capture)`, `probe_spec(unit)`; tablas `CAPTURE_KEYS` e `INVENTORY_QUERIES` | Minimización y sondas internas |
 | Asiento | `probe.readonly_violation` | Intento de escritura detectado en un conector |
@@ -211,6 +226,8 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 
 **DSL (F05-05):** `test_challenge_translation.py` (ida y vuelta, clave y valor desconocidos, clave duplicada y un campo dado a la vez en los dos idiomas) y `test_challenge_dsl.py` (esquema válido, diez documentos rechazados, plantilla de texto rechazada, parámetros tipados aceptados, las seis reglas del producto y los retos que se entregan). `tests/unit/test_challenge_lint_tool.py` comprueba los códigos de salida de la herramienta.
 
+**Workflow y sello (F05-14):** `test_seal_pure.py` (qué cubre el sello, orden indiferente, cualquier cambio lo rompe) y `tests/integration/test_campaign_workflow.py` contra Temporal real: la campaña espera su compuerta, ejecuta, sella y `verify_seal` da verdadero; tras alterar un veredicto en la base, da falso.
+
 **Hallazgos (F05-13):** `test_findings_pure.py` (huella, máquina de estados cerrada, cierre solo por verificación y escalado por recurrencia) y `tests/integration/test_findings.py` (una campaña no cuenta dos veces, tres campañas suben la severidad una sola vez, cierre solo por verificación, riesgo aceptado documentado que caduca a `reopened`, reapertura que no suma ocurrencia y huella única en la base).
 
 **Actividades (F05-12):** `test_activities_pure.py` (solo salen las claves declaradas, ni valores ni cadenas de conexión, captura desconocida que no deja pasar nada, parámetros sin plantillas y lista cerrada de consultas internas de solo lectura) y `tests/integration/test_challenge_activities.py` (sonda real sobre la fuente simulada, evaluación idempotente, consulta interna desconocida rechazada sin reintento, sistema no registrado y asiento previo `query.emit`).
@@ -250,3 +267,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Resolución de selectores sobre la instantánea y compilador de campañas con parámetros tipados | Fase 05 (ARG-042) |
 | 0.1.0-alpha | 2026-09-17 | Actividades de sonda con minimización, ventanas, sondas internas y evaluación persistida | Fase 05 (ARG-044) |
 | 0.1.0-alpha | 2026-09-17 | Ciclo de vida de los hallazgos con deduplicación, escalado y riesgo aceptado con caducidad | Fase 05 (ARG-048) |
+| 0.1.0-alpha | 2026-09-17 | Workflow de campaña con compuertas y pausa por cortacircuitos, y sello verificable | Fase 05 (ARG-043) |

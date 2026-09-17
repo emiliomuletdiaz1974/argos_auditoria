@@ -8,6 +8,7 @@ selector:
   clase_de_activo: AC-stored-personal-data
 sonda:
   tipo: count
+  target: {$node: table}
   por_conector:
     rdbms.postgresql:
       sentencia: >-
@@ -15,23 +16,22 @@ sonda:
         WHERE :reference_column < :limit
       parametros:
         binds:
-          qualified_table: {$node: qualified_table}
-          reference_column: {$node: reference_column}
-          limit: {$campaign: retention_limit}
+          qualified_table: {$node: table}
+          reference_column: {$client: reference_column}
+          limit: {$client: retention_limit}
     rdbms.mariadb:
       sentencia: >-
         SELECT count(*) FROM :qualified_table
         WHERE :reference_column < :limit
       parametros:
         binds:
-          qualified_table: {$node: qualified_table}
-          reference_column: {$node: reference_column}
-          limit: {$campaign: retention_limit}
+          qualified_table: {$node: table}
+          reference_column: {$client: reference_column}
+          limit: {$client: retention_limit}
 criterio:
   opa:
     paquete: argos.retention
     input_map:
-      category: {$node: category}
       treatment: {$client: treatment_id}
       out_of_term: count
 muestreo:

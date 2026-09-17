@@ -20,6 +20,7 @@ CHALLENGE_KEYS: Mapping[str, str] = {
     "clase_de_activo": "asset_class",
     "sonda": "probe",
     "tipo": "kind",
+    "objeto": "target",
     "por_conector": "by_connector",
     "sentencia": "statement",
     "parametros": "params",
@@ -57,12 +58,12 @@ CHALLENGE_VALUES: Mapping[str, Mapping[str, str]] = {
     },
 }
 # Keys whose contents are opaque to the translation: bind names and typed references are free text.
-OPAQUE = frozenset({"params", "input_map"})
+OPAQUE = frozenset({"params", "input_map", "target"})
 # Connector identifiers are names, not fields: the variant below them is translated, they are not.
 BY_CONNECTOR = "by_connector"
 # English names that have no Spanish form because they are already identifiers of the format.
 ENGLISH_ONLY = frozenset(
-    {"id", "version", "selector", "criterion", "opa", "asset_class", "input_map"}
+    {"id", "version", "selector", "criterion", "opa", "asset_class", "input_map", "target"}
 )
 
 

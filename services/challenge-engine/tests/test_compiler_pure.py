@@ -180,6 +180,13 @@ def test_a_missing_reference_is_an_error_not_an_empty_value() -> None:
 def test_a_plan_row_without_its_challenge_or_node_is_an_error() -> None:
     with pytest.raises(CompilerError, match="unknown challenge"):
         _compile(plan=[{**PLAN[0], "challenge_id": "sec-unknown"}])
+
+
+def test_a_challenge_reserved_but_not_written_yet_is_unverifiable() -> None:
+    plan = [{**PLAN[0], "challenge_id": "sec-not-written-yet"}]
+    compiled = _compile(plan=plan, reserved=frozenset({"sec-not-written-yet"}))
+    assert compiled.units == []
+    assert compiled.unverifiable[0]["reason"].endswith("not written yet")
     with pytest.raises(CompilerError, match="unknown node"):
         _compile(plan=[{**PLAN[0], "node_keys": ["k-none"]}])
 

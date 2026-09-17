@@ -37,6 +37,7 @@ class ChallengeSpec:
     obligation: str
     asset_class: str
     probe_kind: str
+    probe_target: dict[str, Any] | None
     params: dict[str, Any]
     by_connector: dict[str, dict[str, Any]]
     criterion: dict[str, Any]
@@ -112,6 +113,7 @@ def parse_challenge(document: Any, source: Path | None = None) -> ChallengeSpec:
         obligation=document["objective"]["obligation"],
         asset_class=document["selector"]["asset_class"],
         probe_kind=probe["kind"],
+        probe_target=dict(probe["target"]) if "target" in probe else None,
         params=dict(probe.get("params", {})),
         by_connector={k: dict(v) for k, v in probe.get("by_connector", {}).items()},
         criterion=dict(document["criterion"]),

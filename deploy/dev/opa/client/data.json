@@ -26,5 +26,10 @@
     "argos_ro": "argos_audit",
     "clinic_admin": "physician",
     "billing_analyst": "billing_clerk"
+  },
+  "campaign_parameters": {
+    "treatment_id": "T-HIS",
+    "reference_column": "created_at",
+    "retention_limit": "2011-09-18"
   }
 }
