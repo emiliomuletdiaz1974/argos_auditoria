@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: 29f5a94
+commit: 83b5b25
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -80,6 +80,13 @@ Dependencias: `argos-common` (configuración, registro y diario) y el SDK de Tem
 - `test_verdict_determinism.py` comprueba que los bytes son canónicos y no contienen flotantes, y que el evaluador los reproduce dos veces seguidas.
 - Se ejecuta en CI (Linux) y en local (Windows).
 
+**Frontera de veredictos (F05-04):** `tests/architecture/` analiza el código con `ast`, sin importarlo, y falla si:
+- algún módulo fuera de `argos_challenges.evaluator` construye un `Verdict`, también con alias, a través del módulo o escondido tras un `import *`;
+- algún módulo fuera de `argos_challenges.store` escribe en `argos.verdicts` (leerla sí está permitido);
+- el evaluador importa un paquete de modelos de lenguaje.
+
+Seis infracciones plantadas comprueban que el analizador las detecta, y el repositorio pasa sin ninguna.
+
 ## 9. Limitaciones conocidas y pendientes
 
 - El motor de retos completo se construye en la Fase 05.
@@ -93,3 +100,4 @@ Dependencias: `argos-common` (configuración, registro y diario) y el SDK de Tem
 | 0.1.0-alpha | 2026-09-17 | Incumplimientos plantados y verdad terreno de campaña para la prueba de la Fase 05 | Fase 05 (F05-01) |
 | 0.1.0-alpha | 2026-09-17 | Vectores de muestreo y cota de Wilson calculados a mano | Fase 05 (F05-02) |
 | 0.1.0-alpha | 2026-09-17 | Suite de determinismo del veredicto con bytes canónicos esperados | Fase 05 (F05-03) |
+| 0.1.0-alpha | 2026-09-17 | Test arquitectónico de la frontera de veredictos | Fase 05 (F05-04) |
