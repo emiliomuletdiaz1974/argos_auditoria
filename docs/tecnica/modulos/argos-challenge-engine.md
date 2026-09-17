@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: fd6556b
+commit: 325851d
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -105,6 +105,20 @@ Es la frontera del producto hecha código: **el veredicto no lo decide nunca un 
   - **Sin variante para el conector del sistema**, la unidad no desaparece: queda en `unverifiable` con su motivo.
   - Mismas entradas, mismas unidades y en el mismo orden.
 
+### Actividades de sonda y evaluación (ARG-044)
+
+Los workflows quedan deterministas y sin entrada/salida; todo lo que habla con un sistema del cliente, con OPA o con la base vive en `ChallengeActivities`.
+- **`probe`** ejecuta la unidad:
+  - las sondas de conector (`scan_schema`, `count`, `sample`, `check_config`) pasan por el SDK, con su asiento previo, su presupuesto de carga y la garantía de solo lectura;
+  - las internas (`shacl` e `inventory_query`) leen lo que ARGOS ya sabe (la instantánea y el grafo) y no tocan ningún sistema del cliente; la consulta interna se elige de una **lista cerrada** por nombre, un reto no escribe la suya.
+- **Errores con significado distinto:**
+  - presupuesto agotado o cortacircuitos abierto **no son fallos**, son esperas: vuelven como reintentables;
+  - una violación de solo lectura **no se reintenta**: congela la unidad y deja asiento `probe.readonly_violation`.
+- **Minimización antes de devolver:** solo salen las claves que permite lo declarado en `evidence.capture`; ni valores, ni cadenas de conexión, ni nada sin declarar llega al historial del workflow.
+- **`wait_window`** espera la ventana pactada del sistema con latido, sin fallar.
+- **`evaluate`** consulta OPA si el criterio lo delega, llama al evaluador puro y persiste con `persist_verdict`: repetir la actividad no duplica veredictos.
+- El worker registra estas actividades junto a las de humo (`campaign_activities()` las ata a la base, a Vault y a OPA).
+
 ## 4. Interfaces
 
 | Tipo | Nombre | Descripción |
@@ -119,6 +133,9 @@ Es la frontera del producto hecha código: **el veredicto no lo decide nunca un 
 | Funciones | `parse_challenge(document, source=None)`, `load_challenge_file(path)`, `library_challenges(dir)`, `lint_challenge(spec, context, path=None)`, `load_schema()`; tipos `ChallengeSpec`, `LintContext`, `ChallengeError` | Modelo y validación de retos |
 | Funciones | `read_challenge(text)`, `to_internal(doc)`, `to_editorial(doc)`; tablas `CHALLENGE_KEYS`, `CHALLENGE_VALUES`; `TranslationError` | Capa de traducción en castellano |
 | Herramienta | `tools/challenge_lint.py [--library DIR]` y `make challenge-lint` | Valida la biblioteca; código 1 si hay errores |
+| Clase | `ChallengeActivities(dsn, secrets, opa_url)` con las actividades `probe`, `wait_window` y `evaluate`; `campaign_activities(cfg)` | Actividades de campaña |
+| Funciones | `minimise(data, capture)`, `probe_spec(unit)`; tablas `CAPTURE_KEYS` e `INVENTORY_QUERIES` | Minimización y sondas internas |
+| Asiento | `probe.readonly_violation` | Intento de escritura detectado en un conector |
 | Clase | `SnapshotSelectorResolver(dsn, snapshot_id)` con `resolve(selector)` y `nodes`; función `matches(node, selector, system_ids)` | Resolución de selectores sobre la instantánea |
 | Funciones | `compile_campaign(campaign_id, plan, challenges, nodes, systems, context)`, `connector_id(system)`, `unit_id(...)`; tipos `CompiledCampaign`, `CompilerError`; tabla `CONNECTOR_IDS` | Compilador de campañas |
 | Tablas | `argos.campaigns` (ampliada), `argos.campaign_units`, `argos.verdicts`, `argos.approval_requests`, `argos.approvals` (migración `0012`) | Campañas, unidades, veredictos y compuertas |
@@ -133,7 +150,7 @@ Es la frontera del producto hecha código: **el veredicto no lo decide nunca un 
 
 ## 5. Configuración
 
-`ARGOS_TEMPORAL_ADDRESS` y `ARGOS_DATABASE_URL` (para el diario), desde `argos-common`.
+`ARGOS_TEMPORAL_ADDRESS`, `ARGOS_DATABASE_URL`, `ARGOS_VAULT_ADDR`, `ARGOS_VAULT_TOKEN` y `ARGOS_OPA_URL` (por defecto `http://127.0.0.1:8181`), desde `argos-common`.
 
 Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema` 4.23 y PyYAML.
 
@@ -181,6 +198,8 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 
 **DSL (F05-05):** `test_challenge_translation.py` (ida y vuelta, clave y valor desconocidos, clave duplicada y un campo dado a la vez en los dos idiomas) y `test_challenge_dsl.py` (esquema válido, diez documentos rechazados, plantilla de texto rechazada, parámetros tipados aceptados, las seis reglas del producto y los retos que se entregan). `tests/unit/test_challenge_lint_tool.py` comprueba los códigos de salida de la herramienta.
 
+**Actividades (F05-12):** `test_activities_pure.py` (solo salen las claves declaradas, ni valores ni cadenas de conexión, captura desconocida que no deja pasar nada, parámetros sin plantillas y lista cerrada de consultas internas de solo lectura) y `tests/integration/test_challenge_activities.py` (sonda real sobre la fuente simulada, evaluación idempotente, consulta interna desconocida rechazada sin reintento, sistema no registrado y asiento previo `query.emit`).
+
 **Compilador y resolución sobre instantánea (F05-11):** `test_compiler_pure.py` (identificadores de conector, unidad completa y explicable, parámetros tipados resueltos, orden estable, sin variante a `unverifiable`, referencias que faltan y filas del plan sin reto o sin nodo como error, y sonda de muestra que exige aprobación) y `tests/integration/test_snapshot_resolver.py` (equivalencia con el grafo vivo en las nueve clases, `status` conservado y la instantánea que no se mueve cuando el grafo sí).
 
 **Almacén (F05-10):** `tests/integration/test_challenge_store.py`: campaña creada, fijada y legible; se fija una sola vez; el mismo veredicto se escribe una vez aunque se repita; veredictos inmutables; resultado desconocido rechazado por la base; compuerta sin petición previa rechazada y doble control con personas distintas; petición repetida que conserva la primera; y estados que solo avanzan.
@@ -214,3 +233,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Evaluador determinista puro con veredicto de cuatro valores y hash canónico | Fase 05 (ARG-046) |
 | 0.1.0-alpha | 2026-09-17 | Tablas de campañas, unidades, veredictos y aprobaciones, y almacén idempotente | Fase 05 (ARG-043) |
 | 0.1.0-alpha | 2026-09-17 | Resolución de selectores sobre la instantánea y compilador de campañas con parámetros tipados | Fase 05 (ARG-042) |
+| 0.1.0-alpha | 2026-09-17 | Actividades de sonda con minimización, ventanas, sondas internas y evaluación persistida | Fase 05 (ARG-044) |

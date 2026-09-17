@@ -52,6 +52,7 @@ class ArgosConfig(BaseSettings):
     LOG_LEVEL: LogLevel = LogLevel.INFO
     LOG_FORMAT_JSON: bool = True
     LLM_LOCAL_ENDPOINT: str | None = "http://127.0.0.1:8000/v1"
+    OPA_URL: str = "http://127.0.0.1:8181"  # operational rules of the challenge engine (ARG-036)
     VAULT_ADDR: str = "http://127.0.0.1:8200"
     VAULT_TOKEN: SecretStr | None = None  # services that open connectors: svc-connector-sdk policy
 
