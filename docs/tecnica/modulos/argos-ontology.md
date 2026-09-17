@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: 79e21cb
+commit: f5de17b
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -23,7 +23,7 @@ Convierte la normativa (RGPD, EHDS, AI Act) en **datos verificables**. Cada obli
 - los retos que la verifican;
 - el tipo de evidencia que producen.
 
-Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-033 (aplicabilidad), ARG-040 (publicación firmada) y el flujo editorial de ARG-038.
+Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-033 (aplicabilidad), ARG-037 (trazabilidad), ARG-040 (publicación firmada) y el flujo editorial de ARG-038.
 
 ## 2. Alcance y límites
 
@@ -119,6 +119,17 @@ Las clases basadas en clasificación exigen una confianza mínima de 0,5, que in
 
 Para expresar «columna sin clasificar» y «sistema de IA pendiente», el selector de la API del inventario se amplió de forma compatible con dos campos, `unclassified` y `status` (nota de desviación ARG-031-033).
 
+### Matriz de trazabilidad y catálogo de retos (ARG-037)
+
+La promesa «cada reto trazado a la obligación que verifica» se comprueba también en sentido inverso, con una consulta reproducible sobre la ontología y el catálogo de retos:
+- **Catálogo provisional** (`library/challenges/catalog.yaml`): identificadores de reto reservados, cada uno con su familia y el **tipo de evidencia** que producirá. Lo sustituye la biblioteca de retos de la Fase 05 conservando los identificadores.
+- **Estados de cada obligación:** `covered` (tiene retos del catálogo), `pending` (declara un motivo de verificación pendiente) u `orphan`.
+- **Errores que impiden publicar:**
+  - obligación sin reto ni motivo pendiente, o con ambos;
+  - reto referenciado que no está en el catálogo;
+  - reto del catálogo que ninguna obligación usa.
+- **Salidas:** `traceability.json` para la consola y `traceability.csv` (separado por `;`) como anexo contractual.
+
 Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6 y PyYAML.
 
 ## 4. Interfaces
@@ -143,6 +154,9 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6 y PyYAML.
 | Clave | Vault Transit `argos-content` (Ed25519) | Firma de contenidos normativos |
 | Fichero | `library/ontology/asset-classes/base.ttl` | Clases de activo base con sus selectores |
 | Funciones | `load_asset_classes(path)`, `asset_classes(graph)`, `compiled_selector(asset_class)`, `asset_class_errors(graph)` | Lectura, compilación y validación de clases de activo |
+| Fichero | `library/challenges/catalog.yaml` | Catálogo provisional de retos (id, familia, tipo de evidencia, descripción) |
+| Funciones | `load_challenge_catalog(path)`, `library_graph(library_dir)`, `build_matrix(graph, catalog)`, `matrix_json(rows)`, `matrix_csv(rows)` | Matriz de trazabilidad y sus errores |
+| Herramienta | `tools/ontology_traceability.py [--library DIR] [--output DIR]` | Escribe la matriz en JSON y CSV; termina con código 1 si hay errores |
 
 ## 5. Configuración
 
@@ -178,6 +192,11 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
   - los datos de salud coinciden con la verdad terreno;
   - clasificadas y sin clasificar parten las columnas vivas;
   - el sistema de IA pendiente aparece.
+- **`test_traceability_pure.py`:**
+  - estados `covered`, `pending` y `orphan`;
+  - cada error de publicación;
+  - validación del catálogo (ids, tipos de evidencia y duplicados);
+  - salidas deterministas en JSON y CSV.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -194,3 +213,4 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
 | 0.1.0-alpha | 2026-09-17 | Almacén RDF versionado e inmutable en PostgreSQL con SPARQL por versión o fecha | Fase 04 (ARG-032) |
 | 0.1.0-alpha | 2026-09-17 | Bundle determinista firmado con `argos-content` y verificación antes de cargar | Fase 04 (ARG-040) |
 | 0.1.0-alpha | 2026-09-17 | Plano de aplicabilidad con clases de activo base y selectores validados | Fase 04 (ARG-033) |
+| 0.1.0-alpha | 2026-09-17 | Matriz de trazabilidad obligación–reto y catálogo provisional de retos | Fase 04 (ARG-037) |

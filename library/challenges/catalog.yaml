@@ -1,0 +1,12 @@
+# Catálogo provisional de identificadores de retos (nota ARG-031-033).
+# Hasta que la Fase 5 traiga la biblioteca real, este fichero es la lista de retos existentes contra
+# la que la matriz de trazabilidad comprueba los `verificado_por` de las obligaciones. Cada entrada
+# reserva un id con su familia y el tipo de evidencia que producirá. Las poblaciones normativas
+# (F04-12, F04-14, F04-16) añaden aquí los retos que referencian; un id sin obligación es huérfano.
+#
+# Formato de cada entrada:
+#   - id: sec-encryption-at-rest     # minúsculas y guiones: <familia>-<nombre>
+#     family: security               # familia del reto
+#     evidence_type: configuration   # query_result | configuration | log_extract | document
+#     description: Cifrado en reposo verificado en el almacén de datos
+challenges: []
