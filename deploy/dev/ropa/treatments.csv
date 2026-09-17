@@ -1,0 +1,3 @@
+id;name;legal_basis;retention;systems
+T-HIS;Synthetic clinical episodes;GDPR 9.2.h;15 years;dev-source-postgres
+T-BILLING;Synthetic billing replica;;6 years;dev-source-mariadb

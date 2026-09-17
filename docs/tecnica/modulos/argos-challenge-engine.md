@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: 1aadd28
+commit: ddb6272
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -59,6 +59,16 @@ Dependencias: `argos-common` (configuración, registro y diario) y el SDK de Tem
 
 `tests/integration/test_temporal.py`: ejecución del workflow de humo, reintentos de actividades y asiento en el diario contra Temporal real.
 
+**Verdad terreno de campaña (Fase 05, F05-01):**
+- `tests/fixtures/campaign_ground_truth.yaml` fija a mano, antes de que exista el motor, el resultado esperado por reto y sistema sobre la instantánea de demostración: 20 retos de RGPD y AI Act, 2 sin variante y el agregado por sistema;
+- los incumplimientos plantados son:
+  - una cuenta de facturación con lectura sobre la réplica con datos de salud y un perfil no autorizado;
+  - un tratamiento sin base jurídica en el registro sintético (`deploy/dev/ropa/treatments.csv`);
+  - el sujeto sintético que reaparece en la réplica;
+  - el sistema de IA de alto riesgo sin documentación técnica;
+- `tests/integration/test_planted_findings.py` comprueba en las fuentes simuladas cada hecho del que depende: TLS, cifrado en reposo, registro de accesos, cuenta plantada, registros fuera de plazo y registro de tratamientos;
+- está pendiente de validación jurídica, como las poblaciones.
+
 ## 9. Limitaciones conocidas y pendientes
 
 - El motor de retos completo se construye en la Fase 05.
@@ -69,3 +79,4 @@ Dependencias: `argos-common` (configuración, registro y diario) y el SDK de Tem
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-14 | Worker de Temporal con workflow de humo, reintentos y asientos en el diario | Fase 01 (ARG-007) |
+| 0.1.0-alpha | 2026-09-17 | Incumplimientos plantados y verdad terreno de campaña para la prueba de la Fase 05 | Fase 05 (F05-01) |

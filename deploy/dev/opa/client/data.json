@@ -1,11 +1,30 @@
 {
   "retention_schedule": {
-    "HIS-episodes": {"days": 5475}
+    "HIS-episodes": {
+      "days": 5475
+    },
+    "T-HIS": {
+      "days": 5475
+    },
+    "T-BILLING": {
+      "days": 2190
+    }
   },
   "retention_defaults": {
-    "special_category.health": {"days": 1825}
+    "special_category.health": {
+      "days": 1825
+    }
   },
   "authorized_profiles": {
-    "special_category.health": ["physician", "nurse"]
+    "special_category.health": [
+      "physician",
+      "nurse",
+      "argos_audit"
+    ]
+  },
+  "identity_profiles": {
+    "argos_ro": "argos_audit",
+    "clinic_admin": "physician",
+    "billing_analyst": "billing_clerk"
   }
 }

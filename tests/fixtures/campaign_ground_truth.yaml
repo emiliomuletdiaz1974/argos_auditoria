@@ -1,0 +1,169 @@
+# Campaign ground truth over the demo snapshot, maintained by hand (F05-01).
+# Written before the challenge engine exists and derived from the simulated sources, the synthetic
+# record of processing (deploy/dev/ropa/treatments.csv), the client data (deploy/dev/opa/client/data.json)
+# and the v1 populations, never from the engine. Pending legal validation like the populations (F04-98).
+# Every value refers to synthetic data.
+#
+# Granularity: one result per challenge and system, the worst over that system's units
+# (non_compliant > not_demonstrated > inconclusive > compliant). Units that cannot be compiled for a
+# connector are listed under `unverifiable`. Each non_compliant entry is one expected finding, with the
+# severity of its obligation.
+version: 1
+campaign_date: 2026-09-16
+snapshot:
+  systems: [dev-source-postgres, dev-source-mariadb]
+  record_of_processing: deploy/dev/ropa/treatments.csv
+  demo_review: true            # tests/fixtures/demo_review.yaml (F04-23)
+  synthetic_subject: true      # injected by tools/demo_client_actions.py (F05-07)
+
+challenges:
+  # --- GDPR · security of processing -------------------------------------------------------------
+  sec-encryption-at-rest:
+    obligation: OBL-RGPD-32-1
+    dev-source-postgres:
+      result: inconclusive
+      reason: PostgreSQL has no native encryption at rest; volume encryption is not visible read-only
+    dev-source-mariadb:
+      result: non_compliant
+      reason: innodb_encrypt_tables = OFF
+  sec-encryption-in-transit:
+    obligation: OBL-RGPD-32-3
+    dev-source-postgres:
+      result: non_compliant
+      reason: ssl = off
+    dev-source-mariadb:
+      result: non_compliant
+      reason: require_secure_transport = OFF
+  sec-access-logging:
+    obligation: OBL-RGPD-32-2
+    dev-source-postgres:
+      result: compliant
+      reason: log_statement = all
+    dev-source-mariadb:
+      result: compliant
+      reason: general_log = ON
+  # --- GDPR · principles ---------------------------------------------------------------------------
+  acc-special-category-profiles:
+    obligation: OBL-RGPD-5-2
+    dev-source-postgres:
+      result: compliant
+      reason: argos_ro (argos_audit) and clinic_admin (physician) are authorised profiles
+    dev-source-mariadb:
+      result: non_compliant
+      reason: billing_analyst (billing_clerk) reads billing.patient_mirror (planted)
+  ret-table-retention:
+    obligation: OBL-RGPD-5-1
+    dev-source-postgres:
+      result: non_compliant
+      reason: clinic.patients has rows created since 2003, older than the 15-year term of T-HIS
+    dev-source-mariadb:
+      result: non_compliant
+      reason: billing.invoices rows from 2010-2011, older than the 6-year term of T-BILLING
+  # --- GDPR · data subject rights (synthetic subject) --------------------------------------------
+  dsr-erasure-effective:
+    obligation: OBL-RGPD-17-1
+    dev-source-postgres:
+      result: compliant
+      reason: the synthetic subject is gone from clinic after the confirmed erasure
+    dev-source-mariadb:
+      result: non_compliant
+      reason: the synthetic subject reappears in billing.patient_mirror (planted)
+  dsr-access-request-term:
+    obligation: OBL-RGPD-15-1
+    dev-source-postgres:
+      result: compliant
+      reason: the client confirms the access request answered in 12 days (term 30)
+    dev-source-mariadb:
+      result: inconclusive
+      reason: the access right was exercised only against the clinical system
+  # --- GDPR · record of processing ---------------------------------------------------------------
+  coh-ropa-declared-systems:
+    obligation: OBL-RGPD-30-1
+    dev-source-postgres:
+      result: compliant
+      reason: declared in T-HIS
+    dev-source-mariadb:
+      result: compliant
+      reason: declared in T-BILLING
+  coh-treatment-legal-basis:
+    obligation: OBL-RGPD-9-1
+    dev-source-postgres:
+      result: compliant
+      reason: T-HIS declares GDPR 9.2.h
+    dev-source-mariadb:
+      result: non_compliant
+      reason: T-BILLING has no legal basis (planted)
+  coh-treatment-retention-declared:
+    obligation: OBL-RGPD-30-2
+    dev-source-postgres:
+      result: compliant
+      reason: T-HIS declares 15 years
+    dev-source-mariadb:
+      result: compliant
+      reason: T-BILLING declares 6 years
+  coh-unclassified-columns:
+    obligation: OBL-RGPD-30-3
+    dev-source-postgres:
+      result: non_compliant
+      reason: six live columns without category after the DPO review
+    dev-source-mariadb:
+      result: non_compliant
+      reason: billing.invoices.amount_cents and issued_at without category
+  # --- GDPR · breaches -----------------------------------------------------------------------------
+  brc-breach-register:
+    obligation: OBL-RGPD-33-2
+    dev-source-postgres:
+      result: inconclusive
+      reason: no breach register document provided in the demo
+    dev-source-mariadb:
+      result: inconclusive
+      reason: no breach register document provided in the demo
+  # --- AI Act (readmission_risk confirmed as high risk) ---------------------------------------------
+  coh-no-prohibited-ai-in-use:
+    obligation: OBL-AIACT-5-1
+    dev-source-postgres:
+      result: compliant
+      reason: the only confirmed AI system is high risk, not prohibited
+  coh-ai-risk-class-declared:
+    obligation: OBL-AIACT-6-1
+    dev-source-postgres:
+      result: compliant
+      reason: risk_class = high
+  coh-ai-training-data-governance:
+    obligation: OBL-AIACT-10-1
+    dev-source-postgres:
+      result: inconclusive
+      reason: no training data declaration provided in the demo
+  doc-ai-technical-documentation:
+    obligation: OBL-AIACT-11-1
+    dev-source-postgres:
+      result: non_compliant
+      reason: the confirmed AI system has no technical documentation reference (planted)
+  sec-ai-event-logging:
+    obligation: OBL-AIACT-12-1
+    dev-source-postgres:
+      result: inconclusive
+      reason: the model serving is outside the simulated sources
+  doc-ai-human-oversight:
+    obligation: OBL-AIACT-26-1
+    dev-source-postgres:
+      result: non_compliant
+      reason: no human oversight owner declared for the confirmed AI system
+  sec-ai-log-retention:
+    obligation: OBL-AIACT-26-2
+    dev-source-postgres:
+      result: inconclusive
+      reason: the model serving logs are outside the simulated sources
+
+unverifiable:
+  - challenge: ret-file-retention
+    system: dev-source-postgres
+    reason: file retention challenge without a variant for relational connectors
+  - challenge: ret-file-retention
+    system: dev-source-mariadb
+    reason: file retention challenge without a variant for relational connectors
+
+# Worst result per system, by hand.
+aggregate:
+  dev-source-postgres: non_compliant
+  dev-source-mariadb: non_compliant
