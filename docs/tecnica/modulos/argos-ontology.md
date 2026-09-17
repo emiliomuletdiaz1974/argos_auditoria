@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: ce7ccb3
+commit: 3490603
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -23,7 +23,7 @@ Convierte la normativa (RGPD, EHDS, AI Act) en **datos verificables**. Cada obli
 - los retos que la verifican;
 - el tipo de evidencia que producen.
 
-Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado) y el flujo editorial de ARG-038.
+Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-040 (publicación firmada) y el flujo editorial de ARG-038.
 
 ## 2. Alcance y límites
 
@@ -78,6 +78,21 @@ Funcionamiento:
 - **Auditoría:** cada carga deja el asiento `ontology.load` en el diario encadenado.
 - **Consultas:** `OntologyStore` ejecuta SPARQL en proceso sobre una versión concreta o la vigente en una fecha. Los parámetros de las consultas son términos RDF tipados, nunca texto interpretado.
 
+### Publicación firmada (ARG-040)
+
+La ontología viaja del equipo editorial a los appliances, incluidos los aislados, como un **bundle firmado**:
+- **Contenido:** un tar.gz determinista con el Turtle de `ontology/`, las políticas `policies/**/*.rego` y el catálogo `challenges/`. Misma biblioteca, versión y fecha dan los mismos bytes.
+- **Manifiesto** (`manifest.json`): versión, fecha de entrada en vigor y SHA-256 de cada fichero.
+- **Firma:** el manifiesto se firma con la clave Ed25519 **`argos-content`** de Vault Transit. La clave no es exportable y es distinta de la de releases de software.
+
+**Antes de cargar se verifica siempre** (`verify_bundle`, `load_bundle`), y el bundle se rechaza (`BundleRejectedError`) si:
+- la firma no es válida o es de otra clave, incluida la de releases;
+- el manifiesto no está en forma canónica o no describe un bundle de ontología;
+- sobran, faltan o cambiaron ficheros respecto al manifiesto;
+- el archivo no es un tar.gz válido, trae rutas inseguras o nombres repetidos, o supera los límites (5000 ficheros, 20 MB por fichero).
+
+Solo un bundle verificado llega al almacén versionado.
+
 Dependencias: `argos-common`, rdflib 7.6 y PyYAML.
 
 ## 4. Interfaces
@@ -96,6 +111,10 @@ Dependencias: `argos-common`, rdflib 7.6 y PyYAML.
 | Funciones | `store_version(dsn, version, in_force_from, graph, sha256, manifest, signature)`, `version_in_force(dsn, at)`, `bundle_record(dsn, version)` | Carga y consulta de versiones |
 | Clase | `OntologyStore(dsn, version=None, at=None)` con `sparql(query, bindings)` | SPARQL sobre una versión |
 | Asiento | `ontology.load` | Carga de una versión en el diario |
+| Funciones | `build_bundle(library_dir, version, in_force_from)`, `sign_bundle(manifest, signer)`, `verify_bundle(bundle, signature, public_key)`, `bundle_graph(verified)`, `load_bundle(dsn, bundle, signature, public_key)` | Construcción, firma, verificación y carga |
+| Herramienta | `tools/ontology_publish.py build --version X.Y.Z --in-force-from AAAA-MM-DD [--output DIR]` | Escribe `argos-ontology-X.Y.Z.tar.gz`, su firma `.sig` y la clave pública `content.pub` |
+| Herramienta | `tools/ontology_publish.py verify <bundle> [--public-key FICHERO]` | Verifica un bundle sin cargarlo |
+| Clave | Vault Transit `argos-content` (Ed25519) | Firma de contenidos normativos |
 
 ## 5. Configuración
 
@@ -110,13 +129,21 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
 
 ## 7. Operación
 
-No aplica todavía: el núcleo es contenido estático. La carga versionada y la publicación firmada se documentan con sus componentes.
+- **Publicar una versión:** `uv run --env-file .env.example python tools/ontology_publish.py build --version X.Y.Z --in-force-from AAAA-MM-DD`, con un token de Vault con permiso de firma sobre `argos-content`.
+- **Verificar un bundle recibido:** `tools/ontology_publish.py verify <bundle>`.
+- **Cargar un bundle en el appliance:** `load_bundle`, que verifica antes de guardar.
 
 ## 8. Verificación
 
 - **`test_vocabulary.py`:** el núcleo OWL, su versión, las etiquetas en castellano, los dominios y rangos, la propiedad simétrica, la lista cerrada de tipos de evidencia y que no haya términos fuera del vocabulario.
 - **`test_editorial_translation.py`:** ida y vuelta de la traducción, claves desconocidas y claves repetidas.
 - **`test_store_pure.py` y `tests/integration/test_ontology_store.py`:** formato de versión y hash; carga, idempotencia y conflicto; vigencia por fecha independiente del orden de carga; SPARQL con parámetros tipados; inmutabilidad frente a `UPDATE`, `DELETE` y `TRUNCATE`; y asiento en el diario.
+- **`test_bundle_pure.py` y `tests/integration/test_ontology_bundle.py`:**
+  - bytes idénticos con la misma biblioteca;
+  - rechazo de bundles manipulados, de un manifiesto reescrito con hashes coherentes, de otra clave y de datos que no son un bundle;
+  - clave `argos-content` Ed25519 no exportable;
+  - carga de un bundle firmado en Vault;
+  - rechazo de un bundle firmado con la clave de releases.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -131,3 +158,4 @@ No aplica todavía: el núcleo es contenido estático. La carga versionada y la 
 | 0.1.0-alpha | 2026-09-17 | Núcleo OWL de tres planos con tipo de evidencia y vocabulario cerrado | Fase 04 (ARG-031) |
 | 0.1.0-alpha | 2026-09-17 | Plantilla editorial en castellano, capa de traducción y compilador determinista a Turtle | Fase 04 (ARG-038) |
 | 0.1.0-alpha | 2026-09-17 | Almacén RDF versionado e inmutable en PostgreSQL con SPARQL por versión o fecha | Fase 04 (ARG-032) |
+| 0.1.0-alpha | 2026-09-17 | Bundle determinista firmado con `argos-content` y verificación antes de cargar | Fase 04 (ARG-040) |

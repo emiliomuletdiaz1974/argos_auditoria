@@ -39,5 +39,7 @@ printf 'path "argos/data/connectors/*" { capabilities = ["read"] }\n' | vault po
 # ARG-010 · release signing key: Ed25519, not exportable
 mounted transit || vault secrets enable transit
 vault read transit/keys/argos-release >/dev/null 2>&1 || vault write -f transit/keys/argos-release type=ed25519 >/dev/null
+# ARG-040 · ontology content signing key: Ed25519, not exportable, separate from releases
+vault read transit/keys/argos-content >/dev/null 2>&1 || vault write -f transit/keys/argos-content type=ed25519 >/dev/null
 
 echo "development vault configured"
