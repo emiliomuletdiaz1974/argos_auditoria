@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-EHDS-13-1 a argos:Obligation ;
+    rdfs:label "Categorías prioritarias registradas en el sistema HCE"@es ;
+    rdfs:comment "Los datos de las categorías prioritarias (historia clínica resumida, recetas, dispensaciones, imagen, resultados diagnósticos e informes de alta) están localizados y catalogados en un sistema HCE del inventario."@es ;
+    argos:appliesTo n:AC-stored-health-data ;
+    argos:derivesFrom n:EHDS-13-1 ;
+    argos:inForceFrom "2029-03-26"^^xsd:date ;
+    argos:severity "medium" ;
+    argos:verifiedBy n:CH-coh-priority-categories-located .
+
+n:CH-coh-priority-categories-located a argos:Challenge ;
+    argos:challengeId "coh-priority-categories-located" .
+

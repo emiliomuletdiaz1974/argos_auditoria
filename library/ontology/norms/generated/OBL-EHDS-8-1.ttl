@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-EHDS-8-1 a argos:Obligation ;
+    rdfs:label "Limitación del acceso decidida por el paciente"@es ;
+    rdfs:comment "Cuando un paciente sintético limita el acceso a parte de sus datos, un profesional sanitario deja de poder consultarlos y la limitación no le resulta visible."@es ;
+    argos:appliesTo n:AC-stored-health-data ;
+    argos:derivesFrom n:EHDS-8 ;
+    argos:inForceFrom "2029-03-26"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-dsr-ehds-access-restriction .
+
+n:CH-dsr-ehds-access-restriction a argos:Challenge ;
+    argos:challengeId "dsr-ehds-access-restriction" .
+

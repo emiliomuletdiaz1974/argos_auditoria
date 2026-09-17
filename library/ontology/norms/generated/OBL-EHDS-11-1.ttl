@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-EHDS-11-1 a argos:Obligation ;
+    rdfs:label "Acceso profesional limitado a los pacientes en tratamiento"@es ;
+    rdfs:comment "Los accesos de los profesionales sanitarios a datos de salud corresponden a personas a las que están tratando; un acceso sin relación asistencial es un hallazgo."@es ;
+    argos:appliesTo n:AC-stored-health-data ;
+    argos:derivesFrom n:EHDS-11-1 ;
+    argos:inForceFrom "2029-03-26"^^xsd:date ;
+    argos:severity "critical" ;
+    argos:verifiedBy n:CH-acc-care-relationship-access .
+
+n:CH-acc-care-relationship-access a argos:Challenge ;
+    argos:challengeId "acc-care-relationship-access" .
+

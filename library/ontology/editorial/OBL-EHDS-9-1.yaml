@@ -1,0 +1,12 @@
+# Población EHDS del v1 (F04-14). Pendiente de validación jurídica (F04-15).
+id: OBL-EHDS-9-1
+norma: EHDS
+articulo: "9.2"
+titulo: "Información al paciente sobre los accesos a sus datos"
+vigente_desde: 2029-03-26
+severidad: high
+texto_resumen: "Cada acceso de un profesional queda registrado con quién accedió, fecha y hora y qué datos consultó, y ese registro se conserva al menos tres años."
+aplica_a:
+  - AC-stored-health-data
+verificado_por:
+  - sec-health-access-log-retention

@@ -1,0 +1,12 @@
+# Población EHDS del v1 (F04-14). Pendiente de validación jurídica (F04-15).
+id: OBL-EHDS-8-1
+norma: EHDS
+articulo: "8"
+titulo: "Limitación del acceso decidida por el paciente"
+vigente_desde: 2029-03-26
+severidad: high
+texto_resumen: "Cuando un paciente sintético limita el acceso a parte de sus datos, un profesional sanitario deja de poder consultarlos y la limitación no le resulta visible."
+aplica_a:
+  - AC-stored-health-data
+verificado_por:
+  - dsr-ehds-access-restriction

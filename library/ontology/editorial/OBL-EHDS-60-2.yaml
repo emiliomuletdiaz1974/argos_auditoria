@@ -1,0 +1,12 @@
+# Población EHDS del v1 (F04-14). Pendiente de validación jurídica (F04-15).
+id: OBL-EHDS-60-2
+norma: EHDS
+articulo: "60.3"
+titulo: "Descripción de los conjuntos de datos exacta y actualizada"
+vigente_desde: 2029-03-26
+severidad: medium
+texto_resumen: "La descripción de los conjuntos de datos comunicada al organismo de acceso coincide con el inventario vivo y se ha revisado al menos una vez en el último año."
+aplica_a:
+  - AC-stored-health-data
+verificado_por:
+  - coh-dataset-description-current

@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: b9c935e
+commit: a2f91e5
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -209,7 +209,9 @@ El resolutor responde a la pregunta que arranca cada campaña: con la ontología
 
 Cada fila del plan explica por sí sola por qué aplica: obligación, etiqueta, severidad, clase de activo, selector, reto y claves de nodo ordenadas.
 
-### Biblioteca normativa v1 · RGPD
+### Biblioteca normativa v1
+
+#### RGPD
 
 > **Pendiente de validación jurídica.** Esta población está estructurada técnicamente, pero todavía no la ha validado el perfil jurídico. Cada plantilla lo indica en su primera línea, y no debe presentarse como validada hasta entonces.
 
@@ -237,6 +239,38 @@ Las obligaciones sobre datos personales en general aplican a las cinco clases de
 | Brechas | `OBL-RGPD-33-2` registro documental | 33.5 | medium | `brc-breach-register` |
 
 El catálogo provisional `library/challenges/catalog.yaml` contiene esos 13 retos, sin huérfanos; el motor de retos debe implementarlos con los mismos ids. La matriz de trazabilidad da 12 obligaciones cubiertas y 1 pendiente. No se declaran equivalencias con otros marcos: las aportará la matriz de solapamiento.
+
+#### EHDS
+
+> **Pendiente de validación jurídica**, igual que la población RGPD.
+
+Reglamento (UE) 2025/327, ELI `http://data.europa.eu/eli/reg/2025/327/oj`. El alcance aprobado es el acceso primario y el uso secundario relevantes para un centro sanitario:
+- la norma y sus artículos citados se declaran en `library/ontology/norms/EHDS.ttl`;
+- las 7 plantillas están en `library/ontology/editorial/OBL-EHDS-*.yaml`;
+- todas las obligaciones aplican a `AC-stored-health-data`.
+
+**Fechas de aplicación (art. 105):**
+- el reglamento está en vigor desde el 26-3-2025 (`inForceFrom` de la norma);
+- cada obligación declara `vigente_desde: 2029-03-26`, fecha en que aplican los artículos 3 a 15 a las categorías prioritarias a), b) y c) y el capítulo IV;
+- como el resolutor filtra por la fecha de la campaña, estas obligaciones no entran en los planes anteriores a esa fecha;
+- la aplicación a las categorías d), e) y f) desde el 26-3-2031 queda para la validación jurídica.
+
+| Uso | Obligación | Artículo | Severidad | Reto |
+|---|---|---|---|---|
+| Primario | `OBL-EHDS-3-1` acceso inmediato del paciente | 3 | high | `dsr-ehds-patient-access` |
+| Primario | `OBL-EHDS-8-1` limitación del acceso decidida por el paciente | 8 | high | `dsr-ehds-access-restriction` |
+| Primario | `OBL-EHDS-9-1` registro de accesos (quién, cuándo, qué; 3 años) | 9.2 | high | `sec-health-access-log-retention` |
+| Primario | `OBL-EHDS-11-1` acceso profesional solo con relación asistencial | 11.1 | critical | `acc-care-relationship-access` |
+| Primario | `OBL-EHDS-13-1` categorías prioritarias registradas en sistema HCE | 13.1 | medium | `coh-priority-categories-located` |
+| Secundario | `OBL-EHDS-60-1` datos al organismo de acceso en 3 meses | 60.2 | medium | Pendiente de verificación: no hay organismo de acceso en el entorno del cliente |
+| Secundario | `OBL-EHDS-60-2` descripción del conjunto de datos exacta y revisada al año | 60.3 | medium | `coh-dataset-description-current` |
+
+Quedan fuera de esta población, a la espera de la validación jurídica:
+- la rectificación (art. 6), la portabilidad (art. 7) y la autoexclusión (arts. 10 y 71);
+- los requisitos de los sistemas HCE (capítulo III), que corresponden al fabricante;
+- la seudonimización y el entorno de tratamiento seguro (arts. 66 y 73), que corresponden al organismo de acceso.
+
+El catálogo provisional queda así en 19 retos.
 
 Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.40 y httpx 0.28.
 
@@ -349,12 +383,13 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
   - obligaciones futuras fuera del plan;
   - ejecuciones inmutables.
 - **`test_population_gdpr.py`:** plantillas con nombre igual a su id y dentro del alcance aprobado, todos los bloques poblados, artículos declarados como parte de la norma, retos presentes en el catálogo y solo la notificación de brechas pendiente de verificación.
+- **`test_population_ehds.py`:** plantillas dentro del alcance, ambos usos poblados, fechas de aplicación del artículo 105 (no de la entrada en vigor), artículos declarados, retos en el catálogo y solo el plazo del organismo de acceso pendiente.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
 
 - **Componentes de la fase aún sin documentar:** se añaden con sus tareas.
-- **Poblaciones normativas:** la población RGPD está pendiente de validación jurídica; las poblaciones EHDS y AI Act se añaden con sus tareas.
+- **Poblaciones normativas:** las poblaciones RGPD y EHDS están pendientes de validación jurídica; la población AI Act se añade con su tarea.
 
 ## 10. Historial
 
@@ -372,3 +407,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | Paquetes Rego de conservación y accesos, contenedor OPA y cliente `evaluate` | Fase 04 (ARG-036) |
 | 0.1.0-alpha | 2026-09-17 | Resolutor de aplicabilidad por fecha de campaña con ejecuciones inmutables, asiento y evento | Fase 04 (ARG-039) |
 | 0.1.0-alpha | 2026-09-17 | Población RGPD del v1: 13 obligaciones y 13 retos, pendiente de validación jurídica | Fase 04 (ARG-031) |
+| 0.1.0-alpha | 2026-09-17 | Población EHDS del v1: 7 obligaciones aplicables desde 2029 y 6 retos, pendiente de validación jurídica | Fase 04 (ARG-031) |

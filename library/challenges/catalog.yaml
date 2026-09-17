@@ -10,6 +10,10 @@
 #     evidence_type: configuration   # query_result | configuration | log_extract | document
 #     description: Cifrado en reposo verificado en el almacén de datos
 challenges:
+  - id: acc-care-relationship-access
+    family: access
+    evidence_type: log_extract
+    description: "Accesos de profesionales a datos de salud sin relación asistencial con el paciente"
   - id: acc-special-category-profiles
     family: access
     evidence_type: query_result
@@ -18,6 +22,14 @@ challenges:
     family: breach
     evidence_type: document
     description: "Registro documental de brechas con hechos, efectos y medidas correctoras"
+  - id: coh-dataset-description-current
+    family: coherence
+    evidence_type: query_result
+    description: "Descripción de conjuntos de datos comparada con el inventario vivo y su fecha de revisión"
+  - id: coh-priority-categories-located
+    family: coherence
+    evidence_type: query_result
+    description: "Categorías prioritarias del EHDS localizadas y catalogadas en sistemas HCE del inventario"
   - id: coh-ropa-declared-systems
     family: coherence
     evidence_type: query_result
@@ -38,6 +50,14 @@ challenges:
     family: data_subject_rights
     evidence_type: log_extract
     description: "Solicitud de acceso sobre un interesado sintético respondida dentro de plazo"
+  - id: dsr-ehds-access-restriction
+    family: data_subject_rights
+    evidence_type: log_extract
+    description: "Limitación de acceso de un paciente sintético respetada por el servicio de los profesionales"
+  - id: dsr-ehds-patient-access
+    family: data_subject_rights
+    evidence_type: log_extract
+    description: "Acceso de un paciente sintético a sus categorías prioritarias tras el registro en el sistema HCE"
   - id: dsr-erasure-effective
     family: data_subject_rights
     evidence_type: query_result
@@ -62,3 +82,7 @@ challenges:
     family: security
     evidence_type: configuration
     description: "Conexiones al almacén de datos obligadas a cifrado en tránsito"
+  - id: sec-health-access-log-retention
+    family: security
+    evidence_type: configuration
+    description: "Registro de accesos a la historia clínica con quién, cuándo y qué, conservado al menos tres años"

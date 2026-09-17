@@ -1,0 +1,27 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Reglamento (UE) 2025/327 del Espacio Europeo de Datos de Salud and the articles cited by the v1 population (F04-14).
+# Pending legal validation (F04-15).
+
+n:EHDS a argos:Norm ;
+  rdfs:label "Reglamento (UE) 2025/327 del Espacio Europeo de Datos de Salud"@es ;
+  argos:eli "http://data.europa.eu/eli/reg/2025/327/oj"^^xsd:anyURI ;
+  argos:inForceFrom "2025-03-26"^^xsd:date .
+
+n:EHDS-3 a argos:Article ; argos:partOf n:EHDS ;
+  rdfs:label "Artículo 3. Derecho de las personas físicas a acceder a sus datos de salud electrónicos personales"@es .
+n:EHDS-8 a argos:Article ; argos:partOf n:EHDS ;
+  rdfs:label "Artículo 8. Derecho a limitar el acceso"@es .
+n:EHDS-9-2 a argos:Article ; argos:partOf n:EHDS ;
+  rdfs:label "Artículo 9.2. Contenido y conservación de la información sobre el acceso a los datos"@es .
+n:EHDS-11-1 a argos:Article ; argos:partOf n:EHDS ;
+  rdfs:label "Artículo 11.1. Acceso de los profesionales sanitarios a los datos de salud electrónicos personales"@es .
+n:EHDS-13-1 a argos:Article ; argos:partOf n:EHDS ;
+  rdfs:label "Artículo 13.1. Registro de datos de salud electrónicos personales"@es .
+n:EHDS-60-2 a argos:Article ; argos:partOf n:EHDS ;
+  rdfs:label "Artículo 60.2. Plazo de puesta a disposición de los datos por el tenedor"@es .
+n:EHDS-60-3 a argos:Article ; argos:partOf n:EHDS ;
+  rdfs:label "Artículo 60.3. Descripción del conjunto de datos por el tenedor"@es .

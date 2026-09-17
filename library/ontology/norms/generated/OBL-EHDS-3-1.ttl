@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-EHDS-3-1 a argos:Obligation ;
+    rdfs:label "Acceso inmediato del paciente a sus datos de salud"@es ;
+    rdfs:comment "Un paciente sintético obtiene a través del servicio de acceso, de forma gratuita e inmediatamente después de su registro en el sistema HCE, los datos de las categorías prioritarias que le conciernen."@es ;
+    argos:appliesTo n:AC-stored-health-data ;
+    argos:derivesFrom n:EHDS-3 ;
+    argos:inForceFrom "2029-03-26"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-dsr-ehds-patient-access .
+
+n:CH-dsr-ehds-patient-access a argos:Challenge ;
+    argos:challengeId "dsr-ehds-patient-access" .
+

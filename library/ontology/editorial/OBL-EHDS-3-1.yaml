@@ -1,0 +1,12 @@
+# Población EHDS del v1 (F04-14). Pendiente de validación jurídica (F04-15).
+id: OBL-EHDS-3-1
+norma: EHDS
+articulo: "3"
+titulo: "Acceso inmediato del paciente a sus datos de salud"
+vigente_desde: 2029-03-26
+severidad: high
+texto_resumen: "Un paciente sintético obtiene a través del servicio de acceso, de forma gratuita e inmediatamente después de su registro en el sistema HCE, los datos de las categorías prioritarias que le conciernen."
+aplica_a:
+  - AC-stored-health-data
+verificado_por:
+  - dsr-ehds-patient-access

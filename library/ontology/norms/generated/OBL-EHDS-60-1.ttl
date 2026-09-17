@@ -1,0 +1,14 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-EHDS-60-1 a argos:Obligation ;
+    rdfs:label "Datos puestos a disposición del organismo de acceso en plazo"@es ;
+    rdfs:comment "Tras una petición del organismo de acceso a datos de salud, el tenedor pone a su disposición los datos solicitados en un máximo de tres meses."@es ;
+    argos:appliesTo n:AC-stored-health-data ;
+    argos:derivesFrom n:EHDS-60-2 ;
+    argos:inForceFrom "2029-03-26"^^xsd:date ;
+    argos:severity "medium" ;
+    argos:verificationPending "El plazo solo puede medirse con peticiones reales o simuladas del organismo de acceso, que no existe todavía en el entorno del cliente." .
+

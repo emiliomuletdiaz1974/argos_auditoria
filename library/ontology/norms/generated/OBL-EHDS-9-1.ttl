@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-EHDS-9-1 a argos:Obligation ;
+    rdfs:label "Información al paciente sobre los accesos a sus datos"@es ;
+    rdfs:comment "Cada acceso de un profesional queda registrado con quién accedió, fecha y hora y qué datos consultó, y ese registro se conserva al menos tres años."@es ;
+    argos:appliesTo n:AC-stored-health-data ;
+    argos:derivesFrom n:EHDS-9-2 ;
+    argos:inForceFrom "2029-03-26"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-sec-health-access-log-retention .
+
+n:CH-sec-health-access-log-retention a argos:Challenge ;
+    argos:challengeId "sec-health-access-log-retention" .
+

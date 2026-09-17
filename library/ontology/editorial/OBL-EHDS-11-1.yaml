@@ -1,0 +1,12 @@
+# Población EHDS del v1 (F04-14). Pendiente de validación jurídica (F04-15).
+id: OBL-EHDS-11-1
+norma: EHDS
+articulo: "11.1"
+titulo: "Acceso profesional limitado a los pacientes en tratamiento"
+vigente_desde: 2029-03-26
+severidad: critical
+texto_resumen: "Los accesos de los profesionales sanitarios a datos de salud corresponden a personas a las que están tratando; un acceso sin relación asistencial es un hallazgo."
+aplica_a:
+  - AC-stored-health-data
+verificado_por:
+  - acc-care-relationship-access

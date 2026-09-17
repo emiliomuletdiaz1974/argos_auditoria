@@ -1,0 +1,12 @@
+# Población EHDS del v1 (F04-14). Pendiente de validación jurídica (F04-15).
+id: OBL-EHDS-13-1
+norma: EHDS
+articulo: "13.1"
+titulo: "Categorías prioritarias registradas en el sistema HCE"
+vigente_desde: 2029-03-26
+severidad: medium
+texto_resumen: "Los datos de las categorías prioritarias (historia clínica resumida, recetas, dispensaciones, imagen, resultados diagnósticos e informes de alta) están localizados y catalogados en un sistema HCE del inventario."
+aplica_a:
+  - AC-stored-health-data
+verificado_por:
+  - coh-priority-categories-located
