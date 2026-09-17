@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: ed532bb
+commit: a9cb4ac
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -278,9 +278,30 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 
 **Biblioteca (F05-06):** `test_challenge_library.py` comprueba las familias, la carga por id, que el catálogo generado coincide con el que se entrega y es estable, que los ids reservados quedan como borrador, que el archivo congela una versión y rechaza cambiarla, y que el archivo no es fuente de retos.
 
+### Biblioteca que se entrega (F05-18)
+
+17 retos escritos sobre dos normas, con sus variantes por conector:
+
+| Familia | Retos |
+|---|---|
+| `sec` | `sec-encryption-at-rest`, `sec-encryption-in-transit`, `sec-access-logging` |
+| `acc` | `acc-special-category-profiles` (criterio en `argos.access`) |
+| `ret` | `ret-table-retention` (criterio en `argos.retention`), `ret-file-retention` (solo conector de ficheros) |
+| `dsr` | `dsr-erasure-effective`, `dsr-access-request-term` (ambos sobre el sujeto sintético) |
+| `coh` | `coh-ropa-declared-systems`, `coh-treatment-legal-basis`, `coh-treatment-retention-declared`, `coh-unclassified-columns`, `coh-no-prohibited-ai-in-use`, `coh-ai-risk-class-declared`, `coh-ai-pending-review` |
+| `doc` | `doc-ai-technical-documentation`, `doc-ai-human-oversight` |
+
+- **Los criterios delegados leen la sonda:** `argos.retention` y `argos.access` toman el recuento y las identidades de `input.result`, lo que el reto declara en `input_map` son los parámetros del cliente. Sin una sola identidad, `argos.access` no absuelve: no hay evidencia con la que hacerlo.
+- **La sonda `shacl` se filtra por forma y por severidad**, y así dos retos distintos (base jurídica y plazo de conservación) se apoyan en la misma forma sin confundirse.
+- **Una referencia que el contexto no resuelve no rompe la campaña:** la unidad sale como `unverifiable` con su motivo (`MissingReferenceError`), igual que un reto sin variante para el conector.
+- **Una consulta interna sin respuesta no es un cero:** devuelve un resultado sin el campo, y el evaluador lo convierte en `inconclusive`. De ahí que `dsr-access-request-term` quede sin resolver en un sistema contra el que no se ejerció el derecho.
+
 ## 9. Limitaciones conocidas y pendientes
 
-- El motor de retos completo se construye en la Fase 05.
+- **Cuatro ids siguen reservados** (`draft` en el catálogo) porque la demostración no tiene de dónde sacar la evidencia: `brc-breach-register` (no hay registro de brechas), `coh-ai-training-data-governance` (no hay declaración de datos de entrenamiento) y `sec-ai-event-logging` y `sec-ai-log-retention` (el servicio del modelo queda fuera de las fuentes simuladas). Escribir un reto que solo puede responder `inconclusive` sería relleno.
+- **Los retos del sujeto sintético declaran `{$subject: …}`**, pero la campaña todavía no pone al sujeto en el contexto del compilador: los valores en claro solo viven en el paquete del cliente y hay que regenerarlos desde la semilla. Se integra en F05-99.
+- **La columna de referencia de la retención va escrita en cada variante** (`created_at`, `issued_at`): el nombre de una columna no puede viajar como parámetro de una sentencia.
+- **`acc-special-category-profiles` deja fuera las cuentas de superusuario**: son cuentas técnicas de administración y se revisan aparte.
 - El contenedor de la API valida los tokens emitidos por Keycloak en su dirección interna (`http://keycloak:8080/realms/argos`); desde el anfitrión, Keycloak responde en `127.0.0.1:8180` y los emisores no coinciden. Para ejercer la API autenticada desde el anfitrión se usa el proceso local, como hacen los tests de F05-15.
 
 ## 10. Historial
@@ -305,3 +326,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Ciclo de vida de los hallazgos con deduplicación, escalado y riesgo aceptado con caducidad | Fase 05 (ARG-048) |
 | 0.1.0-alpha | 2026-09-17 | Workflow de campaña con compuertas y pausa por cortacircuitos, y sello verificable | Fase 05 (ARG-043) |
 | 0.1.0-alpha | 2026-09-17 | Contenedores del worker y de la API en el entorno de desarrollo, con SBOM en el CI | Fase 05 (F05-17) |
+| 0.1.0-alpha | 2026-09-17 | Biblioteca de 17 retos de RGPD y AI Act, criterios delegados que leen la sonda y filtro por severidad en SHACL | Fase 05 (ARG-050) |

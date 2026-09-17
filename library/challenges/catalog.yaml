@@ -11,9 +11,9 @@ challenges:
     draft: true
   - id: acc-special-category-profiles
     family: access
-    evidence_type: query_result
-    description: "Identidades con acceso a categorías especiales frente a los perfiles autorizados (argos.access)"
-    draft: true
+    evidence_type: configuration
+    description: "Identidades con lectura sobre categorías especiales frente a los perfiles autorizados"
+    draft: false
   - id: brc-breach-register
     family: breach
     evidence_type: document
@@ -22,13 +22,13 @@ challenges:
   - id: coh-ai-pending-review
     family: coherence
     evidence_type: query_result
-    description: "Sistemas de IA descubiertos que siguen pendientes de confirmación y clasificación"
-    draft: true
+    description: "Sistemas de IA descubiertos que siguen pendientes de confirmar y clasificar"
+    draft: false
   - id: coh-ai-risk-class-declared
     family: coherence
     evidence_type: query_result
-    description: "Sistemas de IA confirmados con una clase de riesgo válida (forma SHACL)"
-    draft: true
+    description: "Todo sistema de IA confirmado declara una clase de riesgo del AI Act"
+    draft: false
   - id: coh-ai-training-data-governance
     family: coherence
     evidence_type: query_result
@@ -42,8 +42,8 @@ challenges:
   - id: coh-no-prohibited-ai-in-use
     family: coherence
     evidence_type: query_result
-    description: "Sistemas de IA confirmados como práctica prohibida que siguen activos en el inventario"
-    draft: true
+    description: "Ningún sistema de IA en uso está clasificado como práctica prohibida"
+    draft: false
   - id: coh-priority-categories-located
     family: coherence
     evidence_type: query_result
@@ -52,38 +52,38 @@ challenges:
   - id: coh-ropa-declared-systems
     family: coherence
     evidence_type: query_result
-    description: "Sistemas con categorías especiales declarados en el registro de actividades (forma SHACL)"
-    draft: true
+    description: "Los sistemas con datos de salud están en el registro de actividades"
+    draft: false
   - id: coh-treatment-legal-basis
     family: coherence
     evidence_type: query_result
-    description: "Tratamientos del registro de actividades con base jurídica declarada (forma SHACL)"
-    draft: true
+    description: "Todo tratamiento de categorías especiales declara su base jurídica"
+    draft: false
   - id: coh-treatment-retention-declared
     family: coherence
     evidence_type: query_result
-    description: "Tratamientos del registro de actividades con plazo de conservación declarado (forma SHACL)"
-    draft: true
+    description: "Todo tratamiento declara su plazo de conservación"
+    draft: false
   - id: coh-unclassified-columns
     family: coherence
     evidence_type: query_result
-    description: "Columnas vivas del inventario sin categoría de datos asignada"
-    draft: true
+    description: "Columnas vivas del inventario sin categoría asignada"
+    draft: false
   - id: doc-ai-human-oversight
     family: documentation
-    evidence_type: document
-    description: "Designación de las personas a cargo de la supervisión humana del sistema de IA"
-    draft: true
+    evidence_type: query_result
+    description: "El sistema de IA de alto riesgo declara su responsable de supervisión humana"
+    draft: false
   - id: doc-ai-technical-documentation
     family: documentation
-    evidence_type: document
-    description: "Documentación técnica del sistema de IA de alto riesgo y su fecha de actualización"
-    draft: true
+    evidence_type: query_result
+    description: "El sistema de IA de alto riesgo referencia su documentación técnica"
+    draft: false
   - id: dsr-access-request-term
     family: data_subject_rights
-    evidence_type: log_extract
-    description: "Solicitud de acceso sobre un interesado sintético respondida dentro de plazo"
-    draft: true
+    evidence_type: query_result
+    description: "Plazo de respuesta a la solicitud de acceso del interesado"
+    draft: false
   - id: dsr-ehds-access-restriction
     family: data_subject_rights
     evidence_type: log_extract
@@ -97,13 +97,13 @@ challenges:
   - id: dsr-erasure-effective
     family: data_subject_rights
     evidence_type: query_result
-    description: "Datos de un interesado sintético ausentes del origen tras la solicitud de supresión"
-    draft: true
+    description: "La supresión ejercida por el interesado es efectiva en el sistema"
+    draft: false
   - id: ret-file-retention
     family: retention
     evidence_type: query_result
-    description: "Ficheros más antiguos que el plazo de conservación declarado (argos.retention)"
-    draft: true
+    description: "Ficheros conservados por encima del plazo declarado por el cliente"
+    draft: false
   - id: ret-table-retention
     family: retention
     evidence_type: query_result
@@ -112,8 +112,8 @@ challenges:
   - id: sec-access-logging
     family: security
     evidence_type: configuration
-    description: "Registro de accesos activado en el almacén de datos"
-    draft: true
+    description: "Registro de accesos activo en el sistema que guarda categorías especiales"
+    draft: false
   - id: sec-ai-event-logging
     family: security
     evidence_type: configuration
@@ -132,8 +132,8 @@ challenges:
   - id: sec-encryption-in-transit
     family: security
     evidence_type: configuration
-    description: "Conexiones al almacén de datos obligadas a cifrado en tránsito"
-    draft: true
+    description: "Cifrado en tránsito exigido por el motor de datos"
+    draft: false
   - id: sec-health-access-log-retention
     family: security
     evidence_type: configuration

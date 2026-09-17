@@ -44,6 +44,12 @@ class CompilerError(ArgosError):
     """The campaign cannot be compiled: the plan, the library or the context does not fit."""
 
 
+class MissingReferenceError(CompilerError):
+    """A typed reference the campaign context cannot resolve, such as a subject that was not
+    injected or a parameter the client has not declared. It does not break the campaign: the
+    unit becomes `unverifiable` with its reason, like a challenge without a variant."""
+
+
 @dataclass(frozen=True, slots=True)
 class CompiledCampaign:
     units: list[dict[str, Any]] = field(default_factory=list)
@@ -84,7 +90,7 @@ def _resolve(value: Any, node: Mapping[str, Any], context: Mapping[str, Any], wh
             name = str(value[reference])
             source = node if reference == "$node" else (context.get(reference[1:]) or {})
             if name not in source or source[name] is None:
-                raise CompilerError(f"{where}: {reference} {name} is not available")
+                raise MissingReferenceError(f"{where}: {reference} {name} is not available")
             return source[name]
         return {k: _resolve(v, node, context, where) for k, v in value.items()}
     if isinstance(value, list):
@@ -199,9 +205,20 @@ def compile_campaign(
                     }
                 )
                 continue
-            units.append(
-                _unit(campaign_id, spec, obligation, node, system, variant, resolved_context)
-            )
+            try:
+                units.append(
+                    _unit(campaign_id, spec, obligation, node, system, variant, resolved_context)
+                )
+            except MissingReferenceError as missing:
+                unverifiable.append(
+                    {
+                        "challenge_id": challenge_id,
+                        "connector": connector,
+                        "node_key": node_key,
+                        "reason": str(missing),
+                        "system_id": str(system["id"]),
+                    }
+                )
     units.sort(key=lambda unit: (unit["system_id"], unit["unit_id"]))
     unverifiable.sort(key=lambda row: (row["challenge_id"], row["node_key"]))
     return CompiledCampaign(units, unverifiable)

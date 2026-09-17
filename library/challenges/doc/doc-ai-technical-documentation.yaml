@@ -1,0 +1,25 @@
+id: doc-ai-technical-documentation
+version: "1.0"
+title: El sistema de IA de alto riesgo referencia su documentación técnica
+objective:
+  obligation: OBL-AIACT-11-1
+selector:
+  asset_class: AC-confirmed-ai-system
+probe:
+  kind: shacl
+  params:
+    shape: AISystemDocumentationShape
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts, configuration]
+  minimisation: >-
+    Solo los sistemas de IA sin referencia documental y su mensaje; ningún contenido de la
+    documentación.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 0

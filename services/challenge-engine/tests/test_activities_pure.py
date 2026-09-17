@@ -55,6 +55,7 @@ def test_a_probe_spec_travels_with_its_parameters_and_never_with_templates() -> 
 
 def test_the_internal_questions_are_a_closed_read_only_list() -> None:
     assert set(INVENTORY_QUERIES) == {
+        "access_request_days",
         "unclassified_columns",
         "pending_ai_systems",
         "prohibited_ai_systems",

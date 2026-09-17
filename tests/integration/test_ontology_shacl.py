@@ -46,11 +46,15 @@ def test_a_complete_declaration_leaves_no_findings(inventory: tuple[GraphStore, 
     assert _findings(store) == set()
 
 
-def test_a_confirmed_ai_system_without_risk_class_is_found(
+def test_a_confirmed_ai_system_without_its_ai_act_declarations_is_found(
     inventory: tuple[GraphStore, str, str],
 ) -> None:
     store, dsn, _ = inventory
     record = HEADER + b"T-001;Historia clinica;GDPR 9.2.h;15 years;dev-source-postgres\n"
     import_treatments(store, dsn, record, DPO)
     store.execute("CREATE (:AISystem {key: 'ai-planted', status: 'confirmed'})")
-    assert _findings(store) == {("ai-planted", "ConfirmedAISystemShape", "violation")}
+    assert _findings(store) == {
+        ("ai-planted", "ConfirmedAISystemShape", "violation"),
+        ("ai-planted", "AISystemDocumentationShape", "violation"),
+        ("ai-planted", "AIHumanOversightShape", "violation"),
+    }

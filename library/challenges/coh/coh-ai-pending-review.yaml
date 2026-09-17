@@ -1,0 +1,26 @@
+id: coh-ai-pending-review
+version: "1.0"
+title: Sistemas de IA descubiertos que siguen pendientes de confirmar y clasificar
+objective:
+  obligation: OBL-AIACT-6-2
+selector:
+  asset_class: AC-pending-ai-system
+probe:
+  kind: inventory_query
+  params:
+    query: pending_ai_systems
+    snapshot_id: {$campaign: snapshot_id}
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts]
+  minimisation: >-
+    Solo el recuento de sistemas de IA pendientes de revisión; ninguna entrada ni salida del
+    modelo.
+severity: medium
+estimated_cost:
+  probes: 1
+  rows: 1

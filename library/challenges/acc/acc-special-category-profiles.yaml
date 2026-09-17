@@ -1,0 +1,48 @@
+# Quién puede leer una tabla con categorías especiales, frente a los perfiles que el cliente
+# autorizó (data.client.authorized_profiles). Las cuentas de superusuario quedan fuera: son
+# cuentas técnicas de administración y se revisan aparte (pendiente anotado en F05-18).
+id: acc-special-category-profiles
+version: "1.0"
+title: Identidades con lectura sobre categorías especiales frente a los perfiles autorizados
+objective:
+  obligation: OBL-RGPD-5-2
+selector:
+  asset_class: AC-stored-special-category-data
+probe:
+  kind: check_config
+  target: {$node: table}
+  by_connector:
+    rdbms.postgresql:
+      statement: >-
+        SELECT r.rolname AS role_name FROM pg_roles AS r, pg_class AS c
+        JOIN pg_namespace AS n ON n.oid = c.relnamespace
+        WHERE n.nspname || '.' || c.relname = :qualified_table
+        AND NOT r.rolsuper AND r.rolname NOT LIKE 'pg=_%' ESCAPE '='
+        AND has_table_privilege(r.rolname, c.oid, 'SELECT')
+      params:
+        binds:
+          qualified_table: {$node: table}
+    rdbms.generic:
+      statement: >-
+        SELECT DISTINCT SUBSTRING_INDEX(grantee, '@', 1) AS role_name
+        FROM information_schema.table_privileges
+        WHERE CONCAT(table_schema, '.', table_name) = :qualified_table
+        AND privilege_type = 'SELECT'
+      params:
+        binds:
+          qualified_table: {$node: table}
+criterion:
+  opa:
+    package: argos.access
+    input_map:
+      category: special_category.health
+      target: {$node: table}
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo los nombres de las identidades con lectura sobre el objeto; ninguna contraseña, ningún
+    hash de autenticación y ninguna fila de negocio.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 20

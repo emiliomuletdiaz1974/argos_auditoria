@@ -30,7 +30,12 @@ _HEALTH_SYSTEMS = (
     "WHERE k.name STARTS WITH 'special_category.health' AND coalesce(c.missing, false) = false "
     "RETURN DISTINCT t.system_id"
 )
-_CONFIRMED_AI = "MATCH (a:AISystem {status: 'confirmed'}) RETURN a.key, a.risk_class"
+_CONFIRMED_AI = (
+    "MATCH (a:AISystem {status: 'confirmed'}) "
+    "RETURN a.key, a.risk_class, a.documentation_ref, a.oversight_owner"
+)
+# Properties of a confirmed AI system that the AI Act shapes require, exported as they are.
+_AI_PROPERTIES = ("risk_class", "documentation_ref", "oversight_owner")
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -61,12 +66,14 @@ def export_graph(store: GraphStore) -> Graph:
             data.add((N[str(row["system"])], G.declared_in, N[str(row["treatment"])]))
         for row in store.query(_HEALTH_SYSTEMS, columns=("system_id",), conn=conn):
             data.add((N[system_key(str(row["system_id"]))], RDF.type, G.HealthDataSystem))
-        for row in store.query(_CONFIRMED_AI, columns=("key", "risk_class"), conn=conn):
+        columns = ("key", *_AI_PROPERTIES)
+        for row in store.query(_CONFIRMED_AI, columns=columns, conn=conn):
             node = N[str(row["key"])]
             data.add((node, RDF.type, G.ConfirmedAISystem))
-            risk = _literal(row["risk_class"])
-            if risk is not None:
-                data.add((node, G.risk_class, risk))
+            for prop in _AI_PROPERTIES:
+                value = _literal(row[prop])
+                if value is not None:
+                    data.add((node, G[prop], value))
     return data
 
 

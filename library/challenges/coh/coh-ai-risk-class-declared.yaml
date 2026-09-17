@@ -1,0 +1,25 @@
+id: coh-ai-risk-class-declared
+version: "1.0"
+title: Todo sistema de IA confirmado declara una clase de riesgo del AI Act
+objective:
+  obligation: OBL-AIACT-6-1
+selector:
+  asset_class: AC-confirmed-ai-system
+probe:
+  kind: shacl
+  params:
+    shape: ConfirmedAISystemShape
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts, configuration]
+  minimisation: >-
+    Solo los sistemas de IA que incumplen la forma y su mensaje; ninguna entrada ni salida del
+    modelo.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 0

@@ -143,12 +143,16 @@ def test_signed_bundle_applicability_and_engines_on_the_demo_snapshot(
         assert run.skipped == [], at
         assert (at, sorted(found ^ TRUTH.expected_plan(at))) == (at, [])
 
-    # 5a. SHACL: both systems hold health data and none is in the record of processing.
+    # 5a. SHACL: both systems hold health data and none is in the record of processing, and the
+    # confirmed AI system declares neither technical documentation nor human oversight (F05-18).
     findings = {(f.node, f.shape, f.severity) for f in run_shapes(store)}
-    assert findings == {
+    expected = {
         (system_key(system_id), "HealthDataSystemShape", "violation")
         for system_id in system_ids.values()
     }
+    ai_shapes = {"AISystemDocumentationShape", "AIHumanOversightShape"}
+    assert {entry for entry in findings if entry[1] not in ai_shapes} == expected
+    assert {shape for _, shape, _ in findings if shape in ai_shapes} == ai_shapes
 
     # 5b. OPA: the retention rule answers with the synthetic client schedule.
     httpx.get(f"{OPA}/health", timeout=5.0).raise_for_status()

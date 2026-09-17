@@ -1,4 +1,6 @@
 # Reto patrón escrito en castellano: la capa de traducción lo lleva al núcleo en inglés (ADR-0007).
+# La columna de referencia va en cada variante porque un nombre de columna no puede viajar como
+# parámetro de una sentencia (pendiente anotado en F05-18).
 id: ret-table-retention
 version: "1.0"
 titulo: Retención efectiva en tabla frente al calendario declarado
@@ -11,29 +13,21 @@ sonda:
   target: {$node: table}
   por_conector:
     rdbms.postgresql:
-      sentencia: >-
-        SELECT count(*) FROM :qualified_table
-        WHERE :reference_column < :limit
       parametros:
+        where: "created_at < :limit"
         binds:
-          qualified_table: {$node: table}
-          reference_column: {$client: reference_column}
           limit: {$client: retention_limit}
-    rdbms.mariadb:
-      sentencia: >-
-        SELECT count(*) FROM :qualified_table
-        WHERE :reference_column < :limit
+    rdbms.generic:
       parametros:
+        where: "issued_at < :limit"
         binds:
-          qualified_table: {$node: table}
-          reference_column: {$client: reference_column}
           limit: {$client: retention_limit}
 criterio:
   opa:
     paquete: argos.retention
     input_map:
       treatment: {$client: treatment_id}
-      out_of_term: count
+      category: special_category.health
 muestreo:
   confianza: 0.95
   margen: 0.05

@@ -1,0 +1,28 @@
+# Mide el plazo de respuesta con lo que el cliente confirmó sobre el sujeto sintético. Si el
+# derecho no se ejerció contra ese sistema no hay respuesta que medir: "inconclusive".
+id: dsr-access-request-term
+version: "1.0"
+title: Plazo de respuesta a la solicitud de acceso del interesado
+objective:
+  obligation: OBL-RGPD-15-1
+selector:
+  asset_class: AC-stored-personal-data
+probe:
+  kind: inventory_query
+  params:
+    query: access_request_days
+criterion:
+  threshold:
+    field: count
+    operator: "<="
+    value: 30
+evidence:
+  capture: [counts]
+  minimisation: >-
+    Solo los días transcurridos entre la inyección del sujeto sintético y la confirmación del
+    cliente; ninguna solicitud real y ningún dato de personas reales.
+severity: high
+preconditions: [synthetic_subject_injected]
+estimated_cost:
+  probes: 1
+  rows: 1

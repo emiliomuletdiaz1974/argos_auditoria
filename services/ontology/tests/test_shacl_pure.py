@@ -15,13 +15,29 @@ def _treatment(data: Graph, key: str, legal_basis: str | None, retention: str | 
         data.add((N[key], G.retention, Literal(retention)))
 
 
+def _ai_system(
+    data: Graph,
+    key: str,
+    risk_class: str | None,
+    documentation_ref: str | None,
+    oversight_owner: str | None,
+) -> None:
+    data.add((N[key], RDF.type, G.ConfirmedAISystem))
+    for name, value in (
+        ("risk_class", risk_class),
+        ("documentation_ref", documentation_ref),
+        ("oversight_owner", oversight_owner),
+    ):
+        if value is not None:
+            data.add((N[key], G[name], Literal(value)))
+
+
 def test_a_coherent_inventory_has_no_findings() -> None:
     data = Graph()
     _treatment(data, "t1", "GDPR 9.2.h", "15 years")
     data.add((N["s1"], RDF.type, G.HealthDataSystem))
     data.add((N["s1"], G.declared_in, N["t1"]))
-    data.add((N["a1"], RDF.type, G.ConfirmedAISystem))
-    data.add((N["a1"], G.risk_class, Literal("high")))
+    _ai_system(data, "a1", "high", "DOC-IA-001", "dpo@example.invalid")
     assert validate_graph(data, SHAPES) == []
 
 
@@ -29,13 +45,14 @@ def test_each_gap_is_one_finding_with_its_shape_message_and_severity() -> None:
     data = Graph()
     _treatment(data, "t1", None, None)
     data.add((N["s1"], RDF.type, G.HealthDataSystem))
-    data.add((N["a1"], RDF.type, G.ConfirmedAISystem))
-    data.add((N["a2"], RDF.type, G.ConfirmedAISystem))
-    data.add((N["a2"], G.risk_class, Literal("very-high")))
+    _ai_system(data, "a1", None, None, None)
+    _ai_system(data, "a2", "very-high", "DOC-IA-002", "dpo@example.invalid")
     findings = validate_graph(data, SHAPES)
     assert findings == sorted(findings)
     assert {(f.node, f.shape, f.severity) for f in findings} == {
         ("a1", "ConfirmedAISystemShape", "violation"),
+        ("a1", "AISystemDocumentationShape", "violation"),
+        ("a1", "AIHumanOversightShape", "violation"),
         ("a2", "ConfirmedAISystemShape", "violation"),
         ("s1", "HealthDataSystemShape", "violation"),
         ("t1", "TreatmentShape", "violation"),

@@ -1,0 +1,26 @@
+id: coh-treatment-retention-declared
+version: "1.0"
+title: Todo tratamiento declara su plazo de conservación
+objective:
+  obligation: OBL-RGPD-30-2
+selector:
+  asset_class: AC-stored-personal-data
+probe:
+  kind: shacl
+  params:
+    shape: TreatmentShape
+    severity: warning
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts, configuration]
+  minimisation: >-
+    Solo los tratamientos sin plazo declarado y su mensaje; ninguna fila de los sistemas del
+    cliente.
+severity: medium
+estimated_cost:
+  probes: 1
+  rows: 0

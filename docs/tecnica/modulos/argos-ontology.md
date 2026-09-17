@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: f65bdf6
+commit: a9cb4ac
 date: 2026-09-17
 status: current
 confidentiality: client
@@ -165,6 +165,8 @@ Algunas obligaciones no sondean los sistemas del cliente, sino la coherencia de 
 | `TreatmentShape` | Todo tratamiento declara plazo de conservación | Aviso | Tratamiento sin plazo de conservación |
 | `HealthDataSystemShape` | Todo sistema con columnas vivas de datos de salud figura en el registro de actividades | Violación | Sistema con datos de salud fuera del registro de actividades |
 | `ConfirmedAISystemShape` | Todo sistema de IA confirmado tiene una única clase de riesgo del AI Act (`prohibited`, `high`, `limited`, `minimal`) | Violación | Sistema de IA confirmado sin clasificación de riesgo válida del AI Act |
+| `AISystemDocumentationShape` | Todo sistema de IA confirmado referencia su documentación técnica (`documentation_ref`) | Violación | Sistema de IA de alto riesgo sin referencia a su documentación técnica |
+| `AIHumanOversightShape` | Todo sistema de IA confirmado declara su responsable de supervisión humana (`oversight_owner`) | Violación | Sistema de IA de alto riesgo sin responsable de supervisión humana declarado |
 
 Cada incumplimiento es un hallazgo `ShapeFinding(node, shape, message, severity)`, ordenado y determinista. Un valor vacío cuenta como ausente.
 
@@ -493,3 +495,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | Instantánea de demostración con la revisión de un DPO sintético: columnas técnicas y sistema de IA de alto riesgo confirmado | Fase 04 (ARG-039) |
 | 0.1.0-alpha | 2026-09-17 | `OBL-RGPD-32-1` (cifrado en reposo) también sobre todas las categorías especiales | Fase 04 (ARG-031) |
 | 0.1.0-alpha | 2026-09-17 | Cierre técnico de la Fase 04: prueba de extremo a extremo superada; contenido pendiente de validación jurídica | Fase 04 (`fase-04-tecnica`) |
+| 0.1.0-alpha | 2026-09-17 | Formas de documentación técnica y supervisión humana del AI Act, con sus propiedades exportadas al grafo RDF | Fase 05 (F05-18) |

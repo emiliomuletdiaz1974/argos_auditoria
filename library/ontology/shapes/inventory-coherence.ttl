@@ -34,3 +34,19 @@ g:ConfirmedAISystemShape a sh:NodeShape ;
     sh:severity sh:Violation ;
     sh:message "Sistema de IA confirmado sin clasificación de riesgo válida del AI Act"@es
   ] .
+
+g:AISystemDocumentationShape a sh:NodeShape ;
+  sh:targetClass g:ConfirmedAISystem ;
+  sh:property [
+    sh:path g:documentation_ref ; sh:minCount 1 ;
+    sh:severity sh:Violation ;
+    sh:message "Sistema de IA de alto riesgo sin referencia a su documentación técnica"@es
+  ] .
+
+g:AIHumanOversightShape a sh:NodeShape ;
+  sh:targetClass g:ConfirmedAISystem ;
+  sh:property [
+    sh:path g:oversight_owner ; sh:minCount 1 ;
+    sh:severity sh:Violation ;
+    sh:message "Sistema de IA de alto riesgo sin responsable de supervisión humana declarado"@es
+  ] .

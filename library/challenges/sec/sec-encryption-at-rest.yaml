@@ -1,4 +1,5 @@
-# Pattern challenge written in English: the core reads it as it is.
+# Cifrado en reposo. En PostgreSQL no hay parámetro nativo que lo acredite: la sonda pregunta y, si
+# el motor no responde, el veredicto es "inconclusive", nunca "compliant" (ver §9 del módulo).
 id: sec-encryption-at-rest
 version: "1.0"
 title: Cifrado en reposo verificado en el almacén de datos
@@ -10,19 +11,19 @@ probe:
   kind: check_config
   by_connector:
     rdbms.postgresql:
-      params: {check: encryption_at_rest}
+      statement: SELECT setting FROM pg_settings WHERE name = 'encryption_at_rest'
     rdbms.generic:
-      statement: SHOW GLOBAL VARIABLES LIKE 'innodb_encrypt_tables'
+      statement: SELECT LOWER(@@global.innodb_encrypt_tables) AS setting
 criterion:
   threshold:
-    field: rows.0.value
+    field: rows.0.setting
     operator: "=="
-    value: "ON"
+    value: "on"
 evidence:
   capture: [configuration]
   minimisation: >-
-    Solo parámetros de configuración de cifrado; ninguna clave, ninguna cadena de conexión y
-    ningún dato de negocio.
+    Solo el parámetro de cifrado del motor; ninguna clave, ninguna cadena de conexión y ningún
+    dato de negocio.
 severity: critical
 estimated_cost:
   probes: 1

@@ -41,3 +41,24 @@ test_without_any_term_it_is_never_compliant if {
 	v.applied_term_days == 0
 	not v.compliant
 }
+
+test_the_count_of_the_probe_is_used_when_the_challenge_does_not_state_it if {
+	v := retention.verdict with data.client as client
+		with input as {"category": "special_category.health", "treatment": "HIS-episodes", "result": {"count": 0}}
+	v.compliant
+	v.out_of_term == 0
+}
+
+test_records_past_the_term_counted_by_the_probe_are_not_compliant if {
+	v := retention.verdict with data.client as client
+		with input as {"category": "special_category.health", "treatment": "HIS-episodes", "result": {"count": 37}}
+	not v.compliant
+	v.out_of_term == 37
+}
+
+test_without_a_count_nothing_absolves if {
+	v := retention.verdict with data.client as client
+		with input as {"category": "special_category.health", "treatment": "HIS-episodes", "result": {}}
+	not v.compliant
+	v.out_of_term == null
+}

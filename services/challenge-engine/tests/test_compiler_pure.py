@@ -168,9 +168,11 @@ def test_a_node_of_a_connector_without_a_variant_is_unverifiable_not_silent() ->
     ]
 
 
-def test_a_missing_reference_is_an_error_not_an_empty_value() -> None:
-    with pytest.raises(CompilerError, match="retention_limit"):
-        _compile(context={"client": {"treatment_id": "T-HIS"}, "campaign": {}})
+def test_a_missing_reference_is_never_an_empty_value() -> None:
+    """What the context cannot resolve is reported, never filled in with a blank."""
+    compiled = _compile(context={"client": {"treatment_id": "T-HIS"}, "campaign": {}})
+    assert compiled.units == []
+    assert "retention_limit" in compiled.unverifiable[0]["reason"]
     with pytest.raises(CompilerError, match="qualified_name"):
         without_name: dict[str, Any] = {**NODES["k-col-1"], "qualified_name": None, "name": None}
         nodes = {"k-col-1": without_name}
@@ -223,3 +225,39 @@ def test_a_sample_probe_marks_the_unit_as_needing_approval() -> None:
     [unit] = _compile(plan=plan, challenges={sampling_challenge.id: sampling_challenge}).units
     assert unit["needs_approval"] is True
     assert unit["preconditions"] == ["synthetic_subject_injected"]
+
+
+def test_a_reference_the_context_cannot_resolve_makes_the_unit_unverifiable() -> None:
+    """A challenge that needs a synthetic subject nobody injected is not a broken campaign."""
+    spec = parse_challenge(
+        {
+            "id": "dsr-erasure-effective",
+            "version": "1.0",
+            "title": "La supresión ejercida por el interesado es efectiva",
+            "objective": {"obligation": "OBL-RGPD-17-1"},
+            "selector": {"asset_class": "AC-stored-personal-data"},
+            "probe": {
+                "kind": "count",
+                "by_connector": {
+                    "rdbms.postgresql": {"params": {"binds": {"dni": {"$subject": "dni"}}}}
+                },
+            },
+            "criterion": {"threshold": {"field": "count", "operator": "==", "value": 0}},
+            "evidence": {
+                "capture": ["counts"],
+                "minimisation": "Solo el recuento de apariciones del sujeto sintético.",
+            },
+            "severity": "high",
+        }
+    )
+    compiled = compile_campaign(
+        CAMPAIGN,
+        [{"challenge_id": spec.id, "obligation": "OBL-RGPD-17-1", "node_keys": ["k-col-1"]}],
+        {spec.id: spec},
+        NODES,
+        SYSTEMS,
+        context={"client": {}},
+    )
+    assert compiled.units == []
+    assert [row["challenge_id"] for row in compiled.unverifiable] == [spec.id]
+    assert "$subject dni is not available" in compiled.unverifiable[0]["reason"]

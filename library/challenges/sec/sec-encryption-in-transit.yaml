@@ -1,0 +1,28 @@
+id: sec-encryption-in-transit
+version: "1.0"
+title: Cifrado en tránsito exigido por el motor de datos
+objective:
+  obligation: OBL-RGPD-32-3
+selector:
+  asset_class: AC-stored-personal-data
+probe:
+  kind: check_config
+  by_connector:
+    rdbms.postgresql:
+      statement: SELECT setting FROM pg_settings WHERE name = 'ssl'
+    rdbms.generic:
+      statement: SELECT IF(@@global.require_secure_transport, 'on', 'off') AS setting
+criterion:
+  threshold:
+    field: rows.0.setting
+    operator: "=="
+    value: "on"
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo el parámetro que exige conexiones cifradas; ningún certificado, ninguna credencial y
+    ningún dato de negocio.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 1

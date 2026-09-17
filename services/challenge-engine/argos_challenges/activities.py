@@ -262,11 +262,12 @@ class ChallengeActivities:
         params = dict(probe.get("params", {}))
         if kind == "shacl":
             findings = run_shapes(GraphStore(self._dsn))
-            shape = params.get("shape")
+            shape, severity = params.get("shape"), params.get("severity")
             rows = [
                 {"node": finding.node, "shape": finding.shape, "severity": finding.severity}
                 for finding in findings
-                if shape is None or finding.shape == shape
+                if (shape is None or finding.shape == shape)
+                and (severity is None or finding.severity == severity)
             ]
             return {"ok": True, "data": {"count": len(rows), "rows": rows}}
         name = str(params.get("query", ""))
@@ -281,7 +282,11 @@ class ChallengeActivities:
         }
         with psycopg.connect(self._dsn) as conn:
             row = conn.execute(statement, arguments).fetchone()
-        return {"ok": True, "data": {"count": 0 if row is None else int(row[0])}}
+        if row is None or row[0] is None:
+            # A question ARGOS cannot answer is not a zero: the evaluator turns it into
+            # `inconclusive` because the field is missing, never into `compliant`.
+            return {"ok": True, "data": {}}
+        return {"ok": True, "data": {"count": int(row[0])}}
 
     def _run_probe(self, unit: Mapping[str, Any]) -> dict[str, Any]:
         if str(unit["probe"]["kind"]) in INTERNAL_PROBES:

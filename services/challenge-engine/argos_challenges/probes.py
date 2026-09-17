@@ -24,6 +24,7 @@ CAPTURE_KEYS: Mapping[str, tuple[str, ...]] = {
     "hashed_sample": ("columns", "n", "cell_digests", "validator_rates", "validated"),
 }
 # Read-only questions ARGOS answers about itself, by name. A challenge cannot write its own query.
+# Every one of them answers with a single value: no row means ARGOS cannot answer, not zero.
 INVENTORY_QUERIES: Mapping[str, str] = {
     "unclassified_columns": (
         "SELECT count(*) AS count FROM argos.inventory_snapshot_nodes "
@@ -34,6 +35,13 @@ INVENTORY_QUERIES: Mapping[str, str] = {
         "SELECT count(*) AS count FROM argos.inventory_snapshot_nodes "
         "WHERE snapshot_id = %(snapshot_id)s AND label = 'AISystem' "
         "AND system_id = %(system_id)s AND coalesce(status, '') <> 'confirmed'"
+    ),
+    "access_request_days": (
+        "SELECT EXTRACT(DAY FROM i.exercised_at - i.injected_at)::int AS days "
+        "FROM argos.synthetic_injections i "
+        "WHERE i.system_id = %(system_id)s AND i.exercised_right = 'access' "
+        "AND i.exercised_at IS NOT NULL AND i.injected_at IS NOT NULL "
+        "ORDER BY i.exercised_at DESC LIMIT 1"
     ),
     "prohibited_ai_systems": (
         "SELECT count(*) AS count FROM argos.inventory_snapshot_nodes "
