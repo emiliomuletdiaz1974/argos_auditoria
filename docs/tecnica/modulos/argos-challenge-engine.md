@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: ddb6272
+commit: bbb2af3
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -69,6 +69,12 @@ Dependencias: `argos-common` (configuración, registro y diario) y el SDK de Tem
 - `tests/integration/test_planted_findings.py` comprueba en las fuentes simuladas cada hecho del que depende: TLS, cifrado en reposo, registro de accesos, cuenta plantada, registros fuera de plazo y registro de tratamientos;
 - está pendiente de validación jurídica, como las poblaciones.
 
+**Vectores de muestreo (F05-02):** `tests/fixtures/sampling_vectors.yaml` fija, calculados a mano y con el cálculo anotado, los valores que deben dar `sample_size`, `wilson_upper` y `required_sample_size`:
+- `sample_size(10 000)` es 370; el documento de fase decía 371.
+- Con 0 fallos, el tamaño que garantiza una cota inferior al 1 % es 381.
+
+`services/challenge-engine/tests/test_sampling_vectors.py` los contrasta; queda como fallo esperado estricto hasta que exista el módulo de muestreo.
+
 ## 9. Limitaciones conocidas y pendientes
 
 - El motor de retos completo se construye en la Fase 05.
@@ -80,3 +86,4 @@ Dependencias: `argos-common` (configuración, registro y diario) y el SDK de Tem
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-14 | Worker de Temporal con workflow de humo, reintentos y asientos en el diario | Fase 01 (ARG-007) |
 | 0.1.0-alpha | 2026-09-17 | Incumplimientos plantados y verdad terreno de campaña para la prueba de la Fase 05 | Fase 05 (F05-01) |
+| 0.1.0-alpha | 2026-09-17 | Vectores de muestreo y cota de Wilson calculados a mano | Fase 05 (F05-02) |

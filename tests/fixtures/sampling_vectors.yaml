@@ -1,0 +1,63 @@
+# Sampling and Wilson vectors calculated by hand (F05-02), before argos_challenges.sampling exists.
+# Formulas (ARG-045, note ARG-045-046):
+#   z(0.90) = 1.6449, z(0.95) = 1.9600, z(0.99) = 2.5758
+#   sample_size(N, c, m, p=0.5): n0 = z^2 p (1-p) / m^2 ; n = n0 / (1 + (n0 - 1) / N) ; ceil(n), at most N
+#   wilson_upper(k, n, c): p = k/n ; d = 1 + z^2/n ; centre = p + z^2/(2n) ;
+#                          margin = z sqrt(p(1-p)/n + z^2/(4n^2)) ; min(1, (centre + margin) / d) ; 1.0 if n = 0
+#   required_sample_size(k=0, target, c): with k = 0 the upper bound is z^2 / (n + z^2),
+#                          so the smallest n with bound < target is floor(z^2 (1/target - 1)) + 1
+# With c = 0.95 and m = 0.05: n0 = 3.8416 * 0.25 / 0.0025 = 384.16.
+version: 1
+tolerance: 0.000001
+vectors:
+  - function: sample_size
+    args: {population: 1000000, confidence: 0.95, margin: 0.05}
+    expected: 385
+    note: "384.16 / (1 + 383.16 / 1e6) = 384.16 / 1.00038316 = 384.013 -> 385"
+  - function: sample_size
+    args: {population: 10000, confidence: 0.95, margin: 0.05}
+    expected: 370
+    note: "384.16 / 1.038316 = 369.98 -> 370 (the phase document says 371, which is wrong)"
+  - function: sample_size
+    args: {population: 5000, confidence: 0.95, margin: 0.05}
+    expected: 357
+    note: "384.16 / (1 + 383.16 / 5000) = 384.16 / 1.076632 = 356.82 -> 357"
+  - function: sample_size
+    args: {population: 200, confidence: 0.95, margin: 0.05}
+    expected: 132
+    note: "384.16 / (1 + 383.16 / 200) = 384.16 / 2.9158 = 131.75 -> 132 (the finite correction keeps n below N)"
+  - function: sample_size
+    args: {population: 1, confidence: 0.95, margin: 0.05}
+    expected: 1
+    note: "384.16 / (1 + 383.16) = 1.0 -> 1"
+  - function: wilson_upper
+    args: {failures: 0, sample: 385, confidence: 0.95}
+    expected: 0.009880
+    note: "p = 0; d = 1 + 3.8416/385 = 1.009978; centre = 3.8416/770 = 0.004989; margin = 1.96 sqrt(3.8416/592900) = 0.004989; 0.009978 / 1.009978 = 0.009880"
+  - function: wilson_upper
+    args: {failures: 385, sample: 385, confidence: 0.95}
+    expected: 1.0
+    note: "p = 1; margin = z^2/(2n); (1 + 2 z^2/(2n)) / (1 + z^2/n) = 1"
+  - function: wilson_upper
+    args: {failures: 0, sample: 0, confidence: 0.95}
+    expected: 1.0
+    note: "no sample absolves nothing: 1.0 by definition"
+  - function: wilson_upper
+    args: {failures: 3, sample: 100, confidence: 0.99}
+    expected: 0.110874
+    note: "z = 2.5758, z^2 = 6.634746; p = 0.03; d = 1.066347; centre = 0.03 + 0.033174 = 0.063174; margin = 2.5758 sqrt(0.000291 + 0.000166) = 0.055056; 0.118230 / 1.066347 = 0.110874"
+  - function: wilson_upper
+    args: {failures: 10, sample: 370, confidence: 0.90}
+    expected: 0.044698
+    note: "z = 1.6449, z^2 = 2.705696; p = 0.027027; d = 1.007313; centre = 0.027027 + 0.003656 = 0.030683; margin = 1.6449 sqrt(0.0000711 + 0.00000494) = 0.014341; 0.045025 / 1.007313 = 0.044698"
+  - function: required_sample_size
+    args: {failures: 0, target: 0.01, confidence: 0.95}
+    expected: 381
+    note: "3.8416 (1/0.01 - 1) = 380.32 -> 381; check: 3.8416/384.8416 = 0.009982 < 0.01 and 3.8416/383.8416 = 0.010008 >= 0.01 for n = 380"
+invalid:
+  - function: sample_size
+    args: {population: 10000, confidence: 0.80, margin: 0.05}
+    error: ValueError
+  - function: wilson_upper
+    args: {failures: 5, sample: 4, confidence: 0.95}
+    error: ValueError
