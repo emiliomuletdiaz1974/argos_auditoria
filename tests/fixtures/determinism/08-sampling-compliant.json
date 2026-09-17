@@ -1,0 +1,31 @@
+{
+  "name": "08-sampling-compliant",
+  "description": "0 failures in 370 of 10000 with a tolerance of 150: projected 103 <= 150",
+  "unit": {
+    "unit_id": "u-08",
+    "challenge_id": "dsr-erasure-effective",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "threshold": {
+        "field": "count",
+        "operator": "<=",
+        "value": 150
+      }
+    },
+    "sampling": {
+      "population": 10000,
+      "sample": 370,
+      "confidence": "0.95"
+    }
+  },
+  "probe_result": {
+    "ok": true,
+    "data": {
+      "count": 0
+    }
+  },
+  "opa_decision": null,
+  "expected_canonical": "{\"challenge_id\":\"dsr-erasure-effective\",\"challenge_version\":\"1.0\",\"detail\":{\"expected\":150,\"field\":\"count\",\"observed\":0,\"operator\":\"<=\",\"sampling\":{\"confidence\":\"0.95\",\"failures\":0,\"population\":10000,\"projected_upper\":103,\"sample\":370,\"upper_rate\":\"0.010277\"}},\"node_key\":\"k-node-0001\",\"result\":\"compliant\",\"unit_id\":\"u-08\",\"via\":\"threshold\"}",
+  "expected_hash": "a498d7b080dda44b8464e08e4f3aacccdf88acd68c717f9429fcbcfb95c90fc1"
+}

@@ -1,0 +1,31 @@
+{
+  "name": "11-type-mismatch-inconclusive",
+  "description": "Comparing text with a number is inconclusive, never an exception",
+  "unit": {
+    "unit_id": "u-11",
+    "challenge_id": "sec-access-logging",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "threshold": {
+        "field": "rows.0.value",
+        "operator": ">=",
+        "value": 1
+      }
+    },
+    "sampling": null
+  },
+  "probe_result": {
+    "ok": true,
+    "data": {
+      "rows": [
+        {
+          "value": "on"
+        }
+      ]
+    }
+  },
+  "opa_decision": null,
+  "expected_canonical": "{\"challenge_id\":\"sec-access-logging\",\"challenge_version\":\"1.0\",\"detail\":{\"expected\":1,\"field\":\"rows.0.value\",\"observed\":\"on\",\"operator\":\">=\"},\"node_key\":\"k-node-0001\",\"result\":\"inconclusive\",\"unit_id\":\"u-11\",\"via\":\"type_mismatch\"}",
+  "expected_hash": "77b84bfedc42b72b44fdfc69ad96abf2118f6c4d77ccff43dc10dbd9d18faa67"
+}

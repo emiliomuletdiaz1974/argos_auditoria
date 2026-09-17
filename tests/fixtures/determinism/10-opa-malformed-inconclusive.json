@@ -1,0 +1,27 @@
+{
+  "name": "10-opa-malformed-inconclusive",
+  "description": "An OPA decision without a boolean compliant is inconclusive",
+  "unit": {
+    "unit_id": "u-10",
+    "challenge_id": "ret-table-retention",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "opa": {
+        "package": "argos.retention"
+      }
+    },
+    "sampling": null
+  },
+  "probe_result": {
+    "ok": true,
+    "data": {
+      "count": 3
+    }
+  },
+  "opa_decision": {
+    "compliant": "yes"
+  },
+  "expected_canonical": "{\"challenge_id\":\"ret-table-retention\",\"challenge_version\":\"1.0\",\"detail\":{\"package\":\"argos.retention\"},\"node_key\":\"k-node-0001\",\"result\":\"inconclusive\",\"unit_id\":\"u-10\",\"via\":\"opa_invalid\"}",
+  "expected_hash": "90ef913d565914cf2b5c90d7737857dedde887432a3cd2cc870b98e3fec816a1"
+}

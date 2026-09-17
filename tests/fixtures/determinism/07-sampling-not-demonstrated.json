@@ -1,0 +1,31 @@
+{
+  "name": "07-sampling-not-demonstrated",
+  "description": "0 failures in 370 of 10000: upper rate z^2/(n+z^2) = 3.8416/373.8416 = 0.010277 (6 decimals, ceiling) projects ceil(102.77) = 103 > 0; only a census demonstrates <= 0",
+  "unit": {
+    "unit_id": "u-07",
+    "challenge_id": "dsr-erasure-effective",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "threshold": {
+        "field": "count",
+        "operator": "<=",
+        "value": 0
+      }
+    },
+    "sampling": {
+      "population": 10000,
+      "sample": 370,
+      "confidence": "0.95"
+    }
+  },
+  "probe_result": {
+    "ok": true,
+    "data": {
+      "count": 0
+    }
+  },
+  "opa_decision": null,
+  "expected_canonical": "{\"challenge_id\":\"dsr-erasure-effective\",\"challenge_version\":\"1.0\",\"detail\":{\"expected\":0,\"field\":\"count\",\"observed\":0,\"operator\":\"<=\",\"sampling\":{\"confidence\":\"0.95\",\"failures\":0,\"population\":10000,\"projected_upper\":103,\"required_sample\":10000,\"sample\":370,\"upper_rate\":\"0.010277\"}},\"node_key\":\"k-node-0001\",\"result\":\"not_demonstrated\",\"unit_id\":\"u-07\",\"via\":\"threshold\"}",
+  "expected_hash": "5f4e6d606bdb5ae8e3d5926acc4dabc02b0ae98feb7a10ab8e00883f9c028375"
+}

@@ -1,0 +1,27 @@
+{
+  "name": "06-missing-field-inconclusive",
+  "description": "A field absent from the result is inconclusive",
+  "unit": {
+    "unit_id": "u-06",
+    "challenge_id": "sec-encryption-in-transit",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "threshold": {
+        "field": "rows.0.ssl",
+        "operator": "==",
+        "value": "on"
+      }
+    },
+    "sampling": null
+  },
+  "probe_result": {
+    "ok": true,
+    "data": {
+      "rows": []
+    }
+  },
+  "opa_decision": null,
+  "expected_canonical": "{\"challenge_id\":\"sec-encryption-in-transit\",\"challenge_version\":\"1.0\",\"detail\":{\"field\":\"rows.0.ssl\"},\"node_key\":\"k-node-0001\",\"result\":\"inconclusive\",\"unit_id\":\"u-06\",\"via\":\"missing_field\"}",
+  "expected_hash": "257d008409997d2965a377a896df41c53cc0220f4ddea5b82c53bc4556bd8039"
+}

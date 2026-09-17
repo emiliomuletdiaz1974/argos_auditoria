@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: bbb2af3
+commit: 29f5a94
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -75,6 +75,11 @@ Dependencias: `argos-common` (configuración, registro y diario) y el SDK de Tem
 
 `services/challenge-engine/tests/test_sampling_vectors.py` los contrasta; queda como fallo esperado estricto hasta que exista el módulo de muestreo.
 
+**Suite de determinismo del veredicto (F05-03):**
+- `tests/fixtures/determinism/` contiene 11 casos con las entradas, los bytes canónicos esperados del veredicto (escritos a mano) y su SHA-256, uno por vía y por cada uno de los cuatro resultados, incluido el muestreo que no permite absolver.
+- `test_verdict_determinism.py` comprueba que los bytes son canónicos y no contienen flotantes, y que el evaluador los reproduce dos veces seguidas.
+- Se ejecuta en CI (Linux) y en local (Windows).
+
 ## 9. Limitaciones conocidas y pendientes
 
 - El motor de retos completo se construye en la Fase 05.
@@ -87,3 +92,4 @@ Dependencias: `argos-common` (configuración, registro y diario) y el SDK de Tem
 | 0.1.0-alpha | 2026-09-14 | Worker de Temporal con workflow de humo, reintentos y asientos en el diario | Fase 01 (ARG-007) |
 | 0.1.0-alpha | 2026-09-17 | Incumplimientos plantados y verdad terreno de campaña para la prueba de la Fase 05 | Fase 05 (F05-01) |
 | 0.1.0-alpha | 2026-09-17 | Vectores de muestreo y cota de Wilson calculados a mano | Fase 05 (F05-02) |
+| 0.1.0-alpha | 2026-09-17 | Suite de determinismo del veredicto con bytes canónicos esperados | Fase 05 (F05-03) |

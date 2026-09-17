@@ -1,0 +1,29 @@
+{
+  "name": "03-opa-compliant",
+  "description": "OPA decision compliant",
+  "unit": {
+    "unit_id": "u-03",
+    "challenge_id": "ret-table-retention",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "opa": {
+        "package": "argos.retention"
+      }
+    },
+    "sampling": null
+  },
+  "probe_result": {
+    "ok": true,
+    "data": {
+      "count": 0
+    }
+  },
+  "opa_decision": {
+    "compliant": true,
+    "applied_term_days": 5475,
+    "rule": "argos.retention"
+  },
+  "expected_canonical": "{\"challenge_id\":\"ret-table-retention\",\"challenge_version\":\"1.0\",\"detail\":{\"compliant\":true,\"package\":\"argos.retention\"},\"node_key\":\"k-node-0001\",\"result\":\"compliant\",\"unit_id\":\"u-03\",\"via\":\"opa\"}",
+  "expected_hash": "726eaa95a7aa846dbfd5d6b726f1149b5fac02ae0bffd7b1189360b1ce7d6694"
+}

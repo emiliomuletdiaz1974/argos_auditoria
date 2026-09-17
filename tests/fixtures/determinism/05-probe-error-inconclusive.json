@@ -1,0 +1,27 @@
+{
+  "name": "05-probe-error-inconclusive",
+  "description": "A failed probe is inconclusive, never a finding",
+  "unit": {
+    "unit_id": "u-05",
+    "challenge_id": "sec-encryption-at-rest",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "threshold": {
+        "field": "rows.0.encrypted",
+        "operator": "==",
+        "value": true
+      }
+    },
+    "sampling": null
+  },
+  "probe_result": {
+    "ok": false,
+    "data": {
+      "error": "timeout"
+    }
+  },
+  "opa_decision": null,
+  "expected_canonical": "{\"challenge_id\":\"sec-encryption-at-rest\",\"challenge_version\":\"1.0\",\"detail\":{\"error\":\"timeout\"},\"node_key\":\"k-node-0001\",\"result\":\"inconclusive\",\"unit_id\":\"u-05\",\"via\":\"probe_error\"}",
+  "expected_hash": "3926508d3f51aecbf905e71182012b78aa595878d564ca84ad8b5f182b3bd97a"
+}

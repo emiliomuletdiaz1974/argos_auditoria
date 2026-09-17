@@ -1,0 +1,31 @@
+{
+  "name": "09-sampling-non-compliant",
+  "description": "2 observed failures already break <= 0 whatever the bound; upper rate for 2 of 370 is 0.019493, projected 195",
+  "unit": {
+    "unit_id": "u-09",
+    "challenge_id": "dsr-erasure-effective",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "threshold": {
+        "field": "count",
+        "operator": "<=",
+        "value": 0
+      }
+    },
+    "sampling": {
+      "population": 10000,
+      "sample": 370,
+      "confidence": "0.95"
+    }
+  },
+  "probe_result": {
+    "ok": true,
+    "data": {
+      "count": 2
+    }
+  },
+  "opa_decision": null,
+  "expected_canonical": "{\"challenge_id\":\"dsr-erasure-effective\",\"challenge_version\":\"1.0\",\"detail\":{\"expected\":0,\"field\":\"count\",\"observed\":2,\"operator\":\"<=\",\"sampling\":{\"confidence\":\"0.95\",\"failures\":2,\"population\":10000,\"projected_upper\":195,\"sample\":370,\"upper_rate\":\"0.019493\"}},\"node_key\":\"k-node-0001\",\"result\":\"non_compliant\",\"unit_id\":\"u-09\",\"via\":\"threshold\"}",
+  "expected_hash": "29e4b87b01b83d240c0832f9dfc5506d7232464df58250ab3eac22cb538780e0"
+}

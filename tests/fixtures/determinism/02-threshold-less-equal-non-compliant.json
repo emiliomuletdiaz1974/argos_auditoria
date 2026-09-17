@@ -1,0 +1,27 @@
+{
+  "name": "02-threshold-less-equal-non-compliant",
+  "description": "Threshold <= over a count fails",
+  "unit": {
+    "unit_id": "u-02",
+    "challenge_id": "ret-table-retention",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "threshold": {
+        "field": "count",
+        "operator": "<=",
+        "value": 0
+      }
+    },
+    "sampling": null
+  },
+  "probe_result": {
+    "ok": true,
+    "data": {
+      "count": 12
+    }
+  },
+  "opa_decision": null,
+  "expected_canonical": "{\"challenge_id\":\"ret-table-retention\",\"challenge_version\":\"1.0\",\"detail\":{\"expected\":0,\"field\":\"count\",\"observed\":12,\"operator\":\"<=\"},\"node_key\":\"k-node-0001\",\"result\":\"non_compliant\",\"unit_id\":\"u-02\",\"via\":\"threshold\"}",
+  "expected_hash": "4adb3d9cd2f444fcb31824c22917fe85af27918a27aa3f7f3ae4d38e2e703de6"
+}

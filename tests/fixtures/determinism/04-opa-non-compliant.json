@@ -1,0 +1,36 @@
+{
+  "name": "04-opa-non-compliant",
+  "description": "OPA decision not compliant",
+  "unit": {
+    "unit_id": "u-04",
+    "challenge_id": "acc-special-category-profiles",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "opa": {
+        "package": "argos.access"
+      }
+    },
+    "sampling": null
+  },
+  "probe_result": {
+    "ok": true,
+    "data": {
+      "rows": [
+        {
+          "grantee": "billing_analyst"
+        }
+      ]
+    }
+  },
+  "opa_decision": {
+    "compliant": false,
+    "unauthorized": [
+      "billing_analyst"
+    ],
+    "total": 2,
+    "rule": "argos.access"
+  },
+  "expected_canonical": "{\"challenge_id\":\"acc-special-category-profiles\",\"challenge_version\":\"1.0\",\"detail\":{\"compliant\":false,\"package\":\"argos.access\"},\"node_key\":\"k-node-0001\",\"result\":\"non_compliant\",\"unit_id\":\"u-04\",\"via\":\"opa\"}",
+  "expected_hash": "1fe50b92cb175bf0b7ca0f23e524d2c98c81bc1be0150f85c6757629c23c71e6"
+}

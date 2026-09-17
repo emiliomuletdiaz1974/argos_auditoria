@@ -1,0 +1,31 @@
+{
+  "name": "01-threshold-equal-compliant",
+  "description": "Threshold == over a configuration row holds",
+  "unit": {
+    "unit_id": "u-01",
+    "challenge_id": "sec-encryption-in-transit",
+    "challenge_version": "1.0",
+    "node_key": "k-node-0001",
+    "criterion": {
+      "threshold": {
+        "field": "rows.0.ssl",
+        "operator": "==",
+        "value": "on"
+      }
+    },
+    "sampling": null
+  },
+  "probe_result": {
+    "ok": true,
+    "data": {
+      "rows": [
+        {
+          "ssl": "on"
+        }
+      ]
+    }
+  },
+  "opa_decision": null,
+  "expected_canonical": "{\"challenge_id\":\"sec-encryption-in-transit\",\"challenge_version\":\"1.0\",\"detail\":{\"expected\":\"on\",\"field\":\"rows.0.ssl\",\"observed\":\"on\",\"operator\":\"==\"},\"node_key\":\"k-node-0001\",\"result\":\"compliant\",\"unit_id\":\"u-01\",\"via\":\"threshold\"}",
+  "expected_hash": "15fed350067650c9b7d9de0b441b1e5041fefec3663ce26ccc1c6ac72cdbfb21"
+}
