@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: 2ef053e
+commit: e811e8b
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -191,6 +191,24 @@ Reglas de decisión:
 
 El cliente Python `evaluate(package, input_doc, base_url)` llama a `POST /v1/data/<paquete>/verdict`. Valida antes el nombre del paquete (`ValueError`) y lanza `OpaError` si OPA no responde, contesta con error o el paquete no tiene `verdict` de tipo objeto.
 
+### Resolutor de aplicabilidad (ARG-039)
+
+El resolutor responde a la pregunta que arranca cada campaña: con la ontología vigente y el grafo de hoy, qué obligaciones aplican a qué activos y con qué retos se verifican. Cada ejecución sigue cuatro pasos:
+1. **Obligaciones vigentes.** Con SPARQL sobre la versión cargada (`REQUIREMENTS`) obtiene las ternas obligación–clase de activo–reto, en orden estable.
+   - Solo entran las obligaciones vigentes en la **fecha de la campaña** (hoy por defecto): `inForceFrom` incluida, `inForceUntil` excluida.
+   - La fecha de carga de la ontología no cuenta; así, una norma que aplica en el futuro (por ejemplo, el EHDS) no entra hoy en los planes.
+   - Las obligaciones sin reto quedan para la matriz de trazabilidad.
+2. **Selectores.** Cada selector distinto se resuelve **una sola vez por ejecución** a través del protocolo `SelectorResolver`.
+   - `StoreSelectorResolver` lo hace en proceso, con el mismo compilador, las mismas protecciones y las mismas páginas de `MAX_PAGE_SIZE` que la API del inventario.
+   - Cuando haya token de servicio podrá resolverse por HTTP sin tocar el resolutor.
+3. **Ámbito.** El único campo admitido es `system_ids`, una lista no vacía de textos que se normaliza ordenada y sin duplicados. El ámbito solo estrecha: las filas sin nodos dentro de él desaparecen.
+   - Una clase sin selector (con su motivo de verificación pendiente, si lo tiene) o con un selector inválido va a `skipped` con su motivo; nunca se descarta en silencio.
+4. **Persistencia, asiento y evento.**
+   - La ejecución se guarda en `argos.applicability_runs` y, en la misma transacción, se anota `applicability.resolve` (actor `system:resolver`) en el diario.
+   - Tras confirmar, si hay bus, publica `challenge.applicability_ready.v1`.
+
+Cada fila del plan explica por sí sola por qué aplica: obligación, etiqueta, severidad, clase de activo, selector, reto y claves de nodo ordenadas.
+
 Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.40 y httpx 0.28.
 
 ## 4. Interfaces
@@ -225,6 +243,11 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | Ficheros | `library/policies/retention.rego`, `library/policies/access.rego` y sus `*_test.rego` | Paquetes `argos.retention` y `argos.access` |
 | Función | `evaluate(package, input_doc, base_url="http://127.0.0.1:8181", *, client=None)` y `OpaError` | Veredicto de un paquete Rego |
 | Contenedor | `opa` (`openpolicyagent/opa:1.20.2`, `127.0.0.1:8181`) | Servidor OPA de desarrollo con las políticas y `data.client` |
+| Tabla | `argos.applicability_runs` (migración `0010`) | Ejecuciones inmutables: versión de ontología, `resolved_for`, ámbito, plan, omitidas, `pairs` y `nodes_total`; índice por `(campaign_id, created_at)` |
+| Funciones | `resolve(dsn, ontology, selectors, scope, campaign_id=None, bus=None, at=None)`, `requirements(graph, at=None)`, `build_plan(requirements, selectors, scope)`, `check_scope(scope)`, `in_force(at, start, end)` | Resolución de aplicabilidad |
+| Tipos | `ApplicabilityRun`, `Requirement`, `ResolvedNode`, protocolo `SelectorResolver` y `StoreSelectorResolver(store, page_size)` | Plan y resolución de selectores |
+| Asiento | `applicability.resolve` (actor `system:resolver`) | Ejecución, versión de ontología, fecha, pares y nodos |
+| Evento | `challenge.applicability_ready.v1` en `argos.challenge.applicability_ready` (stream `CHALLENGE`) | `run_id`, `campaign_id`, `ontology`, `pairs` |
 | Herramienta | `tools/ontology_gates.py [--library DIR]` y `make ontology-gates` | Imprime `PASS`/`FAIL` por puerta; código 1 si alguna falla; paso del job `verify` del CI |
 
 ## 5. Configuración
@@ -285,6 +308,17 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
   - errores HTTP, de red y veredictos ausentes o no objeto convertidos en `OpaError`;
   - con el servidor real, veredictos de conservación y accesos con `data.client`;
   - los paquetes de test no se cargan.
+- **`test_resolver_pure.py` y `tests/integration/test_ontology_resolver.py`:**
+  - ternas en orden estable y plan con su porqué;
+  - cada selector resuelto una sola vez;
+  - ámbito que solo estrecha, ámbitos inválidos rechazados y normalización;
+  - selectores inválidos omitidos con su motivo;
+  - vigencia con `inForceFrom` incluida e `inForceUntil` excluida;
+  - sobre el grafo real, ejecución guardada, anotada y anunciada;
+  - ámbito fuera del inventario con ejecución vacía;
+  - páginas pequeñas con los mismos nodos;
+  - obligaciones futuras fuera del plan;
+  - ejecuciones inmutables.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -306,3 +340,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | Formas SHACL de coherencia del inventario validadas con pySHACL | Fase 04 (ARG-034) |
 | 0.1.0-alpha | 2026-09-17 | Perfil ODRL de espacios de datos traducido a retos, con hallazgo de lo no verificable | Fase 04 (ARG-035) |
 | 0.1.0-alpha | 2026-09-17 | Paquetes Rego de conservación y accesos, contenedor OPA y cliente `evaluate` | Fase 04 (ARG-036) |
+| 0.1.0-alpha | 2026-09-17 | Resolutor de aplicabilidad por fecha de campaña con ejecuciones inmutables, asiento y evento | Fase 04 (ARG-039) |
