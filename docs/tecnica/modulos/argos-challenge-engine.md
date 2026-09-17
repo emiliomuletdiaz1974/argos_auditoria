@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: 325851d
+commit: d6418f8
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -119,6 +119,16 @@ Los workflows quedan deterministas y sin entrada/salida; todo lo que habla con u
 - **`evaluate`** consulta OPA si el criterio lo delega, llama al evaluador puro y persiste con `persist_verdict`: repetir la actividad no duplica veredictos.
 - El worker registra estas actividades junto a las de humo (`campaign_activities()` las ata a la base, a Vault y a OPA).
 
+### Ciclo de vida de los hallazgos (ARG-048)
+
+Un hallazgo no es una línea de registro: es una **no conformidad con dueño, severidad y camino de salida** (migración `0014`).
+- **Estados:** `open` → `in_remediation` → `pending_verification` → `closed_compliant`, o `reopened` si la reejecución no lo confirma. La vía excepcional es `risk_accepted`, una decisión documentada con caducidad, porque negar esa vía solo produce hallazgos eternamente abiertos que nadie mira.
+- **Solo se cierra por verificación:** ni la consola ni el DPO pueden pasar directamente a cerrado; lo confirma el mismo reto reejecutado.
+- **Deduplicación por huella** (reto y nodo), en una sola sentencia: campañas sucesivas no multiplican el hallazgo, suben su contador; desde tres campañas distintas, suben su severidad un nivel (`critical` ya no sube más).
+- **Una reapertura no es una recurrencia:** es el mismo problema visto otra vez.
+- **Aceptar el riesgo** exige justificación y fecha de caducidad, y la base lo impone con un `CHECK`. Al caducar, `expire_risk_acceptances` lo devuelve a `reopened` con asiento del sistema.
+- Cada paso deja asiento (`finding.open`, `finding.recur`, `finding.transition`) y la apertura publica `challenge.finding_opened.v1` para la consola y los webhooks.
+
 ## 4. Interfaces
 
 | Tipo | Nombre | Descripción |
@@ -133,7 +143,10 @@ Los workflows quedan deterministas y sin entrada/salida; todo lo que habla con u
 | Funciones | `parse_challenge(document, source=None)`, `load_challenge_file(path)`, `library_challenges(dir)`, `lint_challenge(spec, context, path=None)`, `load_schema()`; tipos `ChallengeSpec`, `LintContext`, `ChallengeError` | Modelo y validación de retos |
 | Funciones | `read_challenge(text)`, `to_internal(doc)`, `to_editorial(doc)`; tablas `CHALLENGE_KEYS`, `CHALLENGE_VALUES`; `TranslationError` | Capa de traducción en castellano |
 | Herramienta | `tools/challenge_lint.py [--library DIR]` y `make challenge-lint` | Valida la biblioteca; código 1 si hay errores |
-| Clase | `ChallengeActivities(dsn, secrets, opa_url)` con las actividades `probe`, `wait_window` y `evaluate`; `campaign_activities(cfg)` | Actividades de campaña |
+| Tabla | `argos.findings` (migración `0014`) | Hallazgos con huella única, contador, severidad y caducidad del riesgo aceptado |
+| Funciones | `open_or_recur`, `transition`, `expire_risk_acceptances`, `fingerprint`, `escalate`, `announce`; `FindingError`, `STATUSES`, `TRANSITIONS` | Ciclo de vida de los hallazgos |
+| Asientos y evento | `finding.open`, `finding.recur`, `finding.transition`; `challenge.finding_opened.v1` en `argos.challenge.finding_opened` | Trazabilidad y aviso de hallazgos |
+| Clase | `ChallengeActivities(dsn, secrets, opa_url, bus)` con las actividades `probe`, `wait_window` y `evaluate`; `campaign_activities(cfg)` | Actividades de campaña |
 | Funciones | `minimise(data, capture)`, `probe_spec(unit)`; tablas `CAPTURE_KEYS` e `INVENTORY_QUERIES` | Minimización y sondas internas |
 | Asiento | `probe.readonly_violation` | Intento de escritura detectado en un conector |
 | Clase | `SnapshotSelectorResolver(dsn, snapshot_id)` con `resolve(selector)` y `nodes`; función `matches(node, selector, system_ids)` | Resolución de selectores sobre la instantánea |
@@ -198,6 +211,8 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 
 **DSL (F05-05):** `test_challenge_translation.py` (ida y vuelta, clave y valor desconocidos, clave duplicada y un campo dado a la vez en los dos idiomas) y `test_challenge_dsl.py` (esquema válido, diez documentos rechazados, plantilla de texto rechazada, parámetros tipados aceptados, las seis reglas del producto y los retos que se entregan). `tests/unit/test_challenge_lint_tool.py` comprueba los códigos de salida de la herramienta.
 
+**Hallazgos (F05-13):** `test_findings_pure.py` (huella, máquina de estados cerrada, cierre solo por verificación y escalado por recurrencia) y `tests/integration/test_findings.py` (una campaña no cuenta dos veces, tres campañas suben la severidad una sola vez, cierre solo por verificación, riesgo aceptado documentado que caduca a `reopened`, reapertura que no suma ocurrencia y huella única en la base).
+
 **Actividades (F05-12):** `test_activities_pure.py` (solo salen las claves declaradas, ni valores ni cadenas de conexión, captura desconocida que no deja pasar nada, parámetros sin plantillas y lista cerrada de consultas internas de solo lectura) y `tests/integration/test_challenge_activities.py` (sonda real sobre la fuente simulada, evaluación idempotente, consulta interna desconocida rechazada sin reintento, sistema no registrado y asiento previo `query.emit`).
 
 **Compilador y resolución sobre instantánea (F05-11):** `test_compiler_pure.py` (identificadores de conector, unidad completa y explicable, parámetros tipados resueltos, orden estable, sin variante a `unverifiable`, referencias que faltan y filas del plan sin reto o sin nodo como error, y sonda de muestra que exige aprobación) y `tests/integration/test_snapshot_resolver.py` (equivalencia con el grafo vivo en las nueve clases, `status` conservado y la instantánea que no se mueve cuando el grafo sí).
@@ -234,3 +249,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Tablas de campañas, unidades, veredictos y aprobaciones, y almacén idempotente | Fase 05 (ARG-043) |
 | 0.1.0-alpha | 2026-09-17 | Resolución de selectores sobre la instantánea y compilador de campañas con parámetros tipados | Fase 05 (ARG-042) |
 | 0.1.0-alpha | 2026-09-17 | Actividades de sonda con minimización, ventanas, sondas internas y evaluación persistida | Fase 05 (ARG-044) |
+| 0.1.0-alpha | 2026-09-17 | Ciclo de vida de los hallazgos con deduplicación, escalado y riesgo aceptado con caducidad | Fase 05 (ARG-048) |

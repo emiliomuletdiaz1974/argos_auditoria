@@ -19,6 +19,7 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from argos_challenges.evaluator import evaluate
+from argos_challenges.findings import announce, open_or_recur
 from argos_challenges.probes import INVENTORY_QUERIES, minimise, probe_spec
 from argos_challenges.store import persist_verdict
 from argos_common.config import get_config
@@ -64,10 +65,17 @@ async def record_in_journal(action: str, payload: dict[str, Any]) -> int:
 class ChallengeActivities:
     """Activities of a campaign, bound to a database, a secret store and an OPA server."""
 
-    def __init__(self, dsn: str, secrets: SecretStore, opa_url: str | None = None) -> None:
+    def __init__(
+        self,
+        dsn: str,
+        secrets: SecretStore,
+        opa_url: str | None = None,
+        bus: Any | None = None,
+    ) -> None:
         self._dsn = dsn
         self._secrets = secrets
         self._opa_url = opa_url or get_config().OPA_URL
+        self._bus = bus
 
     # ---------- probes ----------
 
@@ -165,15 +173,25 @@ class ChallengeActivities:
             verdict,
             probe_journal_seq=probe_result.get("journal_seq"),
         )
-        return {
+        answer: dict[str, Any] = {
             "verdict_id": verdict_id,
             "created": created,
             "result": verdict.result,
             "verdict_hash": verdict.hash,
+            "finding": None,
         }
+        if verdict.result == "non_compliant":
+            answer["finding"] = open_or_recur(
+                self._dsn, str(unit["campaign_id"]), unit, verdict, verdict_id
+            )
+        return answer
 
     @activity.defn(name="evaluate")
     async def evaluate_unit(self, payload: dict[str, Any]) -> dict[str, Any]:
         unit = payload["unit"]
         probe_result = payload["probe_result"]
-        return await asyncio.to_thread(self._decide, unit, probe_result)
+        answer = await asyncio.to_thread(self._decide, unit, probe_result)
+        finding = answer.get("finding")
+        if finding and finding.get("created") and self._bus is not None:
+            await announce(self._bus, finding, str(unit["campaign_id"]))
+        return answer
