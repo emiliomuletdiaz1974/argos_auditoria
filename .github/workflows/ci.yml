@@ -21,6 +21,7 @@ jobs:
       - run: make policy-test
       - run: make ontology-gates
       - run: make challenge-lint
+      - run: make challenge-catalog
       - run: make docs-check
 
   integration:

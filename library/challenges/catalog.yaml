@@ -1,120 +1,141 @@
-# Catálogo provisional de identificadores de retos (nota ARG-031-033).
-# Hasta que la Fase 5 traiga la biblioteca real, este fichero es la lista de retos existentes contra
-# la que la matriz de trazabilidad comprueba los `verificado_por` de las obligaciones. Cada entrada
-# reserva un id con su familia y el tipo de evidencia que producirá. Las poblaciones normativas
-# (F04-12, F04-14, F04-16) añaden aquí los retos que referencian; un id sin obligación es huérfano.
-#
-# Formato de cada entrada:
-#   - id: sec-encryption-at-rest     # minúsculas y guiones: <familia>-<nombre>
-#     family: security               # familia del reto
-#     evidence_type: configuration   # query_result | configuration | log_extract | document
-#     description: Cifrado en reposo verificado en el almacén de datos
+# Catálogo de identificadores de retos, GENERADO desde la biblioteca (ARG-050).
+# No se edita a mano: `uv run python tools/challenge_catalog.py` lo escribe y `--check` comprueba
+# que está al día. Cada entrada es un id con su familia, el tipo de evidencia que produce y su
+# descripción; `draft: true` marca un id que las poblaciones ya citan pero cuyo reto aún no existe.
+# La matriz de trazabilidad de la ontología comprueba los `verificado_por` contra este fichero.
 challenges:
   - id: acc-care-relationship-access
     family: access
     evidence_type: log_extract
     description: "Accesos de profesionales a datos de salud sin relación asistencial con el paciente"
+    draft: true
   - id: acc-special-category-profiles
     family: access
     evidence_type: query_result
     description: "Identidades con acceso a categorías especiales frente a los perfiles autorizados (argos.access)"
+    draft: true
   - id: brc-breach-register
     family: breach
     evidence_type: document
     description: "Registro documental de brechas con hechos, efectos y medidas correctoras"
+    draft: true
   - id: coh-ai-pending-review
     family: coherence
     evidence_type: query_result
     description: "Sistemas de IA descubiertos que siguen pendientes de confirmación y clasificación"
+    draft: true
   - id: coh-ai-risk-class-declared
     family: coherence
     evidence_type: query_result
     description: "Sistemas de IA confirmados con una clase de riesgo válida (forma SHACL)"
+    draft: true
   - id: coh-ai-training-data-governance
     family: coherence
     evidence_type: query_result
     description: "Conjuntos de datos de entrenamiento del sistema de IA con origen y finalidad documentados"
+    draft: true
   - id: coh-dataset-description-current
     family: coherence
     evidence_type: query_result
     description: "Descripción de conjuntos de datos comparada con el inventario vivo y su fecha de revisión"
+    draft: true
   - id: coh-no-prohibited-ai-in-use
     family: coherence
     evidence_type: query_result
     description: "Sistemas de IA confirmados como práctica prohibida que siguen activos en el inventario"
+    draft: true
   - id: coh-priority-categories-located
     family: coherence
     evidence_type: query_result
     description: "Categorías prioritarias del EHDS localizadas y catalogadas en sistemas HCE del inventario"
+    draft: true
   - id: coh-ropa-declared-systems
     family: coherence
     evidence_type: query_result
     description: "Sistemas con categorías especiales declarados en el registro de actividades (forma SHACL)"
+    draft: true
   - id: coh-treatment-legal-basis
     family: coherence
     evidence_type: query_result
     description: "Tratamientos del registro de actividades con base jurídica declarada (forma SHACL)"
+    draft: true
   - id: coh-treatment-retention-declared
     family: coherence
     evidence_type: query_result
     description: "Tratamientos del registro de actividades con plazo de conservación declarado (forma SHACL)"
+    draft: true
   - id: coh-unclassified-columns
     family: coherence
     evidence_type: query_result
     description: "Columnas vivas del inventario sin categoría de datos asignada"
+    draft: true
   - id: doc-ai-human-oversight
     family: documentation
     evidence_type: document
     description: "Designación de las personas a cargo de la supervisión humana del sistema de IA"
+    draft: true
   - id: doc-ai-technical-documentation
     family: documentation
     evidence_type: document
     description: "Documentación técnica del sistema de IA de alto riesgo y su fecha de actualización"
+    draft: true
   - id: dsr-access-request-term
     family: data_subject_rights
     evidence_type: log_extract
     description: "Solicitud de acceso sobre un interesado sintético respondida dentro de plazo"
+    draft: true
   - id: dsr-ehds-access-restriction
     family: data_subject_rights
     evidence_type: log_extract
     description: "Limitación de acceso de un paciente sintético respetada por el servicio de los profesionales"
+    draft: true
   - id: dsr-ehds-patient-access
     family: data_subject_rights
     evidence_type: log_extract
     description: "Acceso de un paciente sintético a sus categorías prioritarias tras el registro en el sistema HCE"
+    draft: true
   - id: dsr-erasure-effective
     family: data_subject_rights
     evidence_type: query_result
     description: "Datos de un interesado sintético ausentes del origen tras la solicitud de supresión"
+    draft: true
   - id: ret-file-retention
     family: retention
     evidence_type: query_result
     description: "Ficheros más antiguos que el plazo de conservación declarado (argos.retention)"
+    draft: true
   - id: ret-table-retention
     family: retention
     evidence_type: query_result
-    description: "Registros en tabla más antiguos que el plazo de conservación declarado (argos.retention)"
+    description: "Retención efectiva en tabla frente al calendario declarado"
+    draft: false
   - id: sec-access-logging
     family: security
     evidence_type: configuration
     description: "Registro de accesos activado en el almacén de datos"
+    draft: true
   - id: sec-ai-event-logging
     family: security
     evidence_type: configuration
     description: "Registro automático de acontecimientos activado en el sistema de IA"
+    draft: true
   - id: sec-ai-log-retention
     family: security
     evidence_type: configuration
     description: "Archivos de registro del sistema de IA conservados al menos seis meses"
+    draft: true
   - id: sec-encryption-at-rest
     family: security
     evidence_type: configuration
     description: "Cifrado en reposo verificado en el almacén de datos"
+    draft: false
   - id: sec-encryption-in-transit
     family: security
     evidence_type: configuration
     description: "Conexiones al almacén de datos obligadas a cifrado en tránsito"
+    draft: true
   - id: sec-health-access-log-retention
     family: security
     evidence_type: configuration
     description: "Registro de accesos a la historia clínica con quién, cuándo y qué, conservado al menos tres años"
+    draft: true

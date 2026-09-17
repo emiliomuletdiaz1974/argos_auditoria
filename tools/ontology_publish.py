@@ -14,6 +14,7 @@ import sys
 from datetime import date
 from pathlib import Path
 
+from argos_challenges.library.catalog import archive_library
 from argos_common.config import get_config
 from argos_common.release import VaultTransitSigner
 from argos_ontology.bundle import (
@@ -39,6 +40,11 @@ def _build(args: argparse.Namespace) -> int:
         print("ARGOS_VAULT_TOKEN is required to sign", file=sys.stderr)
         return 2
     signer = VaultTransitSigner(cfg.VAULT_ADDR, cfg.VAULT_TOKEN.get_secret_value(), key=CONTENT_KEY)
+    # The challenges of this version are frozen before packing them: the remediation of a finding is
+    # verified with the challenge that measured it, even after the library moves on (ARG-049).
+    frozen = archive_library(args.library, args.version)
+    if frozen:
+        print(f"archived {frozen} challenge(s) as {args.version}")
     bundle, manifest = build_bundle(
         args.library, args.version, date.fromisoformat(args.in_force_from)
     )

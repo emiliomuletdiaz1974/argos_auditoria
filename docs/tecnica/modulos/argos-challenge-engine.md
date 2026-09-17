@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: c33466d
+commit: bd02581
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -45,6 +45,14 @@ Un reto es un documento YAML con seis bloques obligatorios (`objective`, `select
   - el fichero se llama como el reto.
 - **Retos patrón:** `ret-table-retention` (criterio delegado en OPA, escrito en castellano) y `sec-encryption-at-rest` (umbral, escrito en inglés).
 - **Comprobación:** `make challenge-lint`, también en el job `verify` del CI.
+
+### Biblioteca de retos (ARG-050)
+
+- **Organización:** `library/challenges/<familia>/<id>.yaml`, con las familias del catálogo (`acc`, `brc`, `coh`, `doc`, `ds`, `dsr`, `ret` y `sec`) y subcarpetas por vertical.
+- **Catálogo generado:** `tools/challenge_catalog.py` lo escribe desde los retos y `--check` (`make challenge-catalog`, también en CI) comprueba que está al día. Ya no se edita a mano, así que la biblioteca y la matriz de trazabilidad de la ontología no pueden divergir.
+  - El tipo de evidencia sale de la sonda: configuración para `check_config` y `scan_schema`, resultado de consulta para las demás.
+  - Un id que las poblaciones citan pero cuyo reto aún no existe queda con `draft: true`: hoy, 27 entradas de las que 25 están reservadas.
+- **Archivo por versión:** al publicar, `tools/ontology_publish.py build` congela los retos en `library/challenges/archive/<versión>/` y los empaqueta en el bundle firmado. Una versión archivada no cambia, y es la que verifica la subsanación de un hallazgo (ARG-049).
 
 ## 4. Interfaces
 
@@ -111,6 +119,8 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 
 **DSL (F05-05):** `test_challenge_translation.py` (ida y vuelta, clave y valor desconocidos, clave duplicada y un campo dado a la vez en los dos idiomas) y `test_challenge_dsl.py` (esquema válido, diez documentos rechazados, plantilla de texto rechazada, parámetros tipados aceptados, las seis reglas del producto y los retos que se entregan). `tests/unit/test_challenge_lint_tool.py` comprueba los códigos de salida de la herramienta.
 
+**Biblioteca (F05-06):** `test_challenge_library.py` comprueba las familias, la carga por id, que el catálogo generado coincide con el que se entrega y es estable, que los ids reservados quedan como borrador, que el archivo congela una versión y rechaza cambiarla, y que el archivo no es fuente de retos.
+
 ## 9. Limitaciones conocidas y pendientes
 
 - El motor de retos completo se construye en la Fase 05.
@@ -126,3 +136,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Suite de determinismo del veredicto con bytes canónicos esperados | Fase 05 (F05-03) |
 | 0.1.0-alpha | 2026-09-17 | Test arquitectónico de la frontera de veredictos | Fase 05 (F05-04) |
 | 0.1.0-alpha | 2026-09-17 | DSL de retos con esquema, capa de traducción en castellano, lint y retos patrón | Fase 05 (ARG-041) |
+| 0.1.0-alpha | 2026-09-17 | Biblioteca por familias, catálogo generado y archivo por versión | Fase 05 (ARG-050) |
