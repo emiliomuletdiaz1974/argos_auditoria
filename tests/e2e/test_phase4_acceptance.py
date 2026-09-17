@@ -167,7 +167,12 @@ def test_signed_bundle_applicability_and_engines_on_the_demo_snapshot(
         },
         OPA,
     )
-    assert verdict == {"compliant": True, "applied_term_days": 5475, "rule": "argos.retention"}
+    assert verdict == {
+        "compliant": True,
+        "applied_term_days": 5475,
+        "out_of_term": 0,
+        "rule": "argos.retention",
+    }
 
     # 5c. ODRL: a data space policy becomes challenges plus an honest unverifiable finding.
     policy = parse_policy(

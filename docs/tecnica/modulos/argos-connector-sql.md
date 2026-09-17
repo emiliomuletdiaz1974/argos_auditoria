@@ -5,7 +5,7 @@ title: Conectores de bases de datos (argos-connector-sql)
 module: argos-connector-sql
 phases: ["02", "03"]
 version: 0.1.0-alpha
-commit: d018a74
+commit: pendiente
 date: 2026-09-17
 status: current
 confidentiality: client
@@ -46,6 +46,8 @@ Lectura de catálogo, recuentos, muestras minimizadas y comprobaciones de config
 ## 4. Interfaces
 
 Sondas `scan_schema`, `count`, `sample` (con `validators`) y `check_config`, a través de `Connector.execute` del SDK.
+
+`count` acepta además `params.filters`: una lista de `{column, operator, value, cast}` con la que un reto compara el nodo para el que se compiló. El nombre de la columna no puede viajar como parámetro de una sentencia, así que se valida como identificador; el valor siempre viaja enlazado, y el `cast` (hoy solo `text`) se declara, nunca se adivina, porque buscar un identificador en todas las columnas de una tabla se topa con columnas de otro tipo y un choque de tipos no es un hallazgo.
 
 ## 5. Configuración
 
@@ -89,3 +91,4 @@ La integración real con Oracle y SQL Server está escrita pero **no se ha ejecu
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Conectores SQL genérico, PostgreSQL, Oracle y SQL Server | Fase 02 (ARG-014…016) |
 | 0.1.0-alpha | 2026-09-15 | Validación de identificadores en origen en las muestras | Fase 03 (ARG-024) |
+| 0.1.0-alpha | 2026-09-17 | Filtros declarados en la sonda `count`, con la columna validada y el valor enlazado | Fase 05 (F05-99) |

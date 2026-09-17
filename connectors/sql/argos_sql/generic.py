@@ -1,6 +1,7 @@
 """Generic SQL connector (SQLAlchemy): read-only sessions and dialect-compiled probes (ARG-014)."""
 
 import copy
+import operator
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
@@ -9,9 +10,13 @@ from decimal import Decimal
 from typing import Any, ClassVar
 
 from sqlalchemy import (
+    ColumnElement,
     Engine,
     Integer,
+    String,
     TableClause,
+    bindparam,
+    cast,
     column,
     create_engine,
     event,
@@ -23,7 +28,10 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.engine import Connection, Dialect, Row, make_url
+from sqlalchemy.engine.interfaces import BindTyping
 from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import BindParameter
+from sqlalchemy.types import NullType
 
 from argos_connector.base import Connector
 from argos_connector.probes import ProbeSpec
@@ -49,6 +57,19 @@ class ConfigCheck:
 
     sql: str
     params: tuple[str, ...] = ()
+
+
+# The casts a challenge may ask for before comparing; nothing else reaches a statement.
+_FILTER_CASTS: Mapping[str, Any] = {"text": String}
+# What a challenge may compare a column with; nothing else reaches a statement.
+_FILTER_OPERATORS: Mapping[str, Callable[[Any, Any], Any]] = {
+    "==": operator.eq,
+    "!=": operator.ne,
+    "<=": operator.le,
+    ">=": operator.ge,
+    "<": operator.lt,
+    ">": operator.gt,
+}
 
 
 def _identifier(name: str) -> str:
@@ -113,6 +134,9 @@ class SqlConnector(Connector):
         dialect = copy.copy(engine.dialect)
         dialect.paramstyle = "named"
         dialect.positional = False
+        # psycopg renders a cast beside a typed bind (":filter_0::VARCHAR"); the compiled
+        # string is executed through text(), which would no longer recognise the bind.
+        dialect.bind_typing = BindTyping.NONE
         self._engine, self._compile_dialect = engine, dialect
 
     def close(self) -> None:
@@ -197,9 +221,44 @@ class SqlConnector(Connector):
         return table(name, *[column(_identifier(c)) for c in columns], schema=schema)
 
     def _count_statement(self, spec: ProbeSpec) -> Select[Any]:
-        statement = select(func.count().label("n")).select_from(self._table(spec.target, []))
+        filters = list(spec.params.get("filters") or [])
+        columns = [str(entry.get("column", "")) for entry in filters]
+        source = self._table(spec.target, columns)
+        statement = select(func.count().label("n")).select_from(source)
+        for index, entry in enumerate(filters):
+            statement = statement.where(self._filter(source, index, entry))
         where = spec.params.get("where")  # templates from the challenge library only
         return statement.where(text(where)) if where else statement
+
+    @staticmethod
+    def _filter(source: TableClause, index: int, entry: Mapping[str, Any]) -> ColumnElement[bool]:
+        """A comparison the challenge declared: the column is an identifier, the value a bind.
+
+        This is how a challenge probes the node it was compiled for without ever formatting a
+        value into a statement: the name of a column cannot travel as a parameter, so it is
+        validated as an identifier, and everything else is bound.
+        """
+        name = _identifier(str(entry.get("column", "")))
+        operator = str(entry.get("operator", "=="))
+        comparison = _FILTER_OPERATORS.get(operator)
+        if comparison is None:
+            raise ValueError(f"unknown filter operator: {operator!r}")
+        wanted = entry.get("cast")
+        if wanted is not None and str(wanted) not in _FILTER_CASTS:
+            raise ValueError(f"unknown filter cast: {wanted!r}")
+        # Untyped on purpose: with a type, psycopg renders the cast ":filter_0::VARCHAR" and
+        # text() would no longer recognise the bind when the compiled string is executed.
+        bind: BindParameter[Any] = bindparam(
+            f"filter_{index}", entry.get("value"), type_=NullType()
+        )
+        # A challenge may ask for the comparison as text: looking for an identifier in every
+        # column of a table means meeting columns of other types, and a type clash is not a
+        # finding. The cast is declared, never guessed.
+        left: Any = source.c[name]
+        if wanted is not None:
+            left = cast(left, _FILTER_CASTS[str(wanted)])
+        condition: ColumnElement[bool] = comparison(left, bind)
+        return condition
 
     def _sample_statement(self, spec: ProbeSpec) -> Select[Any]:
         columns = list(spec.params.get("columns") or [])

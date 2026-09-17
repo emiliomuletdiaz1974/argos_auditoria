@@ -165,3 +165,60 @@ def test_rejection_reason_is_journaled(db: Path) -> None:
     with pytest.raises(ReadOnlyViolationError):
         connector.execute(ProbeSpec("check_config", "patients", "DELETE FROM patients"))
     assert journal.rejected[0].outcome is not None
+
+
+def test_count_filters_bind_the_value_and_validate_the_column(db: Path) -> None:
+    """A challenge names the column of the node it probes; the value always travels bound."""
+    connector, journal = _open(db)
+    spec = ProbeSpec(
+        "count",
+        "patients",
+        params={"filters": [{"column": "national_id", "operator": "==", "value": "99992001A"}]},
+    )
+    result = connector.execute(spec)
+    assert result.ok and result.data == {"count": 0}
+    journaled = journal.emitted[0].spec
+    assert journaled.statement is not None
+    assert "99992001A" not in journaled.statement  # the value is a bind, never interpolated
+    assert ":filter_0::" not in journaled.statement  # no driver cast: text() must see the bind
+    assert journaled.params["binds"]["filter_0"] == "99992001A"
+
+
+def test_a_filter_on_an_invalid_column_is_refused(db: Path) -> None:
+    connector, _ = _open(db)
+    spec = ProbeSpec(
+        "count",
+        "patients",
+        params={"filters": [{"column": "national_id; DROP TABLE patients", "value": "x"}]},
+    )
+    with pytest.raises(ValueError, match="invalid SQL identifier"):
+        connector.execute(spec)
+
+
+def test_a_filter_with_an_unknown_operator_is_refused(db: Path) -> None:
+    connector, _ = _open(db)
+    spec = ProbeSpec(
+        "count", "patients", params={"filters": [{"column": "id", "operator": "LIKE", "value": 1}]}
+    )
+    with pytest.raises(ValueError, match="unknown filter operator"):
+        connector.execute(spec)
+
+
+def test_a_filter_can_ask_for_the_comparison_as_text(db: Path) -> None:
+    """Looking for an identifier in every column meets other types; a clash is not a finding."""
+    connector, _ = _open(db)
+    spec = ProbeSpec(
+        "count",
+        "patients",
+        params={"filters": [{"column": "id", "value": "99992001A", "cast": "text"}]},
+    )
+    assert connector.execute(spec).data == {"count": 0}
+
+
+def test_an_unknown_cast_is_refused(db: Path) -> None:
+    connector, _ = _open(db)
+    spec = ProbeSpec(
+        "count", "patients", params={"filters": [{"column": "id", "value": 1, "cast": "jsonb"}]}
+    )
+    with pytest.raises(ValueError, match="unknown filter cast"):
+        connector.execute(spec)

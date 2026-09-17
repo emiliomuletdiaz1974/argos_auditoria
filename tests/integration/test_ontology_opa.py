@@ -32,7 +32,12 @@ def test_retention_verdict_uses_the_client_schedule() -> None:
         },
         OPA,
     )
-    assert verdict == {"compliant": False, "applied_term_days": 5475, "rule": "argos.retention"}
+    assert verdict == {
+        "compliant": False,
+        "applied_term_days": 5475,
+        "out_of_term": 3,
+        "rule": "argos.retention",
+    }
 
 
 def test_access_verdict_lists_the_unauthorized_identities() -> None:

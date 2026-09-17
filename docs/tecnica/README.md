@@ -15,6 +15,7 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | 02 · Conectores de solo lectura | [F02-conectores.md](fases/F02-conectores.md) | Cerrada (`fase-02`) |
 | 03 · Inventario y grafo de conocimiento | [F03-inventario-grafo.md](fases/F03-inventario-grafo.md) | Cerrada (`fase-03`) |
 | 04 · Ontología normativa | [F04-ontologia-normativa.md](fases/F04-ontologia-normativa.md) | Cierre técnico (`fase-04-tecnica`); contenido pendiente de validación jurídica |
+| 05 · Motor de retos | [F05-motor-retos.md](fases/F05-motor-retos.md) | Cerrada (`fase-05`); contenido normativo pendiente de validación jurídica |
 
 ## Módulos
 

@@ -14,14 +14,16 @@ sonda:
   por_conector:
     rdbms.postgresql:
       parametros:
-        where: "created_at < :limit"
-        binds:
-          limit: {$client: retention_limit}
+        filters:
+          - column: created_at
+            operator: "<"
+            value: {$client: retention_limit}
     rdbms.generic:
       parametros:
-        where: "issued_at < :limit"
-        binds:
-          limit: {$client: retention_limit}
+        filters:
+          - column: issued_at
+            operator: "<"
+            value: {$client: retention_limit}
 criterio:
   opa:
     paquete: argos.retention

@@ -5,9 +5,13 @@
 # Every value refers to synthetic data.
 #
 # Granularity: one result per challenge and system, the worst over that system's units
-# (non_compliant > not_demonstrated > inconclusive > compliant). Units that cannot be compiled for a
-# connector are listed under `unverifiable`. Each non_compliant entry is one expected finding, with the
-# severity of its obligation.
+# (non_compliant > not_demonstrated > inconclusive > compliant). Units that cannot be compiled are
+# listed under `unverifiable`: a challenge without a variant for the connector, and an id the
+# populations cite that the library has not written because the demonstration has no evidence source
+# for it. That is a different answer from `inconclusive`, where ARGOS did ask and the evidence did
+# not settle the question; the four AI Act and breach ids moved there in F05-99, when the engine
+# made the distinction visible. Each non_compliant entry is one expected finding, with the severity
+# of its obligation.
 version: 1
 campaign_date: 2026-09-16
 snapshot:
@@ -109,15 +113,6 @@ challenges:
     dev-source-mariadb:
       result: non_compliant
       reason: billing.invoices.amount_cents and issued_at without category
-  # --- GDPR · breaches -----------------------------------------------------------------------------
-  brc-breach-register:
-    obligation: OBL-RGPD-33-2
-    dev-source-postgres:
-      result: inconclusive
-      reason: no breach register document provided in the demo
-    dev-source-mariadb:
-      result: inconclusive
-      reason: no breach register document provided in the demo
   # --- AI Act (readmission_risk confirmed as high risk) ---------------------------------------------
   coh-no-prohibited-ai-in-use:
     obligation: OBL-AIACT-5-1
@@ -129,32 +124,16 @@ challenges:
     dev-source-postgres:
       result: compliant
       reason: risk_class = high
-  coh-ai-training-data-governance:
-    obligation: OBL-AIACT-10-1
-    dev-source-postgres:
-      result: inconclusive
-      reason: no training data declaration provided in the demo
   doc-ai-technical-documentation:
     obligation: OBL-AIACT-11-1
     dev-source-postgres:
       result: non_compliant
       reason: the confirmed AI system has no technical documentation reference (planted)
-  sec-ai-event-logging:
-    obligation: OBL-AIACT-12-1
-    dev-source-postgres:
-      result: inconclusive
-      reason: the model serving is outside the simulated sources
   doc-ai-human-oversight:
     obligation: OBL-AIACT-26-1
     dev-source-postgres:
       result: non_compliant
       reason: no human oversight owner declared for the confirmed AI system
-  sec-ai-log-retention:
-    obligation: OBL-AIACT-26-2
-    dev-source-postgres:
-      result: inconclusive
-      reason: the model serving logs are outside the simulated sources
-
 unverifiable:
   - challenge: ret-file-retention
     system: dev-source-postgres
@@ -162,6 +141,21 @@ unverifiable:
   - challenge: ret-file-retention
     system: dev-source-mariadb
     reason: file retention challenge without a variant for relational connectors
+  - challenge: brc-breach-register
+    system: dev-source-postgres
+    reason: no breach register document provided in the demo, so the challenge stays reserved
+  - challenge: brc-breach-register
+    system: dev-source-mariadb
+    reason: no breach register document provided in the demo, so the challenge stays reserved
+  - challenge: coh-ai-training-data-governance
+    system: dev-source-postgres
+    reason: no training data declaration provided in the demo, so the challenge stays reserved
+  - challenge: sec-ai-event-logging
+    system: dev-source-postgres
+    reason: the model serving is outside the simulated sources, so the challenge stays reserved
+  - challenge: sec-ai-log-retention
+    system: dev-source-postgres
+    reason: the model serving logs are outside the simulated sources, so the challenge stays reserved
 
 # Worst result per system, by hand.
 aggregate:

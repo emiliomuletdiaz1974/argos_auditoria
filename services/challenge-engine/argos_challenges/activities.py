@@ -35,12 +35,14 @@ from argos_challenges.store import (
     save_units,
     set_status,
 )
+from argos_challenges.synthetic import campaign_subject
 from argos_common.config import get_config
 from argos_common.errors import ReadOnlyViolationError
 from argos_common.journal_pg import PostgresJournal
 from argos_common.secret_stores import SecretStore
 from argos_connector.errors import BudgetExceededError, CircuitOpenError
 from argos_inventory.discovery.probes import run_probe
+from argos_inventory.graph.model import system_key
 from argos_inventory.graph.store import GraphStore
 from argos_inventory.versioning.snapshots import take_snapshot
 from argos_ontology.library_hash import library_fingerprint
@@ -52,6 +54,8 @@ from argos_ontology.store import OntologyStore, version_in_force
 from argos_ontology.traceability import load_challenge_catalog
 
 INTERNAL_PROBES = frozenset({"shacl", "inventory_query"})
+_DECLARED_TREATMENTS = "MATCH (s:System)-[:DECLARED_IN]->(t:Treatment) RETURN s.key, t.key"
+_AI_SYSTEMS = "MATCH (a:AISystem) RETURN a.key, a.system_id"
 _PENDING_UNITS = (
     "SELECT f.id::text, u.unit FROM argos.findings f "
     "JOIN argos.verdicts v ON v.id = f.last_verdict "
@@ -98,6 +102,24 @@ async def smoke_probe(system: str) -> dict[str, Any]:
         "attempts": attempt,
         "at": datetime.now(UTC).isoformat(),
     }
+
+
+def _system_scope(store: GraphStore, system_id: str) -> frozenset[str]:
+    """The nodes a coherence finding may talk about for one system: the system itself, the
+    treatments it declares and the AI systems it holds. A campaign answers per system, so a gap
+    in another one is not its verdict."""
+    key = system_key(system_id)
+    treatments = {
+        str(row["treatment"])
+        for row in store.query(_DECLARED_TREATMENTS, columns=("system", "treatment"))
+        if str(row["system"]) == key
+    }
+    ai_systems = {
+        str(row["key"])
+        for row in store.query(_AI_SYSTEMS, columns=("key", "system_id"))
+        if str(row["system_id"]) == system_id
+    }
+    return frozenset({key, *treatments, *ai_systems})
 
 
 @activity.defn
@@ -148,6 +170,7 @@ class ChallengeActivities:
         nodes = {str(node["node_key"]): node for node in resolver.nodes}
         systems = _registered_systems(self._dsn)
         library = load_library()
+        subject = campaign_subject(self._dsn, campaign_id)
         reserved = frozenset(load_challenge_catalog()) - frozenset(library)
         compiled = compile_campaign(
             campaign_id,
@@ -155,7 +178,11 @@ class ChallengeActivities:
             library,
             nodes,
             systems,
-            {"campaign": {"snapshot_id": snapshot.id}, "client": client_parameters()},
+            {
+                "campaign": {"snapshot_id": snapshot.id},
+                "client": client_parameters(),
+                "subject": subject.markers if subject is not None else {},
+            },
             reserved=reserved,
         )
         save_units(self._dsn, campaign_id, compiled.units)
@@ -261,13 +288,16 @@ class ChallengeActivities:
         kind = str(probe["kind"])
         params = dict(probe.get("params", {}))
         if kind == "shacl":
-            findings = run_shapes(GraphStore(self._dsn))
+            store = GraphStore(self._dsn)
+            findings = run_shapes(store)
             shape, severity = params.get("shape"), params.get("severity")
+            scope = _system_scope(store, str(unit["system_id"]))
             rows = [
                 {"node": finding.node, "shape": finding.shape, "severity": finding.severity}
                 for finding in findings
                 if (shape is None or finding.shape == shape)
                 and (severity is None or finding.severity == severity)
+                and finding.node in scope
             ]
             return {"ok": True, "data": {"count": len(rows), "rows": rows}}
         name = str(params.get("query", ""))

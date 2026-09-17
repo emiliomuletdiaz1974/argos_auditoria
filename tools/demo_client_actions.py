@@ -85,6 +85,11 @@ def exercise_erasure(subject: SyntheticSubject) -> None:
     _clinic(ERASE_CLINIC, subject)
 
 
+def erase_from_replica(subject: SyntheticSubject) -> None:
+    """The client finally honours the erasure in the billing replica it had missed."""
+    _billing(ERASE_BILLING, (PATIENT_ID,))
+
+
 def revert(subject: SyntheticSubject) -> None:
     _clinic(ERASE_CLINIC, subject)
     _billing(ERASE_BILLING, (PATIENT_ID,))
@@ -92,7 +97,7 @@ def revert(subject: SyntheticSubject) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["inject", "erase", "revert", "show"])
+    parser.add_argument("action", choices=["inject", "erase", "erase-replica", "revert", "show"])
     parser.add_argument("--seed", default=SEED)
     args = parser.parse_args(argv)
     subject = generate_subjects(args.seed, 1)[0]
@@ -100,6 +105,8 @@ def main(argv: list[str] | None = None) -> int:
         inject(subject)
     elif args.action == "erase":
         exercise_erasure(subject)
+    elif args.action == "erase-replica":
+        erase_from_replica(subject)
     elif args.action == "revert":
         revert(subject)
     print(f"{args.action}: {subject.national_id} ({subject.email})")

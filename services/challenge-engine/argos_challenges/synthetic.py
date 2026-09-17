@@ -294,3 +294,26 @@ def pending_reversions(dsn: str, campaign_id: str | None = None) -> list[dict[st
     return [
         {"id": row[0], "subject_id": row[1], "system_id": row[2], "point": row[3]} for row in rows
     ]
+
+
+def campaign_subject(dsn: str, campaign_id: str | None = None) -> SyntheticSubject | None:
+    """The subject a campaign probes with, regenerated from its recorded seed.
+
+    ARGOS never keeps the clear values (the database has only their hashes), but it keeps the
+    seed and the index it generated them from, so it can reproduce them in memory when it needs
+    to look for the subject in a client system. A campaign without a registered subject has no
+    subject: the challenges that need one stay unverifiable.
+    """
+    query = "SELECT seed, subject_index FROM argos.synthetic_subjects"
+    args: tuple[Any, ...] = ()
+    if campaign_id is not None:
+        query += " WHERE campaign_id = %s OR campaign_id IS NULL"
+        args = (campaign_id,)
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            query + " ORDER BY created_at DESC, subject_index LIMIT 1", args
+        ).fetchone()
+    if row is None:
+        return None
+    seed, index = str(row[0]), int(row[1])
+    return generate_subjects(seed, index + 1)[index]
