@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: b0cee40
+commit: f60fdd9
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -68,6 +68,15 @@ El reto estrella del producto, el borrado efectivo, necesita un interesado de pr
 - **Reversión:** `pending_reversions` lista lo inyectado y no revertido; una campaña no se sella con sujetos sin revertir.
 - **En la demostración:** `tools/demo_client_actions.py` hace de cliente con las credenciales de propietario de las fuentes simuladas: inyecta, suprime solo en la base clínica y deja el sujeto plantado en la réplica de facturación.
 
+### Muestreo declarado (ARG-045)
+
+Sobre poblaciones grandes el censo no es viable, y la honestidad exige dos cosas: calcular la muestra para la confianza declarada y **decidir sobre la cota superior** de incumplimiento, nunca sobre la estimación puntual.
+- `sample_size(population, confidence, margin)` aplica la corrección por población finita, que es el estándar de auditoría.
+- `wilson_upper(failures, sample, confidence)` da la cota superior del intervalo de Wilson; sin muestra devuelve 1,0, es decir, no absuelve.
+- `required_sample_size(failures, target, confidence)` dice cuánta muestra haría falta para demostrarlo: es lo que acompaña a un veredicto **no demostrado**.
+- `plan_sampling(unit, population)` decide censo (por debajo de 5000) o muestra, y **devuelve una unidad nueva**: la que recibe no cambia, porque el historial de Temporal puede haberla leído.
+- Solo se usan operaciones IEEE correctamente redondeadas, para que el resultado sea idéntico en cualquier máquina.
+
 ## 4. Interfaces
 
 | Tipo | Nombre | Descripción |
@@ -82,6 +91,7 @@ El reto estrella del producto, el borrado efectivo, necesita un interesado de pr
 | Funciones | `parse_challenge(document, source=None)`, `load_challenge_file(path)`, `library_challenges(dir)`, `lint_challenge(spec, context, path=None)`, `load_schema()`; tipos `ChallengeSpec`, `LintContext`, `ChallengeError` | Modelo y validación de retos |
 | Funciones | `read_challenge(text)`, `to_internal(doc)`, `to_editorial(doc)`; tablas `CHALLENGE_KEYS`, `CHALLENGE_VALUES`; `TranslationError` | Capa de traducción en castellano |
 | Herramienta | `tools/challenge_lint.py [--library DIR]` y `make challenge-lint` | Valida la biblioteca; código 1 si hay errores |
+| Funciones | `sample_size`, `wilson_upper`, `required_sample_size`, `plan_sampling`; tipo `SamplingPlan`; constantes `Z`, `POPULATION_THRESHOLD` | Muestreo estadístico declarado |
 | Tablas | `argos.synthetic_subjects`, `argos.synthetic_injections` (migración `0011`) | Inventario auditado de sujetos sintéticos |
 | Funciones | `generate_subjects(seed, count)`, `is_synthetic(value)`, `client_package(subject, injections)`, `register_subjects`, `authorize_injection`, `confirm_injection`, `confirm_exercise`, `confirm_revert`, `pending_reversions`; tipos `SyntheticSubject`, `SyntheticError` | Sujeto sintético |
 | Asientos | `synthetic.generate`, `synthetic.authorize`, `synthetic.injected`, `synthetic.exercised`, `synthetic.revert` | Trazabilidad del sujeto sintético |
@@ -137,6 +147,8 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 
 **DSL (F05-05):** `test_challenge_translation.py` (ida y vuelta, clave y valor desconocidos, clave duplicada y un campo dado a la vez en los dos idiomas) y `test_challenge_dsl.py` (esquema válido, diez documentos rechazados, plantilla de texto rechazada, parámetros tipados aceptados, las seis reglas del producto y los retos que se entregan). `tests/unit/test_challenge_lint_tool.py` comprueba los códigos de salida de la herramienta.
 
+**Muestreo (F05-08):** los 11 vectores calculados a mano de F05-02, ya sin marca de fallo esperado, más `test_sampling_pure.py`: censo por debajo del umbral, muestra por encima, la unidad recibida no cambia, la cota baja al crecer la muestra y sube con los fallos, la muestra necesaria es la menor que lo demuestra, y siete argumentos imposibles rechazados.
+
 **Sujeto sintético (F05-07):** `test_synthetic_pure.py` (determinismo por semilla, marcas válidas y reconocibles, rango que no toca la verdad terreno del inventario, paquete del cliente) y `tests/integration/test_synthetic_subjects.py` (la base guarda hashes y nunca valores en claro, solo una persona autoriza y solo con reversión, confirmaciones de escritura única y en el diario, derecho desconocido rechazado, sujetos inmutables, y el script del cliente que deja el sujeto plantado en la réplica).
 
 **Biblioteca (F05-06):** `test_challenge_library.py` comprueba las familias, la carga por id, que el catálogo generado coincide con el que se entrega y es estable, que los ids reservados quedan como borrador, que el archivo congela una versión y rechaza cambiarla, y que el archivo no es fuente de retos.
@@ -158,3 +170,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | DSL de retos con esquema, capa de traducción en castellano, lint y retos patrón | Fase 05 (ARG-041) |
 | 0.1.0-alpha | 2026-09-17 | Biblioteca por familias, catálogo generado y archivo por versión | Fase 05 (ARG-050) |
 | 0.1.0-alpha | 2026-09-17 | Sujeto sintético: generación marcada, inventario auditado, confirmaciones del cliente y script de demostración | Fase 05 (ADR-0008) |
+| 0.1.0-alpha | 2026-09-17 | Muestreo con corrección finita, cota superior de Wilson y muestra necesaria | Fase 05 (ARG-045) |

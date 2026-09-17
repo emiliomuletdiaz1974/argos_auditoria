@@ -9,9 +9,6 @@ import yaml
 
 VECTORS_FILE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "sampling_vectors.yaml"
 DOCUMENT = yaml.safe_load(VECTORS_FILE.read_text(encoding="utf-8"))
-PENDING = pytest.mark.xfail(
-    raises=ModuleNotFoundError, strict=True, reason="argos_challenges.sampling arrives in F05-08"
-)
 
 
 def _function(name: str) -> Any:
@@ -30,7 +27,6 @@ def test_the_vectors_file_documents_every_vector() -> None:
         assert vector["note"].strip(), _label(vector)
 
 
-@PENDING
 @pytest.mark.parametrize("vector", DOCUMENT["vectors"], ids=_label)
 def test_hand_calculated_vector(vector: dict[str, Any]) -> None:
     result = _function(vector["function"])(**vector["args"])
@@ -40,7 +36,6 @@ def test_hand_calculated_vector(vector: dict[str, Any]) -> None:
         assert result == pytest.approx(vector["expected"], abs=DOCUMENT["tolerance"])
 
 
-@PENDING
 @pytest.mark.parametrize("vector", DOCUMENT["invalid"], ids=_label)
 def test_invalid_arguments_are_rejected(vector: dict[str, Any]) -> None:
     with pytest.raises(ValueError):
