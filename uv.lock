@@ -299,12 +299,14 @@ version = "0.1.0a0"
 source = { editable = "services/ontology" }
 dependencies = [
     { name = "argos-common" },
+    { name = "pyyaml" },
     { name = "rdflib" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "argos-common", editable = "libs/common" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "rdflib", specifier = ">=7.6,<8" },
 ]
 

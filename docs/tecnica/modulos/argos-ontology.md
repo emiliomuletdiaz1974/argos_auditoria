@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: 081aa48
+commit: 2d8e811
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -23,7 +23,7 @@ Convierte la normativa (RGPD, EHDS, AI Act) en **datos verificables**. Cada obli
 - los retos que la verifican;
 - el tipo de evidencia que producen.
 
-Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031, el núcleo de la ontología.
+Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo) y el flujo editorial de ARG-038.
 
 ## 2. Alcance y límites
 
@@ -45,7 +45,27 @@ Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031, el núcleo
 
 El núcleo se publica como contenido (`library/ontology/core/argos-core.ttl`, OWL en Turtle). Su espejo en código es `argos_ontology.vocabulary`, y un test mantiene ambos alineados.
 
-Dependencias: `argos-common` y rdflib 7.6.
+### Flujo editorial (ARG-038)
+
+El jurista redacta cada obligación en una **plantilla YAML en castellano** (`library/ontology/editorial/<OBL-ID>.yaml`) sin escribir Turtle. El recorrido hasta el grafo es este:
+
+1. **Lectura estricta** (`translation.read_editorial`): YAML seguro que rechaza claves repetidas.
+2. **Capa de traducción** (`translation.to_internal`): convierte las claves en castellano (`norma`, `articulo`, `titulo`, `vigente_desde`, `severidad`, `texto_resumen`, `aplica_a`, `verificado_por`, `equivalencias`, `pendiente_verificacion`) en las claves internas en inglés, con una tabla cerrada y biyectiva. Una clave desconocida es un error. Así el núcleo nunca ve claves en castellano (ADR-0005 y ADR-0006).
+3. **Validación estricta** (`compiler.parse_obligation`): campos obligatorios, identificadores con formato (`OBL-…`, norma, artículo, clases `AC-…`, retos y equivalencias), severidad de la lista cerrada y fecha de vigencia sin hora.
+4. **Generación con rdflib** (`compiler.obligation_graph`): el Turtle se construye con rdflib, nunca concatenando texto, y se serializa de forma canónica: **el mismo YAML produce siempre los mismos bytes**.
+
+La herramienta `tools/ontology_compile.py` genera `library/ontology/norms/generated/<OBL-ID>.ttl`, y con `--check` falla si algún Turtle generado falta o está desfasado.
+
+**Convenciones de nombres:**
+
+| Elemento | Nombre |
+|---|---|
+| Obligación | `OBL-<NORMA>-<artículo>-<n>` |
+| Artículo | `n:<NORMA>-<artículo con guiones>` |
+| Reto | `n:CH-<id del catálogo>` |
+| Equivalencia | `n:<MARCO>-<código con guiones>` |
+
+Dependencias: `argos-common`, rdflib 7.6 y PyYAML.
 
 ## 4. Interfaces
 
@@ -55,6 +75,10 @@ Dependencias: `argos-common` y rdflib 7.6.
 | Constantes | `ARGOS`, `NORMS`, `DPV`, `ELI`, `ODRL` | Espacios de nombres |
 | Constantes | `CLASSES`, `OBJECT_PROPERTIES` (con dominio y rango), `DATATYPE_PROPERTIES`, `SEVERITIES`, `EVIDENCE_TYPES` | Vocabulario cerrado |
 | Funciones | `bind_prefixes(graph)`, `load_core(path)` | Prefijos comunes y carga del núcleo |
+| Fichero | `library/ontology/editorial/obligation-template.yaml` | Plantilla editorial comentada para el jurista |
+| Funciones | `read_editorial(text)`, `to_internal(document)`, `to_editorial(document)` | Lectura estricta y traducción de claves |
+| Funciones | `parse_obligation(document)`, `obligation_graph(spec)`, `compile_obligation(text)`, `compile_file(path)` | Validación y generación determinista de Turtle |
+| Herramienta | `tools/ontology_compile.py [--check]` | Compila las plantillas o comprueba que el Turtle está al día |
 
 ## 5. Configuración
 
@@ -73,7 +97,9 @@ No aplica todavía: el núcleo es contenido estático. La carga versionada y la 
 
 ## 8. Verificación
 
-`services/ontology/tests/test_vocabulary.py` comprueba el núcleo OWL, la versión, las etiquetas en castellano, los dominios y rangos, la propiedad simétrica, la lista cerrada de tipos de evidencia y que no haya términos fuera del vocabulario.
+- **`test_vocabulary.py`:** el núcleo OWL, su versión, las etiquetas en castellano, los dominios y rangos, la propiedad simétrica, la lista cerrada de tipos de evidencia y que no haya términos fuera del vocabulario.
+- **`test_editorial_translation.py`:** ida y vuelta de la traducción, claves desconocidas y claves repetidas.
+- **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
 
@@ -85,3 +111,4 @@ No aplica todavía: el núcleo es contenido estático. La carga versionada y la 
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-17 | Núcleo OWL de tres planos con tipo de evidencia y vocabulario cerrado | Fase 04 (ARG-031) |
+| 0.1.0-alpha | 2026-09-17 | Plantilla editorial en castellano, capa de traducción y compilador determinista a Turtle | Fase 04 (ARG-038) |

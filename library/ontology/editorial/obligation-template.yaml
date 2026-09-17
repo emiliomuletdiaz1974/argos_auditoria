@@ -1,0 +1,20 @@
+# Plantilla editorial de una obligación. El jurista rellena los campos; el compilador genera
+# el Turtle canónico en library/ontology/norms/generated/<id>.ttl (ADR-0006).
+# Los identificadores van en inglés y en mayúsculas o minúsculas según su tipo; los textos, en
+# castellano. Copia este fichero con el nombre <id>.yaml (por ejemplo OBL-RGPD-32-1.yaml).
+id: OBL-RGPD-32-1                     # único y estable: OBL-<NORMA>-<artículo>-<n>
+norma: RGPD                           # identificador de la norma en library/ontology/norms
+articulo: "32"                        # número de artículo, con puntos si hay apartados: "5.1.e"
+titulo: Seguridad del tratamiento — cifrado de categorías especiales
+vigente_desde: 2018-05-25
+severidad: critical                   # critical | high | medium | low
+texto_resumen: >
+  Los datos de categoría especial almacenados deben contar con cifrado
+  en reposo verificado, no meramente declarado en la política.
+aplica_a:                             # clases de activo existentes (AC-...)
+  - AC-stored-health-data
+verificado_por:                       # ids del catálogo de retos (library/challenges)
+  - sec-encryption-at-rest
+equivalencias:                        # cruces entre marcos, MARCO:código (opcional)
+  - ENS:op.exp.10
+# pendiente_verificacion: "motivo"    # SOLO si todavía no hay reto posible
