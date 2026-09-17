@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: 0722444
+commit: d7c63f8
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -313,6 +313,20 @@ Quedan fuera de esta población, a la espera de la validación jurídica:
 
 El catálogo provisional queda en 27 retos para 28 obligaciones.
 
+### Operación editorial y matriz de solapamiento (ARG-038)
+
+El proceso editorial está en `docs/ontologia/proceso-editorial.md`:
+- **Roles:** jurista, ingeniero normativo y revisor.
+- **SLA interno:** 30 días naturales desde la publicación oficial hasta el bundle firmado, con etapas de límite D+3, D+10, D+15, D+18, D+23, D+27 y D+30. Un retraso no amplía el plazo: la obligación afectada se publica con `pendiente_verificacion` y su motivo.
+- **Reglas:** ids estables, vigencia por fecha de aplicación, honestidad sobre lo no verificable, Turtle solo generado y actualización de la verdad terreno.
+
+La **matriz de solapamiento** (`argos_ontology.overlap`) lista las clases de activo que reciben obligaciones de dos o más normas, con las equivalencias declaradas. Son los puntos en los que una sola campaña produce evidencia para varias normas.
+- Se cruza por clase de activo y no por reto, porque cada reto del catálogo provisional sirve hoy a una sola obligación.
+- La norma de cada obligación se obtiene por `derivesFrom` → `partOf` → `argos:Norm`; una obligación sin norma declarada no genera solapamientos.
+- Sobre la biblioteca actual hay un solapamiento: `AC-stored-health-data`, con obligaciones del EHDS y del RGPD.
+- No se declaran equivalencias con ENS o NIS2 hasta la validación jurídica.
+
+
 Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.40 y httpx 0.28.
 
 ## 4. Interfaces
@@ -352,6 +366,8 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | Tipos | `ApplicabilityRun`, `Requirement`, `ResolvedNode`, protocolo `SelectorResolver` y `StoreSelectorResolver(store, page_size)` | Plan y resolución de selectores |
 | Asiento | `applicability.resolve` (actor `system:resolver`) | Ejecución, versión de ontología, fecha, pares y nodos |
 | Evento | `challenge.applicability_ready.v1` en `argos.challenge.applicability_ready` (stream `CHALLENGE`) | `run_id`, `campaign_id`, `ontology`, `pairs` |
+| Funciones | `build_overlap(graph)`, `overlap_json(rows)`, `overlap_csv(rows)`, tipo `OverlapRow(asset_class, norms, obligations, equivalences)` y `CSV_COLUMNS` | Matriz de solapamiento entre normas |
+| Herramienta | `tools/ontology_overlap.py [--library DIR] [--output DIR]` y `make ontology-overlap` | Escribe `overlap.json` y `overlap.csv` (por defecto en `dist/`) |
 | Herramienta | `tools/ontology_gates.py [--library DIR]` y `make ontology-gates` | Imprime `PASS`/`FAIL` por puerta; código 1 si alguna falla; paso del job `verify` del CI |
 
 ## 5. Configuración
@@ -372,6 +388,7 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 - **Publicar una versión:** `uv run --env-file .env.example python tools/ontology_publish.py build --version X.Y.Z --in-force-from AAAA-MM-DD`, con un token de Vault con permiso de firma sobre `argos-content`.
 - **Verificar un bundle recibido:** `tools/ontology_publish.py verify <bundle>`.
 - **Cargar un bundle en el appliance:** `load_bundle`, que verifica antes de guardar.
+- **Proceso editorial:** seguir `docs/ontologia/proceso-editorial.md` (SLA de 30 días) y publicar con cada versión las matrices de trazabilidad y de solapamiento (`make ontology-overlap`).
 - **Probar las políticas Rego:** `make policy-test` (ejecuta `opa test` en el contenedor; paso del job `verify` del CI).
 - **Servidor OPA de desarrollo:** `docker compose -f deploy/dev/compose.yaml up -d --wait opa`. Tras cambiar políticas o datos se reinicia con `restart opa`: no se usa `--watch` porque los montajes de Windows no propagan eventos.
 
@@ -426,6 +443,7 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 - **`test_population_gdpr.py`:** plantillas con nombre igual a su id y dentro del alcance aprobado, todos los bloques poblados, artículos declarados como parte de la norma, retos presentes en el catálogo y solo la notificación de brechas pendiente de verificación.
 - **`test_population_ehds.py`:** plantillas dentro del alcance, ambos usos poblados, fechas de aplicación del artículo 105 (no de la entrada en vigor), artículos declarados, retos en el catálogo y solo el plazo del organismo de acceso pendiente.
 - **`test_population_ai_act.py`:** plantillas dentro del alcance, bloques poblados, fechas de aplicación del artículo 113, artículos declarados, retos en el catálogo y la clase `AC-confirmed-ai-system`.
+- **`test_overlap_pure.py`:** solapamiento solo en clases de activo alcanzadas por varias normas, un literal con la etiqueta de una norma que no se confunde con la norma, obligaciones sin norma que no generan solapamientos falsos, salidas deterministas en JSON y CSV, y la biblioteca que se entrega, con RGPD y EHDS sobre los datos de salud.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -452,3 +470,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | Población RGPD del v1: 13 obligaciones y 13 retos, pendiente de validación jurídica | Fase 04 (ARG-031) |
 | 0.1.0-alpha | 2026-09-17 | Población EHDS del v1: 7 obligaciones aplicables desde 2029 y 6 retos, pendiente de validación jurídica | Fase 04 (ARG-031) |
 | 0.1.0-alpha | 2026-09-17 | Población AI Act del v1: 8 obligaciones, 8 retos y clase `AC-confirmed-ai-system`, pendiente de validación jurídica | Fase 04 (ARG-031, ARG-033) |
+| 0.1.0-alpha | 2026-09-17 | Proceso editorial con SLA de 30 días y matriz de solapamiento entre normas | Fase 04 (ARG-038) |
