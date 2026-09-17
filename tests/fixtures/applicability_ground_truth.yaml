@@ -1,0 +1,98 @@
+# Applicability ground truth over the demo snapshot, maintained by hand (F04-18).
+# Derived from the inventory ground truth (inventory_ground_truth.yaml) and the v1 populations, not
+# from the resolver. Pending legal validation (F04-19): until then it pins what the ontology says,
+# not what the law requires. Every value refers to synthetic data.
+version: 1
+
+# The snapshot: a full scan and deterministic classification of these systems, then AI discovery.
+snapshot:
+  systems: [dev-source-postgres, dev-source-mariadb]
+
+# Nodes each asset class must resolve to on the snapshot, as "<system> <qualified name>".
+asset_classes:
+  AC-stored-personal-data:
+    - dev-source-postgres clinic.patients.birth_date
+    - dev-source-postgres clinic.patients.full_name
+  AC-stored-identifier-data:
+    - dev-source-mariadb billing.patient_mirror.dni_number
+    - dev-source-postgres clinic.patient_documents.dni_number
+    - dev-source-postgres clinic.patients.national_id
+  AC-stored-contact-data:
+    - dev-source-mariadb billing.patient_mirror.email
+    - dev-source-postgres clinic.patient_documents.email
+  AC-stored-financial-data:
+    - dev-source-mariadb billing.patient_mirror.iban
+    - dev-source-postgres clinic.patient_documents.iban
+  AC-stored-health-data: &health
+    - dev-source-mariadb billing.patient_mirror.diagnosis_code
+    - dev-source-postgres clinic.patient_documents.diagnosis_code
+  AC-stored-special-category-data: *health
+  AC-unclassified-column:
+    - dev-source-mariadb billing.invoices.amount_cents
+    - dev-source-mariadb billing.invoices.id
+    - dev-source-mariadb billing.invoices.issued_at
+    - dev-source-mariadb billing.invoices.patient_ref
+    - dev-source-mariadb billing.invoices.status
+    - dev-source-mariadb billing.patient_mirror.id
+    - dev-source-postgres clinic.appointments.department
+    - dev-source-postgres clinic.appointments.id
+    - dev-source-postgres clinic.appointments.patient_id
+    - dev-source-postgres clinic.appointments.starts_at
+    - dev-source-postgres clinic.consents.granted
+    - dev-source-postgres clinic.consents.patient_id
+    - dev-source-postgres clinic.consents.purpose
+    - dev-source-postgres clinic.consents.updated_at
+    - dev-source-postgres clinic.patient_documents.patient_id
+    - dev-source-postgres clinic.patients.created_at
+    - dev-source-postgres clinic.patients.id
+    - dev-source-postgres clinic.readmission_risk.patient_id
+    - dev-source-postgres clinic.readmission_risk.predicted_at
+    - dev-source-postgres clinic.readmission_risk.risk_score
+  AC-pending-ai-system:
+    - dev-source-postgres table:readmission_risk
+  AC-confirmed-ai-system: []
+
+.personal: &personal
+  - AC-stored-personal-data
+  - AC-stored-identifier-data
+  - AC-stored-contact-data
+  - AC-stored-financial-data
+  - AC-stored-special-category-data
+
+.rgpd: &rgpd
+  OBL-RGPD-5-1: {classes: *personal, challenges: [ret-file-retention, ret-table-retention]}
+  OBL-RGPD-5-2: {classes: [AC-stored-special-category-data], challenges: [acc-special-category-profiles]}
+  OBL-RGPD-9-1: {classes: [AC-stored-special-category-data], challenges: [coh-treatment-legal-basis]}
+  OBL-RGPD-15-1: {classes: *personal, challenges: [dsr-access-request-term]}
+  OBL-RGPD-17-1: {classes: *personal, challenges: [dsr-erasure-effective]}
+  OBL-RGPD-30-1: {classes: [AC-stored-special-category-data], challenges: [coh-ropa-declared-systems]}
+  OBL-RGPD-30-2: {classes: *personal, challenges: [coh-treatment-retention-declared]}
+  OBL-RGPD-30-3: {classes: [AC-unclassified-column], challenges: [coh-unclassified-columns]}
+  OBL-RGPD-32-1: {classes: [AC-stored-health-data], challenges: [sec-encryption-at-rest]}
+  OBL-RGPD-32-2: {classes: [AC-stored-special-category-data], challenges: [sec-access-logging]}
+  OBL-RGPD-32-3: {classes: *personal, challenges: [sec-encryption-in-transit]}
+  OBL-RGPD-33-2: {classes: *personal, challenges: [brc-breach-register]}
+
+.aiact: &aiact
+  OBL-AIACT-5-1: {classes: [AC-confirmed-ai-system], challenges: [coh-no-prohibited-ai-in-use]}
+  OBL-AIACT-6-1: {classes: [AC-confirmed-ai-system], challenges: [coh-ai-risk-class-declared]}
+  OBL-AIACT-6-2: {classes: [AC-pending-ai-system], challenges: [coh-ai-pending-review]}
+  OBL-AIACT-10-1: {classes: [AC-confirmed-ai-system], challenges: [coh-ai-training-data-governance]}
+  OBL-AIACT-11-1: {classes: [AC-confirmed-ai-system], challenges: [doc-ai-technical-documentation]}
+  OBL-AIACT-12-1: {classes: [AC-confirmed-ai-system], challenges: [sec-ai-event-logging]}
+  OBL-AIACT-26-1: {classes: [AC-confirmed-ai-system], challenges: [doc-ai-human-oversight]}
+  OBL-AIACT-26-2: {classes: [AC-confirmed-ai-system], challenges: [sec-ai-log-retention]}
+
+# Obligations that apply on each campaign date, with their classes and challenges. Obligations
+# pending verification (OBL-RGPD-33-1, OBL-EHDS-60-1) have no challenge and never enter a plan.
+dates:
+  "2026-09-16":
+    <<: [*rgpd, *aiact]
+  "2029-03-26":
+    <<: [*rgpd, *aiact]
+    OBL-EHDS-3-1: {classes: [AC-stored-health-data], challenges: [dsr-ehds-patient-access]}
+    OBL-EHDS-8-1: {classes: [AC-stored-health-data], challenges: [dsr-ehds-access-restriction]}
+    OBL-EHDS-9-1: {classes: [AC-stored-health-data], challenges: [sec-health-access-log-retention]}
+    OBL-EHDS-11-1: {classes: [AC-stored-health-data], challenges: [acc-care-relationship-access]}
+    OBL-EHDS-13-1: {classes: [AC-stored-health-data], challenges: [coh-priority-categories-located]}
+    OBL-EHDS-60-2: {classes: [AC-stored-health-data], challenges: [coh-dataset-description-current]}
