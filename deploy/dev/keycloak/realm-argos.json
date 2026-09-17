@@ -6,10 +6,22 @@
   "ssoSessionIdleTimeout": 1800,
   "roles": {
     "realm": [
-      { "name": "platform_admin", "description": "Appliance administration" },
-      { "name": "campaign_manager", "description": "Campaign design and execution" },
-      { "name": "dpo_reviewer", "description": "Approvals and review (Accountable in RACI)" },
-      { "name": "read_only_auditor", "description": "Read-only access to case files" }
+      {
+        "name": "platform_admin",
+        "description": "Appliance administration"
+      },
+      {
+        "name": "campaign_manager",
+        "description": "Campaign design and execution"
+      },
+      {
+        "name": "dpo_reviewer",
+        "description": "Approvals and review (Accountable in RACI)"
+      },
+      {
+        "name": "read_only_auditor",
+        "description": "Read-only access to case files"
+      }
     ]
   },
   "clients": [
@@ -18,19 +30,32 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
-      "attributes": { "pkce.code.challenge.method": "S256" },
-      "redirectUris": ["http://127.0.0.1:5173/*"],
-      "webOrigins": ["http://127.0.0.1:5173"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "http://127.0.0.1:5173/*"
+      ],
+      "webOrigins": [
+        "http://127.0.0.1:5173"
+      ],
       "protocolMappers": [
         {
           "name": "argos-api-audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
-          "config": { "included.client.audience": "argos-api", "access.token.claim": "true", "id.token.claim": "false" }
+          "config": {
+            "included.client.audience": "argos-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
         }
       ]
     },
-    { "clientId": "argos-api", "bearerOnly": true },
+    {
+      "clientId": "argos-api",
+      "bearerOnly": true
+    },
     {
       "clientId": "argos-tests",
       "description": "DEVELOPMENT ONLY: password grant for integration tests",
@@ -42,7 +67,11 @@
           "name": "argos-api-audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
-          "config": { "included.client.audience": "argos-api", "access.token.claim": "true", "id.token.claim": "false" }
+          "config": {
+            "included.client.audience": "argos-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
         }
       ]
     }
@@ -55,8 +84,34 @@
       "emailVerified": true,
       "firstName": "DPO",
       "lastName": "Synthetic",
-      "credentials": [{ "type": "password", "value": "test", "temporary": false }],
-      "realmRoles": ["dpo_reviewer"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "dpo_reviewer"
+      ]
+    },
+    {
+      "username": "manager.test",
+      "enabled": true,
+      "email": "manager.test@argos.local",
+      "emailVerified": true,
+      "firstName": "Campaign",
+      "lastName": "Manager",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "campaign_manager"
+      ]
     }
   ],
   "identityProviders": [

@@ -7,12 +7,15 @@ dependencies = [
     "argos-common",
     "argos-ontology",
     "temporalio>=1.8",
+    "argos-auth",
+    "fastapi>=0.115",
     "jsonschema>=4.23,<5",
     "pyyaml>=6.0",
 ]
 
 [tool.uv.sources]
 argos-common = { workspace = true }
+argos-auth = { workspace = true }
 argos-ontology = { workspace = true }
 
 [build-system]

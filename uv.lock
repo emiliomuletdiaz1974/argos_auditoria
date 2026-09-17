@@ -76,8 +76,10 @@ name = "argos-challenge-engine"
 version = "0.1.0a0"
 source = { editable = "services/challenge-engine" }
 dependencies = [
+    { name = "argos-auth" },
     { name = "argos-common" },
     { name = "argos-ontology" },
+    { name = "fastapi" },
     { name = "jsonschema" },
     { name = "pyyaml" },
     { name = "temporalio" },
@@ -85,8 +87,10 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "argos-auth", editable = "libs/auth" },
     { name = "argos-common", editable = "libs/common" },
     { name = "argos-ontology", editable = "services/ontology" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "temporalio", specifier = ">=1.8" },

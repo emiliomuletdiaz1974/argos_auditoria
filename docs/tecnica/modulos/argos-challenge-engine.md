@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: e9b37fd
+commit: 6ff2132
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -141,6 +141,17 @@ Una campaña es un proceso de días con personas dentro: sobrevive a reinicios, 
   - La Fase 07 lo envolverá con Merkle y firma sin cambiar lo que se sella.
 - **Parámetros del cliente:** el calendario de conservación y sus columnas de referencia son del cliente; viven junto a los datos de OPA y el compilador resuelve `{$client: …}` desde ahí.
 
+### API de campañas y puntos de control (ARG-047)
+
+El reparto del pliego es taxativo: **ARGOS ejecuta y evidencia, el cliente aprueba**. Esta API es donde ocurre.
+- **Roles del realm:** `campaign_manager` planifica y lanza; `dpo_reviewer` aprueba compuertas, autoriza la inyección de un sujeto sintético y mueve un hallazgo; cualquier rol puede leer. Sin token, 401; con token sin rol, 403.
+- **Compuertas:** `GET /campaigns/{id}/gates` muestra qué se aprueba y cuántas aprobaciones faltan; `POST …/approve` registra la del usuario, y al alcanzar las necesarias envía la señal al workflow. `sampling` exige **doble control**: dos personas distintas; la misma no cuenta dos veces.
+- **Sujeto sintético:** autorización del punto de inyección (DPO) y confirmaciones del cliente (inyección, ejercicio del derecho y reversión).
+- **Hallazgos:** `POST /findings/{id}/transition`, con la máquina de estados; una transición ilegal responde 409.
+- **Lectura:** estado de la campaña con `seal_verified` recalculado, veredictos y hallazgos.
+- Cada acción entra en el diario con el usuario que la hizo.
+- Proceso de desarrollo: `python -m argos_challenges.api.main` en `127.0.0.1:8003`.
+
 ## 4. Interfaces
 
 | Tipo | Nombre | Descripción |
@@ -158,6 +169,8 @@ Una campaña es un proceso de días con personas dentro: sobrevive a reinicios, 
 | Tabla | `argos.findings` (migración `0014`) | Hallazgos con huella única, contador, severidad y caducidad del riesgo aceptado |
 | Funciones | `open_or_recur`, `transition`, `expire_risk_acceptances`, `fingerprint`, `escalate`, `announce`; `FindingError`, `STATUSES`, `TRANSITIONS` | Ciclo de vida de los hallazgos |
 | Asientos y evento | `finding.open`, `finding.recur`, `finding.transition`; `challenge.finding_opened.v1` en `argos.challenge.finding_opened` | Trazabilidad y aviso de hallazgos |
+| API | `argos_challenges.api.app.create_app(dsn, validator, start_campaign, signal_campaign)`; `DEV_PORT = 8003`, `DOUBLE_CONTROL_GATES = {"sampling"}`; proceso `python -m argos_challenges.api.main` | API de campañas |
+| Rutas | `POST /campaigns`, `POST /campaigns/{id}/launch`, `GET /campaigns/{id}`, `/verdicts`, `/findings`, `/gates`, `POST /campaigns/{id}/gates/{gate}/approve`, `POST /campaigns/{id}/synthetic/authorize`, `POST /synthetic/{id}/confirm-injection\|confirm-exercise\|confirm-revert`, `POST /findings/{id}/transition` | Puntos de control humanos |
 | Workflows | `CampaignWorkflow` (señales `approve`, `circuit_open`, `circuit_closed`; consulta `progress`) y `SystemRun` | Orquestación de la campaña |
 | Funciones | `seal_payload`, `compute_seal`, `seal_campaign`, `verify_seal`, `announce_seal`; `SealError`; evento `challenge.campaign_sealed.v1`; asiento `campaign.seal` | Sello de campaña |
 | Funciones | `client_parameters()`, `client_data()`; `library_fingerprint()` | Parámetros del cliente y huella de la biblioteca |
@@ -226,6 +239,8 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 
 **DSL (F05-05):** `test_challenge_translation.py` (ida y vuelta, clave y valor desconocidos, clave duplicada y un campo dado a la vez en los dos idiomas) y `test_challenge_dsl.py` (esquema válido, diez documentos rechazados, plantilla de texto rechazada, parámetros tipados aceptados, las seis reglas del producto y los retos que se entregan). `tests/unit/test_challenge_lint_tool.py` comprueba los códigos de salida de la herramienta.
 
+**API (F05-15):** `test_campaign_api_pure.py` con un validador falso (sin token 401, sin rol 403, solo el gestor lanza, solo el revisor aprueba, doble control con dos personas distintas y arranque sin motor que responde 503) y `tests/integration/test_campaign_api.py` con tokens reales del realm: el DPO aprueba y el diario guarda quién, los roles cruzados se rechazan, veredictos y hallazgos se leen y una transición ilegal da 409.
+
 **Workflow y sello (F05-14):** `test_seal_pure.py` (qué cubre el sello, orden indiferente, cualquier cambio lo rompe) y `tests/integration/test_campaign_workflow.py` contra Temporal real: la campaña espera su compuerta, ejecuta, sella y `verify_seal` da verdadero; tras alterar un veredicto en la base, da falso.
 
 **Hallazgos (F05-13):** `test_findings_pure.py` (huella, máquina de estados cerrada, cierre solo por verificación y escalado por recurrencia) y `tests/integration/test_findings.py` (una campaña no cuenta dos veces, tres campañas suben la severidad una sola vez, cierre solo por verificación, riesgo aceptado documentado que caduca a `reopened`, reapertura que no suma ocurrencia y huella única en la base).
@@ -264,6 +279,7 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Muestreo con corrección finita, cota superior de Wilson y muestra necesaria | Fase 05 (ARG-045) |
 | 0.1.0-alpha | 2026-09-17 | Evaluador determinista puro con veredicto de cuatro valores y hash canónico | Fase 05 (ARG-046) |
 | 0.1.0-alpha | 2026-09-17 | Tablas de campañas, unidades, veredictos y aprobaciones, y almacén idempotente | Fase 05 (ARG-043) |
+| 0.1.0-alpha | 2026-09-17 | API de campañas con compuertas de doble control y confirmaciones del cliente | Fase 05 (ARG-047) |
 | 0.1.0-alpha | 2026-09-17 | Resolución de selectores sobre la instantánea y compilador de campañas con parámetros tipados | Fase 05 (ARG-042) |
 | 0.1.0-alpha | 2026-09-17 | Actividades de sonda con minimización, ventanas, sondas internas y evaluación persistida | Fase 05 (ARG-044) |
 | 0.1.0-alpha | 2026-09-17 | Ciclo de vida de los hallazgos con deduplicación, escalado y riesgo aceptado con caducidad | Fase 05 (ARG-048) |
