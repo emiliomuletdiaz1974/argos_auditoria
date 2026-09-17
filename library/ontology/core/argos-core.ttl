@@ -1,0 +1,69 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix dpv:   <https://w3id.org/dpv#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+
+# ARGOS core ontology: three planes (normative, applicability, verification), ARG-031.
+# Deviation note ARG-031-033 and ADR-0006: vocabulary and values in English, labels in Spanish.
+
+<https://ns.argos.eu/core#> a owl:Ontology ;
+  rdfs:label "Ontología núcleo de ARGOS"@es ;
+  owl:versionInfo "1.0.0" .
+
+### Normative plane
+argos:Norm a owl:Class ; rdfs:label "Norma"@es .
+argos:Article a owl:Class ; rdfs:label "Artículo"@es .
+argos:Obligation a owl:Class ; rdfs:label "Obligación verificable"@es .
+
+argos:eli a owl:DatatypeProperty ;
+  rdfs:label "Identificador ELI"@es ; rdfs:domain argos:Norm ; rdfs:range xsd:anyURI .
+argos:inForceFrom a owl:DatatypeProperty ;
+  rdfs:label "En vigor desde"@es ; rdfs:range xsd:date .
+argos:inForceUntil a owl:DatatypeProperty ;
+  rdfs:label "En vigor hasta"@es ; rdfs:range xsd:date .
+argos:severity a owl:DatatypeProperty ;
+  rdfs:label "Severidad del incumplimiento"@es ;
+  rdfs:domain argos:Obligation ; rdfs:range xsd:string ;
+  rdfs:comment "critical | high | medium | low"@es .
+argos:verificationPending a owl:DatatypeProperty ;
+  rdfs:label "Verificación pendiente (motivo)"@es ; rdfs:range xsd:string ;
+  rdfs:comment "Obligación o clase de activo que todavía no se puede verificar"@es .
+argos:derivesFrom a owl:ObjectProperty ;
+  rdfs:label "Deriva de"@es ; rdfs:domain argos:Obligation ; rdfs:range argos:Article .
+argos:partOf a owl:ObjectProperty ;
+  rdfs:label "Parte de"@es ; rdfs:domain argos:Article ; rdfs:range argos:Norm .
+argos:supersedes a owl:ObjectProperty ;
+  rdfs:label "Sustituye a"@es ; rdfs:domain argos:Obligation ; rdfs:range argos:Obligation .
+argos:equivalentTo a owl:ObjectProperty , owl:SymmetricProperty ;
+  rdfs:label "Equivale a"@es ;
+  rdfs:comment "Cruce entre marcos (por ejemplo, medida ENS y art. 32 RGPD)"@es .
+
+### Applicability plane
+argos:AssetClass a owl:Class ; rdfs:label "Clase de activo del grafo"@es .
+argos:graphLabel a owl:DatatypeProperty ;
+  rdfs:label "Etiqueta del grafo"@es ; rdfs:domain argos:AssetClass ; rdfs:range xsd:string .
+argos:selectorJson a owl:DatatypeProperty ;
+  rdfs:label "Selector JSON de la API del inventario"@es ;
+  rdfs:domain argos:AssetClass ; rdfs:range xsd:string .
+argos:dataCategory a owl:ObjectProperty ;
+  rdfs:label "Categoría de datos"@es ; rdfs:domain argos:AssetClass ; rdfs:range dpv:PersonalData .
+argos:appliesTo a owl:ObjectProperty ;
+  rdfs:label "Aplica a"@es ; rdfs:domain argos:Obligation ; rdfs:range argos:AssetClass .
+
+### Verification plane
+argos:Challenge a owl:Class ; rdfs:label "Reto de la biblioteca"@es .
+argos:Verification a owl:Class ; rdfs:label "Verificación (obligación, clase, reto)"@es .
+argos:EvidenceType a owl:Class ; rdfs:label "Tipo de evidencia"@es .
+argos:challengeId a owl:DatatypeProperty ;
+  rdfs:label "Identificador del reto"@es ; rdfs:domain argos:Challenge ; rdfs:range xsd:string .
+argos:verifiedBy a owl:ObjectProperty ;
+  rdfs:label "Verificada por"@es ; rdfs:domain argos:Obligation ; rdfs:range argos:Challenge .
+argos:evidenceType a owl:ObjectProperty ;
+  rdfs:label "Tipo de evidencia que produce"@es ;
+  rdfs:domain argos:Challenge ; rdfs:range argos:EvidenceType .
+
+argos:query_result a argos:EvidenceType ; rdfs:label "Resultado de consulta"@es .
+argos:configuration a argos:EvidenceType ; rdfs:label "Configuración"@es .
+argos:log_extract a argos:EvidenceType ; rdfs:label "Extracto de registro"@es .
+argos:document a argos:EvidenceType ; rdfs:label "Documento"@es .

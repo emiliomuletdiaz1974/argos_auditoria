@@ -32,3 +32,4 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | `argos-events` | [argos-events.md](modulos/argos-events.md) | 01 |
 | `argos-example` | [argos-example.md](modulos/argos-example.md) | 01 (interno) |
 | `argos-inventory` | [argos-inventory.md](modulos/argos-inventory.md) | 03 |
+| `argos-ontology` | [argos-ontology.md](modulos/argos-ontology.md) | 04 (en construcción) |

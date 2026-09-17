@@ -53,7 +53,7 @@ check-heavy:
 	uv run pytest -m heavy
 
 cover:
-	uv run pytest -m "not heavy" --cov=argos_common --cov=argos_events --cov=argos_auth --cov=argos_connector --cov=argos_sql --cov=argos_files --cov=argos_rest --cov=argos_ldap --cov=argos_dicom --cov=argos_fhir --cov=argos_inventory --cov-report=term-missing --cov-fail-under=80
+	uv run pytest -m "not heavy" --cov=argos_common --cov=argos_events --cov=argos_auth --cov=argos_connector --cov=argos_sql --cov=argos_files --cov=argos_rest --cov=argos_ldap --cov=argos_dicom --cov=argos_fhir --cov=argos_inventory --cov=argos_ontology --cov-report=term-missing --cov-fail-under=80
 
 build:
 	docker build -f services/example/Dockerfile --label org.argos.component=ARG-001 --label org.argos.version=$(VERSION) -t argos-example:$(VERSION) .
