@@ -1,0 +1,12 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-30-3
+norma: RGPD
+articulo: "30.1.c"
+titulo: "Categorías de datos descritas en el inventario"
+vigente_desde: 2018-05-25
+severidad: medium
+texto_resumen: "Las columnas vivas del inventario tienen una categoría de datos asignada; una columna sin clasificar impide describir las categorías del tratamiento."
+aplica_a:
+  - AC-unclassified-column
+verificado_por:
+  - coh-unclassified-columns

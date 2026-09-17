@@ -1,0 +1,15 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-33-1
+norma: RGPD
+articulo: "33.1"
+titulo: "Notificación de la brecha en 72 horas"
+vigente_desde: 2018-05-25
+severidad: critical
+texto_resumen: "Ante una brecha, la organización reúne en menos de 72 horas los sistemas afectados, las categorías y los volúmenes de datos que exige la notificación a la autoridad."
+aplica_a:
+  - AC-stored-personal-data
+  - AC-stored-identifier-data
+  - AC-stored-contact-data
+  - AC-stored-financial-data
+  - AC-stored-special-category-data
+pendiente_verificacion: "El simulacro de notificación de extremo a extremo necesita el motor de campañas (Fase 05); el inventario ya aporta los datos de la notificación."

@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-RGPD-5-2 a argos:Obligation ;
+    rdfs:label "Confidencialidad de las categorías especiales"@es ;
+    rdfs:comment "Solo las identidades con un perfil autorizado para la categoría acceden a los datos de categoría especial; cualquier otra identidad con acceso es un hallazgo."@es ;
+    argos:appliesTo n:AC-stored-special-category-data ;
+    argos:derivesFrom n:RGPD-5-1-f ;
+    argos:inForceFrom "2018-05-25"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-acc-special-category-profiles .
+
+n:CH-acc-special-category-profiles a argos:Challenge ;
+    argos:challengeId "acc-special-category-profiles" .
+

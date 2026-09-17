@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-RGPD-9-1 a argos:Obligation ;
+    rdfs:label "Base jurídica del tratamiento de categorías especiales"@es ;
+    rdfs:comment "Todo tratamiento del registro de actividades declara la base jurídica que levanta la prohibición general de tratar categorías especiales."@es ;
+    argos:appliesTo n:AC-stored-special-category-data ;
+    argos:derivesFrom n:RGPD-9-1 ;
+    argos:inForceFrom "2018-05-25"^^xsd:date ;
+    argos:severity "critical" ;
+    argos:verifiedBy n:CH-coh-treatment-legal-basis .
+
+n:CH-coh-treatment-legal-basis a argos:Challenge ;
+    argos:challengeId "coh-treatment-legal-basis" .
+

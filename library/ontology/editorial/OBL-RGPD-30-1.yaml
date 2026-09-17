@@ -1,0 +1,12 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-30-1
+norma: RGPD
+articulo: "30.1"
+titulo: "Sistemas con categorías especiales en el registro de actividades"
+vigente_desde: 2018-05-25
+severidad: high
+texto_resumen: "Todo sistema que almacena datos de categoría especial figura en al menos un tratamiento del registro de actividades."
+aplica_a:
+  - AC-stored-special-category-data
+verificado_por:
+  - coh-ropa-declared-systems

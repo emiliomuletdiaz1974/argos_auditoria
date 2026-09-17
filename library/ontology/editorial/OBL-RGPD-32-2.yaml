@@ -1,0 +1,12 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-32-2
+norma: RGPD
+articulo: "32.1.b"
+titulo: "Registro de accesos a categorías especiales"
+vigente_desde: 2018-05-25
+severidad: high
+texto_resumen: "Los almacenes con datos de categoría especial tienen activado el registro de accesos que permite reconstruir quién consultó qué y cuándo."
+aplica_a:
+  - AC-stored-special-category-data
+verificado_por:
+  - sec-access-logging

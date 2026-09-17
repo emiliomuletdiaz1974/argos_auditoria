@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: e811e8b
+commit: b9c935e
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -209,6 +209,35 @@ El resolutor responde a la pregunta que arranca cada campaña: con la ontología
 
 Cada fila del plan explica por sí sola por qué aplica: obligación, etiqueta, severidad, clase de activo, selector, reto y claves de nodo ordenadas.
 
+### Biblioteca normativa v1 · RGPD
+
+> **Pendiente de validación jurídica.** Esta población está estructurada técnicamente, pero todavía no la ha validado el perfil jurídico. Cada plantilla lo indica en su primera línea, y no debe presentarse como validada hasta entonces.
+
+Cubre el alcance aprobado para el v1: derechos de los interesados, registro de actividades, seguridad del tratamiento y brechas. También incluye los principios del artículo 5 que citan los retos. Hay 13 obligaciones técnicamente verificables:
+- la norma y sus 12 artículos citados se declaran en `library/ontology/norms/RGPD.ttl`;
+- las plantillas están en `library/ontology/editorial/OBL-RGPD-*.yaml`;
+- el Turtle correspondiente se genera en `norms/generated/` con `tools/ontology_compile.py`.
+
+Las obligaciones sobre datos personales en general aplican a las cinco clases de datos personales: `AC-stored-personal-data`, `-identifier-data`, `-contact-data`, `-financial-data` y `-special-category-data`.
+
+| Bloque | Obligación | Artículo | Severidad | Reto |
+|---|---|---|---|---|
+| Principios | `OBL-RGPD-5-1` conservación limitada | 5.1.e | high | `ret-table-retention`, `ret-file-retention` (OPA `argos.retention`) |
+| Principios | `OBL-RGPD-5-2` confidencialidad de categorías especiales | 5.1.f | high | `acc-special-category-profiles` (OPA `argos.access`) |
+| Derechos | `OBL-RGPD-15-1` acceso en plazo | 15 | high | `dsr-access-request-term` |
+| Derechos | `OBL-RGPD-17-1` supresión efectiva | 17 | high | `dsr-erasure-effective` |
+| Registro de actividades | `OBL-RGPD-9-1` base jurídica de categorías especiales | 9.1 | critical | `coh-treatment-legal-basis` (SHACL) |
+| Registro de actividades | `OBL-RGPD-30-1` sistemas declarados | 30.1 | high | `coh-ropa-declared-systems` (SHACL) |
+| Registro de actividades | `OBL-RGPD-30-2` plazos declarados | 30.1.f | medium | `coh-treatment-retention-declared` (SHACL) |
+| Registro de actividades | `OBL-RGPD-30-3` columnas sin clasificar | 30.1.c | medium | `coh-unclassified-columns` |
+| Seguridad | `OBL-RGPD-32-1` cifrado en reposo de datos de salud | 32.1.a | critical | `sec-encryption-at-rest` |
+| Seguridad | `OBL-RGPD-32-2` registro de accesos | 32.1.b | high | `sec-access-logging` |
+| Seguridad | `OBL-RGPD-32-3` cifrado en tránsito | 32.1.b | high | `sec-encryption-in-transit` |
+| Brechas | `OBL-RGPD-33-1` notificación en 72 h | 33.1 | critical | Pendiente de verificación: el simulacro necesita el motor de campañas |
+| Brechas | `OBL-RGPD-33-2` registro documental | 33.5 | medium | `brc-breach-register` |
+
+El catálogo provisional `library/challenges/catalog.yaml` contiene esos 13 retos, sin huérfanos; el motor de retos debe implementarlos con los mismos ids. La matriz de trazabilidad da 12 obligaciones cubiertas y 1 pendiente. No se declaran equivalencias con otros marcos: las aportará la matriz de solapamiento.
+
 Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.40 y httpx 0.28.
 
 ## 4. Interfaces
@@ -319,12 +348,13 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
   - páginas pequeñas con los mismos nodos;
   - obligaciones futuras fuera del plan;
   - ejecuciones inmutables.
+- **`test_population_gdpr.py`:** plantillas con nombre igual a su id y dentro del alcance aprobado, todos los bloques poblados, artículos declarados como parte de la norma, retos presentes en el catálogo y solo la notificación de brechas pendiente de verificación.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
 
 - **Componentes de la fase aún sin documentar:** se añaden con sus tareas.
-- **Poblaciones normativas:** pendientes de validación jurídica.
+- **Poblaciones normativas:** la población RGPD está pendiente de validación jurídica; las poblaciones EHDS y AI Act se añaden con sus tareas.
 
 ## 10. Historial
 
@@ -341,3 +371,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | Perfil ODRL de espacios de datos traducido a retos, con hallazgo de lo no verificable | Fase 04 (ARG-035) |
 | 0.1.0-alpha | 2026-09-17 | Paquetes Rego de conservación y accesos, contenedor OPA y cliente `evaluate` | Fase 04 (ARG-036) |
 | 0.1.0-alpha | 2026-09-17 | Resolutor de aplicabilidad por fecha de campaña con ejecuciones inmutables, asiento y evento | Fase 04 (ARG-039) |
+| 0.1.0-alpha | 2026-09-17 | Población RGPD del v1: 13 obligaciones y 13 retos, pendiente de validación jurídica | Fase 04 (ARG-031) |

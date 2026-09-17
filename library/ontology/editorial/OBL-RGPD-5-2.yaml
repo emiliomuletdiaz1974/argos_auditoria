@@ -1,0 +1,12 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-5-2
+norma: RGPD
+articulo: "5.1.f"
+titulo: "Confidencialidad de las categorías especiales"
+vigente_desde: 2018-05-25
+severidad: high
+texto_resumen: "Solo las identidades con un perfil autorizado para la categoría acceden a los datos de categoría especial; cualquier otra identidad con acceso es un hallazgo."
+aplica_a:
+  - AC-stored-special-category-data
+verificado_por:
+  - acc-special-category-profiles

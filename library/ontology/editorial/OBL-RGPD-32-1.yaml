@@ -1,0 +1,12 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-32-1
+norma: RGPD
+articulo: "32.1.a"
+titulo: "Cifrado en reposo de categorías especiales"
+vigente_desde: 2018-05-25
+severidad: critical
+texto_resumen: "Los datos de categoría especial almacenados cuentan con cifrado en reposo verificado en la configuración del almacén, no meramente declarado en la política."
+aplica_a:
+  - AC-stored-health-data
+verificado_por:
+  - sec-encryption-at-rest

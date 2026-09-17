@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-RGPD-30-1 a argos:Obligation ;
+    rdfs:label "Sistemas con categorías especiales en el registro de actividades"@es ;
+    rdfs:comment "Todo sistema que almacena datos de categoría especial figura en al menos un tratamiento del registro de actividades."@es ;
+    argos:appliesTo n:AC-stored-special-category-data ;
+    argos:derivesFrom n:RGPD-30-1 ;
+    argos:inForceFrom "2018-05-25"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-coh-ropa-declared-systems .
+
+n:CH-coh-ropa-declared-systems a argos:Challenge ;
+    argos:challengeId "coh-ropa-declared-systems" .
+

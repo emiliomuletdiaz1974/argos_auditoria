@@ -1,0 +1,16 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-33-2
+norma: RGPD
+articulo: "33.5"
+titulo: "Registro documental de brechas"
+vigente_desde: 2018-05-25
+severidad: medium
+texto_resumen: "Existe un registro de las brechas con sus hechos, efectos y medidas correctoras, que permite a la autoridad verificar el cumplimiento del artículo 33."
+aplica_a:
+  - AC-stored-personal-data
+  - AC-stored-identifier-data
+  - AC-stored-contact-data
+  - AC-stored-financial-data
+  - AC-stored-special-category-data
+verificado_por:
+  - brc-breach-register

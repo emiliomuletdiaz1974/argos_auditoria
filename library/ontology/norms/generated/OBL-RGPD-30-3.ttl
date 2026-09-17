@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-RGPD-30-3 a argos:Obligation ;
+    rdfs:label "Categorías de datos descritas en el inventario"@es ;
+    rdfs:comment "Las columnas vivas del inventario tienen una categoría de datos asignada; una columna sin clasificar impide describir las categorías del tratamiento."@es ;
+    argos:appliesTo n:AC-unclassified-column ;
+    argos:derivesFrom n:RGPD-30-1-c ;
+    argos:inForceFrom "2018-05-25"^^xsd:date ;
+    argos:severity "medium" ;
+    argos:verifiedBy n:CH-coh-unclassified-columns .
+
+n:CH-coh-unclassified-columns a argos:Challenge ;
+    argos:challengeId "coh-unclassified-columns" .
+

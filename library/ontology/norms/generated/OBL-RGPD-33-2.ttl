@@ -1,0 +1,21 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-RGPD-33-2 a argos:Obligation ;
+    rdfs:label "Registro documental de brechas"@es ;
+    rdfs:comment "Existe un registro de las brechas con sus hechos, efectos y medidas correctoras, que permite a la autoridad verificar el cumplimiento del artículo 33."@es ;
+    argos:appliesTo n:AC-stored-contact-data,
+        n:AC-stored-financial-data,
+        n:AC-stored-identifier-data,
+        n:AC-stored-personal-data,
+        n:AC-stored-special-category-data ;
+    argos:derivesFrom n:RGPD-33-5 ;
+    argos:inForceFrom "2018-05-25"^^xsd:date ;
+    argos:severity "medium" ;
+    argos:verifiedBy n:CH-brc-breach-register .
+
+n:CH-brc-breach-register a argos:Challenge ;
+    argos:challengeId "brc-breach-register" .
+

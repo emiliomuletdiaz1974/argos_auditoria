@@ -1,0 +1,25 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-RGPD-5-1 a argos:Obligation ;
+    rdfs:label "Limitación del plazo de conservación"@es ;
+    rdfs:comment "Los datos personales no se conservan más tiempo del necesario: los registros más antiguos que el plazo del calendario de conservación visado se suprimen o se justifican como excepción documentada."@es ;
+    argos:appliesTo n:AC-stored-contact-data,
+        n:AC-stored-financial-data,
+        n:AC-stored-identifier-data,
+        n:AC-stored-personal-data,
+        n:AC-stored-special-category-data ;
+    argos:derivesFrom n:RGPD-5-1-e ;
+    argos:inForceFrom "2018-05-25"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-ret-file-retention,
+        n:CH-ret-table-retention .
+
+n:CH-ret-file-retention a argos:Challenge ;
+    argos:challengeId "ret-file-retention" .
+
+n:CH-ret-table-retention a argos:Challenge ;
+    argos:challengeId "ret-table-retention" .
+

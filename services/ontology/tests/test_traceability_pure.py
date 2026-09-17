@@ -118,8 +118,8 @@ def test_invalid_catalogs_are_rejected(document: Any, message: str) -> None:
         parse_challenge_catalog(document)
 
 
-def test_the_shipped_catalog_starts_empty_and_valid() -> None:
-    assert load_challenge_catalog(CATALOG_FILE) == {}
+def test_the_shipped_catalog_is_valid() -> None:
+    assert all(entry.id == key for key, entry in load_challenge_catalog(CATALOG_FILE).items())
 
 
 def test_outputs_are_deterministic_json_and_semicolon_csv() -> None:

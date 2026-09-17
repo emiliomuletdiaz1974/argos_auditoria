@@ -1,0 +1,16 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-17-1
+norma: RGPD
+articulo: "17"
+titulo: "Supresión efectiva de los datos"
+vigente_desde: 2018-05-25
+severidad: high
+texto_resumen: "Tras una solicitud de supresión sobre un interesado sintético, sus datos dejan de estar en los sistemas de origen dentro del plazo, no solo en el procedimiento escrito."
+aplica_a:
+  - AC-stored-personal-data
+  - AC-stored-identifier-data
+  - AC-stored-contact-data
+  - AC-stored-financial-data
+  - AC-stored-special-category-data
+verificado_por:
+  - dsr-erasure-effective

@@ -1,0 +1,16 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-15-1
+norma: RGPD
+articulo: "15"
+titulo: "Derecho de acceso atendido en plazo"
+vigente_desde: 2018-05-25
+severidad: high
+texto_resumen: "Una solicitud de acceso ejercida sobre un interesado sintético recibe respuesta completa dentro del plazo de un mes del artículo 12.3."
+aplica_a:
+  - AC-stored-personal-data
+  - AC-stored-identifier-data
+  - AC-stored-contact-data
+  - AC-stored-financial-data
+  - AC-stored-special-category-data
+verificado_por:
+  - dsr-access-request-term

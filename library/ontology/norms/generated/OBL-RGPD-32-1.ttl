@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-RGPD-32-1 a argos:Obligation ;
+    rdfs:label "Cifrado en reposo de categorías especiales"@es ;
+    rdfs:comment "Los datos de categoría especial almacenados cuentan con cifrado en reposo verificado en la configuración del almacén, no meramente declarado en la política."@es ;
+    argos:appliesTo n:AC-stored-health-data ;
+    argos:derivesFrom n:RGPD-32-1-a ;
+    argos:inForceFrom "2018-05-25"^^xsd:date ;
+    argos:severity "critical" ;
+    argos:verifiedBy n:CH-sec-encryption-at-rest .
+
+n:CH-sec-encryption-at-rest a argos:Challenge ;
+    argos:challengeId "sec-encryption-at-rest" .
+

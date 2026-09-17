@@ -1,0 +1,18 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-RGPD-33-1 a argos:Obligation ;
+    rdfs:label "Notificación de la brecha en 72 horas"@es ;
+    rdfs:comment "Ante una brecha, la organización reúne en menos de 72 horas los sistemas afectados, las categorías y los volúmenes de datos que exige la notificación a la autoridad."@es ;
+    argos:appliesTo n:AC-stored-contact-data,
+        n:AC-stored-financial-data,
+        n:AC-stored-identifier-data,
+        n:AC-stored-personal-data,
+        n:AC-stored-special-category-data ;
+    argos:derivesFrom n:RGPD-33-1 ;
+    argos:inForceFrom "2018-05-25"^^xsd:date ;
+    argos:severity "critical" ;
+    argos:verificationPending "El simulacro de notificación de extremo a extremo necesita el motor de campañas (Fase 05); el inventario ya aporta los datos de la notificación." .
+

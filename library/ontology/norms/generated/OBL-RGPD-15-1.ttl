@@ -1,0 +1,21 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-RGPD-15-1 a argos:Obligation ;
+    rdfs:label "Derecho de acceso atendido en plazo"@es ;
+    rdfs:comment "Una solicitud de acceso ejercida sobre un interesado sintético recibe respuesta completa dentro del plazo de un mes del artículo 12.3."@es ;
+    argos:appliesTo n:AC-stored-contact-data,
+        n:AC-stored-financial-data,
+        n:AC-stored-identifier-data,
+        n:AC-stored-personal-data,
+        n:AC-stored-special-category-data ;
+    argos:derivesFrom n:RGPD-15 ;
+    argos:inForceFrom "2018-05-25"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-dsr-access-request-term .
+
+n:CH-dsr-access-request-term a argos:Challenge ;
+    argos:challengeId "dsr-access-request-term" .
+

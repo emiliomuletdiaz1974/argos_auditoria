@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-RGPD-32-2 a argos:Obligation ;
+    rdfs:label "Registro de accesos a categorías especiales"@es ;
+    rdfs:comment "Los almacenes con datos de categoría especial tienen activado el registro de accesos que permite reconstruir quién consultó qué y cuándo."@es ;
+    argos:appliesTo n:AC-stored-special-category-data ;
+    argos:derivesFrom n:RGPD-32-1-b ;
+    argos:inForceFrom "2018-05-25"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-sec-access-logging .
+
+n:CH-sec-access-logging a argos:Challenge ;
+    argos:challengeId "sec-access-logging" .
+

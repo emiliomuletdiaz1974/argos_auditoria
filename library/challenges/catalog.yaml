@@ -9,4 +9,56 @@
 #     family: security               # familia del reto
 #     evidence_type: configuration   # query_result | configuration | log_extract | document
 #     description: Cifrado en reposo verificado en el almacén de datos
-challenges: []
+challenges:
+  - id: acc-special-category-profiles
+    family: access
+    evidence_type: query_result
+    description: "Identidades con acceso a categorías especiales frente a los perfiles autorizados (argos.access)"
+  - id: brc-breach-register
+    family: breach
+    evidence_type: document
+    description: "Registro documental de brechas con hechos, efectos y medidas correctoras"
+  - id: coh-ropa-declared-systems
+    family: coherence
+    evidence_type: query_result
+    description: "Sistemas con categorías especiales declarados en el registro de actividades (forma SHACL)"
+  - id: coh-treatment-legal-basis
+    family: coherence
+    evidence_type: query_result
+    description: "Tratamientos del registro de actividades con base jurídica declarada (forma SHACL)"
+  - id: coh-treatment-retention-declared
+    family: coherence
+    evidence_type: query_result
+    description: "Tratamientos del registro de actividades con plazo de conservación declarado (forma SHACL)"
+  - id: coh-unclassified-columns
+    family: coherence
+    evidence_type: query_result
+    description: "Columnas vivas del inventario sin categoría de datos asignada"
+  - id: dsr-access-request-term
+    family: data_subject_rights
+    evidence_type: log_extract
+    description: "Solicitud de acceso sobre un interesado sintético respondida dentro de plazo"
+  - id: dsr-erasure-effective
+    family: data_subject_rights
+    evidence_type: query_result
+    description: "Datos de un interesado sintético ausentes del origen tras la solicitud de supresión"
+  - id: ret-file-retention
+    family: retention
+    evidence_type: query_result
+    description: "Ficheros más antiguos que el plazo de conservación declarado (argos.retention)"
+  - id: ret-table-retention
+    family: retention
+    evidence_type: query_result
+    description: "Registros en tabla más antiguos que el plazo de conservación declarado (argos.retention)"
+  - id: sec-access-logging
+    family: security
+    evidence_type: configuration
+    description: "Registro de accesos activado en el almacén de datos"
+  - id: sec-encryption-at-rest
+    family: security
+    evidence_type: configuration
+    description: "Cifrado en reposo verificado en el almacén de datos"
+  - id: sec-encryption-in-transit
+    family: security
+    evidence_type: configuration
+    description: "Conexiones al almacén de datos obligadas a cifrado en tránsito"

@@ -1,0 +1,37 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Reglamento (UE) 2016/679 and the articles cited by the v1 population (F04-12).
+# Pending legal validation (F04-13).
+
+n:RGPD a argos:Norm ;
+  rdfs:label "Reglamento General de Protección de Datos"@es ;
+  argos:eli "http://data.europa.eu/eli/reg/2016/679/oj"^^xsd:anyURI ;
+  argos:inForceFrom "2018-05-25"^^xsd:date .
+
+n:RGPD-5-1-e a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 5.1.e. Limitación del plazo de conservación"@es .
+n:RGPD-5-1-f a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 5.1.f. Integridad y confidencialidad"@es .
+n:RGPD-9-1 a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 9.1. Tratamiento de categorías especiales de datos personales"@es .
+n:RGPD-15 a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 15. Derecho de acceso del interesado"@es .
+n:RGPD-17 a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 17. Derecho de supresión"@es .
+n:RGPD-30-1 a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 30.1. Registro de las actividades de tratamiento del responsable"@es .
+n:RGPD-30-1-c a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 30.1.c. Categorías de interesados y de datos personales"@es .
+n:RGPD-30-1-f a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 30.1.f. Plazos previstos para la supresión"@es .
+n:RGPD-32-1-a a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 32.1.a. Seudonimización y cifrado"@es .
+n:RGPD-32-1-b a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 32.1.b. Confidencialidad, integridad, disponibilidad y resiliencia"@es .
+n:RGPD-33-1 a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 33.1. Notificación de una violación de la seguridad a la autoridad"@es .
+n:RGPD-33-5 a argos:Article ; argos:partOf n:RGPD ;
+  rdfs:label "Artículo 33.5. Documentación de las violaciones de la seguridad"@es .

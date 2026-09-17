@@ -1,0 +1,17 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-5-1
+norma: RGPD
+articulo: "5.1.e"
+titulo: "Limitación del plazo de conservación"
+vigente_desde: 2018-05-25
+severidad: high
+texto_resumen: "Los datos personales no se conservan más tiempo del necesario: los registros más antiguos que el plazo del calendario de conservación visado se suprimen o se justifican como excepción documentada."
+aplica_a:
+  - AC-stored-personal-data
+  - AC-stored-identifier-data
+  - AC-stored-contact-data
+  - AC-stored-financial-data
+  - AC-stored-special-category-data
+verificado_por:
+  - ret-table-retention
+  - ret-file-retention

@@ -1,0 +1,12 @@
+# Población RGPD del v1 (F04-12). Pendiente de validación jurídica (F04-13).
+id: OBL-RGPD-9-1
+norma: RGPD
+articulo: "9.1"
+titulo: "Base jurídica del tratamiento de categorías especiales"
+vigente_desde: 2018-05-25
+severidad: critical
+texto_resumen: "Todo tratamiento del registro de actividades declara la base jurídica que levanta la prohibición general de tratar categorías especiales."
+aplica_a:
+  - AC-stored-special-category-data
+verificado_por:
+  - coh-treatment-legal-basis
