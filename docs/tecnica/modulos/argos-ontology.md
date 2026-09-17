@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: 62cfb3d
+commit: f8ebbc7
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -23,7 +23,7 @@ Convierte la normativa (RGPD, EHDS, AI Act) en **datos verificables**. Cada obli
 - los retos que la verifican;
 - el tipo de evidencia que producen.
 
-Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-033 (aplicabilidad), ARG-034 (SHACL), ARG-037 (trazabilidad), ARG-040 (publicación firmada) y ARG-038 (flujo editorial y cinco puertas).
+Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-033 (aplicabilidad), ARG-034 (SHACL), ARG-035 (ODRL), ARG-037 (trazabilidad), ARG-040 (publicación firmada) y ARG-038 (flujo editorial y cinco puertas).
 
 ## 2. Alcance y límites
 
@@ -157,6 +157,23 @@ Algunas obligaciones no sondean los sistemas del cliente, sino la coherencia de 
 
 Cada incumplimiento es un hallazgo `ShapeFinding(node, shape, message, severity)`, ordenado y determinista. Un valor vacío cuenta como ausente.
 
+### Políticas ODRL de espacios de datos (ARG-035)
+
+En los espacios de datos (Gaia-X, EHDS, Catena-X) las condiciones de uso viajan como políticas ODRL 2.2. ARGOS lee el **perfil acotado** que usan los espacios reales, no ODRL completo:
+- **Restricciones:** `purpose`, `elapsedTime`, `dateTime` y `spatial`.
+- **Deberes:** `delete` y `notify`.
+- **Términos:** se aceptan con prefijo, como IRI completa o sin prefijo.
+
+Cada regla verificable se traduce en una especificación de reto sobre el activo del espacio:
+
+| Regla | Reto |
+|---|---|
+| Deber `delete` con plazo `PnYnMnD` | `ds-asset-retention` (`max_days`; con varios plazos, el más estricto) |
+| Permiso con `purpose` | `ds-usage-purpose` (`allowed_purposes`) |
+| Prohibición `distribute` o `share` | `ds-no-redistribution` |
+
+**Lo que queda fuera del perfil no se ignora.** Entra aquí un operando o deber no soportado, una duración con horas o semanas, o un `delete` sin plazo. Cada caso queda en `Policy.unsupported` y genera al final un hallazgo `ds-unverifiable` (`finding_only: true`). Solo un documento ilegible (sin `uid`, sin `target` o con una regla sin `action`) lanza `PolicyError`.
+
 Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML y pySHACL 0.40.
 
 ## 4. Interfaces
@@ -187,6 +204,7 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML y pySHACL 0.
 | Funciones | `gate_syntax`, `gate_consistency`, `gate_coverage`, `gate_traceability`, `gate_signature`, `run_gates(library_dir)` y `GateResult(name, ok, errors)` | Las cinco puertas |
 | Fichero | `library/ontology/shapes/inventory-coherence.ttl` | Formas SHACL de coherencia del inventario |
 | Funciones | `export_graph(store)`, `load_shapes(shapes_dir)`, `validate_graph(data, shapes)`, `run_shapes(store, shapes=None)` | Exportación del grafo y validación SHACL |
+| Funciones | `parse_policy(jsonld)`, `to_challenges(policy)`, `duration_days(iso)`; tipos `Policy`, `Rule`, `Constraint` y `PolicyError` | Lectura del perfil ODRL y traducción a retos |
 | Herramienta | `tools/ontology_gates.py [--library DIR]` y `make ontology-gates` | Imprime `PASS`/`FAIL` por puerta; código 1 si alguna falla; paso del job `verify` del CI |
 
 ## 5. Configuración
@@ -235,6 +253,7 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
   - sobre el grafo real, tratamientos sin base jurídica ni plazo y sistema de salud sin declarar;
   - declaración completa sin hallazgos;
   - sistema de IA confirmado sin clase de riesgo.
+- **`test_odrl_pure.py`:** perfil soportado sin prefijos, traducción a retos, cláusulas fuera del perfil convertidas en hallazgo (incluidas `PT12H`, `P1W` y `P`), documentos malformados rechazados y traducción determinista.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -254,3 +273,4 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
 | 0.1.0-alpha | 2026-09-17 | Matriz de trazabilidad obligación–reto y catálogo provisional de retos | Fase 04 (ARG-037) |
 | 0.1.0-alpha | 2026-09-17 | Cinco puertas editoriales con errores plantados y paso de CI | Fase 04 (ARG-038) |
 | 0.1.0-alpha | 2026-09-17 | Formas SHACL de coherencia del inventario validadas con pySHACL | Fase 04 (ARG-034) |
+| 0.1.0-alpha | 2026-09-17 | Perfil ODRL de espacios de datos traducido a retos, con hallazgo de lo no verificable | Fase 04 (ARG-035) |
