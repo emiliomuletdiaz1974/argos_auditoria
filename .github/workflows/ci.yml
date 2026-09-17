@@ -18,6 +18,7 @@ jobs:
       - name: secrets
         run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.21.2 detect --source /repo --no-banner --redact
       - run: make test
+      - run: make policy-test
       - run: make ontology-gates
       - run: make docs-check
 

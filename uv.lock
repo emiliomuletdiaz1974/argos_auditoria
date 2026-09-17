@@ -300,6 +300,7 @@ source = { editable = "services/ontology" }
 dependencies = [
     { name = "argos-common" },
     { name = "argos-inventory" },
+    { name = "httpx" },
     { name = "pyshacl" },
     { name = "pyyaml" },
     { name = "rdflib" },
@@ -309,6 +310,7 @@ dependencies = [
 requires-dist = [
     { name = "argos-common", editable = "libs/common" },
     { name = "argos-inventory", editable = "services/inventory" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "pyshacl", specifier = ">=0.40,<0.41" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rdflib", specifier = ">=7.6,<8" },

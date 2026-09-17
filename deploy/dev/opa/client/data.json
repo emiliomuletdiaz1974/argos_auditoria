@@ -1,0 +1,11 @@
+{
+  "retention_schedule": {
+    "HIS-episodes": {"days": 5475}
+  },
+  "retention_defaults": {
+    "special_category.health": {"days": 1825}
+  },
+  "authorized_profiles": {
+    "special_category.health": ["physician", "nurse"]
+  }
+}

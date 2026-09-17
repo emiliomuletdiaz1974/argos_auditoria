@@ -1,0 +1,28 @@
+package argos.access_test
+
+import data.argos.access
+
+client := {"authorized_profiles": {"special_category.health": ["physician", "nurse"]}}
+
+test_only_authorized_profiles_is_compliant if {
+	v := access.verdict with data.client as client
+		with input as {"target": "his.episodes", "category": "special_category.health", "identities": [{"name": "dr.garcia", "profile": "physician"}, {"name": "nurse.lopez", "profile": "nurse"}]}
+	v.compliant
+	v.unauthorized == []
+	v.total == 2
+}
+
+test_identities_without_or_outside_the_profiles_are_listed_sorted if {
+	v := access.verdict with data.client as client
+		with input as {"target": "his.episodes", "category": "special_category.health", "identities": [{"name": "svc_bi", "profile": null}, {"name": "dr.garcia", "profile": "physician"}, {"name": "admin", "profile": "it"}, {"name": "etl"}]}
+	not v.compliant
+	v.unauthorized == ["admin", "etl", "svc_bi"]
+	v.total == 4
+}
+
+test_a_category_without_authorized_profiles_authorizes_nobody if {
+	v := access.verdict with data.client as client
+		with input as {"target": "hr.payroll", "category": "identifier.national_id", "identities": [{"name": "dr.garcia", "profile": "physician"}]}
+	not v.compliant
+	v.unauthorized == ["dr.garcia"]
+}

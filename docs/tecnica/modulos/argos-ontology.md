@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: f8ebbc7
+commit: 2ef053e
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -174,7 +174,24 @@ Cada regla verificable se traduce en una especificación de reto sobre el activo
 
 **Lo que queda fuera del perfil no se ignora.** Entra aquí un operando o deber no soportado, una duración con horas o semanas, o un `delete` sin plazo. Cada caso queda en `Policy.unsupported` y genera al final un hallazgo `ds-unverifiable` (`finding_only: true`). Solo un documento ilegible (sin `uid`, sin `target` o con una regla sin `action`) lanza `PolicyError`.
 
-Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML y pySHACL 0.40.
+### Reglas operativas OPA/Rego (ARG-036)
+
+Las decisiones operativas que no son un umbral numérico simple viven como paquetes Rego en `library/policies/`. Cada paquete expone un objeto `verdict`:
+- el evaluador de retos pasa la evidencia de la sonda como `input`;
+- los parámetros aprobados del cliente se cargan en `data.client` desde `client/data.json` (en desarrollo, `deploy/dev/opa/client/data.json`, con datos sintéticos).
+
+| Paquete | `input` | `data.client` | `verdict` |
+|---|---|---|---|
+| `argos.retention` | `category`, `treatment`, `max_age_days`, `out_of_term`, `documented_exceptions` | `retention_schedule[treatment].days` y, si el tratamiento no figura, `retention_defaults[category].days` | `compliant`, `applied_term_days`, `rule` |
+| `argos.access` | `target`, `category`, `identities` (`name`, `profile`; sin perfil cuenta como no autorizado) | `authorized_profiles[category]` | `compliant`, `unauthorized` (ordenado), `total`, `rule` |
+
+Reglas de decisión:
+- **Conservación:** cumple si hay plazo aplicable y el registro más antiguo no lo supera. También cumple si todos los registros fuera de plazo tienen excepción documentada. Sin plazo aplicable, no cumple.
+- **Accesos:** cumple si ninguna identidad queda fuera de los perfiles autorizados. Una categoría sin perfiles autorizados no autoriza a nadie.
+
+El cliente Python `evaluate(package, input_doc, base_url)` llama a `POST /v1/data/<paquete>/verdict`. Valida antes el nombre del paquete (`ValueError`) y lanza `OpaError` si OPA no responde, contesta con error o el paquete no tiene `verdict` de tipo objeto.
+
+Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.40 y httpx 0.28.
 
 ## 4. Interfaces
 
@@ -205,11 +222,16 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML y pySHACL 0.
 | Fichero | `library/ontology/shapes/inventory-coherence.ttl` | Formas SHACL de coherencia del inventario |
 | Funciones | `export_graph(store)`, `load_shapes(shapes_dir)`, `validate_graph(data, shapes)`, `run_shapes(store, shapes=None)` | Exportación del grafo y validación SHACL |
 | Funciones | `parse_policy(jsonld)`, `to_challenges(policy)`, `duration_days(iso)`; tipos `Policy`, `Rule`, `Constraint` y `PolicyError` | Lectura del perfil ODRL y traducción a retos |
+| Ficheros | `library/policies/retention.rego`, `library/policies/access.rego` y sus `*_test.rego` | Paquetes `argos.retention` y `argos.access` |
+| Función | `evaluate(package, input_doc, base_url="http://127.0.0.1:8181", *, client=None)` y `OpaError` | Veredicto de un paquete Rego |
+| Contenedor | `opa` (`openpolicyagent/opa:1.20.2`, `127.0.0.1:8181`) | Servidor OPA de desarrollo con las políticas y `data.client` |
 | Herramienta | `tools/ontology_gates.py [--library DIR]` y `make ontology-gates` | Imprime `PASS`/`FAIL` por puerta; código 1 si alguna falla; paso del job `verify` del CI |
 
 ## 5. Configuración
 
-Sin configuración propia en este componente: el núcleo se carga desde `library/ontology/` del propio despliegue.
+- El núcleo se carga desde `library/ontology/` del propio despliegue.
+- **Servidor OPA:** URL por parámetro `base_url` (por defecto `http://127.0.0.1:8181`); en los tests, variable `ARGOS_TEST_OPA`.
+- **Parámetros del cliente para OPA:** `client/data.json` con `retention_schedule`, `retention_defaults` y `authorized_profiles`, aprobados en el despliegue.
 
 ## 6. Seguridad y tratamiento de datos
 
@@ -223,6 +245,8 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
 - **Publicar una versión:** `uv run --env-file .env.example python tools/ontology_publish.py build --version X.Y.Z --in-force-from AAAA-MM-DD`, con un token de Vault con permiso de firma sobre `argos-content`.
 - **Verificar un bundle recibido:** `tools/ontology_publish.py verify <bundle>`.
 - **Cargar un bundle en el appliance:** `load_bundle`, que verifica antes de guardar.
+- **Probar las políticas Rego:** `make policy-test` (ejecuta `opa test` en el contenedor; paso del job `verify` del CI).
+- **Servidor OPA de desarrollo:** `docker compose -f deploy/dev/compose.yaml up -d --wait opa`. Tras cambiar políticas o datos se reinicia con `restart opa`: no se usa `--watch` porque los montajes de Windows no propagan eventos.
 
 ## 8. Verificación
 
@@ -254,6 +278,13 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
   - declaración completa sin hallazgos;
   - sistema de IA confirmado sin clase de riesgo.
 - **`test_odrl_pure.py`:** perfil soportado sin prefijos, traducción a retos, cláusulas fuera del perfil convertidas en hallazgo (incluidas `PT12H`, `P1W` y `P`), documentos malformados rechazados y traducción determinista.
+- **`library/policies/*_test.rego` (`make policy-test`):** 8 casos de conservación y accesos, incluidos el plazo por defecto, las excepciones documentadas y la identidad sin perfil.
+- **`test_opa_pure.py` y `tests/integration/test_ontology_opa.py`:**
+  - URL y cuerpo de la llamada;
+  - nombres de paquete inválidos rechazados sin llamar;
+  - errores HTTP, de red y veredictos ausentes o no objeto convertidos en `OpaError`;
+  - con el servidor real, veredictos de conservación y accesos con `data.client`;
+  - los paquetes de test no se cargan.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -274,3 +305,4 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
 | 0.1.0-alpha | 2026-09-17 | Cinco puertas editoriales con errores plantados y paso de CI | Fase 04 (ARG-038) |
 | 0.1.0-alpha | 2026-09-17 | Formas SHACL de coherencia del inventario validadas con pySHACL | Fase 04 (ARG-034) |
 | 0.1.0-alpha | 2026-09-17 | Perfil ODRL de espacios de datos traducido a retos, con hallazgo de lo no verificable | Fase 04 (ARG-035) |
+| 0.1.0-alpha | 2026-09-17 | Paquetes Rego de conservación y accesos, contenedor OPA y cliente `evaluate` | Fase 04 (ARG-036) |

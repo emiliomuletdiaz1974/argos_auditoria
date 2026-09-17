@@ -5,7 +5,7 @@ COMPOSE := docker compose -f deploy/dev/compose.yaml --profile sources
 COMPOSE_HEAVY := docker compose -f deploy/dev/compose.yaml --profile sources --profile heavy
 VERSION := $(strip $(file < VERSION))
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -18,6 +18,7 @@ help:
 	@echo "make manifest   build images and write dist/release-manifest.json"
 	@echo "make docs-check     technical documentation covers every module and closed phase"
 	@echo "make ontology-gates  the five editorial gates of the ontology"
+	@echo "make policy-test    Rego unit tests in the OPA container"
 
 dev:
 	uv run python tools/prepare_dev_sources.py
@@ -67,3 +68,6 @@ docs-check:
 
 ontology-gates:
 	uv run python tools/ontology_gates.py
+
+policy-test:
+	$(COMPOSE) run --rm --no-deps opa test /policies -v
