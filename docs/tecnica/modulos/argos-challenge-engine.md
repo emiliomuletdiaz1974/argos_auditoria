@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: df46b33
+commit: pendiente
 date: 2026-09-17
 status: current
 confidentiality: client
@@ -212,6 +212,7 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
 
 - Cada actividad que produce un resultado relevante lo anota en el diario de auditoría encadenado.
 - El workflow de humo no accede a sistemas del cliente.
+- **La IA no puede emitir un veredicto, y no es una promesa escrita sino tres cierres** (F06-01): ningún módulo del gateway de IA alcanza `evaluator`, `store` ni `findings` por ninguna ruta de importación (test arquitectónico que sigue el grafo real); el rol `argos_ai` de PostgreSQL puede leer veredictos y hallazgos —redactar el informe es su oficio— pero no tiene privilegio para escribirlos; y el contenedor no comparte red con la API de campañas.
 - La imagen no lleva secretos: ninguna instrucción `ENV` ni `ARG` define credenciales, y las que necesita el entorno de desarrollo las pone el compose. Corre como el usuario sin privilegios `10001`.
 
 ## 7. Operación
