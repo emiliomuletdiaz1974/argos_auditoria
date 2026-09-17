@@ -5,7 +5,7 @@ COMPOSE := docker compose -f deploy/dev/compose.yaml --profile sources
 COMPOSE_HEAVY := docker compose -f deploy/dev/compose.yaml --profile sources --profile heavy
 VERSION := $(strip $(file < VERSION))
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -20,6 +20,7 @@ help:
 	@echo "make ontology-gates  the five editorial gates of the ontology"
 	@echo "make policy-test    Rego unit tests in the OPA container"
 	@echo "make ontology-overlap  overlap matrix between norms (dist/overlap.*)"
+	@echo "make challenge-lint   the challenge library against its schema and rules"
 
 dev:
 	uv run python tools/prepare_dev_sources.py
@@ -75,3 +76,6 @@ policy-test:
 
 ontology-overlap:
 	uv run python tools/ontology_overlap.py --output dist
+
+challenge-lint:
+	uv run python tools/challenge_lint.py

@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ns.argos.eu/schema/challenge-1.json",
+  "title": "ARGOS challenge (ARG-041)",
+  "type": "object",
+  "required": ["id", "version", "title", "objective", "selector", "probe", "criterion", "evidence", "severity"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z]+-[a-z0-9]+(-[a-z0-9]+)*$", "maxLength": 40 },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+    "title": { "type": "string", "minLength": 10, "maxLength": 120 },
+    "objective": {
+      "type": "object",
+      "required": ["obligation"],
+      "additionalProperties": false,
+      "properties": { "obligation": { "type": "string", "pattern": "^OBL-[A-Z0-9]+(-[A-Z0-9]+)*$" } }
+    },
+    "selector": {
+      "type": "object",
+      "required": ["asset_class"],
+      "additionalProperties": false,
+      "properties": { "asset_class": { "type": "string", "pattern": "^AC-[a-z0-9]+(-[a-z0-9]+)*$" } }
+    },
+    "probe": {
+      "type": "object",
+      "required": ["kind"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "enum": ["scan_schema", "count", "sample", "check_config", "shacl", "inventory_query"] },
+        "params": { "$ref": "#/$defs/params" },
+        "by_connector": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z0-9]+(\\.[a-z0-9_]+)*$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "statement": { "$ref": "#/$defs/text" },
+              "params": { "$ref": "#/$defs/params" }
+            }
+          }
+        }
+      }
+    },
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "oneOf": [{ "required": ["threshold"] }, { "required": ["opa"] }],
+      "properties": {
+        "threshold": {
+          "type": "object",
+          "required": ["field", "operator", "value"],
+          "additionalProperties": false,
+          "properties": {
+            "field": { "type": "string", "pattern": "^[a-z_]+([.][a-z_0-9]+)*$" },
+            "operator": { "enum": ["==", "!=", "<=", ">=", "<", ">"] },
+            "value": { "type": ["string", "number", "boolean"] }
+          }
+        },
+        "opa": {
+          "type": "object",
+          "required": ["package"],
+          "additionalProperties": false,
+          "properties": {
+            "package": { "type": "string", "pattern": "^argos(\\.[a-z_]+)+$" },
+            "input_map": { "$ref": "#/$defs/params" }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["capture", "minimisation"],
+      "additionalProperties": false,
+      "properties": {
+        "capture": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["result", "counts", "hashes", "configuration", "hashed_sample"] }
+        },
+        "minimisation": { "type": "string", "minLength": 20 }
+      }
+    },
+    "severity": { "enum": ["critical", "high", "medium", "low"] },
+    "sampling": {
+      "type": "object",
+      "required": ["confidence", "margin"],
+      "additionalProperties": false,
+      "properties": {
+        "confidence": { "enum": [0.9, 0.95, 0.99] },
+        "margin": { "type": "number", "exclusiveMinimum": 0, "maximum": 0.5 }
+      }
+    },
+    "approval_required": { "type": "boolean" },
+    "preconditions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "enum": ["synthetic_subject_injected", "client_document_provided"] }
+    },
+    "estimated_cost": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "probes": { "type": "integer", "minimum": 1 },
+        "rows": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "not": { "pattern": "\\{\\{" },
+      "$comment": "No text templates: parameters travel typed, never interpolated into a statement."
+    },
+    "reference": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "$node": { "type": "string", "pattern": "^[a-z_]+$" },
+        "$client": { "type": "string", "pattern": "^[a-z_]+$" },
+        "$campaign": { "type": "string", "pattern": "^[a-z_]+$" },
+        "$subject": { "type": "string", "pattern": "^[a-z_]+$" }
+      }
+    },
+    "params": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/value" }
+    },
+    "value": {
+      "anyOf": [
+        { "$ref": "#/$defs/text" },
+        { "type": ["number", "boolean", "null"] },
+        { "$ref": "#/$defs/reference" },
+        { "type": "array", "items": { "$ref": "#/$defs/value" } },
+        { "type": "object", "additionalProperties": { "$ref": "#/$defs/value" } }
+      ]
+    }
+  }
+}

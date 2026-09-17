@@ -1,0 +1,48 @@
+# Reto patrón escrito en castellano: la capa de traducción lo lleva al núcleo en inglés (ADR-0007).
+id: ret-table-retention
+version: "1.0"
+titulo: Retención efectiva en tabla frente al calendario declarado
+objetivo:
+  obligacion: OBL-RGPD-5-1
+selector:
+  clase_de_activo: AC-stored-personal-data
+sonda:
+  tipo: count
+  por_conector:
+    rdbms.postgresql:
+      sentencia: >-
+        SELECT count(*) FROM :qualified_table
+        WHERE :reference_column < :limit
+      parametros:
+        binds:
+          qualified_table: {$node: qualified_table}
+          reference_column: {$node: reference_column}
+          limit: {$campaign: retention_limit}
+    rdbms.mariadb:
+      sentencia: >-
+        SELECT count(*) FROM :qualified_table
+        WHERE :reference_column < :limit
+      parametros:
+        binds:
+          qualified_table: {$node: qualified_table}
+          reference_column: {$node: reference_column}
+          limit: {$campaign: retention_limit}
+criterio:
+  opa:
+    paquete: argos.retention
+    input_map:
+      category: {$node: category}
+      treatment: {$client: treatment_id}
+      out_of_term: count
+muestreo:
+  confianza: 0.95
+  margen: 0.05
+evidencia:
+  capturar: [recuentos]
+  minimizacion: >-
+    Solo el recuento de registros fuera de plazo y los parámetros del cálculo; ningún
+    identificador ni contenido abandona el sistema de origen.
+severidad: alta
+coste_estimado:
+  sondas: 1
+  filas: 0

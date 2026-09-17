@@ -3,10 +3,17 @@ name = "argos-challenge-engine"
 version = "0.1.0-alpha"
 description = "ARGOS challenge and campaign engine (ARG-007, ARG-041…050)"
 requires-python = ">=3.12"
-dependencies = ["argos-common", "temporalio>=1.8"]
+dependencies = [
+    "argos-common",
+    "argos-ontology",
+    "temporalio>=1.8",
+    "jsonschema>=4.23,<5",
+    "pyyaml>=6.0",
+]
 
 [tool.uv.sources]
 argos-common = { workspace = true }
+argos-ontology = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

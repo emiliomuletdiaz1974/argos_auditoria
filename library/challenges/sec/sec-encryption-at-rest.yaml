@@ -1,0 +1,29 @@
+# Pattern challenge written in English: the core reads it as it is.
+id: sec-encryption-at-rest
+version: "1.0"
+title: Cifrado en reposo verificado en el almacén de datos
+objective:
+  obligation: OBL-RGPD-32-1
+selector:
+  asset_class: AC-stored-special-category-data
+probe:
+  kind: check_config
+  by_connector:
+    rdbms.postgresql:
+      params: {check: encryption_at_rest}
+    rdbms.mariadb:
+      statement: SHOW GLOBAL VARIABLES LIKE 'innodb_encrypt_tables'
+criterion:
+  threshold:
+    field: rows.0.value
+    operator: "=="
+    value: "ON"
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo parámetros de configuración de cifrado; ninguna clave, ninguna cadena de conexión y
+    ningún dato de negocio.
+severity: critical
+estimated_cost:
+  probes: 1
+  rows: 1
