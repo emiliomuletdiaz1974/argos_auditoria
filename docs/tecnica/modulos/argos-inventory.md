@@ -5,7 +5,7 @@ title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
 version: 0.1.0-alpha
-commit: 6f46fe4
+commit: ff9225b
 date: 2026-09-17
 status: current
 confidentiality: client
@@ -43,6 +43,7 @@ Construye y mantiene el **inventario vivo** de los sistemas del cliente en un gr
 **Reglas del clasificador determinista** (confianza 0,6 para el diccionario y 1,0 para un validador aceptado):
 - **Diccionario (`dict`):** secuencias de palabras completas del nombre de la columna, en castellano e inglés, nunca subcadenas.
   - Desde la Fase 04, las referencias a un paciente (`patient_id`, `patient_ref`, `paciente_id`, `id_paciente`) son `personal_data`: un identificador seudonimizado sigue siendo dato personal (RGPD, considerando 26).
+- Desde la Fase 04 también se reconocen **categorías especiales distintas de la salud** (`special_category.other`): afiliación sindical, religión, origen étnico, orientación sexual, datos biométricos y genéticos (RGPD, art. 9.1).
 - **Contexto de tabla (`dict:table`, Fase 04):** una columna de puntuación (`score`, `pred`, `prediction`, `probability`, `propensity`) en una tabla de inferencias clínicas (`readmission`, `reingreso`, `mortality`, `mortalidad`, `sepsis`, `triage`, `triaje`) es `special_category.health`.
   - Una inferencia sobre la salud es dato de salud (RGPD, art. 4.15).
   - La misma puntuación en otra tabla, por ejemplo un riesgo de crédito, queda sin clasificar.
@@ -118,3 +119,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.1.0-alpha | 2026-09-16 | Índices GIN, consultas por etiqueta y escrituras en lote: la reexploración extrapolada pasa de 14,9 h a 1,02 h | Fase 03 (rendimiento) |
 | 0.1.0-alpha | 2026-09-17 | Selector ampliado con `unclassified` y `status` para el plano de aplicabilidad de la ontología | Fase 04 (ARG-033) |
 | 0.1.0-alpha | 2026-09-17 | Clasificador: referencias a pacientes como dato personal y puntuaciones de tablas clínicas como dato de salud (`dict:table`) | Fase 04 (ARG-024) |
+| 0.1.0-alpha | 2026-09-17 | Diccionario de categorías especiales no sanitarias y tabla sintética `clinic.staff_affiliations` en la fuente de desarrollo | Fase 04 (ARG-024) |

@@ -28,11 +28,15 @@ asset_classes:
   AC-stored-financial-data:
     - dev-source-mariadb billing.patient_mirror.iban
     - dev-source-postgres clinic.patient_documents.iban
-  AC-stored-health-data: &health
+  AC-stored-health-data:
     - dev-source-mariadb billing.patient_mirror.diagnosis_code
     - dev-source-postgres clinic.patient_documents.diagnosis_code
     - dev-source-postgres clinic.readmission_risk.risk_score
-  AC-stored-special-category-data: *health
+  AC-stored-special-category-data:
+    - dev-source-mariadb billing.patient_mirror.diagnosis_code
+    - dev-source-postgres clinic.patient_documents.diagnosis_code
+    - dev-source-postgres clinic.readmission_risk.risk_score
+    - dev-source-postgres clinic.staff_affiliations.trade_union
   AC-unclassified-column:
     - dev-source-mariadb billing.invoices.amount_cents
     - dev-source-mariadb billing.invoices.id
@@ -48,6 +52,8 @@ asset_classes:
     - dev-source-postgres clinic.patients.created_at
     - dev-source-postgres clinic.patients.id
     - dev-source-postgres clinic.readmission_risk.predicted_at
+    - dev-source-postgres clinic.staff_affiliations.joined_on
+    - dev-source-postgres clinic.staff_affiliations.staff_id
   AC-pending-ai-system:
     - dev-source-postgres table:readmission_risk
   AC-confirmed-ai-system: []

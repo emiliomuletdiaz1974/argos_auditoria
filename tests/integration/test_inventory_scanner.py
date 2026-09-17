@@ -16,7 +16,14 @@ from .sources import VAULT, connector_token, register_catalog_system
 pytestmark = pytest.mark.integration
 
 NATS = "nats://127.0.0.1:4222"
-POSTGRES_TABLES = {"appointments", "consents", "patient_documents", "patients", "readmission_risk"}
+POSTGRES_TABLES = {
+    "appointments",
+    "consents",
+    "patient_documents",
+    "patients",
+    "readmission_risk",
+    "staff_affiliations",
+}
 
 
 class RecordingBus:

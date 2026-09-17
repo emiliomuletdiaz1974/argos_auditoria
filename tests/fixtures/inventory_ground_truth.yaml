@@ -12,6 +12,7 @@ systems:
       clinic.patient_documents: [patient_id, dni_number, iban, diagnosis_code, email]
       clinic.patients: [id, national_id, full_name, birth_date, created_at]
       clinic.readmission_risk: [patient_id, risk_score, predicted_at]
+      clinic.staff_affiliations: [staff_id, trade_union, joined_on]
     identities: [argos_ro, clinic_admin]
   dev-source-mariadb:
     kind: rdbms
@@ -63,6 +64,8 @@ classifications:
   - {system: dev-source-postgres, column: clinic.readmission_risk.patient_id, category: personal_data, method: dict}
   - {system: dev-source-postgres, column: clinic.readmission_risk.risk_score, category: special_category.health, method: "dict:table"}
   - {system: dev-source-mariadb, column: billing.invoices.patient_ref, category: personal_data, method: dict}
+  # A special category other than health (GDPR art. 9.1): trade union membership of staff.
+  - {system: dev-source-postgres, column: clinic.staff_affiliations.trade_union, category: special_category.other, method: dict}
 
 unclassified:
   - {system: dev-source-postgres, column: clinic.appointments.department}
