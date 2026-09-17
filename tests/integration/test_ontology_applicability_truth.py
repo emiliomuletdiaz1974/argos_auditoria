@@ -4,6 +4,7 @@ from datetime import date
 
 import pytest
 from fixtures.applicability_ground_truth import ExpectedRequirement, load_applicability_truth
+from fixtures.demo_review import apply_demo_review
 
 from argos_inventory.ai_discovery.detect import discover_ai
 from argos_inventory.classify.deterministic import classify_new_columns
@@ -25,10 +26,12 @@ NODE_NAMES = (
 
 def test_the_plan_matches_the_ground_truth_on_every_date(migrated_db: str) -> None:
     store = GraphStore(migrated_db)
+    system_ids = {}
     for name in TRUTH.systems:
-        system_id = scan_and_ingest(migrated_db, name)
-        classify_new_columns(store, probe_runner(migrated_db), system_id)
+        system_ids[name] = scan_and_ingest(migrated_db, name)
+        classify_new_columns(store, probe_runner(migrated_db), system_ids[name])
     discover_ai(store)
+    apply_demo_review(store, migrated_db, system_ids)
     names = {
         str(row["key"]): f"{row['system']} {row['name']}"
         for row in store.query(NODE_NAMES, columns=("key", "system", "name"))

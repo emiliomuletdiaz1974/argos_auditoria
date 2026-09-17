@@ -1,0 +1,27 @@
+# Decisions of a synthetic DPO over the demo snapshot, maintained by hand (F04-23).
+# Applied with the real Phase 3 mechanisms (review queue and AI confirmation), never by writing the
+# graph directly. Decision of 2026-09-17, pending legal validation (F04-19). Synthetic data only.
+version: 1
+reviewer: user:demo-dpo
+
+# Columns the deterministic classifier leaves unclassified and the DPO marks as holding no personal
+# data: surrogate keys, audit timestamps and technical flags. Doubtful columns stay unclassified:
+# department (may reveal the clinical specialty), purpose, event timestamps and amounts.
+no_personal_data:
+  dev-source-postgres:
+    - clinic.appointments.id
+    - clinic.consents.granted
+    - clinic.consents.updated_at
+    - clinic.patients.created_at
+    - clinic.patients.id
+  dev-source-mariadb:
+    - billing.invoices.id
+    - billing.invoices.status
+    - billing.patient_mirror.id
+
+# AI candidates the DPO confirms, with their AI Act risk class.
+ai_systems:
+  - system: dev-source-postgres
+    name: table:readmission_risk
+    purpose: Predicción del riesgo de reingreso hospitalario
+    risk_class: high

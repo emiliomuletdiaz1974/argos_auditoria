@@ -8,10 +8,12 @@ from rdflib import Literal, URIRef
 from argos_ontology.traceability import library_graph
 from argos_ontology.vocabulary import ARGOS, NORMS
 from fixtures.applicability_ground_truth import load_applicability_truth
+from fixtures.demo_review import load_demo_review
 from fixtures.ground_truth import load_ground_truth
 
 TRUTH = load_applicability_truth()
 INVENTORY = load_ground_truth()
+REVIEW = load_demo_review()
 LIBRARY = library_graph()
 # Asset class -> category prefix of its selector (library/ontology/asset-classes/base.ttl).
 CATEGORY_OF_CLASS = {
@@ -55,20 +57,27 @@ def test_classified_classes_follow_the_inventory_classifications(asset_class: st
 
 def test_unclassified_columns_are_every_other_column_of_the_snapshot() -> None:
     classified = {_node(c.system, c.column) for c in INVENTORY.classifications}
-    assert TRUTH.asset_classes["AC-unclassified-column"] == _snapshot_columns() - classified
-    assert {_node(s, c) for s, c in INVENTORY.unclassified if s in TRUTH.systems} <= (
-        TRUTH.asset_classes["AC-unclassified-column"]
+    reviewed = {
+        _node(system, column)
+        for system, columns in REVIEW.no_personal_data.items()
+        for column in columns
+    }
+    unclassified = TRUTH.asset_classes["AC-unclassified-column"]
+    assert unclassified == _snapshot_columns() - classified - reviewed
+    assert {_node(s, c) for s, c in INVENTORY.unclassified if s in TRUTH.systems} - reviewed <= (
+        unclassified
     )
 
 
-def test_pending_ai_systems_are_the_score_column_candidates() -> None:
-    expected = {
+def test_ai_systems_are_the_score_column_candidates_split_by_the_dpo_confirmation() -> None:
+    candidates = {
         _node(a.system, f"table:{a.detail_contains}")
         for a in INVENTORY.ai_candidates
         if a.system in TRUTH.systems and a.signal_kind == "score_column"
     }
-    assert TRUTH.asset_classes["AC-pending-ai-system"] == expected
-    assert TRUTH.asset_classes["AC-confirmed-ai-system"] == frozenset()
+    confirmed = {_node(ai.system, ai.name) for ai in REVIEW.ai_systems}
+    assert TRUTH.asset_classes["AC-confirmed-ai-system"] == candidates & confirmed
+    assert TRUTH.asset_classes["AC-pending-ai-system"] == candidates - confirmed
 
 
 def _library_obligations(at: date) -> dict[str, tuple[set[str], set[str]]]:

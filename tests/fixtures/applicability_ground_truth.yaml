@@ -4,7 +4,8 @@
 # not what the law requires. Every value refers to synthetic data.
 version: 1
 
-# The snapshot: a full scan and deterministic classification of these systems, then AI discovery.
+# The snapshot: a full scan and deterministic classification of these systems, AI discovery, and the
+# decisions of the synthetic DPO (demo_review.yaml).
 snapshot:
   systems: [dev-source-postgres, dev-source-mariadb]
 
@@ -39,24 +40,17 @@ asset_classes:
     - dev-source-postgres clinic.staff_affiliations.trade_union
   AC-unclassified-column:
     - dev-source-mariadb billing.invoices.amount_cents
-    - dev-source-mariadb billing.invoices.id
     - dev-source-mariadb billing.invoices.issued_at
-    - dev-source-mariadb billing.invoices.status
-    - dev-source-mariadb billing.patient_mirror.id
     - dev-source-postgres clinic.appointments.department
-    - dev-source-postgres clinic.appointments.id
     - dev-source-postgres clinic.appointments.starts_at
-    - dev-source-postgres clinic.consents.granted
     - dev-source-postgres clinic.consents.purpose
-    - dev-source-postgres clinic.consents.updated_at
-    - dev-source-postgres clinic.patients.created_at
-    - dev-source-postgres clinic.patients.id
     - dev-source-postgres clinic.readmission_risk.predicted_at
     - dev-source-postgres clinic.staff_affiliations.joined_on
     - dev-source-postgres clinic.staff_affiliations.staff_id
-  AC-pending-ai-system:
+  # Confirmed by the synthetic DPO (demo_review.yaml, F04-23).
+  AC-pending-ai-system: []
+  AC-confirmed-ai-system:
     - dev-source-postgres table:readmission_risk
-  AC-confirmed-ai-system: []
 
 .personal: &personal
   - AC-stored-personal-data

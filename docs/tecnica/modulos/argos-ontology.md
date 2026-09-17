@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: 874550b
+commit: c46ee99
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -446,6 +446,9 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 - **`test_overlap_pure.py`:** solapamiento solo en clases de activo alcanzadas por varias normas, un literal con la etiqueta de una norma que no se confunde con la norma, obligaciones sin norma que no generan solapamientos falsos, salidas deterministas en JSON y CSV, y la biblioteca que se entrega, con RGPD y EHDS sobre los datos de salud.
 - **Verdad terreno de aplicabilidad (`tests/fixtures/applicability_ground_truth.yaml`), provisional:**
   - fija a mano, sin copiarlo del resolutor, qué obligaciones aplican a qué nodos de la instantánea de demostración (`dev-source-postgres` y `dev-source-mariadb`);
+  - la instantánea incluye las decisiones de un DPO sintético (`tests/fixtures/demo_review.yaml`), aplicadas con los mecanismos reales de la Fase 03 y anotadas en el diario:
+    - las columnas técnicas (claves sustitutas, marcas de auditoría, `status` y `granted`) se aceptan como `no_personal_data` en la cola de revisión;
+    - `table:readmission_risk` se confirma como sistema de IA de alto riesgo, con lo que aplican las obligaciones de alto riesgo del AI Act;
   - lo hace en dos fechas: el 16-9-2026, con RGPD y AI Act, y el 26-3-2029, con el EHDS añadido;
   - sale de la verdad terreno del inventario y de las poblaciones;
   - `test_applicability_ground_truth_fixture.py` la contrasta con ambas fuentes, y `tests/integration/test_ontology_applicability_truth.py` comprueba que el resolutor la reproduce exactamente;
@@ -478,3 +481,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | Población AI Act del v1: 8 obligaciones, 8 retos y clase `AC-confirmed-ai-system`, pendiente de validación jurídica | Fase 04 (ARG-031, ARG-033) |
 | 0.1.0-alpha | 2026-09-17 | Proceso editorial con SLA de 30 días y matriz de solapamiento entre normas | Fase 04 (ARG-038) |
 | 0.1.0-alpha | 2026-09-17 | Verdad terreno de aplicabilidad provisional sobre la instantánea de demostración | Fase 04 (ARG-039) |
+| 0.1.0-alpha | 2026-09-17 | Instantánea de demostración con la revisión de un DPO sintético: columnas técnicas y sistema de IA de alto riesgo confirmado | Fase 04 (ARG-039) |
