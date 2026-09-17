@@ -16,7 +16,7 @@ from argos_challenges.dsl import parse_challenge
 CAMPAIGN = "01920000-0000-7000-8000-0000000000c1"
 POSTGRES = "01920000-0000-7000-8000-00000000a001"
 FILES = "01920000-0000-7000-8000-00000000b002"
-SYSTEMS = {
+SYSTEMS: dict[str, dict[str, Any]] = {
     POSTGRES: {
         "id": POSTGRES,
         "name": "dev-source-postgres",
@@ -32,7 +32,7 @@ SYSTEMS = {
         "config": {"protocol": "smb"},
     },
 }
-NODES = {
+NODES: dict[str, dict[str, Any]] = {
     "k-col-1": {
         "node_key": "k-col-1",
         "label": "Column",

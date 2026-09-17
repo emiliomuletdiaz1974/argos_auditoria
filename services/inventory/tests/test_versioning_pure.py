@@ -46,6 +46,7 @@ def test_snapshot_hash_is_order_independent_and_content_sensitive() -> None:
             "qualified_name": "clinic.patients",
             "system_id": "s1",
             "categories": [],
+            "status": None,
         },
         {
             "node_key": "a",
@@ -54,9 +55,13 @@ def test_snapshot_hash_is_order_independent_and_content_sensitive() -> None:
             "qualified_name": "clinic.x.dni_number",
             "system_id": "s1",
             "categories": [dni],
+            "status": None,
         },
     ]
     assert snapshot_hash(rows) == snapshot_hash(list(reversed(rows)))
     changed = [dict(rows[0], name="patients2"), rows[1]]
     assert snapshot_hash(changed) != snapshot_hash(rows)
     assert len(snapshot_hash(rows)) == 64
+    # `status` is part of the content since F05-11: a confirmed AI system is not the pending one.
+    confirmed = [rows[0], dict(rows[1], status="confirmed")]
+    assert snapshot_hash(confirmed) != snapshot_hash(rows)
