@@ -5,15 +5,15 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: 6516072
+commit: f65bdf6
 date: 2026-09-17
-status: draft
+status: current
 confidentiality: client
 ---
 
 # Ontología normativa (argos-ontology)
 
-> Documento en construcción durante la Fase 04: cada tarea de la fase añade su componente. Pasa a `current` con el cierre de la fase.
+> Estado al **cierre técnico** de la Fase 04 (tag `fase-04-tecnica`). El código está completo y probado; el contenido normativo de la biblioteca v1 está **pendiente de validación jurídica**.
 
 ## 1. Propósito
 
@@ -23,7 +23,17 @@ Convierte la normativa (RGPD, EHDS, AI Act) en **datos verificables**. Cada obli
 - los retos que la verifican;
 - el tipo de evidencia que producen.
 
-Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-033 (aplicabilidad), ARG-034 (SHACL), ARG-035 (ODRL), ARG-037 (trazabilidad), ARG-040 (publicación firmada) y ARG-038 (flujo editorial y cinco puertas).
+Implementa ARG-031 a ARG-040:
+- ARG-031: núcleo;
+- ARG-032: almacén versionado;
+- ARG-033: aplicabilidad;
+- ARG-034: formas SHACL;
+- ARG-035: políticas ODRL;
+- ARG-036: reglas OPA/Rego;
+- ARG-037: trazabilidad;
+- ARG-038: flujo editorial, cinco puertas y solapamiento;
+- ARG-039: resolutor de aplicabilidad;
+- ARG-040: publicación firmada.
 
 ## 2. Alcance y límites
 
@@ -457,7 +467,6 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 
 ## 9. Limitaciones conocidas y pendientes
 
-- **Componentes de la fase aún sin documentar:** se añaden con sus tareas.
 - **Poblaciones normativas:** las poblaciones RGPD, EHDS y AI Act están pendientes de validación jurídica.
 - **Clase de riesgo de IA:** la aplicabilidad no filtra por `risk_class`; lo comprueba cada reto.
 
@@ -483,3 +492,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | Verdad terreno de aplicabilidad provisional sobre la instantánea de demostración | Fase 04 (ARG-039) |
 | 0.1.0-alpha | 2026-09-17 | Instantánea de demostración con la revisión de un DPO sintético: columnas técnicas y sistema de IA de alto riesgo confirmado | Fase 04 (ARG-039) |
 | 0.1.0-alpha | 2026-09-17 | `OBL-RGPD-32-1` (cifrado en reposo) también sobre todas las categorías especiales | Fase 04 (ARG-031) |
+| 0.1.0-alpha | 2026-09-17 | Cierre técnico de la Fase 04: prueba de extremo a extremo superada; contenido pendiente de validación jurídica | Fase 04 (`fase-04-tecnica`) |
