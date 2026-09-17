@@ -1,0 +1,175 @@
+"""Campaign compiler: applicability plan plus library gives inert work units (ARG-042).
+
+Between the declared challenge and the probe there are three resolutions: the nodes (already
+resolved by the applicability run over the pinned snapshot), the probe variant (the same retention
+challenge is probed differently in PostgreSQL and in an SMB share) and the parameters. The compiler
+does all three **before** running anything, so the plan can be read by the DPO exactly as it will be
+executed: the workflow interprets nothing.
+
+Parameters are typed references (`{"$node": …}`, `{"$client": …}`, `{"$campaign": …}`,
+`{"$subject": …}`) resolved to values here and passed as probe parameters; no value from
+the graph is ever formatted into a statement. A challenge without a variant for a connector
+does not disappear in silence: it becomes an `unverifiable` entry with its reason.
+"""
+
+import hashlib
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from typing import Any
+
+from argos_challenges.dsl import ChallengeSpec
+from argos_common.errors import ArgosError
+
+# The connector registered for a system decides which probe variant applies. The concrete engine of
+# the generic SQL connector lives in its Vault secret, so its identifier stays generic.
+CONNECTOR_IDS: Mapping[str, str] = {
+    "argos_sql.postgres:PostgresConnector": "rdbms.postgresql",
+    "argos_sql.mssql:MssqlConnector": "rdbms.mssql",
+    "argos_sql.oracle:OracleConnector": "rdbms.oracle",
+    "argos_sql.generic:SqlConnector": "rdbms.generic",
+    "argos_files.connector:FilesConnector": "files",
+    "argos_ldap.connector:LdapConnector": "directory.ldap",
+    "argos_rest.connector:RestConnector": "api.rest",
+    "argos_fhir.connector:FhirConnector": "clinical.fhir",
+    "argos_dicom.connector:DicomConnector": "clinical.dicom",
+}
+REFERENCES = ("$node", "$client", "$campaign", "$subject")
+INTERNAL_PROBES = frozenset({"shacl", "inventory_query"})
+INTERNAL_CONNECTOR = "argos.internal"
+
+
+class CompilerError(ArgosError):
+    """The campaign cannot be compiled: the plan, the library or the context does not fit."""
+
+
+@dataclass(frozen=True, slots=True)
+class CompiledCampaign:
+    units: list[dict[str, Any]] = field(default_factory=list)
+    unverifiable: list[dict[str, Any]] = field(default_factory=list)
+
+
+def unit_id(campaign_id: str, challenge_id: str, version: str, node_key: str) -> str:
+    material = f"{campaign_id}|{challenge_id}|{version}|{node_key}"
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def connector_id(system: Mapping[str, Any]) -> str:
+    """The identifier of the connector of a system, as challenges name it in `by_connector`."""
+    base = CONNECTOR_IDS.get(str(system.get("connector")))
+    if base is None:
+        raise CompilerError(f"unknown connector: {system.get('connector')!r}")
+    protocol = (system.get("config") or {}).get("protocol")
+    return f"{base}.{protocol}" if base == "files" and protocol else base
+
+
+def _resolve(value: Any, node: Mapping[str, Any], context: Mapping[str, Any], where: str) -> Any:
+    """Resolve typed references to values; anything else travels as it is."""
+    if isinstance(value, Mapping):
+        keys = set(value)
+        if len(keys) == 1 and keys <= set(REFERENCES):
+            [reference] = keys
+            name = str(value[reference])
+            source = node if reference == "$node" else (context.get(reference[1:]) or {})
+            if name not in source or source[name] is None:
+                raise CompilerError(f"{where}: {reference} {name} is not available")
+            return source[name]
+        return {k: _resolve(v, node, context, where) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve(item, node, context, where) for item in value]
+    return value
+
+
+def _variant(spec: ChallengeSpec, connector: str) -> dict[str, Any] | None:
+    if spec.probe_kind in INTERNAL_PROBES:
+        return {"params": dict(spec.params)}
+    if spec.by_connector:
+        variant = spec.by_connector.get(connector)
+        return None if variant is None else dict(variant)
+    return {"params": dict(spec.params)}
+
+
+def _unit(
+    campaign_id: str,
+    spec: ChallengeSpec,
+    obligation: str,
+    node: Mapping[str, Any],
+    system: Mapping[str, Any],
+    variant: Mapping[str, Any],
+    context: Mapping[str, Any],
+) -> dict[str, Any]:
+    node_key = str(node["node_key"])
+    where = f"{spec.id} on {node_key}"
+    target = node.get("qualified_name") or node.get("name")
+    if not target:
+        raise CompilerError(f"{where}: $node qualified_name is not available")
+    probe = {
+        "kind": spec.probe_kind,
+        "target": str(target),
+        "statement": variant.get("statement"),
+        "params": _resolve(dict(variant.get("params", {})), node, context, where),
+    }
+    return {
+        "unit_id": unit_id(campaign_id, spec.id, spec.version, node_key),
+        "campaign_id": campaign_id,
+        "challenge_id": spec.id,
+        "challenge_version": spec.version,
+        "obligation": obligation,
+        "system_id": str(system["id"]),
+        "node_key": node_key,
+        "probe": probe,
+        "criterion": dict(spec.criterion),
+        "evidence": {"capture": list(spec.capture), "minimisation": spec.minimisation},
+        "severity": spec.severity,
+        "sampling": dict(spec.sampling) if spec.sampling else None,
+        "needs_approval": spec.approval_required,
+        "preconditions": list(spec.preconditions),
+    }
+
+
+def compile_campaign(
+    campaign_id: str,
+    plan: Sequence[Mapping[str, Any]],
+    challenges: Mapping[str, ChallengeSpec],
+    nodes: Mapping[str, Mapping[str, Any]],
+    systems: Mapping[str, Mapping[str, Any]],
+    context: Mapping[str, Any] | None = None,
+) -> CompiledCampaign:
+    """Work units for the campaign, sorted by system and unit, and what cannot be verified."""
+    resolved_context = dict(context or {})
+    units: list[dict[str, Any]] = []
+    unverifiable: list[dict[str, Any]] = []
+    for row in plan:
+        challenge_id = str(row["challenge_id"])
+        spec = challenges.get(challenge_id)
+        if spec is None:
+            raise CompilerError(f"unknown challenge in the plan: {challenge_id}")
+        obligation = str(row["obligation"])
+        for raw_key in row["node_keys"]:
+            node_key = str(raw_key)
+            node = nodes.get(node_key)
+            if node is None:
+                raise CompilerError(f"unknown node in the plan: {node_key}")
+            system = systems.get(str(node["system_id"]))
+            if system is None:
+                raise CompilerError(f"unknown system for the node {node_key}")
+            connector = (
+                INTERNAL_CONNECTOR if spec.probe_kind in INTERNAL_PROBES else connector_id(system)
+            )
+            variant = _variant(spec, connector)
+            if variant is None:
+                unverifiable.append(
+                    {
+                        "challenge_id": challenge_id,
+                        "connector": connector,
+                        "node_key": node_key,
+                        "reason": "the challenge has no probe variant for this connector",
+                        "system_id": str(system["id"]),
+                    }
+                )
+                continue
+            units.append(
+                _unit(campaign_id, spec, obligation, node, system, variant, resolved_context)
+            )
+    units.sort(key=lambda unit: (unit["system_id"], unit["unit_id"]))
+    unverifiable.sort(key=lambda row: (row["challenge_id"], row["node_key"]))
+    return CompiledCampaign(units, unverifiable)

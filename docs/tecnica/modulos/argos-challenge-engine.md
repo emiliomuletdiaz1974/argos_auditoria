@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: 4d81431
+commit: fd6556b
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -95,6 +95,16 @@ Es la frontera del producto hecha código: **el veredicto no lo decide nunca un 
 - `argos_challenges.store` es el **único** módulo que escribe veredictos (lo vigila el test arquitectónico) y cada escritura lleva su asiento en la misma transacción: `campaign.create`, `campaign.pin`, `approval.request`, `approval.grant` y `verdict.emit`.
 - **Idempotencia:** `persist_verdict` inserta con `ON CONFLICT DO NOTHING`; si la actividad se reintenta, devuelve el veredicto que ya había y no anota un segundo asiento.
 
+### Resolución sobre la instantánea y compilador (ARG-042)
+
+- **`SnapshotSelectorResolver`** responde los mismos selectores que la API del inventario, pero leyendo las filas de la instantánea que fijó la campaña. Cumple el protocolo del resolutor de la Fase 04, así que la aplicabilidad se resuelve sobre la foto y no sobre el grafo vivo: es lo que hace comparables dos ejecuciones. Un test de integración comprueba que las nueve clases de activo dan exactamente los mismos nodos por las dos vías.
+  - La instantánea guarda ahora también el `status` (migración `0013`), que necesita la clase de los sistemas de IA confirmados.
+- **`compile_campaign`** convierte cada fila del plan en una **unidad de trabajo inerte**: sonda resuelta, criterio, evidencia, severidad, muestreo, precondiciones y `unit_id` estable. El workflow no interpreta nada, así que el DPO puede leer el plan tal como se va a ejecutar.
+  - **Variante por conector:** el identificador sale del conector registrado del sistema (`rdbms.postgresql`, `rdbms.generic`, `files.smb`…). El motor concreto del conector SQL genérico vive en su secreto de Vault, por eso su identificador se queda genérico.
+  - **Parámetros tipados:** `{$node: …}`, `{$client: …}`, `{$campaign: …}` y `{$subject: …}` se resuelven a valores aquí y viajan como parámetros; ningún valor del grafo se concatena en una consulta. Una referencia que falta es un error, no un valor vacío.
+  - **Sin variante para el conector del sistema**, la unidad no desaparece: queda en `unverifiable` con su motivo.
+  - Mismas entradas, mismas unidades y en el mismo orden.
+
 ## 4. Interfaces
 
 | Tipo | Nombre | Descripción |
@@ -109,6 +119,8 @@ Es la frontera del producto hecha código: **el veredicto no lo decide nunca un 
 | Funciones | `parse_challenge(document, source=None)`, `load_challenge_file(path)`, `library_challenges(dir)`, `lint_challenge(spec, context, path=None)`, `load_schema()`; tipos `ChallengeSpec`, `LintContext`, `ChallengeError` | Modelo y validación de retos |
 | Funciones | `read_challenge(text)`, `to_internal(doc)`, `to_editorial(doc)`; tablas `CHALLENGE_KEYS`, `CHALLENGE_VALUES`; `TranslationError` | Capa de traducción en castellano |
 | Herramienta | `tools/challenge_lint.py [--library DIR]` y `make challenge-lint` | Valida la biblioteca; código 1 si hay errores |
+| Clase | `SnapshotSelectorResolver(dsn, snapshot_id)` con `resolve(selector)` y `nodes`; función `matches(node, selector, system_ids)` | Resolución de selectores sobre la instantánea |
+| Funciones | `compile_campaign(campaign_id, plan, challenges, nodes, systems, context)`, `connector_id(system)`, `unit_id(...)`; tipos `CompiledCampaign`, `CompilerError`; tabla `CONNECTOR_IDS` | Compilador de campañas |
 | Tablas | `argos.campaigns` (ampliada), `argos.campaign_units`, `argos.verdicts`, `argos.approval_requests`, `argos.approvals` (migración `0012`) | Campañas, unidades, veredictos y compuertas |
 | Funciones | `create_campaign`, `pin_campaign`, `save_units`, `persist_verdict`, `request_approval`, `grant_approval`, `set_status`, `campaign_record`; `CampaignStateError`, `STATUSES`, `TRANSITIONS` | Almacén del motor (única escritura de veredictos) |
 | Asientos | `campaign.create`, `campaign.pin`, `approval.request`, `approval.grant`, `verdict.emit` | Trazabilidad de la campaña |
@@ -169,6 +181,8 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 
 **DSL (F05-05):** `test_challenge_translation.py` (ida y vuelta, clave y valor desconocidos, clave duplicada y un campo dado a la vez en los dos idiomas) y `test_challenge_dsl.py` (esquema válido, diez documentos rechazados, plantilla de texto rechazada, parámetros tipados aceptados, las seis reglas del producto y los retos que se entregan). `tests/unit/test_challenge_lint_tool.py` comprueba los códigos de salida de la herramienta.
 
+**Compilador y resolución sobre instantánea (F05-11):** `test_compiler_pure.py` (identificadores de conector, unidad completa y explicable, parámetros tipados resueltos, orden estable, sin variante a `unverifiable`, referencias que faltan y filas del plan sin reto o sin nodo como error, y sonda de muestra que exige aprobación) y `tests/integration/test_snapshot_resolver.py` (equivalencia con el grafo vivo en las nueve clases, `status` conservado y la instantánea que no se mueve cuando el grafo sí).
+
 **Almacén (F05-10):** `tests/integration/test_challenge_store.py`: campaña creada, fijada y legible; se fija una sola vez; el mismo veredicto se escribe una vez aunque se repita; veredictos inmutables; resultado desconocido rechazado por la base; compuerta sin petición previa rechazada y doble control con personas distintas; petición repetida que conserva la primera; y estados que solo avanzan.
 
 **Evaluador (F05-09):** los 11 casos de la suite de determinismo, ya sin marca de fallo esperado, y `test_evaluator_pure.py`: los seis operadores deciden en los dos sentidos, rutas con índices, evidencia que no responde, comparaciones entre tipos distintos que nunca lanzan, decisiones de OPA mal formadas, sonda fallida que no abre hallazgo, muestra que no absuelve y veredicto estable y con hash.
@@ -199,3 +213,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Muestreo con corrección finita, cota superior de Wilson y muestra necesaria | Fase 05 (ARG-045) |
 | 0.1.0-alpha | 2026-09-17 | Evaluador determinista puro con veredicto de cuatro valores y hash canónico | Fase 05 (ARG-046) |
 | 0.1.0-alpha | 2026-09-17 | Tablas de campañas, unidades, veredictos y aprobaciones, y almacén idempotente | Fase 05 (ARG-043) |
+| 0.1.0-alpha | 2026-09-17 | Resolución de selectores sobre la instantánea y compilador de campañas con parámetros tipados | Fase 05 (ARG-042) |

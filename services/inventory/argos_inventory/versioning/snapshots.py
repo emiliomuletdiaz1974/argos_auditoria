@@ -23,7 +23,7 @@ from .deltas import JOURNAL_ACTOR
 _NODES = (
     "MATCH (n) WHERE n.key IS NOT NULL AND coalesce(n.missing, false) = false "
     "AND labels(n)[0] <> 'Category' "
-    "RETURN n.key, labels(n)[0], n.name, n.qualified_name, n.system_id"
+    "RETURN n.key, labels(n)[0], n.name, n.qualified_name, n.system_id, n.status"
 )
 _CLASSIFICATIONS = (
     "MATCH (n)-[r:CLASSIFIED_AS]->(c:Category) RETURN n.key, c.name, r.method, r.confidence"
@@ -34,10 +34,11 @@ _INSERT_SNAPSHOT = (
 )
 _INSERT_NODE = (
     "INSERT INTO argos.inventory_snapshot_nodes "
-    "(snapshot_id, node_key, label, name, qualified_name, system_id, categories) "
-    "VALUES (%s, %s, %s, %s, %s, %s, %s)"
+    "(snapshot_id, node_key, label, name, qualified_name, system_id, categories, status) "
+    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)"
 )
-_FIELDS = ("node_key", "label", "name", "qualified_name", "system_id", "categories")
+# `status` completes what the campaign resolver needs from a snapshot (F05-11).
+_FIELDS = ("node_key", "label", "name", "qualified_name", "system_id", "categories", "status")
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,7 +72,7 @@ def _project(store: GraphStore) -> list[dict[str, Any]]:
             }
         )
     rows = []
-    node_columns = ("key", "label", "name", "qualified_name", "system_id")
+    node_columns = ("key", "label", "name", "qualified_name", "system_id", "status")
     for row in store.query(_NODES, columns=node_columns):
         key = str(row["key"])
         rows.append(
@@ -82,6 +83,7 @@ def _project(store: GraphStore) -> list[dict[str, Any]]:
                 "qualified_name": row["qualified_name"],
                 "system_id": row["system_id"],
                 "categories": sorted(categories.get(key, []), key=lambda c: str(c["category"])),
+                "status": row["status"],
             }
         )
     return rows
@@ -107,6 +109,7 @@ def take_snapshot(store: GraphStore, dsn: str, label: str) -> SnapshotRef:
                         r["qualified_name"],
                         r["system_id"],
                         Jsonb(r["categories"]),
+                        r["status"],
                     )
                     for r in rows
                 ],
@@ -124,7 +127,7 @@ def take_snapshot(store: GraphStore, dsn: str, label: str) -> SnapshotRef:
 def snapshot_nodes(dsn: str, snapshot_id: str) -> list[dict[str, Any]]:
     with psycopg.connect(dsn) as conn:
         cur = conn.execute(
-            "SELECT node_key, label, name, qualified_name, system_id, categories "
+            "SELECT node_key, label, name, qualified_name, system_id, categories, status "
             "FROM argos.inventory_snapshot_nodes WHERE snapshot_id = %s ORDER BY node_key",
             (snapshot_id,),
         )

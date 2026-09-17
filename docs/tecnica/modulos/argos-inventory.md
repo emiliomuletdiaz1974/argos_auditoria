@@ -5,7 +5,7 @@ title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
 version: 0.1.0-alpha
-commit: ff9225b
+commit: fd6556b
 date: 2026-09-17
 status: current
 confidentiality: client
@@ -58,7 +58,7 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 |---|---|---|
 | Grafo | `inventory` (AGE) | Nodos `System`, `Schema`, `Table`, `Column`, `FileArea`, `Identity`, `Group`, `AISystem`, `Treatment` y `Category`; aristas `CONTAINS`, `CAN_ACCESS`, `MEMBER_OF`, `FLOWS_TO`, `CLASSIFIED_AS`, `DECLARED_IN`, `USES_MODEL` y `OBSERVED` |
 | Eventos | `discovery.*.v1`, `discovery.ingested.v1`, `discovery.delta_ready.v1` | Descubrimiento, ingesta confirmada y deltas listos |
-| Tablas | `argos.scan_runs`, `inventory_deltas`, `inventory_snapshots`, `inventory_snapshot_nodes`, `review_queue`, `catalog_columns`, `catalog_coverage` y `catalog_freshness` | Migraciones `0003` a `0008` |
+| Tablas | `argos.scan_runs`, `inventory_deltas`, `inventory_snapshots`, `inventory_snapshot_nodes`, `review_queue`, `catalog_columns`, `catalog_coverage` y `catalog_freshness` | Migraciones `0003` a `0008`; desde la Fase 05, los nodos de instantánea guardan también `status` (migración `0013`) |
 | Funciones | `scan_system`, `compute_deltas`, `take_snapshot`, `verify_snapshot`, `classify_new_columns`, `decide_review`, `refresh_catalog`, `import_treatments`, `detect_engine_links`, `detect_structural`, `discover_ai` y `confirm_ai_system` | Operaciones del inventario |
 | API GraphQL | `/graphql`: `node(key, first, after)`, `resolveSelector(selector, first, after)` y `snapshot(id, first, after)` | Solo lectura; sin mutaciones |
 | Herramientas | `tools/inventory_report.py` y `tools/inventory_benchmark.py` | Informe del inventario y banco de capacidad |
@@ -119,4 +119,5 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.1.0-alpha | 2026-09-16 | Índices GIN, consultas por etiqueta y escrituras en lote: la reexploración extrapolada pasa de 14,9 h a 1,02 h | Fase 03 (rendimiento) |
 | 0.1.0-alpha | 2026-09-17 | Selector ampliado con `unclassified` y `status` para el plano de aplicabilidad de la ontología | Fase 04 (ARG-033) |
 | 0.1.0-alpha | 2026-09-17 | Clasificador: referencias a pacientes como dato personal y puntuaciones de tablas clínicas como dato de salud (`dict:table`) | Fase 04 (ARG-024) |
+| 0.1.0-alpha | 2026-09-17 | Las instantáneas proyectan el `status` de los nodos, que necesita la resolución de campañas | Fase 05 (ARG-042) |
 | 0.1.0-alpha | 2026-09-17 | Diccionario de categorías especiales no sanitarias y tabla sintética `clinic.staff_affiliations` en la fuente de desarrollo | Fase 04 (ARG-024) |

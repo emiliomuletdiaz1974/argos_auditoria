@@ -1,4 +1,4 @@
--- ARG-043/046/047 · Campaigns (extended), work units, verdicts and human gates.
+-- ARG-043/046/047 · Campaigns (extended), their work units, the verdicts they emit and the human gates.
 -- A campaign pins what it measured against (snapshot, ontology version and library version), so two
 -- runs of the same campaign are comparable. Verdicts and approvals are written once and never change:
 -- the file handed to a supervisor is read from these tables.
