@@ -8,5 +8,6 @@ severidad: critical
 texto_resumen: "Los datos de categoría especial almacenados cuentan con cifrado en reposo verificado en la configuración del almacén, no meramente declarado en la política."
 aplica_a:
   - AC-stored-health-data
+  - AC-stored-special-category-data
 verificado_por:
   - sec-encryption-at-rest

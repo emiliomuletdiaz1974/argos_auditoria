@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: c46ee99
+commit: 6516072
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -233,7 +233,7 @@ Las obligaciones sobre datos personales en general aplican a las cinco clases de
 | Registro de actividades | `OBL-RGPD-30-1` sistemas declarados | 30.1 | high | `coh-ropa-declared-systems` (SHACL) |
 | Registro de actividades | `OBL-RGPD-30-2` plazos declarados | 30.1.f | medium | `coh-treatment-retention-declared` (SHACL) |
 | Registro de actividades | `OBL-RGPD-30-3` columnas sin clasificar | 30.1.c | medium | `coh-unclassified-columns` |
-| Seguridad | `OBL-RGPD-32-1` cifrado en reposo de datos de salud | 32.1.a | critical | `sec-encryption-at-rest` |
+| Seguridad | `OBL-RGPD-32-1` cifrado en reposo de categorías especiales (salud y el resto del art. 9) | 32.1.a | critical | `sec-encryption-at-rest` |
 | Seguridad | `OBL-RGPD-32-2` registro de accesos | 32.1.b | high | `sec-access-logging` |
 | Seguridad | `OBL-RGPD-32-3` cifrado en tránsito | 32.1.b | high | `sec-encryption-in-transit` |
 | Brechas | `OBL-RGPD-33-1` notificación en 72 h | 33.1 | critical | Pendiente de verificación: el simulacro necesita el motor de campañas |
@@ -482,3 +482,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | Proceso editorial con SLA de 30 días y matriz de solapamiento entre normas | Fase 04 (ARG-038) |
 | 0.1.0-alpha | 2026-09-17 | Verdad terreno de aplicabilidad provisional sobre la instantánea de demostración | Fase 04 (ARG-039) |
 | 0.1.0-alpha | 2026-09-17 | Instantánea de demostración con la revisión de un DPO sintético: columnas técnicas y sistema de IA de alto riesgo confirmado | Fase 04 (ARG-039) |
+| 0.1.0-alpha | 2026-09-17 | `OBL-RGPD-32-1` (cifrado en reposo) también sobre todas las categorías especiales | Fase 04 (ARG-031) |
