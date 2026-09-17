@@ -1,0 +1,66 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix dpv:   <https://w3id.org/dpv#> .
+@prefix pd:    <https://w3id.org/dpv/pd#> .
+@prefix n:     <https://ns.argos.eu/norms/> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+
+# Base asset classes: the dictionary between the ontology and the inventory graph (ARG-033).
+# Each selectorJson must be accepted by argos_inventory.api.selector.parse_selector, and its label
+# must match argos:graphLabel (gate_consistency, F04-07). Categories are the graph's (F03-06).
+# min_confidence 0.5 keeps dictionary classifications (0.6) and validated ones (0.9 or more).
+
+n:AC-stored-personal-data a argos:AssetClass ;
+  rdfs:label "Dato personal almacenado"@es ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory dpv:PersonalData ;
+  argos:selectorJson """{"label": "Column", "category": "personal_data", "min_confidence": 0.5, "missing": false}""" .
+
+n:AC-stored-identifier-data a argos:AssetClass ;
+  rdfs:label "Identificador oficial almacenado"@es ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory pd:Identifying ;
+  argos:selectorJson """{"label": "Column", "category": "official_identifier", "min_confidence": 0.5, "missing": false}""" .
+
+n:AC-stored-contact-data a argos:AssetClass ;
+  rdfs:label "Dato de contacto almacenado"@es ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory pd:Contact ;
+  argos:selectorJson """{"label": "Column", "category": "contact_data", "min_confidence": 0.5, "missing": false}""" .
+
+n:AC-stored-financial-data a argos:AssetClass ;
+  rdfs:label "Dato financiero almacenado"@es ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory pd:Financial ;
+  argos:selectorJson """{"label": "Column", "category": "financial_data", "min_confidence": 0.5, "missing": false}""" .
+
+n:AC-stored-health-data a argos:AssetClass ;
+  rdfs:label "Dato de salud almacenado"@es ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory pd:Health ;
+  argos:selectorJson """{"label": "Column", "category": "special_category.health", "min_confidence": 0.5, "missing": false}""" .
+
+n:AC-stored-special-category-data a argos:AssetClass ;
+  rdfs:label "Dato de categoría especial almacenado"@es ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory dpv:SpecialCategoryPersonalData ;
+  argos:selectorJson """{"label": "Column", "category": "special_category", "min_confidence": 0.5, "missing": false}""" .
+
+n:AC-unclassified-column a argos:AssetClass ;
+  rdfs:label "Columna sin clasificar"@es ;
+  argos:graphLabel "Column" ;
+  argos:selectorJson """{"label": "Column", "unclassified": true, "missing": false}""" .
+
+n:AC-pending-ai-system a argos:AssetClass ;
+  rdfs:label "Sistema de IA pendiente de confirmación"@es ;
+  argos:graphLabel "AISystem" ;
+  argos:selectorJson """{"label": "AISystem", "status": "pending"}""" .
+
+n:AC-missing-table a argos:AssetClass ;
+  rdfs:label "Tabla desaparecida del inventario"@es ;
+  argos:graphLabel "Table" ;
+  argos:selectorJson """{"label": "Table", "missing": true}""" .
+
+n:AC-cross-border-flow a argos:AssetClass ;
+  rdfs:label "Flujo transfronterizo"@es ;
+  argos:graphLabel "System" ;
+  argos:verificationPending "El grafo aún no registra el país de destino de FLOWS_TO (nota ARG-031-033)" .

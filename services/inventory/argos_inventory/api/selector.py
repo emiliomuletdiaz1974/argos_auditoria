@@ -2,6 +2,8 @@
 
 This is the only way the challenge engine reaches the graph. Labels come from the closed vocabulary
 and every client value travels as a parameter: no client text is ever formatted into the query.
+The fields `unclassified` and `status` let the ontology's asset classes say "column without a
+classification" and "AI system pending confirmation" (deviation note ARG-031-033).
 """
 
 from collections.abc import Mapping
@@ -11,7 +13,16 @@ from typing import Any
 from argos_inventory.graph.model import NODE_LABELS
 
 ALLOWED_SELECTOR_FIELDS = frozenset(
-    {"label", "category", "system_kind", "min_confidence", "missing", "name_like"}
+    {
+        "label",
+        "category",
+        "system_kind",
+        "min_confidence",
+        "missing",
+        "name_like",
+        "unclassified",
+        "status",
+    }
 )
 MAX_TEXT_LENGTH = 100
 DEFAULT_LABEL = "Column"
@@ -32,6 +43,8 @@ class Selector:
     missing: bool | None = None
     name_like: str | None = None
     system_kind: str | None = None
+    unclassified: bool | None = None
+    status: str | None = None
 
 
 def _text(raw: Mapping[str, Any], field: str) -> str | None:
@@ -42,6 +55,13 @@ def _text(raw: Mapping[str, Any], field: str) -> str | None:
         raise ValueError(
             f"selector field {field} must be a text of 1 to {MAX_TEXT_LENGTH} characters"
         )
+    return value
+
+
+def _flag(raw: Mapping[str, Any], field: str) -> bool | None:
+    value = raw.get(field)
+    if value is not None and not isinstance(value, bool):
+        raise ValueError(f"{field} must be a boolean")
     return value
 
 
@@ -61,16 +81,18 @@ def parse_selector(raw: Mapping[str, Any]) -> Selector:
         if isinstance(value, bool) or not isinstance(value, int | float) or not 0 <= value <= 1:
             raise ValueError("min_confidence must be a number between 0 and 1")
         min_confidence = float(value)
-    missing = raw.get("missing")
-    if missing is not None and not isinstance(missing, bool):
-        raise ValueError("missing must be a boolean")
+    unclassified = _flag(raw, "unclassified")
+    if unclassified is not None and category is not None:
+        raise ValueError("unclassified and category cannot be combined")
     return Selector(
         label=str(label),
         category=category,
         min_confidence=min_confidence,
-        missing=missing,
+        missing=_flag(raw, "missing"),
         name_like=_text(raw, "name_like"),
         system_kind=_text(raw, "system_kind"),
+        unclassified=unclassified,
+        status=_text(raw, "status"),
     )
 
 
@@ -99,6 +121,13 @@ def compile_selector(
     if selector.name_like is not None:
         where.append("n.name STARTS WITH $name_like")
         params["name_like"] = selector.name_like
+    if selector.unclassified is True:
+        where.append("NOT exists((n)-[:CLASSIFIED_AS]->())")
+    elif selector.unclassified is False:
+        where.append("exists((n)-[:CLASSIFIED_AS]->())")
+    if selector.status is not None:
+        where.append("n.status STARTS WITH $status")
+        params["status"] = selector.status
     if selector.system_kind is not None:
         if system_ids is None:
             raise ValueError("system_kind needs the system ids of that kind")

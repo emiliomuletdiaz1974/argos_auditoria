@@ -3,9 +3,9 @@ id: MOD-argos-inventory
 kind: module
 title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
-phases: ["03"]
+phases: ["03", "04"]
 version: 0.1.0-alpha
-commit: dfe330f
+commit: 79e21cb
 date: 2026-09-17
 status: current
 confidentiality: client
@@ -60,7 +60,7 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 - **Parámetros de la API:**
   - página máxima de 500 elementos;
   - profundidad máxima de consulta 4;
-  - campos del selector limitados a una lista cerrada (`ALLOWED_SELECTOR_FIELDS`).
+  - campos del selector limitados a una lista cerrada (`ALLOWED_SELECTOR_FIELDS`): `label`, `category`, `min_confidence`, `missing`, `name_like`, `system_kind` y, desde la Fase 04, `unclassified` (columnas con o sin clasificación; no se combina con `category`) y `status` (prefijo del estado, por ejemplo sistemas de IA `pending` o `confirmed`).
 - **Parámetros del planificador:**
   - cadencia estructural de 24 h;
   - hasta 4 exploraciones en paralelo;
@@ -107,3 +107,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-16 | Inventario, grafo, versionado, clasificación, catálogo, flujos, IA, API GraphQL y planificador | Fase 03 (ARG-021…030) |
 | 0.1.0-alpha | 2026-09-16 | Índices GIN, consultas por etiqueta y escrituras en lote: la reexploración extrapolada pasa de 14,9 h a 1,02 h | Fase 03 (rendimiento) |
+| 0.1.0-alpha | 2026-09-17 | Selector ampliado con `unclassified` y `status` para el plano de aplicabilidad de la ontología | Fase 04 (ARG-033) |

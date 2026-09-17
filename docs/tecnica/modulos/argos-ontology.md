@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: 3490603
+commit: 79e21cb
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -23,7 +23,7 @@ Convierte la normativa (RGPD, EHDS, AI Act) en **datos verificables**. Cada obli
 - los retos que la verifican;
 - el tipo de evidencia que producen.
 
-Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-040 (publicación firmada) y el flujo editorial de ARG-038.
+Implementa ARG-031 a ARG-040. Este documento cubre por ahora ARG-031 (núcleo), ARG-032 (almacén versionado), ARG-033 (aplicabilidad), ARG-040 (publicación firmada) y el flujo editorial de ARG-038.
 
 ## 2. Alcance y límites
 
@@ -93,7 +93,33 @@ La ontología viaja del equipo editorial a los appliances, incluidos los aislado
 
 Solo un bundle verificado llega al almacén versionado.
 
-Dependencias: `argos-common`, rdflib 7.6 y PyYAML.
+### Plano de aplicabilidad (ARG-033)
+
+La correspondencia entre clases abstractas («dato de salud almacenado») y nodos del inventario vive en la ontología, dentro del ciclo editorial, y no en código. Cada clase de activo lleva el **selector JSON** que resuelve la API del inventario y la etiqueta del grafo a la que apunta.
+
+Clases base (`library/ontology/asset-classes/base.ttl`):
+
+| Clase | Qué selecciona |
+|---|---|
+| `AC-stored-personal-data` | Columnas vivas clasificadas como dato personal |
+| `AC-stored-identifier-data` | Columnas con identificadores oficiales |
+| `AC-stored-contact-data` | Columnas con datos de contacto |
+| `AC-stored-financial-data` | Columnas con datos financieros |
+| `AC-stored-health-data` | Columnas con datos de salud |
+| `AC-stored-special-category-data` | Columnas con cualquier categoría especial |
+| `AC-unclassified-column` | Columnas vivas sin clasificar |
+| `AC-pending-ai-system` | Sistemas de IA descubiertos pendientes de confirmar |
+| `AC-missing-table` | Tablas desaparecidas del origen |
+| `AC-cross-border-flow` | Pendiente de verificación: el grafo aún no registra el país de destino de los flujos |
+
+Las clases basadas en clasificación exigen una confianza mínima de 0,5, que incluye las clasificaciones por diccionario (0,6) y las validadas. Una clase inválida se detecta con `asset_class_errors`:
+- selector que no es JSON o que la API no acepta;
+- etiqueta distinta de la del selector;
+- ni selector ni motivo de verificación pendiente.
+
+Para expresar «columna sin clasificar» y «sistema de IA pendiente», el selector de la API del inventario se amplió de forma compatible con dos campos, `unclassified` y `status` (nota de desviación ARG-031-033).
+
+Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6 y PyYAML.
 
 ## 4. Interfaces
 
@@ -115,6 +141,8 @@ Dependencias: `argos-common`, rdflib 7.6 y PyYAML.
 | Herramienta | `tools/ontology_publish.py build --version X.Y.Z --in-force-from AAAA-MM-DD [--output DIR]` | Escribe `argos-ontology-X.Y.Z.tar.gz`, su firma `.sig` y la clave pública `content.pub` |
 | Herramienta | `tools/ontology_publish.py verify <bundle> [--public-key FICHERO]` | Verifica un bundle sin cargarlo |
 | Clave | Vault Transit `argos-content` (Ed25519) | Firma de contenidos normativos |
+| Fichero | `library/ontology/asset-classes/base.ttl` | Clases de activo base con sus selectores |
+| Funciones | `load_asset_classes(path)`, `asset_classes(graph)`, `compiled_selector(asset_class)`, `asset_class_errors(graph)` | Lectura, compilación y validación de clases de activo |
 
 ## 5. Configuración
 
@@ -144,6 +172,12 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
   - clave `argos-content` Ed25519 no exportable;
   - carga de un bundle firmado en Vault;
   - rechazo de un bundle firmado con la clave de releases.
+- **`test_applicability_pure.py` y `tests/integration/test_ontology_asset_classes.py`:**
+  - clases base documentadas y sanas, con errores plantados detectados;
+  - sobre el grafo real, cada clase se ejecuta en AGE;
+  - los datos de salud coinciden con la verdad terreno;
+  - clasificadas y sin clasificar parten las columnas vivas;
+  - el sistema de IA pendiente aparece.
 - **`test_editorial_compiler.py`:** validaciones de formato, severidad y fecha; grafo generado; bytes idénticos con el mismo YAML; literales con caracteres especiales sin inyección; y la plantilla que se entrega compila.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -159,3 +193,4 @@ Sin configuración propia en este componente: el núcleo se carga desde `library
 | 0.1.0-alpha | 2026-09-17 | Plantilla editorial en castellano, capa de traducción y compilador determinista a Turtle | Fase 04 (ARG-038) |
 | 0.1.0-alpha | 2026-09-17 | Almacén RDF versionado e inmutable en PostgreSQL con SPARQL por versión o fecha | Fase 04 (ARG-032) |
 | 0.1.0-alpha | 2026-09-17 | Bundle determinista firmado con `argos-content` y verificación antes de cargar | Fase 04 (ARG-040) |
+| 0.1.0-alpha | 2026-09-17 | Plano de aplicabilidad con clases de activo base y selectores validados | Fase 04 (ARG-033) |

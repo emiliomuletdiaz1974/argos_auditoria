@@ -129,4 +129,6 @@ def test_allowed_fields_are_the_documented_ones() -> None:
         "min_confidence",
         "missing",
         "name_like",
+        "unclassified",
+        "status",
     } == ALLOWED_SELECTOR_FIELDS
