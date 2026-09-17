@@ -54,11 +54,12 @@ VALUES (%(id)s, %(fingerprint)s, %(campaign_id)s, %(challenge_id)s, %(obligation
         %(node_key)s, %(severity)s, ARRAY[%(campaign_text)s], %(verdict_id)s, %(detail)s)
 ON CONFLICT (fingerprint) DO UPDATE SET
   occurrences = argos.findings.occurrences
-                + (CASE WHEN argos.findings.campaigns_seen @> ARRAY[%(campaign_text)s] THEN 0
-                        ELSE 1 END),
-  campaigns_seen = CASE WHEN argos.findings.campaigns_seen @> ARRAY[%(campaign_text)s]
-                        THEN argos.findings.campaigns_seen
-                        ELSE argos.findings.campaigns_seen || ARRAY[%(campaign_text)s] END,
+                + (CASE WHEN %(counts)s AND NOT argos.findings.campaigns_seen
+                             @> ARRAY[%(campaign_text)s] THEN 1 ELSE 0 END),
+  campaigns_seen = CASE WHEN %(counts)s AND NOT argos.findings.campaigns_seen
+                             @> ARRAY[%(campaign_text)s]
+                        THEN argos.findings.campaigns_seen || ARRAY[%(campaign_text)s]
+                        ELSE argos.findings.campaigns_seen END,
   status = CASE WHEN argos.findings.status = 'closed_compliant' THEN 'reopened'
                 ELSE argos.findings.status END,
   last_verdict = %(verdict_id)s,
@@ -85,9 +86,17 @@ def escalate(severity: str, occurrences: int) -> str:
 
 
 def open_or_recur(
-    dsn: str, campaign_id: str, unit: Mapping[str, Any], verdict: Verdict, verdict_id: str
+    dsn: str,
+    campaign_id: str,
+    unit: Mapping[str, Any],
+    verdict: Verdict,
+    verdict_id: str,
+    counts_as_recurrence: bool = True,
 ) -> dict[str, Any]:
-    """Open the finding of a non-compliant verdict, or record that it is here again."""
+    """Open the finding of a non-compliant verdict, or record that it is here again.
+
+    A remediation run does not count: it is the same problem being verified, not a new sighting.
+    """
     mark = fingerprint(str(unit["challenge_id"]), str(unit["node_key"]))
     parameters = {
         "id": str(uuid7()),
@@ -101,6 +110,7 @@ def open_or_recur(
         "severity": str(unit["severity"]),
         "verdict_id": verdict_id,
         "detail": Jsonb(verdict.detail),
+        "counts": counts_as_recurrence,
     }
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:

@@ -5,7 +5,7 @@ from temporalio.client import Client
 
 from argos_auth import JwtValidator
 from argos_challenges.api.app import DEV_HOST, DEV_PORT, SERVICE_NAME, create_app
-from argos_challenges.workflows import CampaignWorkflow
+from argos_challenges.workflows import CampaignWorkflow, RemediationRun
 from argos_common.config import get_config
 from argos_common.logs import configure_logging
 
@@ -30,11 +30,22 @@ def main() -> None:  # pragma: no cover - process entry point
         client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")
         await client.get_workflow_handle(f"campaign-{campaign_id}").signal(name, argument)
 
+    async def remediate(scope: dict[str, object]) -> str:
+        client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")
+        handle = await client.start_workflow(
+            RemediationRun.run,
+            scope,
+            id=f"remediation-{scope.get('campaign_id', 'all')}",
+            task_queue=TASK_QUEUE,
+        )
+        return str(handle.id)
+
     app = create_app(
         cfg.DATABASE_URL,
         JwtValidator(cfg.OIDC_ISSUER, cfg.OIDC_AUDIENCE),
         start_campaign=start,
         signal_campaign=signal,
+        start_remediation=remediate,
     )
     uvicorn.run(app, host=DEV_HOST, port=DEV_PORT, log_config=None)
 

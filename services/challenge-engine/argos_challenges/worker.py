@@ -15,7 +15,7 @@ from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
 
 from .activities import ChallengeActivities, record_in_journal, smoke_probe
-from .workflows import CampaignWorkflow, SmokeCampaign, SystemRun
+from .workflows import CampaignWorkflow, RemediationRun, SmokeCampaign, SystemRun
 
 TASK_QUEUE = "argos-campaigns"
 
@@ -35,12 +35,14 @@ async def create_worker(
             campaign.wait_window,
             campaign.evaluate_unit,
             campaign.seal,
+            campaign.start_remediation,
+            campaign.transition_finding,
         ]
     registered: Sequence[Callable[..., Any]] = activities
     return Worker(
         client,
         task_queue=task_queue,
-        workflows=[SmokeCampaign, CampaignWorkflow, SystemRun],
+        workflows=[SmokeCampaign, CampaignWorkflow, SystemRun, RemediationRun],
         activities=registered,
     )
 

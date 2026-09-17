@@ -21,13 +21,14 @@ from temporalio.exceptions import ApplicationError
 from argos_challenges.client import client_parameters
 from argos_challenges.compiler import compile_campaign
 from argos_challenges.evaluator import evaluate
-from argos_challenges.findings import announce, open_or_recur
+from argos_challenges.findings import announce, open_or_recur, transition
 from argos_challenges.library.catalog import load_library
 from argos_challenges.probes import INVENTORY_QUERIES, minimise, probe_spec
 from argos_challenges.seal import announce_seal, seal_campaign
 from argos_challenges.snapshot_resolver import SnapshotSelectorResolver
 from argos_challenges.store import (
     campaign_record,
+    create_campaign,
     persist_verdict,
     pin_campaign,
     request_approval,
@@ -51,6 +52,13 @@ from argos_ontology.store import OntologyStore, version_in_force
 from argos_ontology.traceability import load_challenge_catalog
 
 INTERNAL_PROBES = frozenset({"shacl", "inventory_query"})
+_PENDING_UNITS = (
+    "SELECT f.id::text, u.unit FROM argos.findings f "
+    "JOIN argos.verdicts v ON v.id = f.last_verdict "
+    "JOIN argos.campaign_units u ON u.campaign_id = v.campaign_id AND u.unit_id = v.unit_id "
+    "WHERE f.status = 'pending_verification' "
+    "AND (%s::uuid IS NULL OR f.campaign_id = %s::uuid) ORDER BY f.id"
+)
 _SYSTEMS = (
     "SELECT id::text, name, kind, connection->>'connector', connection->'config' FROM argos.systems"
 )
@@ -188,6 +196,64 @@ class ChallengeActivities:
             await announce_seal(self._bus, sealed)
         return sealed
 
+    # ---------- remediation ----------
+
+    def _start_remediation(self, scope: Mapping[str, Any]) -> dict[str, Any]:
+        """The units to re-run: exactly the ones that opened the findings awaiting verification.
+
+        The unit is the one stored with the verdict, so the remediation is measured with the same
+        challenge version that measured the problem, even if the library has moved on (ARG-049).
+        """
+        # One statement, two uses: without a campaign the parameter is NULL and the filter is off.
+        campaign = scope.get("campaign_id")
+        with psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(_PENDING_UNITS, (campaign, campaign)).fetchall()
+        if not rows:
+            return {"campaign_id": None, "units": []}
+        origin = (
+            campaign_record(self._dsn, str(scope["campaign_id"]))
+            if scope.get("campaign_id")
+            else None
+        )
+        campaign_id = create_campaign(
+            self._dsn,
+            f"Subsanación {scope.get('campaign_id', 'general')}",
+            dict(scope),
+            str(scope.get("requested_by", "user:remediation")),
+        )
+        pin_campaign(
+            self._dsn,
+            campaign_id,
+            snapshot_id=(origin or {}).get("snapshot_id"),
+            snapshot_hash=(origin or {}).get("snapshot_hash"),
+            ontology_version=(origin or {}).get("ontology_version") or "0.0.0",
+            library_version=(origin or {}).get("library_version") or "0.0.0",
+            library_sha256=(origin or {}).get("library_sha256") or "0" * 64,
+            applicability_run=None,
+        )
+        units: list[dict[str, Any]] = []
+        for finding_id, unit in rows:
+            work = dict(unit)
+            work["campaign_id"] = campaign_id
+            work["remediation"] = True
+            units.append({"finding_id": str(finding_id), "unit": work})
+        save_units(self._dsn, campaign_id, [dict(entry["unit"]) for entry in units])
+        return {"campaign_id": campaign_id, "units": units}
+
+    @activity.defn(name="start_remediation")
+    async def start_remediation(self, scope: dict[str, Any]) -> dict[str, Any]:
+        return await asyncio.to_thread(self._start_remediation, scope)
+
+    @activity.defn(name="transition_finding")
+    async def transition_finding(self, payload: dict[str, Any]) -> str:
+        return await asyncio.to_thread(
+            transition,
+            self._dsn,
+            str(payload["finding_id"]),
+            str(payload["to"]),
+            str(payload.get("actor", "system:remediation")),
+        )
+
     # ---------- probes ----------
 
     def _internal_probe(self, unit: Mapping[str, Any]) -> dict[str, Any]:
@@ -293,7 +359,12 @@ class ChallengeActivities:
         }
         if verdict.result == "non_compliant":
             answer["finding"] = open_or_recur(
-                self._dsn, str(unit["campaign_id"]), unit, verdict, verdict_id
+                self._dsn,
+                str(unit["campaign_id"]),
+                unit,
+                verdict,
+                verdict_id,
+                counts_as_recurrence=not bool(unit.get("remediation")),
             )
         return answer
 

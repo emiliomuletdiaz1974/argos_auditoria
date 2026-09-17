@@ -34,6 +34,7 @@ DOUBLE_CONTROL_GATES = frozenset({"sampling"})
 CAMPAIGN_WORKFLOW = "CampaignWorkflow"
 
 TemporalStarter = Callable[[str], Awaitable[str]]
+RemediationStarter = Callable[[dict[str, Any]], Awaitable[str]]
 TemporalSignaller = Callable[[str, str, str], Awaitable[None]]
 
 
@@ -60,6 +61,10 @@ class Confirmation(BaseModel):
     right: str = "erasure"
 
 
+class RemediationScope(BaseModel):
+    campaign_id: str | None = None
+
+
 def _approvals_needed(gate: str) -> int:
     return 2 if gate in DOUBLE_CONTROL_GATES else 1
 
@@ -69,6 +74,7 @@ def create_app(
     validator: JwtValidator,
     start_campaign: TemporalStarter | None = None,
     signal_campaign: TemporalSignaller | None = None,
+    start_remediation: RemediationStarter | None = None,
 ) -> FastAPI:
     """The campaign API. The two callables talk to Temporal; tests pass their own."""
     app = FastAPI(title="ARGOS campaigns", version="1")
@@ -208,6 +214,18 @@ def create_app(
         except synthetic_module.SyntheticError as error:
             raise _fail(error) from None
         return {"injection_id": injection_id, "state": "reverted"}
+
+    @app.post("/remediation")
+    async def remediation(body: RemediationScope, identity: manager) -> dict[str, str]:
+        if start_remediation is None:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE, "no remediation runner attached"
+            )
+        scope: dict[str, Any] = {"requested_by": identity.actor}
+        if body.campaign_id:
+            scope["campaign_id"] = body.campaign_id
+        workflow_id = await start_remediation(scope)
+        return {"workflow_id": workflow_id}
 
     @app.post("/findings/{finding_id}/transition")
     def move_finding(finding_id: str, body: Transition, identity: reviewer) -> dict[str, str]:

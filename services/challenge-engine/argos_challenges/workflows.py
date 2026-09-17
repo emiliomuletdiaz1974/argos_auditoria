@@ -182,3 +182,50 @@ class CampaignWorkflow:
         )
         self._progress["status"] = "sealed"
         return {"campaign_id": campaign_id, "seal": sealed["seal"], **self._progress}
+
+
+@workflow.defn
+class RemediationRun:
+    """Verify what the client says it fixed, with the same challenge that found it (ARG-049).
+
+    The campaign is not relaunched: exactly the non-compliant units come back. A verdict that is
+    neither compliant nor non-compliant leaves the finding where it was, with its reason.
+    """
+
+    @workflow.run
+    async def run(self, scope: dict[str, Any]) -> dict[str, Any]:
+        started = await workflow.execute_activity(
+            "start_remediation",
+            scope,
+            start_to_close_timeout=CAMPAIGN_TIMEOUT,
+            retry_policy=RETRY_POLICY,
+        )
+        summary = {"verified": 0, "closed": 0, "reopened": 0, "unchanged": 0}
+        for entry in started["units"]:
+            unit = entry["unit"]
+            probe_result = await workflow.execute_activity(
+                "probe", unit, start_to_close_timeout=PROBE_TIMEOUT, retry_policy=PROBE_RETRY
+            )
+            verdict = await workflow.execute_activity(
+                "evaluate",
+                {"unit": unit, "probe_result": probe_result},
+                start_to_close_timeout=_TIMEOUT,
+                retry_policy=RETRY_POLICY,
+            )
+            summary["verified"] += 1
+            if verdict["result"] == "compliant":
+                destination = "closed_compliant"
+                summary["closed"] += 1
+            elif verdict["result"] == "non_compliant":
+                destination = "reopened"
+                summary["reopened"] += 1
+            else:
+                summary["unchanged"] += 1
+                continue
+            await workflow.execute_activity(
+                "transition_finding",
+                {"finding_id": entry["finding_id"], "to": destination},
+                start_to_close_timeout=_TIMEOUT,
+                retry_policy=RETRY_POLICY,
+            )
+        return {"campaign_id": started["campaign_id"], **summary}
