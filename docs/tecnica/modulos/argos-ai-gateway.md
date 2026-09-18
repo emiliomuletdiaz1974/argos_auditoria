@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
-commit: d9eedc3
+commit: pendiente
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -22,7 +22,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 ## 2. Alcance y límites
 
 - **Hace:** depurar lo que entra a un prompt, vigilar lo que sale y ser **la única puerta a la inferencia**: colas con dos prioridades, cuota diaria por servicio, JSON forzado con un ciclo de reparación y registro con hash.
-- **Hará:** dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
+- **Hará:** asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
 - **No hace, y no es una cuestión de configuración:** emitir un veredicto. No hay ruta de importación, ni de red, ni de permisos de base de datos que lleve de aquí al evaluador.
 - **No hace:** escribir en un sistema del cliente, ni proponer que se escriba.
 
@@ -33,6 +33,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 - **`argos_ai.rag`** (ARG-053, ARG-054): troceado por estructura jurídica, embeddings, índice sobre pgvector y el pipeline de respuesta con cita obligatoria.
 - **`argos_ai.classify`** (ARG-055): el clasificador semántico que rellena la interfaz ARG-025 de la Fase 03, con la confianza calibrada por las decisiones del DPD.
 - **`argos_ai.generate`** (ARG-056): el generador asistido de retos y la herramienta `tools/new_challenge.py` del equipo normativo.
+- **`argos_ai.reports`** (ARG-057): el redactor del expediente, con el verificador de cifras y la marca de texto asistido.
 - **`argos_ai.backends`**: un contrato (`Backend`, `Completion`) y tres implementaciones. `OpenAiCompatibleBackend` sirve para vLLM y para llama.cpp, porque los dos hablan la misma API; `FakeBackend` responde desde un fichero indexado por el hash del prompt.
 - Dependencias: `argos-common` (errores y configuración) y `argos-connector-sdk`, del que reutiliza los **validadores de identificadores españoles de ARG-024**.
 
@@ -93,6 +94,16 @@ El SLA de 30 días de norma a reto y los 300 retos de GA no salen de escribir YA
 - **Una sonda que escribe no se repara: se rechaza.** Repararla le enseñaría al modelo a colar una escritura por el lint. Toda sentencia declarada tiene que ser `SELECT`, `SHOW` o `WITH` y no contener verbos de escritura; y los guardarraíles de ARG-060 la vuelven a rechazar en el gateway si llegara hasta allí, antes de anotarla como uso válido.
 - **La propuesta entra en Git como rama de revisión, nunca directamente en la biblioteca.** `tools/new_challenge.py` prepara la rama `feature/reto-<id>` en un *worktree* temporal: la copia de trabajo del jurista, su índice y su rama actual quedan exactamente como estaban. Una rama que ya existe no se sobrescribe —la propuesta anterior no se entierra sin revisar—, una propuesta no válida no llega a Git y nada se publica: subir la rama es decisión de una persona.
 
+### Dictámenes con cifras verificadas (ARG-057)
+
+El expediente necesita dos textos que hoy cuestan horas de consultor: el resumen ejecutivo y la narrativa de cada hallazgo. El modelo los redacta desde los datos estructurados de la campaña, con tres reglas que no se doblan:
+
+1. **Toda cifra del texto es una cifra de sus datos.** El verificador extrae cada número y lo busca entre los que se le dieron. No acepta sumas, ni cocientes, ni redondeos: el modelo no hace aritmética para el expediente, aunque acierte (120 de 166 es un 72,29 %, y un «72,3 %» se rechaza igual). Lo que sí tolera es el **formato**: «1.200» es 1200, «0,85» es 0,85 y «85 %» puede citar un cociente de 0,85. Los números dentro de identificadores (`OBL-RGPD-32-1`) y de **referencias legales** («artículo 32», «art. 32.1.a», «apartado 2») no son cantidades y no se comprueban.
+2. **El texto nunca altera un veredicto.** El resumen solo puede citar veredictos de su propia campaña, y la narrativa de un hallazgo no puede afirmar la conformidad que su veredicto negó («es conforme», «cumple», «no procede»). Decir «no es conforme» sí puede: eso no es discutir el veredicto, es el veredicto.
+3. **Toda pieza queda marcada** `generated`, con el hash de su prompt, en `argos.report_texts`: la marca que el expediente de la Fase 07 enseña al supervisor.
+
+**Un borrador que rompe una regla no se guarda en absoluto**, ni siquiera con un aviso. Y lo que se guarda no se edita: la tabla es de escritura única, y un borrador nuevo es una fila nueva. Los casos trampa de los conjuntos dorados de F06-02, escritos antes que el verificador, se ejecutan tal cual como test.
+
 ### Guardarraíles (ARG-060)
 
 - **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase.
@@ -122,6 +133,8 @@ El SLA de 30 días de norma a reto y los 300 retos de GA no salen de escribir YA
 | `refit`, `stored_calibrator`, `drift` | `(dsn, now=None)` | trabajo nocturno, panel de calidad |
 | `propose_challenge` | `(obligation, text, gateway, context, regulation="") -> ChallengeProposal` | equipo normativo |
 | `tools/new_challenge.py` | `OBL-… "texto" [--repo]` → rama `feature/reto-<id>` | equipo normativo |
+| `draft_summary`, `draft_finding_narrative` | `(dsn, id, gateway) -> str` (id del texto guardado) | Fase 07 (expediente) |
+| `unsupported_figures`, `extract_figures` | `(text, data) -> list[str]` | ARG-057, ARG-059 |
 
 ## 5. Configuración
 
@@ -138,6 +151,10 @@ El SLA de 30 días de norma a reto y los 300 retos de GA no salen de escribir YA
 El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 8. Verificación
+
+`services/ai-gateway/tests/test_figures_pure.py`: los casos trampa dorados de F06-02, separador de miles, coma decimal, porcentaje que cita un cociente, aritmética del modelo rechazada, números de identificadores y referencias legales excluidos y todas las cifras que fallan, no solo la primera.
+
+`services/ai-gateway/tests/test_writer_pure.py` y `tests/integration/test_report_writer.py`: resumen que se guarda marcado, cifra inventada que no guarda nada, veredicto de otra campaña rechazado, narrativa que discute su veredicto rechazada, «no es conforme» permitido y texto guardado que no se puede editar.
 
 `services/ai-gateway/tests/test_challenge_gen_pure.py`: propuesta que compila, reparación en un ciclo con los errores del lint, propuesta que sigue fallando, YAML roto reparado, sonda de escritura rechazada sin reparación y prompt con esquema, sondas y dos ejemplos.
 
@@ -169,7 +186,8 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 9. Limitaciones conocidas y pendientes
 
-- El paquete está a medias: de los diez componentes están ARG-052 a ARG-056 y ARG-060.
+- El paquete está a medias: de los diez componentes están ARG-052 a ARG-057 y ARG-060.
+- La detección de una narrativa que discute su veredicto es una lista cerrada de expresiones; un modelo podría dar un rodeo que no recoja. Los conjuntos dorados del arnés (ARG-059) son los que miden si hace falta ampliarla.
 - El reajuste nocturno de la calibración es una función (`refit`) pero aún no tiene planificador: se engancha a Temporal con la operación.
 - La telemetría de sustituciones se anota en el asiento de cada completado; falta publicarla como métrica (ARG-059).
 - El presupuesto se cuenta por tokens del backend; con el backend determinista esos números son un proxy por longitud, no tokens reales.
@@ -185,3 +203,4 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 | 0.1.0-alpha | 2026-09-17 | RAG normativo con recuperación híbrida, cita comprobada y rehúso honesto | Fase 06 (ARG-054) |
 | 0.1.0-alpha | 2026-09-17 | Clasificación semántica con confianza calibrada por las decisiones del DPD | Fase 06 (ARG-055) |
 | 0.1.0-alpha | 2026-09-17 | Generación asistida de retos que compilan antes de mostrarse, y rama de revisión en un worktree temporal | Fase 06 (ARG-056) |
+| 0.1.0-alpha | 2026-09-17 | Dictámenes con cifras verificadas, veredictos intocables y marca de texto asistido | Fase 06 (ARG-057) |
