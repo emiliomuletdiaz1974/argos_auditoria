@@ -4,8 +4,8 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.7.0-alpha
-commit: 3a8726e
+version: 0.8.0-alpha
+commit: pendiente
 date: 2026-09-18
 status: draft
 confidentiality: client
@@ -17,12 +17,12 @@ confidentiality: client
 
 Convierte el resultado de una campaña en evidencia que un tercero puede comprobar sin fiarse de ARGOS: artefactos inmutables, un árbol de Merkle que los encadena, la firma de su raíz, un sello de tiempo, el expediente y la credencial verificable. Implementa ARG-061 a ARG-070.
 
-En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con el anclaje de su raíz, el **cliente del almacén WORM (ARG-061)** , los **artefactos de evidencia (ARG-062)** , la **firma de la raíz de campaña (ARG-064)** , el **anclaje del diario (ARG-066)** , el **sellado temporal RFC 3161 con cola (ARG-065)** y el **expediente de campaña en JSON y PDF (ARG-067)**. El resto llega en las tareas siguientes de la Fase 07, y este documento está en estado `draft` hasta entonces.
+En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con el anclaje de su raíz, el **cliente del almacén WORM (ARG-061)** , los **artefactos de evidencia (ARG-062)** , la **firma de la raíz de campaña (ARG-064)** , el **anclaje del diario (ARG-066)** , el **sellado temporal RFC 3161 con cola (ARG-065)** , el **expediente de campaña en JSON y PDF (ARG-067)** y la **credencial verificable (ARG-068)**. El resto llega en las tareas siguientes de la Fase 07, y este documento está en estado `draft` hasta entonces.
 
 ## 2. Alcance y límites
 
 - **Hace:** convertir cada veredicto en un artefacto canónico, minimizado y con su propio hash, escribirlo una vez, indexarlo y anunciarlo; escribir evidencia una sola vez en un almacén con bloqueo en modo conformidad y releerla; construir el árbol sobre el SHA-256 de los artefactos de una campaña, dar la prueba de inclusión de cada uno, verificarla y señalar qué artefactos ya no coinciden; anclar la raíz de cada campaña una sola vez.
-- **Hará:** credencial (ARG-068) y publicación en espacios de datos (ARG-070).
+- **Hará:** publicación en espacios de datos (ARG-070).
 - **No hace:** no decide conformidad (eso es del evaluador del motor de retos) ni modifica una raíz ya anclada.
 
 ## 3. Arquitectura
@@ -34,6 +34,7 @@ En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con 
 - `argos_evidence.journal`: el diario anclado en la campaña (ARG-066). No hay un segundo verificador ni una segunda fórmula de hash: la cadena la comprueba `PostgresJournal.verify` (ADR-0002, nota ARG-066). Este módulo ancla la cabeza verificada del diario (`seq` y `entry_hash`) en el objeto firmado de la campaña: después, aunque alguien reescriba toda la historia y recalcule todos los hashes, el asiento anclado ya no tiene el hash anclado. También escribe en el WORM el informe de verificación del diario de cada campaña.
 - `argos_evidence.tsa`: sellado temporal RFC 3161. La firma prueba quién; el sello prueba cuándo, y lo dice una autoridad ajena. El appliance puede estar aislado (P-02), así que el sellado es asíncrono: el sobre firmado entra en la cola al firmarse y se ve «en cola» hasta que exista un token verificado. Hay dos caminos al token, en línea (`process_queue`) y aislado (`export_requests` / `import_replies`), y **un solo verificador** (`verify_reply`, sobre `rfc3161-client`, Apache-2.0): estado, cadena hasta una raíz de confianza, nonce de la última petición, certificado de sellado y SHA-256 de los bytes exactos guardados en el WORM. El token se guarda en el WORM junto al objeto (`<clave>.tsr`).
 - `argos_evidence.dossier`: el expediente, lo que el DPO entrega a un auditor o a un inspector (nota ARG-067). `build` lo ensambla en JSON canónico a partir de registros que ya existen (campaña y sello, resultados por resultado y por obligación, aprobaciones, hallazgos, textos redactados con su marca y cadena de evidencia completa), sin ningún momento de ensamblado dentro: el mismo estado da siempre el mismo hash. `render` genera el PDF **solo desde ese JSON**, tras comprobar su hash, con **ReportLab** (BSD) en modo invariante: el mismo expediente da el mismo PDF byte a byte. Cada página lleva el SHA-256 del JSON y la portada un QR con la URL del comprobador público y ese hash. Todo texto redactado por el modelo sale bajo la marca «Texto asistido por IA».
+- `argos_evidence.credential`: la credencial verificable de cada expediente (ADR-0011). W3C VC 2.0 con prueba `DataIntegrityProof` y suite **`eddsa-jcs-2022`**: forma canónica JCS del RFC 8785 (paquete `rfc8785`, no la canonicalización del diario) y firma Ed25519 sobre `SHA-256(opciones) ‖ SHA-256(documento)`; pasa los vectores publicados por el W3C byte a byte. Emisor `did:web` con una clave Multikey para aserciones, que es la misma que firma las raíces. El sujeto se construye campo a campo (campaña, hash del expediente, raíz, versiones, resultados, hallazgos por severidad y marca `nonProduction`): **sin datos personales ni nombres de sistemas**. La revocación es un bit en una **Bitstring Status List** (131 072 bits, GZIP y base64url), reconstruida desde las revocaciones registradas y firmada otra vez: la credencial no se toca.
 - `argos_evidence.worm`: cliente del almacén WORM (VersityGW con *object lock*, ADR-0010). Solo escribe una vez, lee y consulta la retención; **no tiene ninguna primitiva de borrado**.
 
 Reglas del árbol:
@@ -74,6 +75,11 @@ Reglas del árbol:
 | Función pública | `dossier.render_pdf(dossier_json, verifier_url) -> bytes`, `dossier.qr_payload(url, sha256)` | PDF reproducible desde el JSON; rechaza un JSON cuyo hash no cuadra (`DossierError`) |
 | Función pública | `dossier.write_dossier(dsn, store, campaign_id, verifier_url, retain_until) -> DossierRecord` | Guarda JSON y PDF en `campaigns/{campaign_id}/dossier/{sha256}.json|.pdf` y los registra; el mismo estado da el mismo registro, uno nuevo (p. ej. con el sello) da otro y se conservan todos |
 | Tabla o migración | `argos.dossiers` (`0025_dossiers.sql`) | Un expediente por hash con sus claves y versiones en el WORM; escritura única |
+| Función pública | `credential.issue.issue_credential(dsn, store, signer, issuer, status_base_url, dossier_sha256, retain_until) -> CredentialRecord` | Emite una vez por expediente y guarda la credencial en `campaigns/{campaign_id}/credential/{id}.json`; diario `credential.issued` |
+| Función pública | `credential.issue.revoke_credential(dsn, credential_id, reason, revoked_by)`, `status_list_credential(...)` | Revocación con motivo (diario `credential.revoked`) y lista de estado firmada reconstruida |
+| Función pública | `credential.issue.verify_credential(credential, did_document, status_list) -> CredentialCheck` | Prueba contra el DID, método de verificación del emisor y bit de revocación; motivos explícitos (`proof`, `revoked`, `status not checked`…) |
+| Función pública | `credential.proof.add_proof`, `verify_proof`, `hash_data`, `jcs`; `credential.did.did_web`, `did_web_url`, `did_document`; `credential.status.encode_list`, `decode_list` | Suite `eddsa-jcs-2022`, `did:web` y lista de estado |
+| Tabla o migración | `argos.credentials`, `argos.credential_revocations`, secuencia `argos.credential_status_seq` (`0026_credentials.sql`) | Una credencial por expediente con su lista e índice; revocaciones con motivo; escritura única |
 | Función pública | `signing.signing_payload(...)`, `signing.sign_payload(signer, payload)`, `signing.verify_envelope(bytes, public_key) -> bool`, `signing.key_id(public_key)` | Objeto de firma, sobre y verificación con la clave pública, sin la plataforma |
 | Tabla o migración | `argos.campaign_signatures` (`0023_campaign_signatures.sql`) | Clave y versión del sobre, SHA-256, identificador de la clave y marca `non_production`; se escribe una vez |
 | Servicio del entorno | `evidence-store` (`127.0.0.1:7075`, red `evidence`, volumen `evidence-data`) | VersityGW v1.8.0, backend POSIX con versiones |
@@ -93,6 +99,7 @@ Usa la cadena de conexión a PostgreSQL de la plataforma (`ARGOS_DATABASE_URL`, 
 - **Sellado temporal:** ningún token se acepta sin pasar por el verificador único; un token de otro objeto, de otra petición (nonce) o de una autoridad sin raíz de confianza se rechaza y el objeto sigue en cola. Los sellos de la TSA de desarrollo llevan una política de pruebas y no son cualificados (nota ARG-064-065); la TSA cualificada llega con F07-16.
 - **Expediente:** solo lleva lo que ya está en los registros minimizados (veredictos, hallazgos sin datos del cliente, textos verificados por el redactor de la Fase 06). La firma de desarrollo y el sello en cola se muestran como tales en el PDF.
 - **Licencias:** el PDF no usa PyMuPDF (AGPL), que solo emplea la herramienta interna `docs_pack` y los tests como lector; el servicio usa ReportLab (BSD).
+- **Credencial sin datos personales:** el sujeto solo admite la lista cerrada `SUBJECT_KEYS` y pasa por los validadores de identificadores; un test lo vigila. Las credenciales firmadas con la clave de desarrollo llevan `nonProduction: true`.
 - **Diario anclado:** `sign_campaign_root` ancla por defecto la cabeza verificada del diario, y un diario roto no se ancla.
 - **Nada firmado en desarrollo pasa por producción:** un firmante que no se declara `production` marca cada objeto con `non_production: true` dentro de lo firmado; la marca queda también en `argos.campaign_signatures` y en el diario. Solo el `TpmSigner` del appliance se declarará de producción (nota ARG-064-065).
 - `argos.campaign_roots` es de escritura única: un disparador rechaza `UPDATE`, `DELETE` y `TRUNCATE`.
@@ -117,11 +124,14 @@ Por ahora es una librería. El almacén `evidence-store` arranca con `make dev`;
 - `tests/integration/test_journal_anchor.py`: cabeza anclada tras verificar; diario roto que no se ancla; asiento anterior alterado detectado; reescritura completa de la historia con hashes recalculados detectada por el anclaje; firma que ancla la cabeza por defecto; informe verificable e idempotente en el WORM; y ninguna segunda fórmula de hash del diario.
 - `services/evidence/tests/test_tsa_pure.py` y `tests/integration/test_tsa.py`: la firma encola el sello y el estado se ve; sello verificado y guardado en el WORM; un fallo deja el objeto en cola y el reintento lo sella; un token de otro objeto se rechaza; exportación e importación aisladas; una respuesta a una petición anterior se rechaza por el nonce; una entrada sellada no cambia ni desaparece.
 - `services/evidence/tests/test_dossier_pure.py` y `tests/integration/test_dossier.py`: PDF idéntico para el mismo expediente; hash en cada página; QR con la URL y el hash; cada texto asistido con su marca y ninguna marca sin texto; cifras del JSON; JSON alterado rechazado; firma de desarrollo y sello en cola visibles; expediente ensamblado desde una campaña real; mismo estado, mismo expediente; campaña sin sellar rechazada; JSON y PDF en el WORM y nueva versión cuando llega el sello.
+- `services/evidence/tests/test_credential_vectors.py`: vectores del W3C de `eddsa-jcs-2022` (claves, JCS, hashes, firma, `proofValue` y documento firmado) byte a byte.
+- `services/evidence/tests/test_credential_pure.py` y `tests/integration/test_credential.py`: `did:web`, lista de estado (orden de bits, GZIP, base64url), sujeto sin datos personales, verificación contra el DID, revocación que invalida sin tocar la credencial, lista falsificada o clave ajena rechazadas, emisión real con la clave de Vault, idempotencia y tablas de escritura única.
 - `tests/integration/test_worm_conformance.py`: la prueba de conformidad de ADR-0010 contra el almacén real (borrar, sobrescribir y acortar la retención fallan).
 - `tests/architecture/test_worm_has_no_delete.py`: el cliente no expone ni alcanza ninguna primitiva de borrado, ni por nombre ni por acceso dinámico.
 
 ## 9. Limitaciones conocidas y pendientes
 
+- El documento DID y las listas de estado se publican con `evidence-api` (F07-13); hasta entonces se construyen y verifican, pero nadie los sirve.
 - El árbol completo se guardará en el WORM al cerrar la campaña (F07-13); hasta entonces `tree_key` es solo la clave prevista.
 - La expiración a un año del bucket `working` que prevé ADR-0010 no está configurada: el cliente no toca reglas de ciclo de vida, y se decidirá con la operación del almacén (Fase 10).
 
@@ -136,3 +146,4 @@ Por ahora es una librería. El almacén `evidence-store` arranca con `make dev`;
 | 0.5.0-alpha | 2026-09-18 | Cabeza del diario anclada en la firma e informe de verificación del diario en el WORM | F07-07 |
 | 0.6.0-alpha | 2026-09-18 | Sellado temporal RFC 3161 con cola, modo aislado y TSA de desarrollo | F07-08 |
 | 0.7.0-alpha | 2026-09-18 | Expediente de campaña en JSON canónico y PDF reproducible con QR | F07-09 |
+| 0.8.0-alpha | 2026-09-18 | Credencial verificable VC 2.0 con `eddsa-jcs-2022`, `did:web` y Bitstring Status List | F07-10 |
