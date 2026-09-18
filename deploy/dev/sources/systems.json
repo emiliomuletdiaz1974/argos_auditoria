@@ -80,6 +80,7 @@
       "profile": "sources",
       "credentials": {"base_url": "http://127.0.0.1:8180"},
       "config": {
+        "allow_insecure": true,
         "descriptor": {
           "routes": [
             {"path": "/realms/{realm}", "defaults": {"realm": "argos"}},
@@ -96,7 +97,7 @@
       "connector": "argos_fhir.connector:FhirConnector",
       "profile": "sources",
       "credentials": {"base_url": "http://127.0.0.1:8090/fhir"},
-      "config": {}
+      "config": {"allow_insecure": true}
     },
     {
       "id": "01920000-0000-7000-8000-00000000e002",

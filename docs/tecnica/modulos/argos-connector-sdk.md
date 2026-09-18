@@ -55,6 +55,7 @@ Otras piezas:
 | Clase | `LoadBudget(system_id, config, ...)` | Ventanas por día y zona horaria, tasa por minuto con ráfaga, filas máximas por sonda y cortacircuitos por latencia |
 | Función | `bus_circuit_listener(bus, loop)` | Publica `campaign.circuit_open.v1` al abrirse un cortacircuitos |
 | Funciones | `validate_read_only_sql`, `assert_safe_http_method` | Validación de solo lectura |
+| Función | `require_tls(encrypted, config, target)` | Rechaza al abrir un transporte sin cifrar salvo que el sistema declare `allow_insecure: true` |
 | Funciones | `is_valid_dni`, `is_valid_nie`, `is_valid_nuss`, `is_valid_iban_es`, `mrn_validator`, `acceptance_rates` | Validadores con dígito de control (Fase 03) |
 | Tabla | `argos.connector_queries` (migración `0002_connectors.sql`) | Estados `emitted`, `completed`, `failed`, `rejected`; un trigger impide borrar filas y modificar las cerradas |
 | Arnés | `argos_connector.testing` | `assert_no_write_surface`, `assert_sql_writes_rejected`, `assert_http_writes_rejected` para los tests de cualquier conector |
@@ -96,3 +97,4 @@ El presupuesto de carga vive en la memoria de cada proceso; con varias réplicas
 | 0.1.0-alpha | 2026-09-15 | Contrato de solo lectura, arnés de escritura, diario previo y presupuesto de carga | Fase 02 (ARG-011…013) |
 | 0.1.0-alpha | 2026-09-15 | Validadores de DNI, NIE, NUSS, IBAN y NHC | Fase 03 (ARG-024) |
 | 0.1.0-alpha | 2026-09-18 | La validación de solo lectura rechaza funciones con efectos por familia y paquete, y sentencias de escritura pasadas como texto | Auditoría de seguridad (A1) |
+| 0.1.0-alpha | 2026-09-18 | `require_tls`: transporte cifrado obligatorio salvo declaración explícita en el sistema | Auditoría de seguridad (M10) |

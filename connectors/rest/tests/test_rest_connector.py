@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 import pytest
 
-from argos_common.errors import ReadOnlyViolationError
+from argos_common.errors import ConfigurationError, ReadOnlyViolationError
 from argos_connector.probes import ProbeSpec
 from argos_connector.testing import (
     InMemoryJournal,
@@ -62,6 +62,19 @@ class Api:
         if path == "/v1/redirecting":
             return httpx.Response(302, headers={"location": "https://evil.test/steal"})
         return httpx.Response(200, json={})
+
+
+def test_a_clear_http_api_is_refused_unless_declared() -> None:
+    # The bearer token would travel in clear text.
+    descriptor = {**DESCRIPTOR, "base_url": "http://api.hospital.test/v1"}
+    context = make_context({"token": TEST_TOKEN})
+    connector = RestConnector(SYSTEM_ID, {"descriptor": descriptor}, context)
+    with pytest.raises(ConfigurationError, match="allow_insecure"):
+        connector.open()
+    declared = {"descriptor": descriptor, "allow_insecure": True}
+    allowed = RestConnector(SYSTEM_ID, declared, make_context({"token": TEST_TOKEN}))
+    allowed.open()
+    allowed.close()
 
 
 class MockRest(RestConnector):

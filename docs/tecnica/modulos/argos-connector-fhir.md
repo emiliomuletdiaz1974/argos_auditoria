@@ -6,7 +6,7 @@ module: argos-connector-fhir
 phases: ["02"]
 version: 0.1.0-alpha
 commit: d018a74
-date: 2026-09-17
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -34,7 +34,7 @@ Sondas del SDK `count` y `sample` por tipo de recurso, para sistemas de tipo `cl
 
 ## 5. Configuración
 
-- **Por sistema:** URL base del servidor FHIR y `extra_resources`, opcional.
+- **Por sistema:** URL base del servidor FHIR, `extra_resources` y `allow_insecure`, opcionales.
 - **Credencial:** token Bearer en Vault.
 
 ## 6. Seguridad y tratamiento de datos
@@ -42,6 +42,8 @@ Sondas del SDK `count` y `sample` por tipo de recurso, para sistemas de tipo `cl
 **Permisos que necesita la cuenta del cliente:** lectura (`read` y `search`) sobre los tipos de recurso configurados; ninguna operación de creación, actualización ni borrado.
 
 Las muestras se minimizan con el hash con clave del SDK.
+
+Como hereda del conector REST, solo acepta `https://` salvo `allow_insecure: true` declarado en el sistema.
 
 ## 7. Operación
 
@@ -62,3 +64,4 @@ Las mismas del conector REST respecto a OAuth2.
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Conector FHIR R4 con recuentos `_summary=count` y rutas de recursos cerradas | Fase 02 (ARG-020) |
+| 0.1.0-alpha | 2026-09-18 | Transporte cifrado obligatorio: `http://` solo con `allow_insecure: true` declarado | Auditoría de seguridad (M10) |

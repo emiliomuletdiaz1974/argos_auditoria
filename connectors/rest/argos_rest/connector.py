@@ -13,6 +13,7 @@ from argos_common.errors import ReadOnlyViolationError
 from argos_connector.base import Connector
 from argos_connector.probes import ProbeSpec
 from argos_connector.readonly import assert_safe_http_method
+from argos_connector.tls import require_tls
 
 SECURITY_HEADERS = (
     "strict-transport-security",
@@ -111,6 +112,7 @@ class RestConnector(Connector):
         descriptor = self._descriptor()
         raw_base = descriptor.get("base_url") or self.context.credentials["base_url"]
         base_url = str(raw_base).rstrip("/")
+        require_tls(httpx.URL(base_url).scheme == "https", self.config, base_url)
         routes = tuple(Route.from_descriptor(r) for r in descriptor["routes"])
         headers = {"Accept": "application/json"}
         token = self.context.credentials.get("token")

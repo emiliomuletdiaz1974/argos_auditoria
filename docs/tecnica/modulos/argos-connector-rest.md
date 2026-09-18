@@ -6,7 +6,7 @@ module: argos-connector-rest
 phases: ["02"]
 version: 0.1.0-alpha
 commit: d018a74
-date: 2026-09-17
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -38,7 +38,7 @@ Sondas del SDK `count`, `sample` y `check_config` sobre las rutas declaradas.
 
 ## 5. Configuración
 
-- **Por sistema:** `descriptor` (`base_url`, `routes` con `path`, `items_field`, `count_field`, `page` y `defaults`) y, opcionalmente, `ca_file`.
+- **Por sistema:** `descriptor` (`base_url`, `routes` con `path`, `items_field`, `count_field`, `page` y `defaults`) y, opcionalmente, `ca_file` y `allow_insecure`.
 - **Credencial:** token Bearer en Vault.
 
 ## 6. Seguridad y tratamiento de datos
@@ -48,6 +48,7 @@ Sondas del SDK `count`, `sample` y `check_config` sobre las rutas declaradas.
 - Métodos de escritura rechazados por el SDK antes de salir.
 - Sin redirecciones.
 - Validación TLS con la CA configurada.
+- **Solo `https://`:** una URL base `http://` se rechaza al abrir, porque el token Bearer viajaría en claro, salvo que el sistema declare `allow_insecure: true` (en desarrollo, las fuentes en loopback).
 
 ## 7. Operación
 
@@ -68,3 +69,4 @@ Solo admite token Bearer estático desde Vault. El flujo OAuth2 *client credenti
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Conector REST declarativo con lista cerrada de rutas y paginación confinada | Fase 02 (ARG-019) |
+| 0.1.0-alpha | 2026-09-18 | Transporte cifrado obligatorio: `http://` solo con `allow_insecure: true` declarado | Auditoría de seguridad (M10) |
