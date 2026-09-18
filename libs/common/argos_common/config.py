@@ -70,6 +70,19 @@ class ArgosConfig(BaseSettings):
             raise ValueError("LOG_FORMAT_JSON must be true in production")
         if not self.OIDC_ISSUER.startswith("https://"):
             raise ValueError("OIDC_ISSUER must use https in production")
+        # Tokens, credentials and the policies that decide verdicts travel on these links.
+        encrypted = {
+            "VAULT_ADDR": self.VAULT_ADDR.startswith("https://"),
+            "NATS_URL": self.NATS_URL.startswith("tls://"),
+            "OPA_URL": self.OPA_URL.startswith("https://"),
+            "LLM_LOCAL_ENDPOINT": self.LLM_LOCAL_ENDPOINT is None
+            or self.LLM_LOCAL_ENDPOINT.startswith("https://"),
+        }
+        for field, ok in encrypted.items():
+            if not ok:
+                raise ValueError(f"{field} must use an encrypted transport in production")
+        if self.VAULT_TOKEN is not None and self.VAULT_TOKEN.get_secret_value() == "root":
+            raise ValueError("VAULT_TOKEN must be a scoped service token in production")
         return self
 
 

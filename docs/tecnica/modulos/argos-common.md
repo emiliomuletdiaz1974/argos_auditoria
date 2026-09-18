@@ -6,7 +6,7 @@ module: argos-common
 phases: ["01", "03"]
 version: 0.1.0-alpha
 commit: 1aadd28
-date: 2026-09-17
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -67,7 +67,11 @@ En entorno de producción la configuración se rechaza si:
 - la base de datos apunta a un host local;
 - `WORM_STORAGE_PATH` no es una ruta absoluta;
 - el registro no es JSON;
-- el emisor OIDC no usa `https`.
+- el emisor OIDC no usa `https`;
+- `VAULT_ADDR`, `OPA_URL` o `LLM_LOCAL_ENDPOINT` no usan `https`, o `NATS_URL` no usa `tls://`: por ahí viajan tokens, credenciales y las políticas que deciden veredictos;
+- `VAULT_TOKEN` es el token `root` del modo de desarrollo de Vault.
+
+El error nombra el campo, nunca el valor recibido.
 
 Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su rama `argos/services/<servicio>`, y solo la política del SDK de conectores lee `argos/connectors/<id>`.
 
@@ -113,3 +117,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-14 | Configuración, errores, registro, salud, diario v1, migrador, secretos y release firmada | Fase 01 |
 | 0.1.0-alpha | 2026-09-15 | `VAULT_ADDR` y `VAULT_TOKEN` para los servicios que abren conectores | Fase 03 (ARG-022) |
+| 0.1.0-alpha | 2026-09-18 | En producción, transporte cifrado obligatorio hacia Vault, NATS, OPA y el modelo, y sin token `root` | Auditoría de seguridad (B13) |
