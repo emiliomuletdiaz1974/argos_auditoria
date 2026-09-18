@@ -27,13 +27,18 @@ _SEARCH = (
     "WHERE (%(origins)s::text[] IS NULL OR origin = ANY(%(origins)s::text[])) "
     "ORDER BY embedding <=> %(vector)s::vector LIMIT %(k)s"
 )
+# Any of the words of the question, not all of them: a DPO asks in sentences, and «¿en cuántas
+# horas hay que notificar una violación de datos?» has words the article does not use. The query is
+# built by PostgreSQL itself from its own parse of the question (AND turned into OR), so nothing the
+# user typed reaches the statement as syntax; ts_rank puts first the fragments that share most.
 _LEXICAL = (
     "SELECT reference, text, origin, source, "
-    "ts_rank(to_tsvector('spanish', reference || ' ' || text), plainto_tsquery('spanish', %(q)s)) "
+    "ts_rank(to_tsvector('spanish', reference || ' ' || text), "
+    "replace(plainto_tsquery('spanish', %(q)s)::text, '&', '|')::tsquery) "
     "FROM argos.rag_chunks "
     "WHERE (%(origins)s::text[] IS NULL OR origin = ANY(%(origins)s::text[])) "
     "AND to_tsvector('spanish', reference || ' ' || text) "
-    "@@ plainto_tsquery('spanish', %(q)s) "
+    "@@ replace(plainto_tsquery('spanish', %(q)s)::text, '&', '|')::tsquery "
     "ORDER BY 5 DESC LIMIT %(k)s"
 )
 

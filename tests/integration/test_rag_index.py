@@ -76,3 +76,11 @@ def test_the_lexical_search_finds_an_article_number(migrated_db: str) -> None:
 def test_an_unknown_origin_is_refused(migrated_db: str) -> None:
     with pytest.raises(ValueError, match="origin"):
         index_document(migrated_db, "x", "inventado", RGPD, "RGPD", EMBEDDER)
+
+
+def test_the_lexical_search_answers_a_question_in_plain_words(migrated_db: str) -> None:
+    """A DPO asks in sentences, not in keywords: not every word of the question is in the law."""
+    _index(migrated_db)
+    question = "¿En cuántas horas hay que notificar una violación de datos del hospital?"
+    hits = search_lexical(migrated_db, question, k=5)
+    assert "RGPD art. 33.1" in [hit.reference for hit in hits]

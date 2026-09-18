@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
-commit: 23a619d
+commit: pendiente
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -35,6 +35,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 - **`argos_ai.generate`** (ARG-056): el generador asistido de retos y la herramienta `tools/new_challenge.py` del equipo normativo.
 - **`argos_ai.reports`** (ARG-057): el redactor del expediente, con el verificador de cifras y la marca de texto asistido.
 - **`argos_ai.assistant`** (ARG-058): el asistente de consola, un agente con cuatro herramientas cerradas de solo lectura.
+- **`argos_ai.evaluation`** (ARG-059): el arnés que mide cada oficio contra sus conjuntos dorados y la puerta de calidad.
 - **`argos_ai.backends`**: un contrato (`Backend`, `Completion`) y tres implementaciones. `OpenAiCompatibleBackend` sirve para vLLM y para llama.cpp, porque los dos hablan la misma API; `FakeBackend` responde desde un fichero indexado por el hash del prompt.
 - Dependencias: `argos-common` (errores y configuración) y `argos-connector-sdk`, del que reutiliza los **validadores de identificadores españoles de ARG-024**.
 
@@ -121,6 +122,21 @@ Responde preguntas de tres mundos —la normativa, el estado del cliente y las d
 - **Defensa en profundidad:** un paso del modelo que lleve una sentencia de escritura lo para el guardarraíl del gateway antes de que el agente llegue a buscar la herramienta.
 - **La conversación vive solo en memoria**, para la pregunta en curso; lo que queda registrado es el hash de cada prompt, nunca su contenido.
 
+### Arnés de evaluación con conjuntos dorados (ARG-059)
+
+«La IA funciona bien» es, en ARGOS, una afirmación con evidencia. Cada oficio responde a cada caso de su conjunto dorado (F06-02); la nota de un conjunto es la proporción ponderada de aciertos, y la puerta la compara con el umbral escrito —con su motivo— en `goldens/thresholds.yaml`. **Las trampas pesan el doble**, porque miden el rehúso, que es la virtud más difícil.
+
+**Dos modos, con dos preguntas distintas:**
+
+- **Oráculo** (`make ai-eval`, dentro de `make check`): el «modelo» responde a cada caso con su salida esperada. No mide el modelo; mide **todo lo demás**: que la recuperación alcance el fragmento que la respuesta cita, que las comprobaciones acepten lo correcto y rechacen las trampas, y que las notas y la puerta funcionen. Si el oráculo no llega a un umbral, el que pierde puntos es el pipeline. Corre sobre una base desechable.
+- **Real** (`make ai-eval-release`, `tools/ai_eval/run_goldens.py`): el modelo servido. Su nota es la calidad del modelo y es la puerta de una release. Necesita los pesos (F06-05).
+
+Un conjunto que desaparece, o un umbral sin su conjunto, es un error: el arnés no da por bueno lo que no midió.
+
+**Lo que el arnés destapó la primera vez que corrió**, y por qué el embebedor de pruebas cambió: con el oráculo respondiendo perfecto, RAG sacó **0,68**. La búsqueda léxica ponía primero el artículo correcto, pero el embebedor de pruebas era ruido puro, y en la fusión RRF lo que coincidía por casualidad en las dos listas desplazaba al acierto léxico fuera del contexto. El pipeline estaba bien; el CI medía ruido. El embebedor determinista pasó a ser una bolsa de palabras con *feature hashing* —sin pesos, pero con señal— y RAG subió a **1,0**. Un test comprueba ahora que el embebedor ordena bien cinco preguntas contra seis fragmentos, algo que un embebedor de ruido no consigue ni una vez en 5000 intentos. La misma lección vale para producción: **con un embebedor flojo, la fusión puede empeorar un buen resultado léxico**; la puerta de release con el modelo real es la que lo vigila.
+
+La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por relevancia, en lugar de «todas»: un DPO pregunta con frases, y «¿en cuántas horas hay que notificar una violación de datos?» tiene palabras que el artículo no usa.
+
 ### Guardarraíles (ARG-060)
 
 - **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase.
@@ -154,6 +170,8 @@ Responde preguntas de tres mundos —la normativa, el estado del cliente y las d
 | `unsupported_figures`, `extract_figures` | `(text, data) -> list[str]` | ARG-057, ARG-059 |
 | `ask` | `(question, gateway, tools) -> Answer(answer, sources, complete, calls)` | Fase 08 (chat de la consola) |
 | `default_toolbox` | `(dsn, embedder) -> dict[str, Tool]` | ARG-058 |
+| `evaluate_all` | `(dsn, embedder, backends=oracle_backends) -> list[SuiteReport]` | CI, release, panel de calidad |
+| `score`, `gate`, `SuiteReport`, `TRAP_WEIGHT = 2` | nota ponderada y código de salida | CI |
 
 ## 5. Configuración
 
@@ -170,6 +188,12 @@ Responde preguntas de tres mundos —la normativa, el estado del cliente y las d
 El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 8. Verificación
+
+`services/ai-gateway/tests/test_eval_metrics_pure.py`: la nota calculada a mano, el doble peso de las trampas, un conjunto que pasa lo fácil y falla las trampas que no aprueba, un conjunto vacío que es error y no un 100 %, y un umbral sin su conjunto que cierra la puerta.
+
+`services/ai-gateway/tests/test_embeddings_pure.py`: el embebedor de pruebas ordena bien cinco preguntas contra seis fragmentos, trata igual acentos y mayúsculas y nunca devuelve un vector nulo.
+
+`tests/integration/test_ai_goldens.py` (`make ai-eval`): los cuatro conjuntos alcanzan su umbral con el oráculo y las trampas de redacción se rechazan.
 
 `services/ai-gateway/tests/test_assistant_pure.py`: pregunta normativa con una herramienta, mixta con dos, argumento fuera de tipo que no llega a la herramienta, herramienta desconocida, paso con escritura parado por el guardarraíl, sexta llamada cortada, fuente no consultada y llamada fallida que no puede citarse, ninguna herramienta con lenguaje de consulta, presupuesto que la pregunta no puede subir y conversación que no se registra.
 
@@ -209,7 +233,8 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 9. Limitaciones conocidas y pendientes
 
-- El paquete está a medias: de los diez componentes están ARG-052 a ARG-058 y ARG-060.
+- Faltan el contenedor del gateway (F06-13) y el modelo real (F06-05); los diez componentes de código están.
+- **El índice vectorial no guarda qué embebedor calculó cada vector** (pendiente anotado): mezclar embebedores en una misma base dejaría vectores de otro espacio sin error. Por eso el oráculo corre en una base desechable.
 - El formato de paso del asistente es JSON sobre `chat_json`, no el *tool-calling* nativo del servidor: así funciona igual con llama.cpp, vLLM y el backend determinista. Con vLLM en el appliance puede pasarse al nativo sin cambiar las herramientas.
 - La detección de una narrativa que discute su veredicto es una lista cerrada de expresiones; un modelo podría dar un rodeo que no recoja. Los conjuntos dorados del arnés (ARG-059) son los que miden si hace falta ampliarla.
 - El reajuste nocturno de la calibración es una función (`refit`) pero aún no tiene planificador: se engancha a Temporal con la operación.
@@ -229,3 +254,4 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 | 0.1.0-alpha | 2026-09-17 | Generación asistida de retos que compilan antes de mostrarse, y rama de revisión en un worktree temporal | Fase 06 (ARG-056) |
 | 0.1.0-alpha | 2026-09-17 | Dictámenes con cifras verificadas, veredictos intocables y marca de texto asistido | Fase 06 (ARG-057) |
 | 0.1.0-alpha | 2026-09-17 | Asistente de consola con cuatro herramientas cerradas, presupuesto fijo y fuentes comprobadas | Fase 06 (ARG-058) |
+| 0.1.0-alpha | 2026-09-17 | Arnés de evaluación con conjuntos dorados y puerta de calidad; embebedor de pruebas con señal y búsqueda léxica por cualquiera de las palabras | Fase 06 (ARG-059) |

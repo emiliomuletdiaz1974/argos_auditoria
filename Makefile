@@ -5,7 +5,7 @@ COMPOSE := docker compose -f deploy/dev/compose.yaml --profile sources
 COMPOSE_HEAVY := docker compose -f deploy/dev/compose.yaml --profile sources --profile heavy
 VERSION := $(strip $(file < VERSION))
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog ai-eval ai-eval-release
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -22,6 +22,8 @@ help:
 	@echo "make ontology-overlap  overlap matrix between norms (dist/overlap.*)"
 	@echo "make challenge-lint   the challenge library against its schema and rules"
 	@echo "make challenge-catalog  the generated challenge catalog is up to date"
+	@echo "make ai-eval       golden sets of the AI layer with the oracle (also inside make check)"
+	@echo "make ai-eval-release  golden sets against the served model: release gate (needs weights)"
 
 dev:
 	uv run python tools/prepare_dev_sources.py
@@ -84,3 +86,9 @@ challenge-lint:
 
 challenge-catalog:
 	uv run python tools/challenge_catalog.py --check
+
+ai-eval:
+	uv run pytest -m integration tests/integration/test_ai_goldens.py
+
+ai-eval-release:
+	uv run --env-file .env.example python tools/ai_eval/run_goldens.py

@@ -68,9 +68,10 @@ class SemanticClassifier:
         if not columns:
             return []
         # The inventory calls this synchronously, from a batch job: it owns no event loop.
-        return asyncio.run(self._propose(columns))
+        return asyncio.run(self.propose_async(columns))
 
-    async def _propose(self, columns: Sequence[ColumnContext]) -> list[Proposal]:
+    async def propose_async(self, columns: Sequence[ColumnContext]) -> list[Proposal]:
+        """The same proposal, for a caller that already runs an event loop."""
         user = json.dumps(
             [
                 {
