@@ -139,10 +139,17 @@ class ChallengeActivities:
         secrets: SecretStore,
         opa_url: str | None = None,
         bus: Any | None = None,
+        opa_token: str | None = None,
     ) -> None:
         self._dsn = dsn
         self._secrets = secrets
-        self._opa_url = opa_url or get_config().OPA_URL
+        if opa_url is None:
+            config = get_config()
+            opa_url = config.OPA_URL
+            if opa_token is None and config.OPA_TOKEN is not None:
+                opa_token = config.OPA_TOKEN.get_secret_value()
+        self._opa_url = opa_url
+        self._opa_token = opa_token
         self._bus = bus
 
     # ---------- preparation ----------
@@ -381,7 +388,7 @@ class ChallengeActivities:
             input_doc = dict(criterion["opa"].get("input_map", {}))
             input_doc.setdefault("result", probe_result.get("data", {}))
             try:
-                decision = opa_evaluate(package, input_doc, self._opa_url)
+                decision = opa_evaluate(package, input_doc, self._opa_url, token=self._opa_token)
             except OpaError:
                 decision = None
         verdict = evaluate(unit, probe_result, decision)

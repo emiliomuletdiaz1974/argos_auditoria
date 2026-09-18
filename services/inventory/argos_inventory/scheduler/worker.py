@@ -20,7 +20,7 @@ from temporalio.worker import Worker
 from argos_common.config import ArgosConfig, get_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
-from argos_events import Bus
+from argos_events import bus_from_config
 from argos_inventory.scheduler.activities import InventoryActivities
 from argos_inventory.scheduler.workflows import RescanPlanner, ScanSystem
 
@@ -72,7 +72,7 @@ async def ensure_schedule(
 async def run(cfg: ArgosConfig) -> None:
     if cfg.VAULT_TOKEN is None:
         raise ValueError("ARGOS_VAULT_TOKEN is required by the inventory scheduler")
-    bus = Bus("inventory-scheduler", cfg.NATS_URL)
+    bus = bus_from_config("inventory-scheduler", cfg)
     await bus.connect()
     try:
         client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")

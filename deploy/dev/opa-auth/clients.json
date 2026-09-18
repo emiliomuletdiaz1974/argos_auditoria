@@ -1,0 +1,6 @@
+{
+  "opa_clients": {
+    "8bac850e1afa968afe7f14a95c7b69fb11e65d4b508ef209a04369ff79c7a9fb": "challenge-worker (development token dev-only-opa-challenge)",
+    "6862abf9e98e8a3f926fea86f9b50558c3caf697f7455069aed0c4dec15611cb": "host processes and tests (development token dev-only-opa-host)"
+  }
+}

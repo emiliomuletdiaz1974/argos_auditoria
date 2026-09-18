@@ -206,7 +206,7 @@ El cierre de un hallazgo no lo declara el cliente: lo confirma **el mismo reto q
 
 ## 5. Configuración
 
-`ARGOS_TEMPORAL_ADDRESS`, `ARGOS_DATABASE_URL`, `ARGOS_NATS_URL`, `ARGOS_VAULT_ADDR`, `ARGOS_VAULT_TOKEN`, `ARGOS_OPA_URL` (por defecto `http://127.0.0.1:8181`), `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, desde `argos-common`.
+`ARGOS_TEMPORAL_ADDRESS`, `ARGOS_DATABASE_URL`, `ARGOS_NATS_URL`, `ARGOS_VAULT_ADDR`, `ARGOS_VAULT_TOKEN`, `ARGOS_OPA_URL` (por defecto `http://127.0.0.1:8181`), `ARGOS_OPA_TOKEN` (el worker se identifica ante OPA; en desarrollo, `dev-only-opa-challenge`), `ARGOS_NATS_USER` y `ARGOS_NATS_PASSWORD` (usuario `challenge`), `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, desde `argos-common`.
 
 `ARGOS_API_BIND` es propia del proceso de la API: la dirección a la que se ata uvicorn. Por defecto `127.0.0.1`; el contenedor la pone a `0.0.0.0` porque el puerto publicado ya limita el acceso al bucle local del anfitrión.
 
@@ -339,3 +339,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-18 | API de campañas: ids UUID validados, cuerpos acotados, errores de base sin detalle y descripción solo en desarrollo | Auditoría de seguridad (B5, B6, B8) |
 | 0.1.0-alpha | 2026-09-18 | Sujeto sintético: autorización ligada a su campaña y confirmaciones en orden y sin repetición | Auditoría de seguridad (B4) |
 | 0.1.0-alpha | 2026-09-18 | La verificación del sello consulta su asiento en vez de recorrer el diario | Auditoría de seguridad (B9) |
+| 0.1.0-alpha | 2026-09-18 | Las actividades se identifican ante OPA con su token | Auditoría de seguridad (M7) |

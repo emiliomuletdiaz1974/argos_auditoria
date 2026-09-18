@@ -17,6 +17,7 @@ from nats.js import JetStreamContext
 from nats.js.api import ConsumerConfig, DeliverPolicy, RetentionPolicy, StorageType, StreamConfig
 from nats.js.errors import NotFoundError
 
+from argos_common.config import ArgosConfig
 from argos_common.ids import uuid7
 from argos_common.journal_pg import PostgresJournal
 from argos_common.logs import get_logger
@@ -79,6 +80,14 @@ async def ensure_streams(js: JetStreamContext) -> None:
             await js.update_stream(cfg)
 
 
+def bus_from_config(
+    service: str, cfg: ArgosConfig, journal: PostgresJournal | None = None
+) -> "Bus":
+    """The bus of a service with the NATS identity of its configuration."""
+    password = cfg.NATS_PASSWORD.get_secret_value() if cfg.NATS_PASSWORD else None
+    return Bus(service, cfg.NATS_URL, journal, user=cfg.NATS_USER, password=password)
+
+
 class Bus:
     def __init__(
         self,
@@ -87,12 +96,20 @@ class Bus:
         journal: PostgresJournal | None = None,
         retry_delay: float = 30.0,
         max_deliveries: int = 5,
+        *,
+        user: str | None = None,
+        password: str | None = None,
     ) -> None:
         self.service = service
         self._url = url
         self._journal = journal
         self._retry_delay = retry_delay
         self._max_deliveries = max_deliveries
+        # The server's permissions for this user decide which subjects the service may publish.
+        self._credentials = {"user": user, "password": password} if user else {}
+
+    def __repr__(self) -> str:
+        return f"Bus(service={self.service!r}, url={self._url!r})"
         self._nc: Client | None = None
         self._js: JetStreamContext | None = None
 
@@ -103,7 +120,7 @@ class Bus:
         return self._js
 
     async def connect(self) -> None:
-        self._nc = await nats.connect(self._url, name=self.service)
+        self._nc = await nats.connect(self._url, name=self.service, **self._credentials)
         self._js = self._nc.jetstream()
         await ensure_streams(self._js)
 

@@ -73,6 +73,9 @@ def _production(monkeypatch: pytest.MonkeyPatch, **extra: str) -> None:
     monkeypatch.setenv("ARGOS_NATS_URL", "tls://nats.argos.internal:4222")
     monkeypatch.setenv("ARGOS_OPA_URL", "https://opa.argos.internal:8181")
     monkeypatch.setenv("ARGOS_LLM_LOCAL_ENDPOINT", "https://llm.argos.internal/v1")
+    monkeypatch.setenv("ARGOS_NATS_USER", "inventory")
+    monkeypatch.setenv("ARGOS_NATS_PASSWORD", "a-long-generated-secret")
+    monkeypatch.setenv("ARGOS_OPA_TOKEN", "another-long-generated-secret")
     for key, value in extra.items():
         monkeypatch.setenv(key, value)
 
@@ -126,6 +129,25 @@ def test_production_refuses_clear_or_development_endpoints(
         load_config()
     assert field in str(refused.value.details)
     assert value not in str(refused.value.details)
+
+
+@pytest.mark.parametrize("missing", ["ARGOS_NATS_USER", "ARGOS_NATS_PASSWORD", "ARGOS_OPA_TOKEN"])
+def test_production_requires_the_bus_and_policy_credentials(
+    monkeypatch: pytest.MonkeyPatch, missing: str
+) -> None:
+    _production(monkeypatch)
+    monkeypatch.delenv(missing)
+    with pytest.raises(ConfigurationError) as refused:
+        load_config()
+    assert missing.removeprefix("ARGOS_") in str(refused.value.details)
+
+
+def test_the_bus_and_policy_secrets_never_print(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ARGOS_DATABASE_URL", DSN)
+    monkeypatch.setenv("ARGOS_NATS_PASSWORD", "dev-only-nats")
+    monkeypatch.setenv("ARGOS_OPA_TOKEN", "dev-only-opa")
+    shown = repr(load_config())
+    assert "dev-only-nats" not in shown and "dev-only-opa" not in shown
 
 
 def test_production_requires_json_logs(monkeypatch: pytest.MonkeyPatch) -> None:

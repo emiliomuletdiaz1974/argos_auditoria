@@ -42,9 +42,10 @@ services:
 
   nats:
     image: nats:2.10-alpine
-    command: ["-js", "-sd", "/data", "-m", "8222"]
+    # One user per service and per subject family (nats/nats.conf): nobody publishes anonymously.
+    command: ["-c", "/etc/nats/nats.conf"]
     ports: ["127.0.0.1:4222:4222", "127.0.0.1:8222:8222"]
-    volumes: ["nats-data:/data"]
+    volumes: ["nats-data:/data", "./nats/nats.conf:/etc/nats/nats.conf:ro"]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
       interval: 5s
@@ -94,9 +95,13 @@ services:
 
   opa:
     image: openpolicyagent/opa:1.20.2
-    command: ["run", "--server", "--addr", "0.0.0.0:8181", "--ignore", "*_test.rego", "/policies", "/data"]
+    # OPA decides verdicts: token authentication, and its own policy (opa-auth/authz.rego) only
+    # lets known clients evaluate argos.* packages; nobody loads or reads policies over the API.
+    command: ["run", "--server", "--addr", "0.0.0.0:8181",
+              "--authentication=token", "--authorization=basic",
+              "--ignore", "*_test.rego", "/policies", "/data", "/auth"]
     ports: ["127.0.0.1:8181:8181"]
-    volumes: ["../../library/policies:/policies:ro", "./opa:/data:ro"]
+    volumes: ["../../library/policies:/policies:ro", "./opa:/data:ro", "./opa-auth:/auth:ro"]
 
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -143,7 +148,10 @@ services:
       ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos
       ARGOS_TEMPORAL_ADDRESS: temporal:7233
       ARGOS_NATS_URL: nats://nats:4222
+      ARGOS_NATS_USER: challenge
+      ARGOS_NATS_PASSWORD: dev-only-nats-challenge
       ARGOS_OPA_URL: http://opa:8181
+      ARGOS_OPA_TOKEN: dev-only-opa-challenge
       ARGOS_VAULT_ADDR: http://vault:8200
       ARGOS_VAULT_TOKEN: root   # development Vault started with -dev-root-token-id=root
       # The container validates tokens issued through the internal address; from the host,

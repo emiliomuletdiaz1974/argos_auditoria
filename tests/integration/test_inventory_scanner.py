@@ -1,6 +1,7 @@
 """ARG-022 · the discovery scanner runs read-only probes and records every run (F03-02)."""
 
 import asyncio
+import os
 import uuid
 from typing import Any
 
@@ -15,7 +16,7 @@ from .sources import VAULT, connector_token, register_catalog_system
 
 pytestmark = pytest.mark.integration
 
-NATS = "nats://127.0.0.1:4222"
+NATS = os.environ.get("ARGOS_TEST_NATS", "nats://argos-dev:dev-only-nats-host@127.0.0.1:4222")
 POSTGRES_TABLES = {
     "appointments",
     "consents",

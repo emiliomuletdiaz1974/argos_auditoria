@@ -53,7 +53,8 @@ def campaign_activities(cfg: ArgosConfig | None = None) -> ChallengeActivities:
     config = cfg or get_config()
     token = config.VAULT_TOKEN.get_secret_value() if config.VAULT_TOKEN else ""
     secrets = VaultSecretStore(config.VAULT_ADDR, token)
-    return ChallengeActivities(config.DATABASE_URL, secrets, config.OPA_URL)
+    opa_token = config.OPA_TOKEN.get_secret_value() if config.OPA_TOKEN else None
+    return ChallengeActivities(config.DATABASE_URL, secrets, config.OPA_URL, opa_token=opa_token)
 
 
 async def main() -> None:

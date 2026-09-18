@@ -26,15 +26,21 @@ def evaluate(
     base_url: str = DEFAULT_OPA_URL,
     *,
     client: httpx.Client | None = None,
+    token: str | None = None,
 ) -> dict[str, Any]:
-    """The `verdict` of a Rego package for this input."""
+    """The `verdict` of a Rego package for this input.
+
+    OPA runs with token authentication: the token identifies the challenge engine, and OPA's own
+    authorization policy only lets it evaluate `argos.*` packages, never load or read policies.
+    """
     if not PACKAGE_NAME.fullmatch(package):
         raise ValueError(f"invalid Rego package name: {package!r}")
     url = f"{base_url.rstrip('/')}/v1/data/{package.replace('.', '/')}/verdict"
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
     owned = client is None
     http = client if client is not None else httpx.Client(timeout=TIMEOUT_SECONDS)
     try:
-        response = http.post(url, json={"input": input_doc})
+        response = http.post(url, json={"input": input_doc}, headers=headers)
         response.raise_for_status()
         body = response.json()
     except httpx.HTTPStatusError as exc:

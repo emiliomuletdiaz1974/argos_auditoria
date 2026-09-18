@@ -202,7 +202,13 @@ Reglas de decisión:
 - **Conservación:** cumple si hay plazo aplicable y el registro más antiguo no lo supera. También cumple si todos los registros fuera de plazo tienen excepción documentada. Sin plazo aplicable, no cumple.
 - **Accesos:** cumple si ninguna identidad queda fuera de los perfiles autorizados. Una categoría sin perfiles autorizados no autoriza a nadie.
 
-El cliente Python `evaluate(package, input_doc, base_url)` llama a `POST /v1/data/<paquete>/verdict`. Valida antes el nombre del paquete (`ValueError`) y lanza `OpaError` si OPA no responde, contesta con error o el paquete no tiene `verdict` de tipo objeto.
+El cliente Python `evaluate(package, input_doc, base_url, token=None)` llama a `POST /v1/data/<paquete>/verdict`, con el token como `Bearer` si lo hay. Valida antes el nombre del paquete (`ValueError`) y lanza `OpaError` si OPA no responde, contesta con error o el paquete no tiene `verdict` de tipo objeto.
+
+**OPA autenticado:** OPA decide veredictos, así que arranca con `--authentication=token --authorization=basic` y su propia política (`deploy/dev/opa-auth/authz.rego`):
+- sin token solo responde `/health`;
+- con un token conocido solo se pueden evaluar paquetes `argos.*` (`POST /v1/data/argos/...`);
+- nadie carga, sustituye ni lee políticas por la API, ni lee datos fuera de `argos.*`: las políticas vienen del montaje de solo lectura de la biblioteca;
+- los tokens se comparan por su SHA-256 (`clients.json`), así que los datos de OPA no revelan ninguno. Una petición denegada responde 401.
 
 ### Resolutor de aplicabilidad (ARG-039)
 
@@ -497,3 +503,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | Cierre técnico de la Fase 04: prueba de extremo a extremo superada; contenido pendiente de validación jurídica | Fase 04 (`fase-04-tecnica`) |
 | 0.1.0-alpha | 2026-09-17 | Formas de documentación técnica y supervisión humana del AI Act, con sus propiedades exportadas al grafo RDF | Fase 05 (F05-18) |
 | 0.1.0-alpha | 2026-09-18 | La verificación no confía en la clave que viaja con el bundle sin su huella fijada | Auditoría de seguridad (B3) |
+| 0.1.0-alpha | 2026-09-18 | Cliente de OPA con token y OPA con autenticación y autorización propias | Auditoría de seguridad (M7) |

@@ -58,7 +58,8 @@ Dependencias externas: PostgreSQL 16 (esquema `argos`), HashiCorp Vault (kv-v2 y
 ## 5. Configuración
 
 Variables con prefijo `ARGOS_`:
-- `DATABASE_URL` (obligatoria), `NATS_URL`, `TEMPORAL_ADDRESS`;
+- `DATABASE_URL` (obligatoria), `NATS_URL`, `NATS_USER`, `NATS_PASSWORD` (secreto), `TEMPORAL_ADDRESS`;
+- `OPA_URL` y `OPA_TOKEN` (secreto);
 - `OIDC_ISSUER` y `OIDC_AUDIENCE`;
 - `WORM_STORAGE_PATH`, `LOG_LEVEL`, `LOG_FORMAT_JSON`, `LLM_LOCAL_ENDPOINT`;
 - `VAULT_ADDR` y `VAULT_TOKEN`, solo para los servicios que abren conectores; el token se guarda como secreto y no se registra.
@@ -69,7 +70,8 @@ En entorno de producción la configuración se rechaza si:
 - el registro no es JSON;
 - el emisor OIDC no usa `https`;
 - `VAULT_ADDR`, `OPA_URL` o `LLM_LOCAL_ENDPOINT` no usan `https`, o `NATS_URL` no usa `tls://`: por ahí viajan tokens, credenciales y las políticas que deciden veredictos;
-- `VAULT_TOKEN` es el token `root` del modo de desarrollo de Vault.
+- `VAULT_TOKEN` es el token `root` del modo de desarrollo de Vault;
+- faltan `NATS_USER`, `NATS_PASSWORD` u `OPA_TOKEN`: ni NATS ni OPA atienden a un cliente anónimo.
 
 El error nombra el campo, nunca el valor recibido.
 
@@ -119,3 +121,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.1.0-alpha | 2026-09-15 | `VAULT_ADDR` y `VAULT_TOKEN` para los servicios que abren conectores | Fase 03 (ARG-022) |
 | 0.1.0-alpha | 2026-09-18 | En producción, transporte cifrado obligatorio hacia Vault, NATS, OPA y el modelo, y sin token `root` | Auditoría de seguridad (B13) |
 | 0.1.0-alpha | 2026-09-18 | Huella de la clave de firma: la clave que acompaña al artefacto solo vale si coincide con la huella fijada | Auditoría de seguridad (B3) |
+| 0.1.0-alpha | 2026-09-18 | Credenciales de NATS y token de OPA, obligatorios en producción | Auditoría de seguridad (M6, M7) |
