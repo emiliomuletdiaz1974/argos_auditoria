@@ -69,7 +69,8 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 - Variables comunes de `argos-common`: base de datos, NATS, Temporal, OIDC y Vault para los servicios que abren conectores.
 - **Parámetros de la API:**
   - página máxima de 500 elementos;
-  - profundidad máxima de consulta 4;
+  - profundidad máxima de consulta 4, como mucho 10 alias y 1000 tokens por petición: la profundidad sola no acota una consulta, porque cada alias de `node` es otra búsqueda en el grafo;
+  - los errores de validación y de argumentos llegan al cliente, pero una excepción de un resolver responde «Unexpected error.» y no describe la base de datos ni AGE;
   - campos del selector limitados a una lista cerrada (`ALLOWED_SELECTOR_FIELDS`): `label`, `category`, `min_confidence`, `missing`, `name_like`, `system_kind` y, desde la Fase 04, `unclassified` (columnas con o sin clasificación; no se combina con `category`) y `status` (prefijo del estado, por ejemplo sistemas de IA `pending` o `confirmed`).
 - **Parámetros del planificador:**
   - cadencia estructural de 24 h;
@@ -123,3 +124,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.1.0-alpha | 2026-09-17 | Diccionario de categorías especiales no sanitarias y tabla sintética `clinic.staff_affiliations` en la fuente de desarrollo | Fase 04 (ARG-024) |
 | 0.1.0-alpha | 2026-09-17 | La interfaz de ARG-025 tiene servicio: el clasificador semántico calibrado de la Fase 06, sin cambios en la cola ni en los umbrales | Fase 06 (ARG-055) |
 | 0.1.0-alpha | 2026-09-18 | El modelo no puede aceptar solo una propuesta `no_personal_data`: siempre la revisa el DPD | Auditoría de seguridad (M8) |
+| 0.1.0-alpha | 2026-09-18 | La API GraphQL limita alias y tokens por petición y enmascara los errores internos | Auditoría de seguridad (M9, B7) |
