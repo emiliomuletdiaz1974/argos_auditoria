@@ -5,6 +5,7 @@ ARG-010 produces it; ARG-086 (updater) verifies it offline with the public key.
 
 import base64
 import hashlib
+import hmac
 import json
 from pathlib import Path
 from typing import Any, Protocol
@@ -74,6 +75,23 @@ class VaultTransitSigner:
         versions = response["data"]["keys"]
         latest = versions[str(max(int(v) for v in versions))]
         return base64.b64decode(latest["public_key"])
+
+
+def key_fingerprint(public_key: bytes) -> str:
+    """SHA-256 of the raw public key: what an operator records apart from the artefact."""
+    return hashlib.sha256(public_key).hexdigest()
+
+
+def require_trusted_key(public_key: bytes, fingerprint: str | None) -> None:
+    """A key that travels beside the artefact proves nothing: whoever swaps one swaps the other.
+
+    It is trusted only when it matches a fingerprint pinned somewhere else (configuration, image,
+    the operator's record).
+    """
+    if not fingerprint:
+        raise IntegrityError("the verifying key is not pinned: pass its fingerprint")
+    if not hmac.compare_digest(key_fingerprint(public_key), fingerprint.strip().lower()):
+        raise IntegrityError("the verifying key is not the trusted one")
 
 
 def verify_signature(data: bytes, signature: bytes, public_key: bytes) -> None:

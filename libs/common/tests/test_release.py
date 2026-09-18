@@ -7,7 +7,13 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
 from argos_common.errors import IntegrityError
-from argos_common.release import build_manifest, serialize, verify_signature
+from argos_common.release import (
+    build_manifest,
+    key_fingerprint,
+    require_trusted_key,
+    serialize,
+    verify_signature,
+)
 
 IMG_A = {"ref": "argos-example:0.1.0@sha256:" + "a" * 64, "component": "ARG-001"}
 IMG_B = {"ref": "argos-api:0.1.0@sha256:" + "b" * 64, "component": "ARG-071"}
@@ -66,3 +72,14 @@ def test_wrong_key_or_malformed_signature() -> None:
         verify_signature(data, b"short", _pub(key))
     with pytest.raises(IntegrityError):
         verify_signature(data, key.sign(data), b"bad-public-key")
+
+
+def test_a_key_travelling_with_the_artefact_is_trusted_only_by_its_fingerprint() -> None:
+    # Whoever replaces the manifest can replace the key beside it: the fingerprint is pinned apart.
+    key = _pub(Ed25519PrivateKey.generate())
+    require_trusted_key(key, key_fingerprint(key))
+    require_trusted_key(key, key_fingerprint(key).upper() + "\n")
+    with pytest.raises(IntegrityError, match="not the trusted"):
+        require_trusted_key(_pub(Ed25519PrivateKey.generate()), key_fingerprint(key))
+    with pytest.raises(IntegrityError, match="not pinned"):
+        require_trusted_key(key, None)

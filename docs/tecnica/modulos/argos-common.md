@@ -52,7 +52,7 @@ Dependencias externas: PostgreSQL 16 (esquema `argos`), HashiCorp Vault (kv-v2 y
 | Funciones | `canonicalize`, `compute_hash`, `verify_entries`, `require_integrity` | Recalculan y verifican la cadena sin confiar en la base de datos |
 | Función | `apply_migrations(dsn, directory)` | Aplica migraciones `NNNN_nombre.sql` bajo bloqueo consultivo; `tools/migrate.py` |
 | Clases | `VaultSecretStore(url, token, mount)`, `EncryptedFileSecretStore`, `TpmSecretStore` | Lectura de secretos por ruta |
-| Funciones y clases | `build_manifest`, `serialize`, `VaultTransitSigner`, `verify_signature` | Manifiesto de release firmado; `tools/release.py build`, `sign` y `verify` |
+| Funciones y clases | `build_manifest`, `serialize`, `VaultTransitSigner`, `verify_signature`, `key_fingerprint`, `require_trusted_key` | Manifiesto de release firmado; `tools/release.py build`, `sign` y `verify` (este exige `--fingerprint` o `ARGOS_RELEASE_KEY_FINGERPRINT`, porque la clave vive junto al manifiesto en `dist/`) |
 | Tabla | `argos.audit_journal` y función `argos.journal_append` (migración `0001_core.sql`) | Diario de auditoría |
 
 ## 5. Configuración
@@ -118,3 +118,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.1.0-alpha | 2026-09-14 | Configuración, errores, registro, salud, diario v1, migrador, secretos y release firmada | Fase 01 |
 | 0.1.0-alpha | 2026-09-15 | `VAULT_ADDR` y `VAULT_TOKEN` para los servicios que abren conectores | Fase 03 (ARG-022) |
 | 0.1.0-alpha | 2026-09-18 | En producción, transporte cifrado obligatorio hacia Vault, NATS, OPA y el modelo, y sin token `root` | Auditoría de seguridad (B13) |
+| 0.1.0-alpha | 2026-09-18 | Huella de la clave de firma: la clave que acompaña al artefacto solo vale si coincide con la huella fijada | Auditoría de seguridad (B3) |
