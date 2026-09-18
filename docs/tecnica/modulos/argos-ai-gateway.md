@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
-commit: 4a025f9
+commit: pendiente
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -34,6 +34,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 - **`argos_ai.classify`** (ARG-055): el clasificador semántico que rellena la interfaz ARG-025 de la Fase 03, con la confianza calibrada por las decisiones del DPD.
 - **`argos_ai.generate`** (ARG-056): el generador asistido de retos y la herramienta `tools/new_challenge.py` del equipo normativo.
 - **`argos_ai.reports`** (ARG-057): el redactor del expediente, con el verificador de cifras y la marca de texto asistido.
+- **`argos_ai.assistant`** (ARG-058): el asistente de consola, un agente con cuatro herramientas cerradas de solo lectura.
 - **`argos_ai.backends`**: un contrato (`Backend`, `Completion`) y tres implementaciones. `OpenAiCompatibleBackend` sirve para vLLM y para llama.cpp, porque los dos hablan la misma API; `FakeBackend` responde desde un fichero indexado por el hash del prompt.
 - Dependencias: `argos-common` (errores y configuración) y `argos-connector-sdk`, del que reutiliza los **validadores de identificadores españoles de ARG-024**.
 
@@ -104,6 +105,22 @@ El expediente necesita dos textos que hoy cuestan horas de consultor: el resumen
 
 **Un borrador que rompe una regla no se guarda en absoluto**, ni siquiera con un aviso. Y lo que se guarda no se edita: la tabla es de escritura única, y un borrador nuevo es una fila nueva. Los casos trampa de los conjuntos dorados de F06-02, escritos antes que el verificador, se ejecutan tal cual como test.
 
+### Asistente de consola con herramientas cerradas (ARG-058)
+
+Responde preguntas de tres mundos —la normativa, el estado del cliente y las dos cosas a la vez— con un **agente de herramientas cerradas**: elige entre cuatro herramientas de solo lectura con parámetros tipados y va iterando hasta poder responder.
+
+| Herramienta | Qué lee | Parámetros |
+|---|---|---|
+| `search_regulation` | El corpus normativo (ARG-054), con fragmentos citables | la pregunta, de 3 a 300 caracteres |
+| `finding_status` | Recuentos de hallazgos por estado y severidad | `status` y `severity` cerrados, `system_id` UUID, `challenge_id` con patrón |
+| `inventory_coverage` | La cobertura del catálogo (ARG-026) | `system_id` opcional |
+| `query_graph` | El selector de la lista blanca de la API del inventario (ARG-029), el mismo que usa el motor de retos | solo los campos del selector |
+
+- **Nunca un lenguaje de consulta.** Ninguna herramienta acepta SQL, Cypher ni un filtro escrito como texto: cada una construye su propia consulta parametrizada. Un test comprueba que ningún esquema tenga un campo así.
+- **Tres cosas fijas que la pregunta no puede mover:** el **presupuesto** de cinco llamadas por pregunta —si no basta, la respuesta lo dice en vez de adivinar—; los **argumentos**, validados contra el esquema antes de ejecutar nada, de modo que una llamada inválida vuelve al modelo con su error y gasta presupuesto igual; y las **fuentes**: cada fuente que cita la respuesta tiene que ser una herramienta que de verdad devolvió datos, igual que una cita del RAG tiene que ser un fragmento recuperado.
+- **Defensa en profundidad:** un paso del modelo que lleve una sentencia de escritura lo para el guardarraíl del gateway antes de que el agente llegue a buscar la herramienta.
+- **La conversación vive solo en memoria**, para la pregunta en curso; lo que queda registrado es el hash de cada prompt, nunca su contenido.
+
 ### Guardarraíles (ARG-060)
 
 - **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase.
@@ -135,6 +152,8 @@ El expediente necesita dos textos que hoy cuestan horas de consultor: el resumen
 | `tools/new_challenge.py` | `OBL-… "texto" [--repo]` → rama `feature/reto-<id>` | equipo normativo |
 | `draft_summary`, `draft_finding_narrative` | `(dsn, id, gateway) -> str` (id del texto guardado) | Fase 07 (expediente) |
 | `unsupported_figures`, `extract_figures` | `(text, data) -> list[str]` | ARG-057, ARG-059 |
+| `ask` | `(question, gateway, tools) -> Answer(answer, sources, complete, calls)` | Fase 08 (chat de la consola) |
+| `default_toolbox` | `(dsn, embedder) -> dict[str, Tool]` | ARG-058 |
 
 ## 5. Configuración
 
@@ -151,6 +170,10 @@ El expediente necesita dos textos que hoy cuestan horas de consultor: el resumen
 El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 8. Verificación
+
+`services/ai-gateway/tests/test_assistant_pure.py`: pregunta normativa con una herramienta, mixta con dos, argumento fuera de tipo que no llega a la herramienta, herramienta desconocida, paso con escritura parado por el guardarraíl, sexta llamada cortada, fuente no consultada y llamada fallida que no puede citarse, ninguna herramienta con lenguaje de consulta, presupuesto que la pregunta no puede subir y conversación que no se registra.
+
+`tests/integration/test_assistant.py`: las cuatro herramientas contra la base real —incluido un campo fuera de la lista blanca del selector— y una pregunta de principio a fin.
 
 `services/ai-gateway/tests/test_figures_pure.py`: los casos trampa dorados de F06-02, separador de miles, coma decimal, porcentaje que cita un cociente, aritmética del modelo rechazada, números de identificadores y referencias legales excluidos y todas las cifras que fallan, no solo la primera.
 
@@ -186,7 +209,8 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 9. Limitaciones conocidas y pendientes
 
-- El paquete está a medias: de los diez componentes están ARG-052 a ARG-057 y ARG-060.
+- El paquete está a medias: de los diez componentes están ARG-052 a ARG-058 y ARG-060.
+- El formato de paso del asistente es JSON sobre `chat_json`, no el *tool-calling* nativo del servidor: así funciona igual con llama.cpp, vLLM y el backend determinista. Con vLLM en el appliance puede pasarse al nativo sin cambiar las herramientas.
 - La detección de una narrativa que discute su veredicto es una lista cerrada de expresiones; un modelo podría dar un rodeo que no recoja. Los conjuntos dorados del arnés (ARG-059) son los que miden si hace falta ampliarla.
 - El reajuste nocturno de la calibración es una función (`refit`) pero aún no tiene planificador: se engancha a Temporal con la operación.
 - La telemetría de sustituciones se anota en el asiento de cada completado; falta publicarla como métrica (ARG-059).
@@ -204,3 +228,4 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 | 0.1.0-alpha | 2026-09-17 | Clasificación semántica con confianza calibrada por las decisiones del DPD | Fase 06 (ARG-055) |
 | 0.1.0-alpha | 2026-09-17 | Generación asistida de retos que compilan antes de mostrarse, y rama de revisión en un worktree temporal | Fase 06 (ARG-056) |
 | 0.1.0-alpha | 2026-09-17 | Dictámenes con cifras verificadas, veredictos intocables y marca de texto asistido | Fase 06 (ARG-057) |
+| 0.1.0-alpha | 2026-09-17 | Asistente de consola con cuatro herramientas cerradas, presupuesto fijo y fuentes comprobadas | Fase 06 (ARG-058) |
