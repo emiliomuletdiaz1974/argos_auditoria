@@ -11,7 +11,7 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-from argos_common.release import serialize
+from argos_common.release import key_fingerprint, serialize
 from argos_ontology.bundle import (
     MANIFEST_NAME,
     BundleRejectedError,
@@ -157,6 +157,9 @@ def test_the_publish_tool_verifies_and_rejects(library: Path, tmp_path: Path) ->
     target.write_bytes(bundle)
     tool.signature_path(target).write_bytes(sign_bundle(manifest, signer))
     (tmp_path / "content.pub").write_bytes(signer.public_key())
-    assert tool.main(["verify", str(target)]) == 0
-    target.write_bytes(_repack(bundle, {"policies/retention.rego": b"package argos.softened\n"}))
+    pinned = ["--fingerprint", key_fingerprint(signer.public_key())]
+    assert tool.main(["verify", str(target), *pinned]) == 0
+    # The key beside the bundle alone is not trusted: whoever swaps one swaps the other.
     assert tool.main(["verify", str(target)]) == 1
+    target.write_bytes(_repack(bundle, {"policies/retention.rego": b"package argos.softened\n"}))
+    assert tool.main(["verify", str(target), *pinned]) == 1
