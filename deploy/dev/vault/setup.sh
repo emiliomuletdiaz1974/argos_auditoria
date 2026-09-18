@@ -41,5 +41,7 @@ mounted transit || vault secrets enable transit
 vault read transit/keys/argos-release >/dev/null 2>&1 || vault write -f transit/keys/argos-release type=ed25519 >/dev/null
 # ARG-040 · ontology content signing key: Ed25519, not exportable, separate from releases
 vault read transit/keys/argos-content >/dev/null 2>&1 || vault write -f transit/keys/argos-content type=ed25519 >/dev/null
+# ARG-064 · campaign root signing key: Ed25519, not exportable, one per appliance (a TPM key in production)
+vault read transit/keys/argos-evidence >/dev/null 2>&1 || vault write -f transit/keys/argos-evidence type=ed25519 >/dev/null
 
 echo "development vault configured"

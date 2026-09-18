@@ -78,9 +78,10 @@ def artifact_key(campaign_id: str, verdict_id: str) -> str:
     return f"campaigns/{campaign_id}/artifacts/{verdict_id}.json"
 
 
-def _instant(value: dt.datetime) -> str:
+def canonical_instant(value: dt.datetime) -> str:
+    """UTC with microseconds and a Z, the same shape as the journal."""
     if value.tzinfo is None:
-        raise ValueError("the verdict time must carry a time zone")
+        raise ValueError("the time must carry a time zone")
     return value.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
@@ -120,7 +121,7 @@ def build_artifact(row: Mapping[str, Any]) -> bytes:
         "detail": verdict.get("detail"),
         "verdict_hash": str(row["verdict_hash"]),
         "query_journal_seq": row["probe_journal_seq"],
-        "evaluated_at": _instant(row["created_at"]),
+        "evaluated_at": canonical_instant(row["created_at"]),
     }
     found = personal_identifiers(document)
     if found:
