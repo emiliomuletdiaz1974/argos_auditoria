@@ -82,9 +82,11 @@ def test_a_finding_closes_only_through_the_verification(migrated_db: str) -> Non
     campaign_id = _campaign(migrated_db, "Campaña de cierre")
     finding = _finding(migrated_db, campaign_id)
     with pytest.raises(FindingError, match="illegal transition"):
-        transition(migrated_db, finding["id"], "closed_compliant", DPO)
+        transition(migrated_db, finding["id"], "closed_compliant", "system:remediation")
     transition(migrated_db, finding["id"], "in_remediation", DPO)
     transition(migrated_db, finding["id"], "pending_verification", DPO)
+    with pytest.raises(FindingError, match="remediation"):
+        transition(migrated_db, finding["id"], "closed_compliant", DPO)
     transition(migrated_db, finding["id"], "closed_compliant", "system:remediation")
     with pytest.raises(FindingError, match="illegal transition"):
         transition(migrated_db, finding["id"], "in_remediation", DPO)

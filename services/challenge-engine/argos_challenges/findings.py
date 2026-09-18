@@ -45,6 +45,7 @@ ESCALATION_CAMPAIGNS = 3
 EVENT_SUBJECT = "argos.challenge.finding_opened"
 EVENT_TYPE = "challenge.finding_opened.v1"
 SYSTEM_ACTOR = "system:findings"
+REMEDIATION_ACTOR = "system:remediation"
 
 _OPEN_OR_RECUR = """
 INSERT INTO argos.findings
@@ -160,6 +161,19 @@ async def announce(bus: Any, finding: Mapping[str, Any], campaign_id: str) -> No
     )
 
 
+def check_request(to: str, actor: str, note: str = "", risk_expiry: date | None = None) -> None:
+    """The rules of a transition that do not depend on the current status."""
+    if to not in STATUSES:
+        raise FindingError(f"unknown status: {to!r}")
+    if not actor.startswith(("user:", "system:")):
+        raise FindingError("a transition has an actor: user:<sub> or system:<name>")
+    if to == "closed_compliant" and actor != REMEDIATION_ACTOR:
+        # Closing is the verdict of the re-run of the stored WorkUnit, never a person's say-so.
+        raise FindingError(f"only {REMEDIATION_ACTOR} closes a finding as compliant")
+    if to == "risk_accepted" and (not note.strip() or risk_expiry is None):
+        raise FindingError("accepting a risk needs a justification and an expiry date")
+
+
 def transition(
     dsn: str,
     finding_id: str,
@@ -169,12 +183,7 @@ def transition(
     risk_expiry: date | None = None,
 ) -> str:
     """Move a finding, with the closed state machine and its journal entry."""
-    if to not in STATUSES:
-        raise FindingError(f"unknown status: {to!r}")
-    if not actor.startswith(("user:", "system:")):
-        raise FindingError("a transition has an actor: user:<sub> or system:<name>")
-    if to == "risk_accepted" and (not note.strip() or risk_expiry is None):
-        raise FindingError("accepting a risk needs a justification and an expiry date")
+    check_request(to, actor, note, risk_expiry)
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:
         row = conn.execute(

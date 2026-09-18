@@ -21,7 +21,7 @@ from temporalio.exceptions import ApplicationError
 from argos_challenges.client import client_parameters
 from argos_challenges.compiler import compile_campaign
 from argos_challenges.evaluator import evaluate
-from argos_challenges.findings import announce, open_or_recur, transition
+from argos_challenges.findings import REMEDIATION_ACTOR, announce, open_or_recur, transition
 from argos_challenges.library.catalog import load_library
 from argos_challenges.probes import INVENTORY_QUERIES, minimise, probe_spec
 from argos_challenges.seal import announce_seal, seal_campaign
@@ -278,7 +278,7 @@ class ChallengeActivities:
             self._dsn,
             str(payload["finding_id"]),
             str(payload["to"]),
-            str(payload.get("actor", "system:remediation")),
+            REMEDIATION_ACTOR,
         )
 
     # ---------- probes ----------
