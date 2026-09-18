@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: 6525f7f
+commit: 607450c
 date: 2026-09-18
 status: current
 confidentiality: client
