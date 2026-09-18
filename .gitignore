@@ -15,3 +15,7 @@ deploy/dev/sources/certs/
 deploy/dev/sources/ldap/
 .repo-map.xml
 .repo-map.stamp
+
+# Weights of the local model (F06-05): content downloaded by a person, never versioned.
+deploy/dev/models/*
+!deploy/dev/models/HASHES.txt

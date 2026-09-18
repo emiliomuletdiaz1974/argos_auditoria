@@ -32,6 +32,9 @@ services:
       POSTGRES_HOST_AUTH_METHOD: trust
     ports: ["127.0.0.1:55432:5432"]
     volumes: ["pg-data:/var/lib/postgresql/data"]
+    # The AI gateway reaches the database through its own network, with the restricted role
+    # `argos_ai`; it never shares a network with the campaign API (F06-01, F06-13).
+    networks: [default, ai-data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U argos -d argos"]
       interval: 5s
@@ -180,6 +183,40 @@ services:
       interval: 5s
       retries: 30
 
+  # ── AI layer (F06-13): the gateway on its own networks, never on the one of the campaign API. ──
+  ai-gateway:
+    build:
+      context: ../..
+      dockerfile: services/ai-gateway/Dockerfile
+    image: argos-ai-gateway:dev
+    environment:
+      # The session runs as `argos_ai`: it may read, write its own tables and append to the
+      # journal, and it has no privilege to touch a verdict or a finding.
+      ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos?options=-c%20role%3Dargos_ai
+      ARGOS_LLM_LOCAL_ENDPOINT: http://llm:8080/v1
+      ARGOS_LLM_MODEL: argos-llm
+      ARGOS_API_BIND: 0.0.0.0   # published below on 127.0.0.1 only
+      ARGOS_LOG_LEVEL: INFO
+    networks: [ai, ai-data]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports: ["127.0.0.1:8005:8005"]
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/health', timeout=2)"]
+      interval: 5s
+      retries: 30
+
+  # The local model server (ADR-0009): llama.cpp over CPU with the OpenAI-compatible API. It has
+  # its own profile because it needs the weights of F06-05; without them `make dev` still works.
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    profiles: ["llm"]
+    command: ["-m", "/models/model.gguf", "--host", "0.0.0.0", "--port", "8080", "--alias", "argos-llm"]
+    volumes: ["./models:/models:ro"]
+    networks: [ai]
+    ports: ["127.0.0.1:8004:8080"]
+
   # ── Simulated customer sources (F02-04). Profile "sources" is part of make dev. ──
   source-postgres:
     image: postgres:16-alpine
@@ -301,6 +338,11 @@ services:
       test: ["CMD", "healthcheck.sh"]
       interval: 10s
       retries: 60
+
+networks:
+  default:
+  ai:
+  ai-data:
 
 volumes:
   pg-data:

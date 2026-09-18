@@ -79,3 +79,15 @@ def test_what_was_spent_today_is_carried_into_the_next_gateway(migrated_db: str)
     second = postgres_gateway(migrated_db, FakeBackend.of(['{"category": "personal_data"}']))
     with pytest.raises(QuotaExceededError):
         asyncio.run(second.chat_json("reports", SYSTEM, USER, SCHEMA))
+
+
+def test_the_gateway_works_under_the_restricted_role(migrated_db: str) -> None:
+    """The container connects as `argos_ai`, not as the owner: quota, usage and journal must all
+    work with the privileges of the barrier (F06-01), and nothing more."""
+    restricted = f"{migrated_db}?options=-c%20role%3Dargos_ai"
+    gateway = postgres_gateway(restricted, FakeBackend.of(['{"category": "personal_data"}']))
+    answer = asyncio.run(gateway.chat_json("inventory", SYSTEM, USER, SCHEMA))
+    with psycopg.connect(restricted) as conn:
+        assert conn.execute("SELECT current_user").fetchone() == ("argos_ai",)
+        rows = conn.execute("SELECT prompt_sha256 FROM argos.ai_usage").fetchall()
+    assert rows == [(answer.prompt_sha256,)]

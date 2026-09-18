@@ -65,6 +65,7 @@ cover:
 build:
 	docker build -f services/example/Dockerfile --label org.argos.component=ARG-001 --label org.argos.version=$(VERSION) -t argos-example:$(VERSION) .
 	docker build -f services/challenge-engine/Dockerfile --label org.argos.component=ARG-043 --label org.argos.version=$(VERSION) -t argos-challenge-engine:$(VERSION) .
+	docker build -f services/ai-gateway/Dockerfile --label org.argos.component=ARG-052 --label org.argos.version=$(VERSION) -t argos-ai-gateway:$(VERSION) .
 
 manifest: build
 	uv run python tools/release.py build --version $(VERSION)

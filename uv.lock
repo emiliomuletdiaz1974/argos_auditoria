@@ -66,9 +66,11 @@ dependencies = [
     { name = "argos-common" },
     { name = "argos-connector-sdk" },
     { name = "argos-inventory" },
+    { name = "fastapi" },
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "pyyaml" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
@@ -77,9 +79,11 @@ requires-dist = [
     { name = "argos-common", editable = "libs/common" },
     { name = "argos-connector-sdk", editable = "connectors/sdk" },
     { name = "argos-inventory", editable = "services/inventory" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
 [[package]]

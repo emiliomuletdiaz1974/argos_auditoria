@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
-commit: 283dc0e
+commit: pendiente
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -45,7 +45,7 @@ Tres cierres, no una promesa escrita:
 
 1. **Importaciones:** `tests/architecture/ai_boundary.py` sigue el grafo de importaciones real del espacio de trabajo y rechaza que cualquier módulo de este paquete alcance `argos_challenges.evaluator`, `.store` o `.findings`, aunque el cable esté atado tres módulos más allá.
 2. **Permisos:** el rol `argos_ai` de PostgreSQL (migración `0015`) lee el esquema y escribe solo `argos.ai_usage`. Leer veredictos y hallazgos sí: redactar el informe desde ellos es el oficio de ARG-057.
-3. **Red:** el contenedor no comparte red con la API de campañas (se comprueba en F06-13).
+3. **Red:** el contenedor no comparte red con la API de campañas. Se comprueba **desde dentro del contenedor** (`tests/integration/test_ai_containers.py`): para el gateway, `challenge-api` no existe. La base la alcanza por su propia red (`ai-data`) y con la sesión en el rol `argos_ai`, así que desde dentro escribir un veredicto también se deniega.
 
 ### El gateway (ARG-052)
 
@@ -165,6 +165,7 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | `Calibrator` | `fit(decisions)`, `calibrate(category, declared)`, `curves()` | ARG-055, ARG-059 |
 | `refit`, `stored_calibrator`, `drift` | `(dsn, now=None)` | trabajo nocturno, panel de calidad |
 | `propose_challenge` | `(obligation, text, gateway, context, regulation="") -> ChallengeProposal` | equipo normativo |
+| `GET /health`, `POST /v1/chat_json` | servicio interno en `8005` | servicios de la plataforma |
 | `tools/new_challenge.py` | `OBL-… "texto" [--repo]` → rama `feature/reto-<id>` | equipo normativo |
 | `draft_summary`, `draft_finding_narrative` | `(dsn, id, gateway) -> str` (id del texto guardado) | Fase 07 (expediente) |
 | `unsupported_figures`, `extract_figures` | `(text, data) -> list[str]` | ARG-057, ARG-059 |
@@ -181,13 +182,22 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 
 - Ningún dato personal validado llega al modelo: se sustituye antes por un marcador.
 - Ningún prompt se escribe en un log ni en una tabla; lo que se registra es su hash (ARG-052, `argos.ai_usage`).
+- El rol `argos_ai` puede **añadir** asientos al diario encadenado (migración `0020`, permiso de ejecución sobre `journal_append`, que es `SECURITY DEFINER`) y nada más sobre él. Hasta F06-13 no lo tenía: los tests del gateway conectaban como propietario y no lo veían. Ejecutar el gateway como lo hace el contenedor lo destapó.
 - El paquete no puede escribir veredictos ni hallazgos, por código y por permisos.
 
 ## 7. Operación
 
-El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
+- **El servicio:** `python -m argos_ai.api.main`, con dos puntos internos —`GET /health` y `POST /v1/chat_json`, el contrato de ARG-052—. Una cuota agotada es un 429, una salida que los guardarraíles rechazan es un 422 y una respuesta que no encaja tras la reparación es un 502. Es **interno a propósito**: su única protección en desarrollo es la red, como la NetworkPolicy del appliance.
+- **El contenedor:** `services/ai-gateway/Dockerfile`, usuario sin privilegios, sin secretos y **sin pesos** (el modelo lo sirve su propio contenedor). `make dev` levanta `ai-gateway` en `127.0.0.1:8005` con healthcheck; `make build` construye `argos-ai-gateway:<versión>` con `org.argos.component=ARG-052` y el CI genera su SBOM.
+- **Las redes:** `ai` (gateway y modelo) y `ai-data` (gateway y PostgreSQL). PostgreSQL está en las dos redes, la de siempre y `ai-data`; la API de campañas, solo en la de siempre.
+- **El modelo:** el servicio `llm` (llama.cpp sobre CPU, API compatible OpenAI, ADR-0009) va en su propio perfil, `llm`, porque necesita los pesos de F06-05. Sin ellos, `make dev` funciona igual y `/v1/chat_json` responde 502.
+- **La sesión de base de datos** corre como `argos_ai` (`options=-c role=argos_ai` en la cadena de conexión).
 
 ## 8. Verificación
+
+`services/ai-gateway/tests/test_ai_api_pure.py`: salud, respuesta con su hash y sin su prompt, 429 por cuota, 422 por guardarraíl, 502 por esquema y prioridad desconocida rechazada.
+
+`tests/integration/test_ai_containers.py`: salud del contenedor, la API de campañas inexistente desde dentro, la base alcanzada como `argos_ai`, la escritura de un veredicto denegada desde dentro y una imagen sin root, sin secretos y sin pesos. `tests/integration/test_ai_gateway.py` comprueba además que el gateway funciona entero bajo el rol restringido.
 
 `services/ai-gateway/tests/test_eval_metrics_pure.py`: la nota calculada a mano, el doble peso de las trampas, un conjunto que pasa lo fácil y falla las trampas que no aprueba, un conjunto vacío que es error y no un 100 %, y un umbral sin su conjunto que cierra la puerta.
 
@@ -255,3 +265,4 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 | 0.1.0-alpha | 2026-09-17 | Dictámenes con cifras verificadas, veredictos intocables y marca de texto asistido | Fase 06 (ARG-057) |
 | 0.1.0-alpha | 2026-09-17 | Asistente de consola con cuatro herramientas cerradas, presupuesto fijo y fuentes comprobadas | Fase 06 (ARG-058) |
 | 0.1.0-alpha | 2026-09-17 | Arnés de evaluación con conjuntos dorados y puerta de calidad; embebedor de pruebas con señal y búsqueda léxica por cualquiera de las palabras | Fase 06 (ARG-059) |
+| 0.1.0-alpha | 2026-09-17 | Servicio y contenedor del gateway en su propia red, con la sesión en el rol restringido y el diario abierto solo para añadir | Fase 06 (F06-13) |

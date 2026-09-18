@@ -45,7 +45,7 @@ jobs:
       - name: sbom
         run: |
           mkdir -p dist/sbom
-          for image in argos-example argos-challenge-engine; do
+          for image in argos-example argos-challenge-engine argos-ai-gateway; do
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/dist/sbom:/out" \
               anchore/syft:v1.14.0 "$image:$(cat VERSION)" -o spdx-json="/out/$image.spdx.json"
           done
