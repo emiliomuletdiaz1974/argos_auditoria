@@ -183,6 +183,15 @@ services:
       interval: 5s
       retries: 30
 
+  # ── Evidence (F07-04): the WORM store, VersityGW with object lock (ADR-0010). Development keeps a
+  # one-day default retention; resetting it means dropping the `evidence-data` volume. ──
+  evidence-store:
+    image: versity/versitygw:v1.8.0
+    entrypoint: ["sh", "-c", "mkdir -p /data/objects /data/versions && exec versitygw --access dev-only-evidence --secret dev-only-evidence-secret posix --versioning-dir /data/versions /data/objects"]
+    volumes: ["evidence-data:/data"]
+    networks: [evidence]
+    ports: ["127.0.0.1:7075:7070"]
+
   # ── AI layer (F06-13): the gateway on its own networks, never on the one of the campaign API. ──
   ai-gateway:
     build:
@@ -343,7 +352,9 @@ networks:
   default:
   ai:
   ai-data:
+  evidence:
 
 volumes:
   pg-data:
   nats-data:
+  evidence-data:

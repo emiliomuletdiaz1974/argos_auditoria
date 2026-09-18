@@ -282,16 +282,18 @@ requires-dist = [
 
 [[package]]
 name = "argos-evidence"
-version = "0.1.0a0"
+version = "0.2.0a0"
 source = { editable = "services/evidence" }
 dependencies = [
     { name = "argos-common" },
+    { name = "boto3" },
     { name = "psycopg", extra = ["binary"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "argos-common", editable = "libs/common" },
+    { name = "boto3", specifier = ">=1.43" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
 ]
 

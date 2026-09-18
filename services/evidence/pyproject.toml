@@ -1,10 +1,11 @@
 [project]
 name = "argos-evidence"
-version = "0.1.0-alpha"
+version = "0.2.0-alpha"
 description = "ARGOS evidence service (ARG-061…070)"
 requires-python = ">=3.12"
 dependencies = [
     "argos-common",
+    "boto3>=1.43",
     "psycopg[binary]>=3.2",
 ]
 

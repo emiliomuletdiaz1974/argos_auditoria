@@ -42,3 +42,24 @@ La Especificación (§4) deja abierta la elección entre almacenes autoalojables
 
 - **Inmutabilidad en PostgreSQL con triggers** (como el diario): protege frente a nuestro código, no frente a un administrador de la base. No es la garantía que pide un perito.
 - **Firmar y no bloquear:** la firma detecta la manipulación, pero no la impide; el borrado de una evidencia firmada también es una pérdida.
+
+## Resultado de la prueba de conformidad (F07-04, 2026-09-18)
+
+**VersityGW v1.8.0 (backend POSIX con directorio de versiones) pasa la prueba** y es el almacén elegido. No hace falta probar SeaweedFS ni Ceph RGW. Contra el almacén real del entorno, `tests/integration/test_worm_conformance.py` comprueba sobre una versión con retención en modo conformidad:
+
+| Intento | Resultado |
+|---|---|
+| Borrar la versión, también con `BypassGovernanceRetention` | Rechazado (`AccessDenied`) |
+| Acortar la retención o pasarla a modo gobernanza | Rechazado (`AccessDenied`) |
+| Sobrescribir con la escritura condicional del cliente (`If-None-Match: *`) | Rechazado (`PreconditionFailed`) |
+| Sobrescribir con un `PUT` sin condición | Crea una versión nueva, como manda S3; la versión bloqueada sigue idéntica byte a byte y bloqueada |
+| Borrar una versión escrita sin cabeceras de bloqueo | Rechazado: la retención por defecto del bucket se aplica |
+
+Todo lo anterior también vale para la cuenta raíz del almacén.
+
+Dos precisiones que salen de la prueba:
+
+- **«Sobrescribir» en S3 no destruye:** un `PUT` sobre una clave existente añade una versión y deja la anterior. Por eso el cliente guarda y lee siempre por `VersionId`. La garantía es que la versión escrita no cambia ni desaparece, no que la clave no admita más versiones.
+- **VersityGW aplica la retención por defecto del bucket, pero no la informa** en `GetObjectRetention` para objetos escritos sin cabeceras (AWS sí la informa). El cliente escribe siempre con retención explícita, así que no le afecta.
+
+**Límite de la garantía:** con el backend POSIX, la protección vale para todo acceso por la API S3. Quien tenga acceso de superusuario al sistema de ficheros del appliance podría tocar los ficheros y sus atributos extendidos. Ese acceso lo cierran el cifrado y el endurecimiento del appliance (F1-11a y Fase 09), no el almacén; queda anotado como pendiente para esa fase.
