@@ -18,7 +18,7 @@ from typing import Any
 from argos_common.errors import ArgosError
 from argos_common.journal import Anomaly
 from argos_common.journal_pg import PostgresJournal
-from argos_evidence.artifacts import file_digest, seal_document
+from argos_evidence.core.integrity import file_digest, seal_document
 from argos_evidence.worm import WormAlreadyStoredError, WormStore
 
 REPORT_SCHEMA = "argos/journal-report/1"

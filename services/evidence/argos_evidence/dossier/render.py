@@ -24,7 +24,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from argos_evidence.artifacts import file_digest, verify_artifact
+from argos_evidence.core.integrity import file_digest, verify_artifact
 from argos_evidence.dossier.build import DossierError
 
 ASSISTED_MARK = "Texto asistido por IA"

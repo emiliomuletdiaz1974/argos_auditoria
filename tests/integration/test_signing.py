@@ -14,14 +14,10 @@ from argos_challenges.seal import seal_campaign
 from argos_challenges.store import create_campaign
 from argos_common.journal_pg import PostgresJournal
 from argos_common.release import VaultTransitSigner
+from argos_evidence.core.envelope import verify_envelope
 from argos_evidence.merkle import build_tree
 from argos_evidence.roots import record_root
-from argos_evidence.signing import (
-    SigningError,
-    sign_campaign_root,
-    signature_key,
-    verify_envelope,
-)
+from argos_evidence.signing import SigningError, sign_campaign_root, signature_key
 from argos_evidence.worm import WormStore, ensure_buckets
 
 pytestmark = pytest.mark.integration

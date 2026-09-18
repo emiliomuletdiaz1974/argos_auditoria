@@ -8,14 +8,8 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 
-from argos_evidence.signing import (
-    ALGORITHM,
-    envelope_bytes,
-    key_id,
-    sign_payload,
-    signing_payload,
-    verify_envelope,
-)
+from argos_evidence.core.envelope import key_id, verify_envelope
+from argos_evidence.signing import ALGORITHM, envelope_bytes, sign_payload, signing_payload
 
 CAMPAIGN = "0199a000-0000-7000-8000-000000000001"
 HEAD = {"seq": 118, "entry_hash": "e" * 64}

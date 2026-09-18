@@ -18,7 +18,8 @@ from argos_challenges.findings import open_or_recur
 from argos_challenges.seal import seal_campaign
 from argos_challenges.store import create_campaign, persist_verdict
 from argos_common.release import VaultTransitSigner
-from argos_evidence.artifacts import file_digest, verify_artifact, write_artifact
+from argos_evidence.artifacts import write_artifact
+from argos_evidence.core.integrity import file_digest, verify_artifact
 from argos_evidence.dossier import DossierError, assemble, write_dossier
 from argos_evidence.journal import anchor_head, journal_report
 from argos_evidence.roots import record_root, tree_for

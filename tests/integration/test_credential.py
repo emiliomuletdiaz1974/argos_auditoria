@@ -15,8 +15,8 @@ from argos_evidence.credential.issue import (
     issue_credential,
     revoke_credential,
     status_list_credential,
-    verify_credential,
 )
+from argos_evidence.credential.verify import verify_credential
 from argos_evidence.dossier import write_dossier
 
 from .test_dossier import URL, _campaign, _store

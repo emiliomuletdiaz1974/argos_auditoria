@@ -14,7 +14,6 @@ from argos_evidence.credential.issue import (
     build_credential,
     credential_subject,
     status_list_credential_document,
-    verify_credential,
 )
 from argos_evidence.credential.multibase import multibase_decode
 from argos_evidence.credential.proof import add_proof
@@ -26,6 +25,7 @@ from argos_evidence.credential.status import (
     new_bitstring,
     set_bit,
 )
+from argos_evidence.credential.verify import verify_credential
 
 DID = did_web("evidence.argos.example")
 LIST_URL = "https://evidence.argos.example/status/0"

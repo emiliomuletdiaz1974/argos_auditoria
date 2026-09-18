@@ -17,7 +17,7 @@ import psycopg
 from botocore.exceptions import ClientError
 
 from argos_common.errors import ArgosError
-from argos_evidence.artifacts import canonical_instant, file_digest, seal_document
+from argos_evidence.core.integrity import canonical_instant, file_digest, seal_document
 from argos_evidence.journal import report_key
 from argos_evidence.roots import get_root
 from argos_evidence.worm import WormAlreadyStoredError, WormStore

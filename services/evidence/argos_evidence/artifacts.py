@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
-import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -24,8 +23,11 @@ from typing import Any
 import psycopg
 
 from argos_common.errors import ArgosError
-from argos_common.journal import canonicalize
 from argos_connector.validators import VALIDATORS
+from argos_evidence.core.integrity import (
+    canonical_instant,
+    seal_document,
+)
 from argos_evidence.worm import WormAlreadyStoredError, WormIntegrityError, WormStore
 
 SCHEMA = "argos/evidence/1"
@@ -78,13 +80,6 @@ def artifact_key(campaign_id: str, verdict_id: str) -> str:
     return f"campaigns/{campaign_id}/artifacts/{verdict_id}.json"
 
 
-def canonical_instant(value: dt.datetime) -> str:
-    """UTC with microseconds and a Z, the same shape as the journal."""
-    if value.tzinfo is None:
-        raise ValueError("the time must carry a time zone")
-    return value.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-
-
 def _identifiers_in(text: str) -> bool:
     if _PLATFORM_ID.fullmatch(text.strip().lower()):
         return False
@@ -129,36 +124,6 @@ def build_artifact(row: Mapping[str, Any]) -> bytes:
             f"the artifact would carry personal identifiers at {', '.join(found)}"
         )
     return seal_document(document)
-
-
-def seal_document(document: Mapping[str, Any]) -> bytes:
-    """Canonical bytes of ``document`` with its own SHA-256, computed without that field."""
-    content = dict(document)
-    content.pop("sha256", None)
-    sealed = {**content, "sha256": file_digest(canonicalize(content).encode("utf-8"))}
-    return canonicalize(sealed).encode("utf-8")
-
-
-def file_digest(body: bytes) -> str:
-    """SHA-256 of a stored file, as the index, the tree and the record name it."""
-    return hashlib.sha256(body).hexdigest()
-
-
-def verify_artifact(body: bytes) -> bool:
-    """True when ``body`` is canonical and its inner hash matches the rest of it."""
-    try:
-        document = json.loads(body)
-    except ValueError:
-        return False
-    if not isinstance(document, dict) or not isinstance(document.get("sha256"), str):
-        return False
-    try:
-        if canonicalize(document).encode("utf-8") != body:
-            return False
-        content = canonicalize({k: v for k, v in document.items() if k != "sha256"})
-    except ValueError:
-        return False
-    return file_digest(content.encode("utf-8")) == str(document["sha256"])
 
 
 def _verdict_row(dsn: str, campaign_id: str, verdict_id: str) -> dict[str, Any]:

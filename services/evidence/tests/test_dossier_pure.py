@@ -6,7 +6,7 @@ from typing import Any
 import pymupdf  # test-only reader (development dependency); never shipped
 import pytest
 
-from argos_evidence.artifacts import file_digest, seal_document
+from argos_evidence.core.integrity import file_digest, seal_document
 from argos_evidence.dossier import (
     ASSISTED_MARK,
     DossierError,

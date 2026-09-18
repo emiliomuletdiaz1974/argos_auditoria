@@ -26,23 +26,15 @@ from rfc3161_client import (
     HashAlgorithm,
     TimeStampRequest,
     TimestampRequestBuilder,
-    TimeStampResponse,
-    VerifierBuilder,
-    decode_timestamp_response,
 )
-from rfc3161_client.errors import VerificationError
 
-from argos_common.errors import ArgosError
-from argos_evidence.artifacts import file_digest
+from argos_evidence.core.integrity import file_digest
+from argos_evidence.core.timestamp import TimestampRejectedError, verify_reply
 from argos_evidence.worm import WormAlreadyStoredError, WormStore
 
 Transport = Callable[[bytes], bytes]
 QUERY_TYPE = "application/timestamp-query"
 REPLY_TYPE = "application/timestamp-reply"
-
-
-class TimestampRejectedError(ArgosError):
-    """A reply that does not stamp this object, for this request, from a trusted TSA."""
 
 
 @dataclass(frozen=True)
@@ -73,21 +65,6 @@ def new_request(data: bytes) -> TimeStampRequest:
         .cert_request(cert_request=True)
         .build()
     )
-
-
-def verify_reply(
-    reply: bytes, data: bytes, nonce: int, roots: list[x509.Certificate]
-) -> TimeStampResponse:
-    """The one verifier of every reply, online or imported."""
-    try:
-        response = decode_timestamp_response(reply)
-    except ValueError as exc:
-        raise TimestampRejectedError(f"not a time stamp reply: {exc}") from exc
-    try:
-        VerifierBuilder(roots=list(roots), nonce=nonce).build().verify_message(response, data)
-    except VerificationError as exc:
-        raise TimestampRejectedError(str(exc)) from exc
-    return response
 
 
 def http_transport(url: str, timeout: float = 10.0) -> Transport:

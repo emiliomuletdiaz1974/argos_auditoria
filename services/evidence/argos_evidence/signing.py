@@ -22,14 +22,13 @@ from dataclasses import dataclass
 from typing import Any
 
 import psycopg
-from cryptography.exceptions import InvalidSignature
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from argos_common.errors import ArgosError
 from argos_common.journal import canonicalize
 from argos_common.journal_pg import PostgresJournal
 from argos_common.release import Signer
-from argos_evidence.artifacts import canonical_instant
+from argos_evidence.core.envelope import key_id, verify_envelope
+from argos_evidence.core.integrity import canonical_instant
 from argos_evidence.journal import anchor_head
 from argos_evidence.roots import get_root
 from argos_evidence.tsa import enqueue
@@ -59,11 +58,6 @@ class SignatureRecord:
 
 def signature_key(campaign_id: str) -> str:
     return f"campaigns/{campaign_id}/root-signature.json"
-
-
-def key_id(public_key: bytes) -> str:
-    """Stable name of a key: the first 128 bits of the SHA-256 of its raw public bytes."""
-    return hashlib.sha256(public_key).hexdigest()[:32]
 
 
 def _is_production(signer: Signer) -> bool:
@@ -118,21 +112,6 @@ def sign_payload(signer: Signer, payload: Mapping[str, Any]) -> dict[str, Any]:
 
 def envelope_bytes(envelope: Mapping[str, Any]) -> bytes:
     return canonicalize(dict(envelope)).encode("utf-8")
-
-
-def verify_envelope(body: bytes, public_key: bytes) -> bool:
-    """True when ``body`` is an envelope signed by ``public_key`` over its payload."""
-    try:
-        envelope = json.loads(body)
-        payload = envelope["payload"]
-        signature = bytes.fromhex(envelope["signature"])
-        if payload.get("key_id") != key_id(public_key):
-            return False
-        data = canonicalize(payload).encode("utf-8")
-        Ed25519PublicKey.from_public_bytes(public_key).verify(signature, data)
-    except (ValueError, KeyError, TypeError, AttributeError, InvalidSignature):
-        return False
-    return True
 
 
 def _signed(dsn: str, campaign_id: str) -> SignatureRecord | None:

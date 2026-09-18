@@ -16,8 +16,8 @@ from argos_evidence.artifacts import (
     artifact_key,
     build_artifact,
     personal_identifiers,
-    verify_artifact,
 )
+from argos_evidence.core.integrity import verify_artifact
 
 CAMPAIGN = "0199a000-0000-7000-8000-000000000001"
 VERDICT = "0199a000-0000-7000-8000-000000000002"

@@ -15,11 +15,11 @@ from cryptography import x509
 from argos_challenges.seal import seal_campaign
 from argos_challenges.store import create_campaign
 from argos_common.release import VaultTransitSigner
+from argos_evidence.core.timestamp import TimestampRejectedError
 from argos_evidence.merkle import build_tree
 from argos_evidence.roots import record_root
 from argos_evidence.signing import sign_campaign_root
 from argos_evidence.tsa import (
-    TimestampRejectedError,
     accept_reply,
     export_requests,
     http_transport,

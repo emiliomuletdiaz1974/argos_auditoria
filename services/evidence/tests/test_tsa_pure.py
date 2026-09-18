@@ -4,7 +4,8 @@ import hashlib
 
 import pytest
 
-from argos_evidence.tsa import TimestampRejectedError, new_request, verify_reply
+from argos_evidence.core.timestamp import TimestampRejectedError, verify_reply
+from argos_evidence.tsa import new_request
 
 
 def test_a_request_stamps_the_sha256_of_the_object_with_a_nonce_and_the_certificate() -> None:

@@ -18,7 +18,7 @@ from argos_challenges.store import create_campaign
 from argos_common.journal import compute_hash
 from argos_common.journal_pg import PostgresJournal
 from argos_common.release import VaultTransitSigner
-from argos_evidence.artifacts import verify_artifact
+from argos_evidence.core.integrity import verify_artifact
 from argos_evidence.journal import (
     JournalAnchorError,
     anchor_head,

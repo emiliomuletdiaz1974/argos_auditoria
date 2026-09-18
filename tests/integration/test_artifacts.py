@@ -11,7 +11,8 @@ import pytest
 
 from argos_challenges.evaluator import evaluate
 from argos_challenges.store import create_campaign, persist_verdict
-from argos_evidence.artifacts import artifact_key, verify_artifact, write_artifact
+from argos_evidence.artifacts import artifact_key, write_artifact
+from argos_evidence.core.integrity import verify_artifact
 from argos_evidence.worm import WormStore, ensure_buckets
 
 from .sources import register_catalog_system
