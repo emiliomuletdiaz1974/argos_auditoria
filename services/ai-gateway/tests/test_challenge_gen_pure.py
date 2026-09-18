@@ -91,7 +91,17 @@ def test_the_obligation_the_jurist_pasted_reaches_the_model() -> None:
 
 
 @pytest.mark.parametrize(
-    "statement", ["UPDATE t SET a = 1", "DROP TABLE t", "INSERT INTO t VALUES (1)"]
+    "statement",
+    [
+        "UPDATE t SET a = 1",
+        "DROP TABLE t",
+        "INSERT INTO t VALUES (1)",
+        # They start with SELECT and name no write verb, so a prefix check lets them through.
+        "SELECT * INTO copy FROM patients",
+        "SELECT pg_terminate_backend(42)",
+        "SELECT * FROM dblink('dbname=x', 'SELECT 1') AS r(a INT)",
+        "SELECT set_config('default_transaction_read_only', 'off', false)",
+    ],
 )
 def test_every_kind_of_write_is_refused(statement: str) -> None:
     writes = VALID.replace("SELECT setting FROM pg_settings WHERE name = 'ssl'", statement)

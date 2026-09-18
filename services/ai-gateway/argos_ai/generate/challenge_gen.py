@@ -24,6 +24,8 @@ from argos_ai.gateway import Gateway
 from argos_ai.guardrails import OutputRejectedError
 from argos_challenges.dsl import SCHEMA_FILE, LintContext, lint_challenge, parse_challenge
 from argos_challenges.library.translation import read_challenge, to_internal
+from argos_common.errors import ReadOnlyViolationError
+from argos_connector.readonly import validate_read_only_sql
 from argos_ontology.vocabulary import LIBRARY_DIR
 
 PROMPT_FILE = Path(__file__).resolve().parents[4] / "library" / "prompts" / "challenge_gen.yaml"
@@ -32,6 +34,7 @@ READ_ONLY = re.compile(r"^\s*(select|show|with)\b", re.IGNORECASE)
 WRITES = re.compile(
     r"\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|merge)\b", re.IGNORECASE
 )
+GUARD_DIALECTS = ("postgres", "mysql", "tsql", "oracle")
 PROBE_CATALOG = (
     "Sondas de conector: scan_schema, count, sample, check_config. "
     "Sondas internas, que leen lo que ARGOS ya sabe: shacl, inventory_query."
@@ -91,6 +94,23 @@ def _statements(document: Any) -> list[str]:
     return found
 
 
+def _reads_only(statement: str) -> bool:
+    """The connectors' own read-only guard, not a prefix check that `SELECT ... INTO` passes.
+
+    The target system, and so its dialect, is not known yet: the statement has to be a read in at
+    least one of them, and the connector checks it again in its real dialect before running it.
+    """
+    if not READ_ONLY.match(statement) or WRITES.search(statement):
+        return False
+    for dialect in GUARD_DIALECTS:
+        try:
+            validate_read_only_sql(statement, dialect)
+        except ReadOnlyViolationError:
+            continue
+        return True
+    return False
+
+
 def check(text: str, context: LintContext) -> list[str]:
     """The errors of a proposal, as the CI would report them. Empty means it compiles."""
     try:
@@ -98,7 +118,7 @@ def check(text: str, context: LintContext) -> list[str]:
     except yaml.YAMLError as exc:
         return [f"no es YAML válido: {exc}"]
     for statement in _statements(raw):
-        if not READ_ONLY.match(statement) or WRITES.search(statement):
+        if not _reads_only(statement):
             raise _WritingProbeError(statement)
     try:
         spec = parse_challenge(to_internal(read_challenge(text)))
