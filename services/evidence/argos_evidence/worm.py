@@ -87,6 +87,11 @@ class WormStore:
         body: bytes = response["Body"].read()
         return body
 
+    def version_of(self, key: str) -> str:
+        """Current version of ``key``: lets a retried write find what the first one stored."""
+        response = self._client.head_object(Bucket=self._bucket, Key=key)
+        return str(response["VersionId"])
+
     def retention(self, key: str, version_id: str) -> tuple[str, dt.datetime]:
         response = self._client.get_object_retention(
             Bucket=self._bucket, Key=key, VersionId=version_id

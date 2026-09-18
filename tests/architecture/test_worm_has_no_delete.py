@@ -18,7 +18,7 @@ def _tree() -> ast.Module:
 
 def test_the_store_exposes_only_writing_once_and_reading() -> None:
     public = {name for name in dir(WormStore) if not name.startswith("_")}
-    assert public == {"get", "put_immutable", "retention"}
+    assert public == {"get", "put_immutable", "retention", "version_of"}
 
 
 def test_no_attribute_name_or_string_can_reach_a_delete_call() -> None:

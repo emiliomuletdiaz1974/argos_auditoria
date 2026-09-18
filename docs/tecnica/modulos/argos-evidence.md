@@ -4,8 +4,8 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.2.0-alpha
-commit: 41d1c6c
+version: 0.3.0-alpha
+commit: pendiente
 date: 2026-09-18
 status: draft
 confidentiality: client
@@ -17,18 +17,19 @@ confidentiality: client
 
 Convierte el resultado de una campaña en evidencia que un tercero puede comprobar sin fiarse de ARGOS: artefactos inmutables, un árbol de Merkle que los encadena, la firma de su raíz, un sello de tiempo, el expediente y la credencial verificable. Implementa ARG-061 a ARG-070.
 
-En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con el anclaje de su raíz y el **cliente del almacén WORM (ARG-061)**. El resto llega en las tareas siguientes de la Fase 07, y este documento está en estado `draft` hasta entonces.
+En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con el anclaje de su raíz, el **cliente del almacén WORM (ARG-061)** y los **artefactos de evidencia (ARG-062)**. El resto llega en las tareas siguientes de la Fase 07, y este documento está en estado `draft` hasta entonces.
 
 ## 2. Alcance y límites
 
-- **Hace:** escribir evidencia una sola vez en un almacén con bloqueo en modo conformidad y releerla; construir el árbol sobre el SHA-256 de los artefactos de una campaña, dar la prueba de inclusión de cada uno, verificarla y señalar qué artefactos ya no coinciden; anclar la raíz de cada campaña una sola vez.
-- **Hará:** artefactos (ARG-062), firma (ARG-064), sellado temporal (ARG-065), anclaje del diario (ARG-066), expediente (ARG-067), credencial (ARG-068) y publicación en espacios de datos (ARG-070).
+- **Hace:** convertir cada veredicto en un artefacto canónico, minimizado y con su propio hash, escribirlo una vez, indexarlo y anunciarlo; escribir evidencia una sola vez en un almacén con bloqueo en modo conformidad y releerla; construir el árbol sobre el SHA-256 de los artefactos de una campaña, dar la prueba de inclusión de cada uno, verificarla y señalar qué artefactos ya no coinciden; anclar la raíz de cada campaña una sola vez.
+- **Hará:** firma (ARG-064), sellado temporal (ARG-065), anclaje del diario (ARG-066), expediente (ARG-067), credencial (ARG-068) y publicación en espacios de datos (ARG-070).
 - **No hace:** no decide conformidad (eso es del evaluador del motor de retos) ni modifica una raíz ya anclada.
 
 ## 3. Arquitectura
 
 - `argos_evidence.merkle`: el árbol. **Solo biblioteca estándar**: el mismo fichero se entrega junto al expediente como verificador aislado (`python merkle.py <artefacto> <prueba.json>`).
 - `argos_evidence.roots`: orden de las hojas y anclaje de la raíz en PostgreSQL.
+- `argos_evidence.artifacts`: el artefacto de cada veredicto. JSON canónico con la misma función del diario (`argos_common.journal.canonicalize`), su propio SHA-256 calculado sin ese campo y la fecha en que se registró el veredicto, no la de escritura: el mismo veredicto da siempre los mismos bytes (nota ARG-062). Antes de escribir, rechaza cualquier valor que sea un DNI, NIE, NUSS o IBAN español validado, con los validadores de ARG-024.
 - `argos_evidence.worm`: cliente del almacén WORM (VersityGW con *object lock*, ADR-0010). Solo escribe una vez, lee y consulta la retención; **no tiene ninguna primitiva de borrado**.
 
 Reglas del árbol:
@@ -50,6 +51,11 @@ Reglas del árbol:
 | Función pública | `worm.WormStore.put_immutable(key, data, retain_until) -> StoredObject` | Escritura condicional (`If-None-Match: *`) con retención en modo conformidad y suma SHA-256; relee la versión y comprueba el hash. `WormAlreadyStoredError` si la clave ya existe |
 | Función pública | `worm.WormStore.get(key, version_id=None)`, `worm.WormStore.retention(key, version_id)` | Lectura por versión y consulta de la retención |
 | Función pública | `worm.ensure_buckets(client, default_retention_days)` | Crea, de forma idempotente, `evidence` (bloqueo en conformidad con retención por defecto) y `working` (versionado, sin bloqueo) |
+| Función pública | `artifacts.write_artifact(dsn, store, campaign_id, verdict_id, retain_until) -> ArtifactRecord` | Escribe el artefacto de un veredicto en `campaigns/{campaign_id}/artifacts/{verdict_id}.json` y lo indexa. Idempotente: un reintento comprueba byte a byte lo ya guardado |
+| Función pública | `artifacts.build_artifact(row)`, `artifacts.verify_artifact(bytes)`, `artifacts.personal_identifiers(document)` | Construcción, verificación aislada del hash interno y búsqueda de identificadores personales |
+| Evento publicado | `argos.evidence.artifact_written` (`evidence.artifact_written.v1`, stream `EVIDENCE`) | `campaign_id`, `verdict_id`, `key`, `version_id` y `sha256` del artefacto; con `announce_artifact(bus, record)` |
+| Tabla o migración | `argos.evidence_index` (`0022_evidence_index.sql`) | Clave, versión y SHA-256 del fichero de cada artefacto; se escribe una vez |
+| Función pública | `worm.WormStore.version_of(key)` | Versión actual de una clave, para que un reintento encuentre lo que guardó el primero |
 | Servicio del entorno | `evidence-store` (`127.0.0.1:7075`, red `evidence`, volumen `evidence-data`) | VersityGW v1.8.0, backend POSIX con versiones |
 | Tabla o migración | `argos.campaign_roots` (`0021_campaign_roots.sql`) | Raíz, número de hojas, orden y clave del árbol en el WORM; se escribe una vez |
 | Herramienta de línea de órdenes | `python merkle.py <artefacto> <prueba.json>` | Verificador aislado; código de salida 0 si el artefacto pertenece al árbol |
@@ -60,11 +66,13 @@ Usa la cadena de conexión a PostgreSQL de la plataforma (`ARGOS_DATABASE_URL`, 
 
 ## 6. Seguridad y tratamiento de datos
 
-- Solo maneja **hashes** de artefactos, nunca su contenido.
+- **Minimización (P-16):** el artefacto solo lleva lo que la sonda dejó pasar en el veredicto. Si aun así contuviera un DNI, NIE, NUSS o IBAN validado, no se escribe (`ArtifactNotMinimisedError`) y el error señala la ruta JSON.
+- El árbol y la raíz solo manejan **hashes** de artefactos, nunca su contenido.
+- `argos.evidence_index` es de escritura única, como `argos.campaign_roots`.
 - `argos.campaign_roots` es de escritura única: un disparador rechaza `UPDATE`, `DELETE` y `TRUNCATE`.
 - La inmutabilidad de la evidencia es **técnica**: la da el almacén con bloqueo en modo conformidad, que rechaza borrar, acortar la retención o relajar el modo, también a su cuenta raíz. Lo demuestra la prueba de conformidad.
 - La garantía cubre el acceso por la API S3; el acceso de superusuario al sistema de ficheros del appliance lo cierran el cifrado y el endurecimiento del appliance (ADR-0010).
-- Decisiones aplicables: ADR-0010 (almacén WORM), ADR-0011 (credencial) y nota ARG-064-065.
+- Decisiones aplicables: ADR-0010 (almacén WORM), ADR-0011 (credencial) y notas ARG-062 y ARG-064-065.
 
 ## 7. Operación
 
@@ -76,6 +84,8 @@ Por ahora es una librería. El almacén `evidence-store` arranca con `make dev`;
 - `services/evidence/tests/test_merkle_pure.py`: vectores exactos; inclusión en árboles de 1 a 64 hojas; 2000 corrupciones de un byte con semilla fija, todas detectadas y localizadas.
 - `services/evidence/tests/test_merkle_standalone_pure.py`: solo biblioteca estándar y verificador por línea de órdenes.
 - `tests/integration/test_campaign_roots.py`: orden de las hojas y escritura única de la raíz.
+- `services/evidence/tests/test_artifacts_pure.py`: mismos bytes para el mismo veredicto, forma canónica del diario, hash interno que detecta cualquier cambio, identificadores personales rechazados y evento en el stream `EVIDENCE`.
+- `tests/integration/test_artifacts.py`: un veredicto real escrito en el WORM e indexado; reintento idempotente; índice perdido reconstruido desde los mismos bytes; índice de escritura única.
 - `tests/integration/test_worm_conformance.py`: la prueba de conformidad de ADR-0010 contra el almacén real (borrar, sobrescribir y acortar la retención fallan).
 - `tests/architecture/test_worm_has_no_delete.py`: el cliente no expone ni alcanza ninguna primitiva de borrado, ni por nombre ni por acceso dinámico.
 
@@ -90,3 +100,4 @@ Por ahora es una librería. El almacén `evidence-store` arranca con `make dev`;
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-18 | Árbol de Merkle con separación de dominio, verificador aislado y anclaje de la raíz | F07-03 |
 | 0.2.0-alpha | 2026-09-18 | Cliente del almacén WORM sin primitiva de borrado y almacén `evidence-store` en el entorno | F07-04 |
+| 0.3.0-alpha | 2026-09-18 | Artefactos de evidencia canónicos, minimizados, indexados y anunciados | F07-05 |
