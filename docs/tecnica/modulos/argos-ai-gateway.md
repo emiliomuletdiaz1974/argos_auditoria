@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
-commit: dd8bffd
+commit: pendiente
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -22,7 +22,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 ## 2. Alcance y límites
 
 - **Hace:** depurar lo que entra a un prompt, vigilar lo que sale y ser **la única puerta a la inferencia**: colas con dos prioridades, cuota diaria por servicio, JSON forzado con un ciclo de reparación y registro con hash.
-- **Hará:** embeddings y RAG normativo (ARG-053, ARG-054), clasificación calibrada (ARG-055), generación de retos (ARG-056), dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
+- **Hará:** el RAG normativo con cita obligatoria (ARG-054), clasificación calibrada (ARG-055), generación de retos (ARG-056), dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
 - **No hace, y no es una cuestión de configuración:** emitir un veredicto. No hay ruta de importación, ni de red, ni de permisos de base de datos que lleve de aquí al evaluador.
 - **No hace:** escribir en un sistema del cliente, ni proponer que se escriba.
 
@@ -30,6 +30,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 
 - **`argos_ai.guardrails`** (ARG-060): `scrub_input` a la entrada y `check_output` a la salida. Puro, sin modelo y sin entrada/salida, para poder probarlo entero.
 - **`argos_ai.gateway.Gateway`** (ARG-052): la puerta. El diario y el registro de uso se inyectan, así que el gateway se ejerce entero sin base de datos; `argos_ai.quotas.postgres_gateway` lo monta como corre en el appliance.
+- **`argos_ai.rag`** (ARG-053): troceado por estructura jurídica, embeddings e índice sobre pgvector.
 - **`argos_ai.backends`**: un contrato (`Backend`, `Completion`) y tres implementaciones. `OpenAiCompatibleBackend` sirve para vLLM y para llama.cpp, porque los dos hablan la misma API; `FakeBackend` responde desde un fichero indexado por el hash del prompt.
 - Dependencias: `argos-common` (errores y configuración) y `argos-connector-sdk`, del que reutiliza los **validadores de identificadores españoles de ARG-024**.
 
@@ -52,6 +53,15 @@ Tres cierres, no una promesa escrita:
 
 Sin él el CI dependería de una GPU y del humor de un modelo, y un conjunto dorado que cambia bajo los pies no mide nada. Responde desde un fichero indexado por el hash del prompt, y **una entrada que no conoce es un error**: un valor por defecto en silencio convertiría un caso que falta en una suite verde.
 
+### El corpus indexable (ARG-053)
+
+- **Se trocea por estructura jurídica, no por tamaño ciego.** Un fragmento es un apartado con la cabecera de su artículo como contexto, porque «a) la seudonimización» a solas no dice nada. Solo un apartado que de verdad no cabe se parte, y entonces **su cita lo dice** con un sufijo en vez de fingir que es el apartado entero. Un preámbulo no es un artículo y no recibe cita: inventarla sería peor que perderlo.
+- **La referencia es el punto de la tabla:** `RGPD art. 32.1.a`. Un fragmento que un DPO no puede citar no le sirve de nada.
+- **El origen** (`norm`, `guide`, `client`) permite citar con propiedad: lo que dice la norma no es lo que dice el procedimiento del cliente.
+- **Idempotente por hash de fragmento:** reindexar no duplica una fila ni mueve un vector. Importa más de lo que parece — el corpus se reindexa en cada actualización de contenido, y un índice que se desplaza hace que la cita de ayer apunte hoy a otro sitio.
+- **Dos búsquedas sobre la misma tabla:** vectorial con índice HNSW y léxica con `tsvector`, porque los números de artículo son justo lo que peor tratan los embeddings y justo lo que un DPO escribe.
+- **El embebedor es configuración.** En los tests, `HashEmbedder` da un vector estable por texto: no entiende nada, pero es determinista, y la calidad semántica se mide contra el modelo real en los conjuntos dorados.
+
 ### Guardarraíles (ARG-060)
 
 - **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase.
@@ -71,6 +81,9 @@ Sin él el CI dependería de una GPU y del humor de un modelo, y un conjunto dor
 | `Gateway.chat_json` | `(service, system, user, schema, priority="batch") -> Answer` | ARG-054…058 |
 | `postgres_gateway` | `(dsn, backend, model="argos-llm") -> Gateway` | el proceso del appliance |
 | `daily_quotas`, `spent_today` | `(dsn) -> dict[str, int]` | operación, panel de calidad |
+| `chunk_legal_text` | `(text, norm) -> list[Chunk]` | ARG-053, ingesta del observatorio |
+| `index_document`, `index_chunks` | `(dsn, source, origin, …, embedder) -> int` | ARG-054, documentación del cliente |
+| `search`, `search_lexical` | `(dsn, query, …) -> list[Hit]` | ARG-054, ARG-058 |
 
 ## 5. Configuración
 
@@ -88,6 +101,10 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 8. Verificación
 
+`services/ai-gateway/tests/test_chunking_pure.py`: un apartado por fragmento con su cabecera, numeración no consecutiva respetada, apartado largo partido con sufijo, continuación de una letra que se queda en la letra, hashes estables y sin colisiones, y preámbulo descartado.
+
+`tests/integration/test_rag_index.py`: indexación idempotente, fragmentos citables, dimensión del vector, búsqueda que encuentra lo que se le dio, filtro por origen y búsqueda léxica por número de artículo.
+
 `services/ai-gateway/tests/test_gateway_pure.py`: esquema forzado y reparado en un ciclo, error si tras la reparación sigue sin encajar, cuota mirada antes de llamar, servicio sin cuota que no gasta, registro con hash y sin prompt, entrada depurada antes de llegar al modelo, salida que decide conformidad rechazada, cola interactiva que el trabajo por lotes no mata de hambre y backend determinista que rechaza lo que no conoce.
 
 `tests/integration/test_ai_gateway.py`: cuotas leídas de la tabla, uso y asiento escritos, ni el prompt ni el dato personal en ninguna parte, y lo gastado hoy que sobrevive a un reinicio.
@@ -98,7 +115,7 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 9. Limitaciones conocidas y pendientes
 
-- El paquete está a medias: de los diez componentes están ARG-052 y ARG-060.
+- El paquete está a medias: de los diez componentes están ARG-052, ARG-053 y ARG-060.
 - La telemetría de sustituciones se anota en el asiento de cada completado; falta publicarla como métrica (ARG-059).
 - El presupuesto se cuenta por tokens del backend; con el backend determinista esos números son un proxy por longitud, no tokens reales.
 - La lista de identificadores es la española de ARG-024; otro país necesita sus validadores, no otra expresión regular.
@@ -109,3 +126,4 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-17 | Guardarraíles de entrada y salida, con las tablas como contenido | Fase 06 (ARG-060) |
 | 0.1.0-alpha | 2026-09-17 | Gateway con colas, cuotas en tabla, JSON forzado, registro con hash y backend determinista | Fase 06 (ARG-052) |
+| 0.1.0-alpha | 2026-09-17 | Corpus troceado por estructura jurídica e índice vectorial y léxico sobre pgvector | Fase 06 (ARG-053) |
