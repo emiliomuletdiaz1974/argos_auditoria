@@ -3,13 +3,13 @@ name = "argos-platform"
 version = "0.1.0-alpha"
 description = "Sovereign regulatory compliance verification platform (GDPR, EHDS, AI Act, ENS)"
 requires-python = ">=3.12"
-dependencies = ["argos-ai-gateway", "argos-auth", "argos-challenge-engine", "argos-common", "argos-connector-dicom", "argos-connector-fhir", "argos-connector-files", "argos-connector-ldap", "argos-connector-rest", "argos-connector-sdk", "argos-connector-sql", "argos-events", "argos-example", "argos-inventory", "argos-ontology"]
+dependencies = ["argos-ai-gateway", "argos-auth", "argos-challenge-engine", "argos-common", "argos-connector-dicom", "argos-connector-fhir", "argos-connector-files", "argos-connector-ldap", "argos-connector-rest", "argos-connector-sdk", "argos-connector-sql", "argos-events", "argos-evidence", "argos-example", "argos-inventory", "argos-ontology"]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["connectors/dicom", "connectors/fhir", "connectors/files", "connectors/ldap", "connectors/rest", "connectors/sdk", "connectors/sql", "libs/auth", "libs/common", "libs/events", "services/ai-gateway", "services/challenge-engine", "services/example", "services/inventory", "services/ontology"]
+members = ["connectors/dicom", "connectors/fhir", "connectors/files", "connectors/ldap", "connectors/rest", "connectors/sdk", "connectors/sql", "libs/auth", "libs/common", "libs/events", "services/ai-gateway", "services/challenge-engine", "services/evidence", "services/example", "services/inventory", "services/ontology"]
 
 [tool.uv.sources]
 argos-ai-gateway = { workspace = true }
@@ -24,6 +24,7 @@ argos-connector-rest = { workspace = true }
 argos-connector-sdk = { workspace = true }
 argos-connector-sql = { workspace = true }
 argos-events = { workspace = true }
+argos-evidence = { workspace = true }
 argos-example = { workspace = true }
 argos-inventory = { workspace = true }
 argos-ontology = { workspace = true }

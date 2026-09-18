@@ -20,6 +20,7 @@ members = [
     "argos-connector-sdk",
     "argos-connector-sql",
     "argos-events",
+    "argos-evidence",
     "argos-example",
     "argos-inventory",
     "argos-ontology",
@@ -280,6 +281,21 @@ requires-dist = [
 ]
 
 [[package]]
+name = "argos-evidence"
+version = "0.1.0a0"
+source = { editable = "services/evidence" }
+dependencies = [
+    { name = "argos-common" },
+    { name = "psycopg", extra = ["binary"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-common", editable = "libs/common" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+]
+
+[[package]]
 name = "argos-example"
 version = "0.1.0a0"
 source = { editable = "services/example" }
@@ -375,6 +391,7 @@ dependencies = [
     { name = "argos-connector-sdk" },
     { name = "argos-connector-sql" },
     { name = "argos-events" },
+    { name = "argos-evidence" },
     { name = "argos-example" },
     { name = "argos-inventory" },
     { name = "argos-ontology" },
@@ -417,6 +434,7 @@ requires-dist = [
     { name = "argos-connector-sdk", editable = "connectors/sdk" },
     { name = "argos-connector-sql", editable = "connectors/sql" },
     { name = "argos-events", editable = "libs/events" },
+    { name = "argos-evidence", editable = "services/evidence" },
     { name = "argos-example", editable = "services/example" },
     { name = "argos-inventory", editable = "services/inventory" },
     { name = "argos-ontology", editable = "services/ontology" },
