@@ -87,6 +87,17 @@ def phase5_db() -> Iterator[str]:
             conn.execute(drop.format(sql.Identifier(name)))
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _clean_sources() -> Iterator[None]:
+    """The sources are shared by every test: leave them as the ground truth describes them."""
+    subject = generate_subjects(SEED, 1)[0]
+    _demo_client().revert(subject)
+    try:
+        yield
+    finally:
+        _demo_client().revert(subject)
+
+
 @pytest.fixture(scope="module")
 def demo(phase5_db: str) -> dict[str, str]:
     """The demonstration snapshot: both sources, the record of processing and the subject."""
