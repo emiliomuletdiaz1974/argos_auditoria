@@ -222,6 +222,7 @@ def create_app(
                 body.method,
                 body.revert_procedure,
                 identity.actor,
+                campaign_id=campaign_id,
             )
         except synthetic_module.SyntheticError as error:
             raise _fail(error) from None

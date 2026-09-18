@@ -64,6 +64,7 @@ El reto estrella del producto, el borrado efectivo, necesita un interesado de pr
   2. `authorize_injection`, que exige una persona y un procedimiento de reversión (`synthetic.authorize`);
   3. `confirm_injection`, `confirm_exercise` y `confirm_revert`, que confirma el cliente (`synthetic.injected`, `synthetic.exercised`, `synthetic.revert`).
 - **Escritura única:** los triggers impiden cambiar una autorización o repetir una confirmación, y los sujetos son inmutables.
+- **Orden y campaña:** una autorización pedida para una campaña exige que el sujeto sea de esa campaña. El ejercicio de un derecho y la reversión exigen la inyección confirmada antes. La inyección y la reversión se confirman una sola vez, y un mismo derecho no se confirma dos veces; un derecho distinto del mismo sujeto sí.
 - **Sin confirmación no hay absolución:** un reto con `preconditions: [synthetic_subject_injected]` queda `inconclusive` mientras el cliente no confirme.
 - **Reversión:** `pending_reversions` lista lo inyectado y no revertido; una campaña no se sella con sujetos sin revertir.
 - **En la demostración:** `tools/demo_client_actions.py` hace de cliente con las credenciales de propietario de las fuentes simuladas: inyecta, suprime solo en la base clínica y deja el sujeto plantado en la réplica de facturación.
@@ -307,6 +308,7 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 - **La columna de referencia de la retención va escrita en cada variante** (`created_at`, `issued_at`): el nombre de una columna no puede viajar como parámetro de una sentencia.
 - **`acc-special-category-profiles` deja fuera las cuentas de superusuario**: son cuentas técnicas de administración y se revisan aparte.
 - El contenedor de la API valida los tokens emitidos por Keycloak en su dirección interna (`http://keycloak:8080/realms/argos`); desde el anfitrión, Keycloak responde en `127.0.0.1:8180` y los emisores no coinciden. Para ejercer la API autenticada desde el anfitrión se usa el proceso local, como hacen los tests de F05-15.
+- **Una fila de inyección guarda solo el último derecho ejercido** (`exercised_right`): el diario conserva cada ejercicio, pero la tabla no. Una tabla de ejercicios por inyección lo resolvería con una migración.
 
 ## 10. Historial
 
@@ -335,3 +337,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-18 | Solo la reejecución de subsanación cierra un hallazgo como conforme | Auditoría de seguridad (M5) |
 | 0.1.0-alpha | 2026-09-18 | Las compuertas del workflow comprueban las aprobaciones registradas, no solo la señal | Auditoría de seguridad (M4) |
 | 0.1.0-alpha | 2026-09-18 | API de campañas: ids UUID validados, cuerpos acotados, errores de base sin detalle y descripción solo en desarrollo | Auditoría de seguridad (B5, B6, B8) |
+| 0.1.0-alpha | 2026-09-18 | Sujeto sintético: autorización ligada a su campaña y confirmaciones en orden y sin repetición | Auditoría de seguridad (B4) |
