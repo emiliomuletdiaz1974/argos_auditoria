@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
-commit: 006492c
+commit: pendiente
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -22,7 +22,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 ## 2. Alcance y límites
 
 - **Hace:** depurar lo que entra a un prompt, vigilar lo que sale y ser **la única puerta a la inferencia**: colas con dos prioridades, cuota diaria por servicio, JSON forzado con un ciclo de reparación y registro con hash.
-- **Hará:** clasificación calibrada (ARG-055), generación de retos (ARG-056), dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
+- **Hará:** generación de retos (ARG-056), dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
 - **No hace, y no es una cuestión de configuración:** emitir un veredicto. No hay ruta de importación, ni de red, ni de permisos de base de datos que lleve de aquí al evaluador.
 - **No hace:** escribir en un sistema del cliente, ni proponer que se escriba.
 
@@ -31,6 +31,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 - **`argos_ai.guardrails`** (ARG-060): `scrub_input` a la entrada y `check_output` a la salida. Puro, sin modelo y sin entrada/salida, para poder probarlo entero.
 - **`argos_ai.gateway.Gateway`** (ARG-052): la puerta. El diario y el registro de uso se inyectan, así que el gateway se ejerce entero sin base de datos; `argos_ai.quotas.postgres_gateway` lo monta como corre en el appliance.
 - **`argos_ai.rag`** (ARG-053, ARG-054): troceado por estructura jurídica, embeddings, índice sobre pgvector y el pipeline de respuesta con cita obligatoria.
+- **`argos_ai.classify`** (ARG-055): el clasificador semántico que rellena la interfaz ARG-025 de la Fase 03, con la confianza calibrada por las decisiones del DPD.
 - **`argos_ai.backends`**: un contrato (`Backend`, `Completion`) y tres implementaciones. `OpenAiCompatibleBackend` sirve para vLLM y para llama.cpp, porque los dos hablan la misma API; `FakeBackend` responde desde un fichero indexado por el hash del prompt.
 - Dependencias: `argos-common` (errores y configuración) y `argos-connector-sdk`, del que reutiliza los **validadores de identificadores españoles de ARG-024**.
 
@@ -72,6 +73,17 @@ La exigencia está por encima de la habitual: **la cita exacta**. «El RGPD exig
 - **Rehúso honesto.** Sin soporte suficiente, la respuesta lo dice y enseña los fragmentos más cercanos por si el humano quiere juzgar. «No encuentro base normativa en el corpus» es una respuesta correcta del producto, no un fallo.
 - Con el corpus vacío ni siquiera se llama al modelo.
 
+### Clasificación semántica calibrada (ARG-055)
+
+Un modelo dice 0,9 y acierta 0,7. Sin corregirlo, los umbrales de ARG-025 —aceptar desde 0,85, revisar desde 0,50— serían números arbitrarios.
+
+- **Rellena la interfaz de la Fase 03 sin tocarla.** `SemanticClassifier.propose(columns)` es el `ClassificationModel` que el inventario llevaba esperando desde F03-07: la cola, los umbrales y el triaje siguen donde estaban. Solo viajan metadatos: nombre, tipo, tabla y nombres de las hermanas, nunca un valor.
+- **Cada decisión del DPD es una etiqueta gratis.** El modelo declaró una confianza y la persona dijo acierto o fallo. Una **regresión isotónica por categoría** sobre esos pares traduce lo que el modelo declara a lo que de verdad ha conseguido. Isotónica porque lo único que se supone es que declarar más no puede significar acertar menos. Se implementa con *pool adjacent violators*, sin dependencias.
+- **Por debajo de 50 decisiones no hay curva en la que confiar**, ni motivo para confiar en el modelo: la calibración es la identidad con techo en **0,8**. Ese techo está a propósito por debajo del umbral de aceptación: un modelo sin calibrar puede llenar la cola de revisión, pero no clasificar nada solo.
+- **Se guarda la confianza declarada, no la calibrada** (`argos.ai_proposals`). La cola de ARG-025 guarda la calibrada, porque es la que usó el triaje, y ajustar la curva siguiente sobre ella la alimentaría con su propia salida.
+- **El prompt es un fichero versionado** (`library/prompts/classify.yaml`) y su SHA-256 va con el clasificador: cambiar el prompt es cambiar el clasificador, y las curvas se reajustan después.
+- **`refit(dsn)`** es el trabajo nocturno: reajusta las curvas con las decisiones nuevas, las guarda en `argos.ai_calibration` y lo anota en el diario. **`drift(dsn)`** da la precisión de los últimos 30 días por categoría, la señal que publicará ARG-059.
+
 ### Guardarraíles (ARG-060)
 
 - **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase.
@@ -96,6 +108,9 @@ La exigencia está por encima de la habitual: **la cita exacta**. «El RGPD exig
 | `search`, `search_lexical` | `(dsn, query, …) -> list[Hit]` | ARG-054, ARG-058 |
 | `answer` | `(dsn, question, gateway, embedder, origins=None) -> Answer` | ARG-056 (contexto), ARG-058 (herramienta normativa) |
 | `reciprocal_rank_fusion` | `(rankings, k=60) -> list[str]` | ARG-054 |
+| `SemanticClassifier` | `(gateway, calibrator, record=None).propose(columns)` | ARG-025 (inventario) |
+| `Calibrator` | `fit(decisions)`, `calibrate(category, declared)`, `curves()` | ARG-055, ARG-059 |
+| `refit`, `stored_calibrator`, `drift` | `(dsn, now=None)` | trabajo nocturno, panel de calidad |
 
 ## 5. Configuración
 
@@ -112,6 +127,12 @@ La exigencia está por encima de la habitual: **la cita exacta**. «El RGPD exig
 El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 8. Verificación
+
+`services/ai-gateway/tests/test_calibration_pure.py`: la curva PAVA contra una calculada a mano, monotonía, empates en la confianza declarada tratados como un solo punto, modelo sobreconfiado bajado a su tasa real, techo por debajo del mínimo de datos, curva por categoría y guardado y lectura idénticos.
+
+`services/ai-gateway/tests/test_classify_service_pure.py`: las propuestas que espera el inventario, la confianza calibrada que ve el triaje, un modelo sin calibrar que solo puede encolar, solo metadatos al modelo, el prompt versionado y la confianza declarada registrada en lugar de la calibrada.
+
+`tests/integration/test_classify_service.py`: la curva aprendida de la confianza declarada y no de la encolada, guardada y leída, las decisiones pendientes que no cuentan como etiqueta, la deriva de 30 días y el registro del clasificador.
 
 `services/ai-gateway/tests/test_rag_pure.py`: la fórmula de RRF contra números calculados a mano, la preferencia por el acuerdo, la cita inventada que invalida, la respuesta que se dice suficiente sin citar y el rehúso.
 
@@ -131,7 +152,8 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 9. Limitaciones conocidas y pendientes
 
-- El paquete está a medias: de los diez componentes están ARG-052, ARG-053, ARG-054 y ARG-060.
+- El paquete está a medias: de los diez componentes están ARG-052, ARG-053, ARG-054, ARG-055 y ARG-060.
+- El reajuste nocturno de la calibración es una función (`refit`) pero aún no tiene planificador: se engancha a Temporal con la operación.
 - La telemetría de sustituciones se anota en el asiento de cada completado; falta publicarla como métrica (ARG-059).
 - El presupuesto se cuenta por tokens del backend; con el backend determinista esos números son un proxy por longitud, no tokens reales.
 - La lista de identificadores es la española de ARG-024; otro país necesita sus validadores, no otra expresión regular.
@@ -144,3 +166,4 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 | 0.1.0-alpha | 2026-09-17 | Gateway con colas, cuotas en tabla, JSON forzado, registro con hash y backend determinista | Fase 06 (ARG-052) |
 | 0.1.0-alpha | 2026-09-17 | Corpus troceado por estructura jurídica e índice vectorial y léxico sobre pgvector | Fase 06 (ARG-053) |
 | 0.1.0-alpha | 2026-09-17 | RAG normativo con recuperación híbrida, cita comprobada y rehúso honesto | Fase 06 (ARG-054) |
+| 0.1.0-alpha | 2026-09-17 | Clasificación semántica con confianza calibrada por las decisiones del DPD | Fase 06 (ARG-055) |
