@@ -35,6 +35,7 @@ from sqlalchemy.types import NullType
 
 from argos_connector.base import Connector
 from argos_connector.probes import ProbeSpec
+from argos_connector.tls import require_tls
 from argos_connector.validators import acceptance_rates, resolve_validators
 
 SQLGLOT_DIALECTS = {
@@ -70,6 +71,28 @@ _FILTER_OPERATORS: Mapping[str, Callable[[Any, Any], Any]] = {
     "<": operator.lt,
     ">": operator.gt,
 }
+
+
+def transport_encrypted(raw_url: str) -> bool:
+    """Whether the URL asks for a transport that is encrypted **and** checks the server.
+
+    Encryption without verification (PostgreSQL `sslmode=require`) sends the samples to whoever
+    answers, so it does not count. SQLite is a local file and has no transport.
+    """
+    url = make_url(raw_url)
+    query = {key.lower(): str(value).lower() for key, value in url.query.items()}
+    backend = url.get_backend_name()
+    if backend == "sqlite":
+        return True
+    if backend == "postgresql":
+        return query.get("sslmode") in ("verify-ca", "verify-full")
+    if backend in ("mysql", "mariadb"):
+        return "ssl_ca" in query
+    if backend == "mssql":
+        return query.get("encrypt") in ("yes", "true", "strict", "mandatory")
+    if backend == "oracle":
+        return query.get("protocol") == "tcps" or "(protocol=tcps)" in raw_url.lower()
+    return False
 
 
 def _identifier(name: str) -> str:
@@ -118,7 +141,9 @@ class SqlConnector(Connector):
 
     # ---------- lifecycle ----------
     def open(self) -> None:
-        url = make_url(self.context.credentials["url"])
+        raw_url = self.context.credentials["url"]
+        url = make_url(raw_url)
+        require_tls(transport_encrypted(raw_url), self.config, url.render_as_string())
         options: dict[str, Any] = {"pool_pre_ping": True}
         if url.get_backend_name() != "sqlite":
             options.update(pool_size=1, max_overflow=1, pool_recycle=1800)

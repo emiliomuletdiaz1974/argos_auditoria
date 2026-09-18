@@ -8,6 +8,7 @@ from typing import Any
 
 from argos_connector.base import Connector
 from argos_connector.probes import ProbeSpec
+from argos_connector.tls import require_tls
 
 from .backends import FileBackend, normalise_prefix
 from .backends.local import LocalBackend
@@ -60,13 +61,18 @@ class FilesConnector(Connector):
         if self._backend is not None:
             return
         protocol = self.config.get("protocol")
+        # The first block of each file crosses the network before it is hashed.
+        insecure = self.config.get("allow_insecure") is True
         if protocol == "smb":
             from .backends.smb import SmbBackend
 
-            self._backend = SmbBackend(self.context.credentials)
+            # SMB 3 encryption is demanded; a declared exception leaves it to negotiation.
+            self._backend = SmbBackend(self.context.credentials, encrypt=None if insecure else True)
         elif protocol == "s3":
             from .backends.s3 import S3Backend
 
+            endpoint = str(self.context.credentials.get("endpoint_url") or "https://")
+            require_tls(endpoint.lower().startswith("https://"), self.config, endpoint)
             self._backend = S3Backend(self.context.credentials)
         elif protocol == "local":
             self._backend = LocalBackend(self.config["mount"])

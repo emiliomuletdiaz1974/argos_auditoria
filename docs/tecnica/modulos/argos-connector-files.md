@@ -6,7 +6,7 @@ module: argos-connector-files
 phases: ["02"]
 version: 0.1.0-alpha
 commit: d018a74
-date: 2026-09-17
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -38,7 +38,8 @@ Sondas del SDK sobre metadatos: `scan_schema`, `count` y `sample`, esta con cabe
 
 ## 5. Configuración
 
-- **Por sistema:** `protocol` (`local`, `smb` o `s3`), `mount` (solo `local`) y `max_walk_entries` (tope del recorrido).
+- **Por sistema:** `protocol` (`local`, `smb` o `s3`), `mount` (solo `local`), `max_walk_entries` (tope del recorrido) y `allow_insecure`.
+- **Transporte:** SMB exige cifrado SMB 3 y S3 solo acepta un `endpoint_url` `https://`, porque el primer bloque de cada fichero cruza la red antes de convertirse en hash. `allow_insecure: true` en el sistema deja SMB a lo que negocie el servidor y acepta S3 por `http://`.
 - **Credenciales:** en Vault.
 
 ## 6. Seguridad y tratamiento de datos
@@ -73,3 +74,4 @@ Ninguna específica del conector.
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Conector de ficheros con recorrido de metadatos y muestras minimizadas | Fase 02 (ARG-017) |
+| 0.1.0-alpha | 2026-09-18 | Cifrado SMB 3 exigido y S3 solo por `https://`, salvo `allow_insecure` declarado | Auditoría de seguridad (M10) |

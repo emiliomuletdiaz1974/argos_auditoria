@@ -10,7 +10,7 @@ from . import FileEntry, normalise_prefix
 
 
 class SmbBackend:
-    def __init__(self, credentials: Mapping[str, str]) -> None:
+    def __init__(self, credentials: Mapping[str, str], encrypt: bool | None = True) -> None:
         self._server = credentials["server"]
         self._share = credentials["share"]
         self._port = int(credentials.get("port", "445"))
@@ -19,6 +19,7 @@ class SmbBackend:
             username=credentials["username"],
             password=credentials["password"],
             port=self._port,
+            encrypt=encrypt,
         )
 
     def close(self) -> None:

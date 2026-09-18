@@ -7,7 +7,7 @@
       "connector": "argos_sql.postgres:PostgresConnector",
       "profile": "sources",
       "credentials": {"url": "postgresql+psycopg://argos_ro@127.0.0.1:55433/clinic"},
-      "config": {"statement_timeout_ms": 5000, "host_aliases": ["source-postgres"]}
+      "config": {"allow_insecure": true, "statement_timeout_ms": 5000, "host_aliases": ["source-postgres"]}
     },
     {
       "id": "01920000-0000-7000-8000-00000000a002",
@@ -16,7 +16,7 @@
       "connector": "argos_sql.generic:SqlConnector",
       "profile": "sources",
       "credentials": {"url": "mysql+pymysql://argos_ro:@127.0.0.1:53306/billing"},
-      "config": {"statement_timeout_ms": 5000, "host_aliases": ["source-mariadb"]}
+      "config": {"allow_insecure": true, "statement_timeout_ms": 5000, "host_aliases": ["source-mariadb"]}
     },
     {
       "id": "01920000-0000-7000-8000-00000000a003",
@@ -25,7 +25,7 @@
       "connector": "argos_sql.mssql:MssqlConnector",
       "profile": "heavy",
       "credentials": {"url": "mssql+pymssql://argos_ro:Dev-Only-Ro-2026@127.0.0.1:51433/erp"},
-      "config": {"statement_timeout_ms": 5000, "isolation_level": "SNAPSHOT"}
+      "config": {"allow_insecure": true, "statement_timeout_ms": 5000, "isolation_level": "SNAPSHOT"}
     },
     {
       "id": "01920000-0000-7000-8000-00000000a004",
@@ -34,7 +34,7 @@
       "connector": "argos_sql.oracle:OracleConnector",
       "profile": "heavy",
       "credentials": {"url": "oracle+oracledb://argos_ro:dev-only-ro@127.0.0.1:51521/?service_name=FREEPDB1"},
-      "config": {"statement_timeout_ms": 5000}
+      "config": {"allow_insecure": true, "statement_timeout_ms": 5000}
     },
     {
       "id": "01920000-0000-7000-8000-00000000b001",
@@ -52,7 +52,7 @@
       "connector": "argos_files.connector:FilesConnector",
       "profile": "sources",
       "credentials": {"server": "127.0.0.1", "port": "1445", "share": "clinical", "username": "argos_ro", "password": "dev-only-smb"},
-      "config": {"protocol": "smb"}
+      "config": {"allow_insecure": true, "protocol": "smb"}
     },
     {
       "id": "01920000-0000-7000-8000-00000000b003",
@@ -61,7 +61,7 @@
       "connector": "argos_files.connector:FilesConnector",
       "profile": "sources",
       "credentials": {"endpoint_url": "http://127.0.0.1:7070", "access_key": "dev-only-access", "secret_key": "dev-only-secret-key", "bucket": "clinical-archive", "region": "us-east-1"},
-      "config": {"protocol": "s3"}
+      "config": {"allow_insecure": true, "protocol": "s3"}
     },
     {
       "id": "01920000-0000-7000-8000-00000000c001",

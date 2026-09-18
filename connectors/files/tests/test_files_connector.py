@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from argos_common.errors import ReadOnlyViolationError
+from argos_common.errors import ConfigurationError, ReadOnlyViolationError
 from argos_connector.probes import ProbeSpec
 from argos_connector.testing import (
     InMemoryJournal,
@@ -133,6 +133,37 @@ def test_close_releases_the_backend_session(share: Path) -> None:
     assert backend.closed is True
     with pytest.raises(RuntimeError, match="not open"):
         _ = connector.backend
+
+
+def test_s3_over_clear_http_is_refused_unless_declared() -> None:
+    credentials = {
+        "endpoint_url": "http://s3.hospital.test",
+        "access_key": "a",
+        "secret_key": "s",
+        "bucket": "b",
+    }
+    connector = FilesConnector(SYSTEM_ID, {"protocol": "s3"}, make_context(credentials))
+    with pytest.raises(ConfigurationError, match="allow_insecure"):
+        connector.open()
+    declared = {"protocol": "s3", "allow_insecure": True}
+    allowed = FilesConnector(SYSTEM_ID, declared, make_context(credentials))
+    allowed.open()
+    allowed.close()
+
+
+@pytest.mark.parametrize(("config", "encrypt"), [({}, True), ({"allow_insecure": True}, None)])
+def test_smb_sessions_are_encrypted_unless_declared(
+    monkeypatch: pytest.MonkeyPatch, config: dict[str, object], encrypt: bool | None
+) -> None:
+    # Without encryption the first block of every clinical file crosses the network in clear.
+    sessions: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        "smbclient.register_session", lambda server, **kwargs: sessions.append(kwargs)
+    )
+    credentials = {"server": "fs01", "share": "clinical", "username": "u", "password": "p"}
+    connector = FilesConnector(SYSTEM_ID, {"protocol": "smb", **config}, make_context(credentials))
+    connector.open()
+    assert sessions[0]["encrypt"] is encrypt
 
 
 def test_unknown_protocol_is_rejected() -> None:
