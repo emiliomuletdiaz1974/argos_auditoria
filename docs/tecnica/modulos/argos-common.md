@@ -3,10 +3,10 @@ id: MOD-argos-common
 kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
-phases: ["01", "03"]
+phases: ["01", "03", "07"]
 version: 0.1.0-alpha
-commit: 1aadd28
-date: 2026-09-17
+commit: pendiente
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -33,7 +33,7 @@ Base compartida por todos los servicios de ARGOS: configuración validada al arr
 | `health` | Rutas uniformes `/health/live` y `/health` para servicios HTTP |
 | `ids` | Identificadores UUID v7 ordenables en el tiempo |
 | `journal` | Diario encadenado v1: canonicalización, hash y verificación independientes de la base de datos |
-| `journal_pg` | Cliente PostgreSQL del diario: añadir, leer y verificar |
+| `journal_pg` | Cliente PostgreSQL del diario: añadir, leer y verificar. `argos_common.PostgresJournal` se carga al primer uso, no con el paquete: importar las partes puras (hash y forma canónica del diario, errores) no arrastra el cliente de PostgreSQL, y así las usa el comprobador público (ARG-069) |
 | `migrations` | Migrador de SQL numerado con suma de control y un asiento por migración |
 | `secret_stores` | Interfaz única de secretos: Vault, fichero cifrado (solo desarrollo) y TPM (pendiente) |
 | `release` | Manifiesto de release canónico y firma Ed25519 en Vault Transit |
@@ -113,3 +113,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-14 | Configuración, errores, registro, salud, diario v1, migrador, secretos y release firmada | Fase 01 |
 | 0.1.0-alpha | 2026-09-15 | `VAULT_ADDR` y `VAULT_TOKEN` para los servicios que abren conectores | Fase 03 (ARG-022) |
+| 0.1.0-alpha | 2026-09-18 | `PostgresJournal` se carga al primer uso desde `argos_common`; la interfaz no cambia | F07-11 (ARG-069) |

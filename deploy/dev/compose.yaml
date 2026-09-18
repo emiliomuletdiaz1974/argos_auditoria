@@ -205,6 +205,22 @@ services:
       interval: 5s
       retries: 30
 
+  # Public verifier (F07-11): checks an evidence bundle with nothing but what it carries. It has its
+  # own network and reaches no other service: no database, no store, no secret.
+  verifier:
+    build:
+      context: ../..
+      dockerfile: services/verifier/Dockerfile
+    image: argos-verifier:dev
+    environment:
+      ARGOS_API_BIND: 0.0.0.0   # published below on 127.0.0.1 only
+    networks: [verifier]
+    ports: ["127.0.0.1:8007:8007"]
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8007/health', timeout=2)"]
+      interval: 5s
+      retries: 30
+
   # ── AI layer (F06-13): the gateway on its own networks, never on the one of the campaign API. ──
   ai-gateway:
     build:
@@ -366,6 +382,7 @@ networks:
   ai:
   ai-data:
   evidence:
+  verifier:
 
 volumes:
   pg-data:

@@ -11,13 +11,14 @@ from __future__ import annotations
 import copy
 import hashlib
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import rfc8785
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from argos_common.release import Signer
+if TYPE_CHECKING:
+    from argos_common.release import Signer
 from argos_evidence.credential.multibase import base58btc_encode, multibase_decode
 
 CRYPTOSUITE = "eddsa-jcs-2022"

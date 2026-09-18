@@ -25,6 +25,7 @@ members = [
     "argos-inventory",
     "argos-ontology",
     "argos-platform",
+    "argos-verifier",
 ]
 
 [[package]]
@@ -282,7 +283,7 @@ requires-dist = [
 
 [[package]]
 name = "argos-evidence"
-version = "0.8.0a0"
+version = "0.9.0a0"
 source = { editable = "services/evidence" }
 dependencies = [
     { name = "argos-common" },
@@ -409,6 +410,7 @@ dependencies = [
     { name = "argos-example" },
     { name = "argos-inventory" },
     { name = "argos-ontology" },
+    { name = "argos-verifier" },
 ]
 
 [package.dev-dependencies]
@@ -452,6 +454,7 @@ requires-dist = [
     { name = "argos-example", editable = "services/example" },
     { name = "argos-inventory", editable = "services/inventory" },
     { name = "argos-ontology", editable = "services/ontology" },
+    { name = "argos-verifier", editable = "services/verifier" },
 ]
 
 [package.metadata.requires-dev]
@@ -475,6 +478,23 @@ dev = [
     { name = "types-hvac", specifier = ">=2.4.0.20260731" },
     { name = "types-jsonschema", specifier = ">=4.23" },
     { name = "types-pyyaml", specifier = ">=6.0" },
+]
+
+[[package]]
+name = "argos-verifier"
+version = "0.1.0a0"
+source = { editable = "services/verifier" }
+dependencies = [
+    { name = "argos-evidence" },
+    { name = "fastapi" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-evidence", editable = "services/evidence" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
 [[package]]

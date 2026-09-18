@@ -1,0 +1,194 @@
+"""What a third party checks in an evidence bundle, piece by piece (ARG-069).
+
+A bundle carries what was handed over (the dossier, the signed root envelope,
+the time stamp token, the credential and some artifacts with their inclusion
+proofs) and what is public (the issuer's DID document, the status list, the
+TSA roots). Nothing else is consulted. Every check has a name and says why it
+failed; a check that could not be made is "skipped" and says so, never
+"passed".
+"""
+
+from __future__ import annotations
+
+import base64
+import binascii
+import hashlib
+import json
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
+from typing import Any
+
+from cryptography import x509
+
+from argos_evidence.core.envelope import verify_envelope
+from argos_evidence.core.integrity import file_digest, verify_artifact
+from argos_evidence.core.timestamp import TimestampRejectedError, verify_reply
+from argos_evidence.credential.multibase import public_key_from_multibase
+from argos_evidence.credential.verify import verify_credential
+from argos_evidence.merkle import verify_proof
+
+BUNDLE_SCHEMA = "argos/verification-bundle/1"
+PASSED, FAILED, SKIPPED = "passed", "failed", "skipped"
+
+
+@dataclass(frozen=True)
+class Check:
+    name: str
+    status: str
+    detail: str
+
+
+@dataclass
+class Report:
+    checks: list[Check] = field(default_factory=list)
+
+    @property
+    def ok(self) -> bool:
+        return all(c.status != FAILED for c in self.checks)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "ok": self.ok,
+            "checks": [
+                {"name": c.name, "status": c.status, "detail": c.detail} for c in self.checks
+            ],
+        }
+
+
+def _bytes(bundle: Mapping[str, Any], name: str) -> bytes | None:
+    value = bundle.get(name)
+    if not isinstance(value, str):
+        return None
+    try:
+        return base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+
+
+def _guarded(report: Report, name: str, check: Callable[[], tuple[str, str]]) -> None:
+    try:
+        status, detail = check()
+    except (KeyError, TypeError, ValueError, IndexError, AttributeError) as exc:
+        status, detail = FAILED, f"the bundle is malformed here: {type(exc).__name__}: {exc}"
+    report.checks.append(Check(name, status, detail))
+
+
+def _issuer_key(did_document: Any) -> bytes:
+    methods = {m["id"]: m for m in did_document["verificationMethod"]}
+    return public_key_from_multibase(
+        methods[did_document["assertionMethod"][0]]["publicKeyMultibase"]
+    )
+
+
+def verify_bundle(bundle: Mapping[str, Any]) -> Report:
+    report = Report()
+    dossier_bytes = _bytes(bundle, "dossier")
+    envelope = _bytes(bundle, "root_signature")
+    dossier: dict[str, Any] = {}
+    chain: dict[str, Any] = {}
+    key: bytes | None = None
+
+    def dossier_hash() -> tuple[str, str]:
+        nonlocal dossier, chain
+        if dossier_bytes is None:
+            return FAILED, "the bundle has no readable dossier"
+        if not verify_artifact(dossier_bytes):
+            return FAILED, "the dossier does not match its own SHA-256: it was changed"
+        dossier = json.loads(dossier_bytes)
+        chain = dossier.get("evidence_chain") or {}
+        return PASSED, f"dossier SHA-256 {file_digest(dossier_bytes)}"
+
+    def issuer_key() -> tuple[str, str]:
+        nonlocal key
+        key = _issuer_key(bundle["did_document"])
+        return PASSED, f"key of {bundle['did_document']['id']}"
+
+    def root_signature() -> tuple[str, str]:
+        if key is None or envelope is None:
+            return FAILED, "there is no signed root or no issuer key to check it with"
+        if not verify_envelope(envelope, key):
+            return FAILED, "the signature of the campaign root does not verify with the issuer key"
+        payload = json.loads(envelope)["payload"]
+        note = " (development key, not production)" if payload.get("non_production") else ""
+        return PASSED, f"root signed by key {payload['key_id']}{note}"
+
+    def root_matches_dossier() -> tuple[str, str]:
+        if envelope is None or not chain:
+            return FAILED, "there is no signed root or no dossier to compare"
+        payload = json.loads(envelope)["payload"]
+        if payload["merkle_root"] != (chain.get("merkle") or {}).get("root"):
+            return FAILED, "the signed Merkle root is not the one the dossier states"
+        if payload["campaign_id"] != dossier["campaign"]["id"]:
+            return FAILED, "the signed root belongs to another campaign"
+        if file_digest(envelope) != (chain.get("signature") or {}).get("sha256"):
+            return FAILED, "the dossier cites another signature envelope"
+        return PASSED, "the dossier, the signature and the Merkle root agree"
+
+    def timestamp() -> tuple[str, str]:
+        token = _bytes(bundle, "timestamp_token")
+        stated = (chain.get("time_stamp") or {}).get("status")
+        if token is None:
+            if stated == "stamped":
+                return FAILED, "the dossier says the root is stamped but no token was given"
+            return SKIPPED, "the root is signed; its time stamp is still queued"
+        if envelope is None:
+            return FAILED, "there is no signed root for the token to cover"
+        roots = [x509.load_pem_x509_certificate(p.encode()) for p in bundle.get("tsa_roots", [])]
+        if not roots:
+            return FAILED, "no TSA root was given to check the token against"
+        try:
+            info = verify_reply(token, envelope, None, roots).tst_info
+        except TimestampRejectedError as exc:
+            return FAILED, f"the time stamp token does not verify: {exc}"
+        return (
+            PASSED,
+            f"stamped at {info.gen_time.isoformat()} under policy {info.policy.dotted_string}",
+        )
+
+    def credential() -> tuple[str, str]:
+        if bundle.get("credential") is None:
+            return SKIPPED, "no credential was given"
+        check = verify_credential(
+            bundle["credential"], bundle["did_document"], bundle.get("status_list")
+        )
+        if not check.valid:
+            return FAILED, "the credential does not verify: " + ", ".join(check.reasons)
+        return PASSED, "the credential verifies against the issuer DID and is not revoked"
+
+    def credential_matches_dossier() -> tuple[str, str]:
+        if bundle.get("credential") is None:
+            return SKIPPED, "no credential was given"
+        stated = bundle["credential"]["credentialSubject"]["dossierSha256"]
+        if dossier_bytes is None or stated != file_digest(dossier_bytes):
+            return FAILED, "the credential vouches for another dossier"
+        return PASSED, "the credential vouches for this dossier"
+
+    for name, step in (
+        ("dossier_hash", dossier_hash),
+        ("issuer_key", issuer_key),
+        ("root_signature", root_signature),
+        ("root_matches_dossier", root_matches_dossier),
+        ("timestamp", timestamp),
+        ("credential", credential),
+        ("credential_matches_dossier", credential_matches_dossier),
+    ):
+        _guarded(report, name, step)
+
+    root = (chain.get("merkle") or {}).get("root")
+    for position, item in enumerate(bundle.get("artifacts") or []):
+
+        def inclusion(item: Mapping[str, Any] = item) -> tuple[str, str]:
+            artifact = _bytes(item, "artifact")
+            if artifact is None or not verify_artifact(artifact):
+                return FAILED, "the artifact does not match its own SHA-256: it was changed"
+            path = [(str(side), bytes.fromhex(sibling)) for side, sibling in item["proof"]["path"]]
+            digest = hashlib.sha256(artifact).digest()
+            if item["proof"]["root"] != root:
+                return FAILED, "the proof leads to another root than the dossier's"
+            index, size = int(item["proof"]["index"]), int(item["proof"]["size"])
+            if not verify_proof(digest, index, size, path, bytes.fromhex(root)):
+                return FAILED, f"the artifact is not leaf {index} of the campaign tree"
+            return PASSED, f"leaf {index} of {size}"
+
+        _guarded(report, f"artifact_inclusion[{position}]", inclusion)
+    return report

@@ -1,0 +1,20 @@
+[project]
+name = "argos-verifier"
+version = "0.1.0-alpha"
+description = "ARGOS public verifier of evidence bundles (ARG-069)"
+requires-python = ">=3.12"
+dependencies = [
+    "argos-evidence",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+]
+
+[tool.uv.sources]
+argos-evidence = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["argos_verifier"]

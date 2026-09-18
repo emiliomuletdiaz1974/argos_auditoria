@@ -1,4 +1,11 @@
-"""ARGOS platform common library and core (components ARG-001 / ARG-005)."""
+"""ARGOS platform common library and core (components ARG-001 / ARG-005).
+
+`PostgresJournal` is loaded on first use, not with the package: importing the pure parts (the
+journal hash, canonical form, errors) must not pull in the PostgreSQL client, so that the public
+verifier (ARG-069) can use them without a database driver.
+"""
+
+from typing import TYPE_CHECKING, Any
 
 from .config import ApplianceSize, ArgosConfig, Environment, LogLevel, get_config, load_config
 from .errors import ArgosError, ConfigurationError, IntegrityError
@@ -14,8 +21,10 @@ from .journal import (
     require_integrity,
     verify_entries,
 )
-from .journal_pg import PostgresJournal
 from .logs import configure_logging, get_logger
+
+if TYPE_CHECKING:
+    from .journal_pg import PostgresJournal
 
 __all__ = [
     "ArgosConfig",
@@ -41,3 +50,11 @@ __all__ = [
     "get_logger",
     "mount_health",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name == "PostgresJournal":
+        from .journal_pg import PostgresJournal
+
+        return PostgresJournal
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -4,8 +4,8 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.8.0-alpha
-commit: ddb41fb
+version: 0.9.0-alpha
+commit: pendiente
 date: 2026-09-18
 status: draft
 confidentiality: client
@@ -35,6 +35,8 @@ En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con 
 - `argos_evidence.tsa`: sellado temporal RFC 3161. La firma prueba quién; el sello prueba cuándo, y lo dice una autoridad ajena. El appliance puede estar aislado (P-02), así que el sellado es asíncrono: el sobre firmado entra en la cola al firmarse y se ve «en cola» hasta que exista un token verificado. Hay dos caminos al token, en línea (`process_queue`) y aislado (`export_requests` / `import_replies`), y **un solo verificador** (`verify_reply`, sobre `rfc3161-client`, Apache-2.0): estado, cadena hasta una raíz de confianza, nonce de la última petición, certificado de sellado y SHA-256 de los bytes exactos guardados en el WORM. El token se guarda en el WORM junto al objeto (`<clave>.tsr`).
 - `argos_evidence.dossier`: el expediente, lo que el DPO entrega a un auditor o a un inspector (nota ARG-067). `build` lo ensambla en JSON canónico a partir de registros que ya existen (campaña y sello, resultados por resultado y por obligación, aprobaciones, hallazgos, textos redactados con su marca y cadena de evidencia completa), sin ningún momento de ensamblado dentro: el mismo estado da siempre el mismo hash. `render` genera el PDF **solo desde ese JSON**, tras comprobar su hash, con **ReportLab** (BSD) en modo invariante: el mismo expediente da el mismo PDF byte a byte. Cada página lleva el SHA-256 del JSON y la portada un QR con la URL del comprobador público y ese hash. Todo texto redactado por el modelo sale bajo la marca «Texto asistido por IA».
 - `argos_evidence.credential`: la credencial verificable de cada expediente (ADR-0011). W3C VC 2.0 con prueba `DataIntegrityProof` y suite **`eddsa-jcs-2022`**: forma canónica JCS del RFC 8785 (paquete `rfc8785`, no la canonicalización del diario) y firma Ed25519 sobre `SHA-256(opciones) ‖ SHA-256(documento)`; pasa los vectores publicados por el W3C byte a byte. Emisor `did:web` con una clave Multikey para aserciones, que es la misma que firma las raíces. El sujeto se construye campo a campo (campaña, hash del expediente, raíz, versiones, resultados, hallazgos por severidad y marca `nonProduction`): **sin datos personales ni nombres de sistemas**. La revocación es un bit en una **Bitstring Status List** (131 072 bits, GZIP y base64url), reconstruida desde las revocaciones registradas y firmada otra vez: la credencial no se toca.
+- `argos_evidence.core`: el **núcleo puro de verificación** (`integrity`: forma canónica y hash autoexcluido; `envelope`: sobre firmado de la raíz; `timestamp`: verificador único de sellos RFC 3161, con nonce opcional para quien no hizo la petición). Junto con `merkle` y los módulos puros de `credential` (`proof`, `did`, `multibase`, `status`, `verify`), es lo único que usa el comprobador público: sin base de datos, sin almacén y sin red. El resto del paquete lo reutiliza en vez de duplicarlo.
+- `argos_evidence.bundle`: el **paquete de verificación** de un expediente para un tercero (`export_bundle`): expediente, sobre firmado, token de sello y cada artefacto con su prueba de inclusión, en bytes exactos, junto a la credencial, el documento DID, la lista de estado y las raíces de la TSA.
 - `argos_evidence.worm`: cliente del almacén WORM (VersityGW con *object lock*, ADR-0010). Solo escribe una vez, lee y consulta la retención; **no tiene ninguna primitiva de borrado**.
 
 Reglas del árbol:
@@ -80,6 +82,8 @@ Reglas del árbol:
 | Función pública | `credential.issue.verify_credential(credential, did_document, status_list) -> CredentialCheck` | Prueba contra el DID, método de verificación del emisor y bit de revocación; motivos explícitos (`proof`, `revoked`, `status not checked`…) |
 | Función pública | `credential.proof.add_proof`, `verify_proof`, `hash_data`, `jcs`; `credential.did.did_web`, `did_web_url`, `did_document`; `credential.status.encode_list`, `decode_list` | Suite `eddsa-jcs-2022`, `did:web` y lista de estado |
 | Tabla o migración | `argos.credentials`, `argos.credential_revocations`, secuencia `argos.credential_status_seq` (`0026_credentials.sql`) | Una credencial por expediente con su lista e índice; revocaciones con motivo; escritura única |
+| Función pública | `bundle.export_bundle(dsn, store, dossier_sha256, *, did_document, status_list, tsa_roots_pem) -> dict` | Paquete `argos/verification-bundle/1` que comprueba `argos-verifier` |
+| Función pública | `core.integrity.*`, `core.envelope.*`, `core.timestamp.verify_reply`, `credential.verify.verify_credential` | Núcleo puro de verificación (antes en `artifacts`, `signing`, `tsa` y `credential.issue`, que ahora lo importan) |
 | Función pública | `signing.signing_payload(...)`, `signing.sign_payload(signer, payload)`, `signing.verify_envelope(bytes, public_key) -> bool`, `signing.key_id(public_key)` | Objeto de firma, sobre y verificación con la clave pública, sin la plataforma |
 | Tabla o migración | `argos.campaign_signatures` (`0023_campaign_signatures.sql`) | Clave y versión del sobre, SHA-256, identificador de la clave y marca `non_production`; se escribe una vez |
 | Servicio del entorno | `evidence-store` (`127.0.0.1:7075`, red `evidence`, volumen `evidence-data`) | VersityGW v1.8.0, backend POSIX con versiones |
@@ -147,3 +151,4 @@ Por ahora es una librería. El almacén `evidence-store` arranca con `make dev`;
 | 0.6.0-alpha | 2026-09-18 | Sellado temporal RFC 3161 con cola, modo aislado y TSA de desarrollo | F07-08 |
 | 0.7.0-alpha | 2026-09-18 | Expediente de campaña en JSON canónico y PDF reproducible con QR | F07-09 |
 | 0.8.0-alpha | 2026-09-18 | Credencial verificable VC 2.0 con `eddsa-jcs-2022`, `did:web` y Bitstring Status List | F07-10 |
+| 0.9.0-alpha | 2026-09-18 | Núcleo puro de verificación separado y paquete de verificación para el comprobador público | F07-11 |
