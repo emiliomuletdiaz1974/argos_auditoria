@@ -9,3 +9,5 @@ eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_
 eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:73
 eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:76
 eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:79
+# Not a secret: the test key the W3C publishes in vc-di-eddsa (Appendix B), used only by its vectors.
+ddb41fb4bf1ddd3df27a9109fa755955bae24791:tests/vectors/vc_eddsa_jcs_2022.json:generic-api-key:4
