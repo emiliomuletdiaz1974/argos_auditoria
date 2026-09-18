@@ -205,6 +205,20 @@ services:
       interval: 5s
       retries: 30
 
+  # Simulated EDC Management API (F07-12): only what ARGOS uses, bodies checked, state in memory.
+  # The real connector (and Gaia-X, Pontus-X) arrive with F07-16. Development key, trivial on purpose.
+  edc-mock:
+    build: ./edc-mock
+    image: argos-dev/edc-mock:dev
+    environment:
+      EDC_API_KEY: dev-only-edc-key
+    networks: [evidence]
+    ports: ["127.0.0.1:19193:19193"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:19193/health', timeout=2)"]
+      interval: 5s
+      retries: 30
+
   # Public verifier (F07-11): checks an evidence bundle with nothing but what it carries. It has its
   # own network and reaches no other service: no database, no store, no secret.
   verifier:
