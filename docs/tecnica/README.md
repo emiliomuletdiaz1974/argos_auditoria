@@ -16,6 +16,7 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | 03 · Inventario y grafo de conocimiento | [F03-inventario-grafo.md](fases/F03-inventario-grafo.md) | Cerrada (`fase-03`) |
 | 04 · Ontología normativa | [F04-ontologia-normativa.md](fases/F04-ontologia-normativa.md) | Cierre técnico (`fase-04-tecnica`); contenido pendiente de validación jurídica |
 | 05 · Motor de retos | [F05-motor-retos.md](fases/F05-motor-retos.md) | Cerrada (`fase-05`); contenido normativo pendiente de validación jurídica |
+| 07 · Evidencia y credencial | [F07-evidencia-credencial.md](fases/F07-evidencia-credencial.md) | Cerrada (`fase-07`) con firma, sello y EDC de desarrollo; TPM, TSA cualificada, EDC real y GXDCH pendientes |
 
 ## Módulos
 
