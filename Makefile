@@ -5,7 +5,7 @@ COMPOSE := docker compose -f deploy/dev/compose.yaml --profile sources
 COMPOSE_HEAVY := docker compose -f deploy/dev/compose.yaml --profile sources --profile heavy
 VERSION := $(strip $(file < VERSION))
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog ai-eval ai-eval-release
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog ai-eval ai-eval-release demo demo-reset
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -24,6 +24,8 @@ help:
 	@echo "make challenge-catalog  the generated challenge catalog is up to date"
 	@echo "make ai-eval       golden sets of the AI layer with the oracle (also inside make check)"
 	@echo "make ai-eval-release  golden sets against the served model: release gate (needs weights)"
+	@echo "make demo         MVP demonstration end to end, outputs in .scratch/demo (needs make dev)"
+	@echo "make demo-reset   drop every volume and start the environment again, clean for a demonstration"
 
 dev:
 	uv run python tools/prepare_dev_sources.py
@@ -39,6 +41,15 @@ dev-heavy: dev
 
 dev-down:
 	$(COMPOSE_HEAVY) down
+
+# The demonstration environment from nothing: every volume goes (development data, WORM store,
+# TSA test CA), then `make dev` builds, migrates, registers and seeds the sources again.
+demo-reset:
+	$(COMPOSE_HEAVY) down -v
+	$(MAKE) dev
+
+demo:
+	uv run python tools/demo/run_mvp_demo.py --out .scratch/demo
 
 lint:
 	uv run ruff check .

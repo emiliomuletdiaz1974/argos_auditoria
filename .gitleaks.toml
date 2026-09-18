@@ -4,5 +4,6 @@ title = "argos"
 useDefault = true
 
 [allowlist]
-description = "Trivial development-only credentials of the simulated sources, marked dev-only on purpose"
+description = "Trivial development-only credentials of the simulated sources, marked dev-only on purpose; the demonstration backup bundle, public verification material (hashes, signatures, time stamp token) over synthetic data"
 regexes = ['''(?i)dev-only''']
+paths = ['''docs/demo/respaldo/bundle\.json''']
