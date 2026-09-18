@@ -150,3 +150,36 @@ def test_to_datetime_accepts_filetime_and_datetime() -> None:
 
 def test_no_write_surface() -> None:
     assert_no_write_surface(LdapConnector)
+
+
+def _real_connection_kwargs(
+    monkeypatch: pytest.MonkeyPatch, config: dict[str, Any]
+) -> dict[str, Any]:
+    captured: dict[str, Any] = {}
+
+    def spy(server: Server, **kwargs: Any) -> dict[str, Any]:
+        captured.update(kwargs, server=server)
+        return captured
+
+    monkeypatch.setattr("argos_ldap.connector.Connection", spy)
+    credentials = {"host": "dc01.hosp.local", "bind_dn": "cn=argos", "password": "dev-only"}
+    LdapConnector(SYSTEM_ID, config, make_context(credentials=credentials))._connect()
+    return captured
+
+
+def test_referrals_are_never_followed(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A referral to another host would receive the simple bind, in clear text if it is ldap://.
+    kwargs = _real_connection_kwargs(monkeypatch, {"base_dn": BASE})
+    assert kwargs["auto_referrals"] is False
+    assert kwargs["server"].allowed_referral_hosts == []
+
+
+def test_network_timeouts_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
+    kwargs = _real_connection_kwargs(monkeypatch, {"base_dn": BASE})
+    assert kwargs["server"].connect_timeout == 10
+    assert kwargs["receive_timeout"] == 30
+    kwargs = _real_connection_kwargs(
+        monkeypatch, {"base_dn": BASE, "connect_timeout_s": 3, "receive_timeout_s": 5}
+    )
+    assert kwargs["server"].connect_timeout == 3
+    assert kwargs["receive_timeout"] == 5

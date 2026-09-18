@@ -6,7 +6,7 @@ module: argos-connector-ldap
 phases: ["02"]
 version: 0.1.0-alpha
 commit: d018a74
-date: 2026-09-17
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -43,7 +43,7 @@ Sondas del SDK: `scan_schema`, `count` y `sample`.
 
 ## 5. Configuración
 
-- **Por sistema:** `base_dn`, `ca_file`, `tls_valid_names`, `user_filter`, `group_filter` y `page_size`.
+- **Por sistema:** `base_dn`, `ca_file`, `tls_valid_names`, `user_filter`, `group_filter`, `page_size`, `connect_timeout_s` (10 s por defecto) y `receive_timeout_s` (30 s por defecto).
 - **Credenciales de enlace:** en Vault.
 
 ## 6. Seguridad y tratamiento de datos
@@ -52,6 +52,8 @@ Sondas del SDK: `scan_schema`, `count` y `sample`.
 
 - Los filtros LDAP se validan antes de usarse, para evitar inyección.
 - El recorrido de grupos está acotado.
+- **No se siguen referrals.** Un referral a otro servidor recibiría el enlace con la contraseña de la cuenta de servicio, y en claro si fuera `ldap://`. Las entradas fuera del controlador configurado no se consultan.
+- La conexión y cada respuesta tienen tiempo máximo, así que un servidor lento no bloquea al worker.
 
 ## 7. Operación
 
@@ -72,3 +74,4 @@ Ninguna específica del conector.
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Conector LDAP y Active Directory con membresía transitiva y conexión de solo lectura | Fase 02 (ARG-018) |
+| 0.1.0-alpha | 2026-09-18 | Sin seguimiento de referrals y con tiempos máximos de conexión y respuesta | Auditoría de seguridad (A2) |

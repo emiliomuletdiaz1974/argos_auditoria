@@ -97,6 +97,10 @@ class LdapConnector(Connector):
             use_ssl=True,
             tls=tls,
             get_info=NONE,
+            # Referrals are never followed: ldap3 would repeat the simple bind against any host
+            # the directory names, in clear text when the referral is ldap://.
+            allowed_referral_hosts=[],
+            connect_timeout=int(self.config.get("connect_timeout_s", 10)),
         )
         return Connection(
             server,
@@ -104,6 +108,8 @@ class LdapConnector(Connector):
             password=credentials["password"],
             read_only=True,
             auto_bind=True,
+            auto_referrals=False,
+            receive_timeout=int(self.config.get("receive_timeout_s", 30)),
             raise_exceptions=True,
         )
 
