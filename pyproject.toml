@@ -78,5 +78,5 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["smbclient.*", "smbprotocol.*", "boto3.*", "botocore.*", "ldap3.*"]
+module = ["smbclient.*", "smbprotocol.*", "boto3.*", "botocore.*", "ldap3.*", "reportlab.*"]
 ignore_missing_imports = true
