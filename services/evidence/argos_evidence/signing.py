@@ -30,6 +30,7 @@ from argos_common.journal import canonicalize
 from argos_common.journal_pg import PostgresJournal
 from argos_common.release import Signer
 from argos_evidence.artifacts import canonical_instant
+from argos_evidence.journal import anchor_head
 from argos_evidence.roots import get_root
 from argos_evidence.worm import WormAlreadyStoredError, WormStore
 
@@ -166,11 +167,14 @@ def sign_campaign_root(
     store: WormStore,
     signer: Signer,
     campaign_id: str,
-    journal_head: Mapping[str, Any],
+    journal_head: Mapping[str, Any] | None,
     retain_until: dt.datetime,
     now: dt.datetime | None = None,
 ) -> SignatureRecord:
-    """Sign the root of a sealed campaign once, store the envelope and journal it."""
+    """Sign the root of a sealed campaign once, store the envelope and journal it.
+
+    Without an explicit ``journal_head`` the current, verified head is anchored (ARG-066).
+    """
     existing = _signed(dsn, campaign_id)
     if existing is not None:
         return existing
@@ -179,6 +183,8 @@ def sign_campaign_root(
     if root is None:
         raise SigningError(f"campaign {campaign_id} has no Merkle root to sign")
 
+    if journal_head is None:
+        journal_head = anchor_head(dsn)
     payload = signing_payload(
         campaign_id=campaign_id,
         merkle_root=root.root,

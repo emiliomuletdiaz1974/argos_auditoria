@@ -4,8 +4,8 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.4.0-alpha
-commit: eeed179
+version: 0.5.0-alpha
+commit: pendiente
 date: 2026-09-18
 status: draft
 confidentiality: client
@@ -17,12 +17,12 @@ confidentiality: client
 
 Convierte el resultado de una campaña en evidencia que un tercero puede comprobar sin fiarse de ARGOS: artefactos inmutables, un árbol de Merkle que los encadena, la firma de su raíz, un sello de tiempo, el expediente y la credencial verificable. Implementa ARG-061 a ARG-070.
 
-En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con el anclaje de su raíz, el **cliente del almacén WORM (ARG-061)** , los **artefactos de evidencia (ARG-062)** y la **firma de la raíz de campaña (ARG-064)**. El resto llega en las tareas siguientes de la Fase 07, y este documento está en estado `draft` hasta entonces.
+En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con el anclaje de su raíz, el **cliente del almacén WORM (ARG-061)** , los **artefactos de evidencia (ARG-062)** , la **firma de la raíz de campaña (ARG-064)** y el **anclaje del diario (ARG-066)**. El resto llega en las tareas siguientes de la Fase 07, y este documento está en estado `draft` hasta entonces.
 
 ## 2. Alcance y límites
 
 - **Hace:** convertir cada veredicto en un artefacto canónico, minimizado y con su propio hash, escribirlo una vez, indexarlo y anunciarlo; escribir evidencia una sola vez en un almacén con bloqueo en modo conformidad y releerla; construir el árbol sobre el SHA-256 de los artefactos de una campaña, dar la prueba de inclusión de cada uno, verificarla y señalar qué artefactos ya no coinciden; anclar la raíz de cada campaña una sola vez.
-- **Hará:** sellado temporal (ARG-065), anclaje del diario (ARG-066), expediente (ARG-067), credencial (ARG-068) y publicación en espacios de datos (ARG-070).
+- **Hará:** sellado temporal (ARG-065), expediente (ARG-067), credencial (ARG-068) y publicación en espacios de datos (ARG-070).
 - **No hace:** no decide conformidad (eso es del evaluador del motor de retos) ni modifica una raíz ya anclada.
 
 ## 3. Arquitectura
@@ -31,6 +31,7 @@ En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con 
 - `argos_evidence.roots`: orden de las hojas y anclaje de la raíz en PostgreSQL.
 - `argos_evidence.artifacts`: el artefacto de cada veredicto. JSON canónico con la misma función del diario (`argos_common.journal.canonicalize`), su propio SHA-256 calculado sin ese campo y la fecha en que se registró el veredicto, no la de escritura: el mismo veredicto da siempre los mismos bytes (nota ARG-062). Antes de escribir, rechaza cualquier valor que sea un DNI, NIE, NUSS o IBAN español validado, con los validadores de ARG-024.
 - `argos_evidence.signing`: la firma de la raíz. El objeto firmado es JSON canónico y dice todo lo que la firma cubre: raíz de Merkle, número y orden de hojas, clave del árbol, **sello de campaña de la Fase 05**, cabeza del diario, momento, algoritmo (Ed25519) e identificador de la clave. Solo se firma una campaña sellada y con raíz; se firma una vez y el sobre (objeto, firma y clave pública) va al WORM.
+- `argos_evidence.journal`: el diario anclado en la campaña (ARG-066). No hay un segundo verificador ni una segunda fórmula de hash: la cadena la comprueba `PostgresJournal.verify` (ADR-0002, nota ARG-066). Este módulo ancla la cabeza verificada del diario (`seq` y `entry_hash`) en el objeto firmado de la campaña: después, aunque alguien reescriba toda la historia y recalcule todos los hashes, el asiento anclado ya no tiene el hash anclado. También escribe en el WORM el informe de verificación del diario de cada campaña.
 - `argos_evidence.worm`: cliente del almacén WORM (VersityGW con *object lock*, ADR-0010). Solo escribe una vez, lee y consulta la retención; **no tiene ninguna primitiva de borrado**.
 
 Reglas del árbol:
@@ -58,6 +59,10 @@ Reglas del árbol:
 | Tabla o migración | `argos.evidence_index` (`0022_evidence_index.sql`) | Clave, versión y SHA-256 del fichero de cada artefacto; se escribe una vez |
 | Función pública | `worm.WormStore.version_of(key)` | Versión actual de una clave, para que un reintento encuentre lo que guardó el primero |
 | Función pública | `signing.sign_campaign_root(dsn, store, signer, campaign_id, journal_head, retain_until) -> SignatureRecord` | Firma la raíz de una campaña sellada, guarda el sobre en `campaigns/{campaign_id}/root-signature.json`, lo registra y lo anota en el diario (`campaign.root_signed`). Idempotente |
+| Función pública | `journal.anchor_head(dsn) -> {seq, entry_hash}` | Cabeza actual del diario tras verificar toda la cadena; si la cadena está rota no se ancla (`JournalAnchorError`) |
+| Función pública | `journal.verify_anchor(dsn, head) -> AnchorCheck` | Comprueba la cadena hasta la cabeza anclada y que el asiento anclado conserva su hash; `intact`, `head_matches` y anomalías |
+| Función pública | `journal.journal_report(dsn, store, campaign_id, head, retain_until) -> ReportRecord` | Informe de verificación del diario en `campaigns/{campaign_id}/journal-report.json`, con su propio hash; sin fecha dentro, así que un reintento lo comprueba byte a byte |
+| Función pública | `artifacts.seal_document(document)`, `artifacts.file_digest(body)` | Añadir a un documento su propio SHA-256 autoexcluido y calcular el hash de un fichero guardado; los usan artefactos e informe |
 | Función pública | `signing.signing_payload(...)`, `signing.sign_payload(signer, payload)`, `signing.verify_envelope(bytes, public_key) -> bool`, `signing.key_id(public_key)` | Objeto de firma, sobre y verificación con la clave pública, sin la plataforma |
 | Tabla o migración | `argos.campaign_signatures` (`0023_campaign_signatures.sql`) | Clave y versión del sobre, SHA-256, identificador de la clave y marca `non_production`; se escribe una vez |
 | Servicio del entorno | `evidence-store` (`127.0.0.1:7075`, red `evidence`, volumen `evidence-data`) | VersityGW v1.8.0, backend POSIX con versiones |
@@ -74,6 +79,7 @@ Usa la cadena de conexión a PostgreSQL de la plataforma (`ARGOS_DATABASE_URL`, 
 - El árbol y la raíz solo manejan **hashes** de artefactos, nunca su contenido.
 - `argos.evidence_index` y `argos.campaign_signatures` son de escritura única, como `argos.campaign_roots`.
 - **Custodia de la clave:** la clave privada de firma nunca está en disco ni en memoria de ARGOS; firma el custodio (Vault Transit en desarrollo, TPM en el appliance).
+- **Diario anclado:** `sign_campaign_root` ancla por defecto la cabeza verificada del diario, y un diario roto no se ancla.
 - **Nada firmado en desarrollo pasa por producción:** un firmante que no se declara `production` marca cada objeto con `non_production: true` dentro de lo firmado; la marca queda también en `argos.campaign_signatures` y en el diario. Solo el `TpmSigner` del appliance se declarará de producción (nota ARG-064-065).
 - `argos.campaign_roots` es de escritura única: un disparador rechaza `UPDATE`, `DELETE` y `TRUNCATE`.
 - La inmutabilidad de la evidencia es **técnica**: la da el almacén con bloqueo en modo conformidad, que rechaza borrar, acortar la retención o relajar el modo, también a su cuenta raíz. Lo demuestra la prueba de conformidad.
@@ -94,6 +100,7 @@ Por ahora es una librería. El almacén `evidence-store` arranca con `make dev`;
 - `tests/integration/test_artifacts.py`: un veredicto real escrito en el WORM e indexado; reintento idempotente; índice perdido reconstruido desde los mismos bytes; índice de escritura única.
 - `services/evidence/tests/test_signing_pure.py`: objeto estable, verificación con la clave pública, cualquier campo alterado rompe la firma, otra clave no verifica y la marca `non_production`.
 - `tests/integration/test_signing.py`: firma con la clave de Vault de una campaña sellada, sobre en el WORM, anotación en el diario, idempotencia, rechazo de campañas sin sellar o sin raíz y tabla de escritura única.
+- `tests/integration/test_journal_anchor.py`: cabeza anclada tras verificar; diario roto que no se ancla; asiento anterior alterado detectado; reescritura completa de la historia con hashes recalculados detectada por el anclaje; firma que ancla la cabeza por defecto; informe verificable e idempotente en el WORM; y ninguna segunda fórmula de hash del diario.
 - `tests/integration/test_worm_conformance.py`: la prueba de conformidad de ADR-0010 contra el almacén real (borrar, sobrescribir y acortar la retención fallan).
 - `tests/architecture/test_worm_has_no_delete.py`: el cliente no expone ni alcanza ninguna primitiva de borrado, ni por nombre ni por acceso dinámico.
 
@@ -110,3 +117,4 @@ Por ahora es una librería. El almacén `evidence-store` arranca con `make dev`;
 | 0.2.0-alpha | 2026-09-18 | Cliente del almacén WORM sin primitiva de borrado y almacén `evidence-store` en el entorno | F07-04 |
 | 0.3.0-alpha | 2026-09-18 | Artefactos de evidencia canónicos, minimizados, indexados y anunciados | F07-05 |
 | 0.4.0-alpha | 2026-09-18 | Firma de la raíz de campaña con clave no exportable y marca de no producción | F07-06 |
+| 0.5.0-alpha | 2026-09-18 | Cabeza del diario anclada en la firma e informe de verificación del diario en el WORM | F07-07 |

@@ -128,9 +128,20 @@ def build_artifact(row: Mapping[str, Any]) -> bytes:
         raise ArtifactNotMinimisedError(
             f"the artifact would carry personal identifiers at {', '.join(found)}"
         )
-    content = canonicalize(document)
-    document["sha256"] = hashlib.sha256(content.encode("utf-8")).hexdigest()
-    return canonicalize(document).encode("utf-8")
+    return seal_document(document)
+
+
+def seal_document(document: Mapping[str, Any]) -> bytes:
+    """Canonical bytes of ``document`` with its own SHA-256, computed without that field."""
+    content = dict(document)
+    content.pop("sha256", None)
+    sealed = {**content, "sha256": file_digest(canonicalize(content).encode("utf-8"))}
+    return canonicalize(sealed).encode("utf-8")
+
+
+def file_digest(body: bytes) -> str:
+    """SHA-256 of a stored file, as the index, the tree and the record name it."""
+    return hashlib.sha256(body).hexdigest()
 
 
 def verify_artifact(body: bytes) -> bool:
@@ -147,7 +158,7 @@ def verify_artifact(body: bytes) -> bool:
         content = canonicalize({k: v for k, v in document.items() if k != "sha256"})
     except ValueError:
         return False
-    return hashlib.sha256(content.encode("utf-8")).hexdigest() == str(document["sha256"])
+    return file_digest(content.encode("utf-8")) == str(document["sha256"])
 
 
 def _verdict_row(dsn: str, campaign_id: str, verdict_id: str) -> dict[str, Any]:
