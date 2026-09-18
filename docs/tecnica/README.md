@@ -33,7 +33,7 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | `argos-connector-sdk` | [argos-connector-sdk.md](modulos/argos-connector-sdk.md) | 02, 03 |
 | `argos-connector-sql` | [argos-connector-sql.md](modulos/argos-connector-sql.md) | 02, 03 |
 | `argos-events` | [argos-events.md](modulos/argos-events.md) | 01 |
-| `argos-evidence` | [argos-evidence.md](modulos/argos-evidence.md) | 07 (en construcción) |
+| `argos-evidence` | [argos-evidence.md](modulos/argos-evidence.md) | 07 |
 | `argos-example` | [argos-example.md](modulos/argos-example.md) | 01 (interno) |
 | `argos-inventory` | [argos-inventory.md](modulos/argos-inventory.md) | 03, 04 |
 | `argos-ontology` | [argos-ontology.md](modulos/argos-ontology.md) | 04 |

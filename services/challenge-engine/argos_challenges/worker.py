@@ -13,6 +13,7 @@ from temporalio.worker import Worker
 from argos_common.config import ArgosConfig, get_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
+from argos_events import Bus
 
 from .activities import ChallengeActivities, record_in_journal, smoke_probe
 from .workflows import CampaignWorkflow, RemediationRun, SmokeCampaign, SystemRun
@@ -47,19 +48,27 @@ async def create_worker(
     )
 
 
-def campaign_activities(cfg: ArgosConfig | None = None) -> ChallengeActivities:
-    """The campaign activities bound to the configured database, Vault and OPA."""
+def campaign_activities(
+    cfg: ArgosConfig | None = None, bus: Bus | None = None
+) -> ChallengeActivities:
+    """The campaign activities bound to the configured database, Vault, OPA and bus.
+
+    With a bus, sealing a campaign is announced on `argos.campaign.sealed`; whoever needs to act
+    on it (the evidence service) listens. The campaign never waits for them.
+    """
     config = cfg or get_config()
     token = config.VAULT_TOKEN.get_secret_value() if config.VAULT_TOKEN else ""
     secrets = VaultSecretStore(config.VAULT_ADDR, token)
-    return ChallengeActivities(config.DATABASE_URL, secrets, config.OPA_URL)
+    return ChallengeActivities(config.DATABASE_URL, secrets, config.OPA_URL, bus)
 
 
 async def main() -> None:
     cfg = get_config()
     configure_logging("argos-campaign-worker", cfg.LOG_LEVEL)
     client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")
-    worker = await create_worker(client, campaign=campaign_activities(cfg))
+    bus = Bus("argos-campaign-worker", cfg.NATS_URL)
+    await bus.connect()
+    worker = await create_worker(client, campaign=campaign_activities(cfg, bus))
     get_logger(__name__, "ARG-007").info(f"worker ready on queue {TASK_QUEUE}")
     await worker.run()
 

@@ -205,6 +205,68 @@ services:
       interval: 5s
       retries: 30
 
+  # Evidence service (F07-13): the worker listens for sealed campaigns on NATS and carries each one
+  # to its credential; the API publishes only what verification needs (DID, status lists,
+  # credentials). Both reach the WORM store, the TSA and the EDC on the evidence network.
+  evidence-worker:
+    build: &evidence_build
+      context: ../..
+      dockerfile: services/evidence/Dockerfile
+    image: argos-evidence:dev
+    command: ["/app/.venv/bin/python", "-m", "argos_evidence.worker"]
+    environment: &evidence_env
+      ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos
+      ARGOS_TEMPORAL_ADDRESS: temporal:7233
+      ARGOS_NATS_URL: nats://nats:4222
+      ARGOS_VAULT_ADDR: http://vault:8200
+      ARGOS_VAULT_TOKEN: root   # development Vault started with -dev-root-token-id=root
+      ARGOS_LOG_LEVEL: INFO
+      ARGOS_EVIDENCE_ISSUER_DID: did:web:127.0.0.1%3A8008
+      ARGOS_EVIDENCE_STATUS_BASE_URL: http://127.0.0.1:8008/status
+      ARGOS_EVIDENCE_CREDENTIAL_BASE_URL: http://127.0.0.1:8008/credentials
+      ARGOS_EVIDENCE_VERIFIER_URL: http://127.0.0.1:8007/verify
+      ARGOS_EVIDENCE_RETENTION_DAYS: "1"
+      ARGOS_EVIDENCE_S3_ENDPOINT: http://evidence-store:7070
+      ARGOS_EVIDENCE_S3_ACCESS_KEY: dev-only-evidence
+      ARGOS_EVIDENCE_S3_SECRET_KEY: dev-only-evidence-secret
+      ARGOS_EVIDENCE_TSA_URL: http://tsa:3180
+      ARGOS_EVIDENCE_TSA_ROOTS_URL: http://tsa:3180/ca.pem
+      ARGOS_EVIDENCE_STAMP_ATTEMPTS: "12"
+      ARGOS_EVIDENCE_STAMP_WAIT_SECONDS: "5"
+    networks: [default, evidence]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+      nats:
+        condition: service_started
+      evidence-store:
+        condition: service_started
+      tsa:
+        condition: service_healthy
+
+  evidence-api:
+    build: *evidence_build
+    image: argos-evidence:dev
+    command: ["/app/.venv/bin/python", "-m", "argos_evidence.api"]
+    environment:
+      <<: *evidence_env
+      ARGOS_API_BIND: 0.0.0.0   # published below on 127.0.0.1 only
+    networks: [default, evidence]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      evidence-store:
+        condition: service_started
+      tsa:
+        condition: service_healthy
+    ports: ["127.0.0.1:8008:8008"]
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8008/health', timeout=2)"]
+      interval: 5s
+      retries: 30
+
   # Simulated EDC Management API (F07-12): only what ARGOS uses, bodies checked, state in memory.
   # The real connector (and Gaia-X, Pontus-X) arrive with F07-16. Development key, trivial on purpose.
   edc-mock:

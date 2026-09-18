@@ -5,8 +5,8 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: e8a057c
-date: 2026-09-17
+commit: pendiente
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -117,7 +117,7 @@ Los workflows quedan deterministas y sin entrada/salida; todo lo que habla con u
 - **Minimización antes de devolver:** solo salen las claves que permite lo declarado en `evidence.capture`; ni valores, ni cadenas de conexión, ni nada sin declarar llega al historial del workflow.
 - **`wait_window`** espera la ventana pactada del sistema con latido, sin fallar.
 - **`evaluate`** consulta OPA si el criterio lo delega, llama al evaluador puro y persiste con `persist_verdict`: repetir la actividad no duplica veredictos.
-- El worker registra estas actividades junto a las de humo (`campaign_activities()` las ata a la base, a Vault y a OPA).
+- El worker registra estas actividades junto a las de humo (`campaign_activities()` las ata a la base, a Vault, a OPA y al bus). Con el bus conectado, sellar una campaña se **anuncia** en `argos.campaign.sealed`: el servicio de evidencia (F07-13) escucha y lleva la campaña hasta su credencial. La campaña no espera a nadie ni depende de que el servicio de evidencia exista.
 
 ### Ciclo de vida de los hallazgos (ARG-048)
 
@@ -329,3 +329,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Contenedores del worker y de la API en el entorno de desarrollo, con SBOM en el CI | Fase 05 (F05-17) |
 | 0.1.0-alpha | 2026-09-17 | Biblioteca de 17 retos de RGPD y AI Act, criterios delegados que leen la sonda y filtro por severidad en SHACL | Fase 05 (ARG-050) |
 | 0.1.0-alpha | 2026-09-17 | Prueba de la fase: campaña completa, reejecución determinista, sello y subsanación | Fase 05 (`fase-05`) |
+| 0.1.0-alpha | 2026-09-18 | El worker se conecta al bus y anuncia cada sello en `argos.campaign.sealed` (dependencia de `argos-events`) | F07-13 |
