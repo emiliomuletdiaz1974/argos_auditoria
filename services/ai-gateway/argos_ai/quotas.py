@@ -7,6 +7,7 @@ the budget is read **before** calling the model.
 
 from collections.abc import Mapping
 from typing import Any
+from uuid import UUID
 
 import psycopg
 
@@ -41,6 +42,17 @@ def record_usage(dsn: str, row: Mapping[str, Any]) -> None:
         conn.execute(_RECORD, dict(row))
 
 
+def verdict_exists(dsn: str, verdict_id: str) -> bool:
+    """Whether a verdict the model quotes is real (the argos_ai role may read verdicts)."""
+    try:
+        UUID(verdict_id)
+    except ValueError:
+        return False
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute("SELECT 1 FROM argos.verdicts WHERE id = %s", (verdict_id,)).fetchone()
+    return row is not None
+
+
 def postgres_gateway(
     dsn: str, backend: Backend, model: str = "argos-llm", **kwargs: Any
 ) -> Gateway:
@@ -58,6 +70,7 @@ def postgres_gateway(
         quotas=daily_quotas(dsn),
         spent=spent_today(dsn),
         reload_quotas=lambda: daily_quotas(dsn),
+        verdict_exists=lambda verdict_id: verdict_exists(dsn, verdict_id),
         model=model,
         **kwargs,
     )

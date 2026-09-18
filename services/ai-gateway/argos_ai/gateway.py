@@ -83,6 +83,7 @@ class Gateway:
         reservation: int = DEFAULT_RESERVATION,
         today: Callable[[], date] | None = None,
         reload_quotas: Callable[[], Mapping[str, int]] | None = None,
+        verdict_exists: Callable[[str], bool] | None = None,
     ) -> None:
         self._backend = backend
         self._journal = journal
@@ -96,6 +97,7 @@ class Gateway:
         self._reservation = reservation
         self._today = today or (lambda: datetime.now(UTC).date())
         self._reload_quotas = reload_quotas
+        self._verdict_exists = verdict_exists
         self._day = self._today()
 
     def spent(self, service: str) -> int:
@@ -144,7 +146,7 @@ class Gateway:
         try:
             async with self._slots[priority]:
                 data, repaired = await self._complete(clean_system, clean_user, schema, cost)
-            check_output(data)
+            check_output(data, self._verdict_exists)
         finally:
             self._reserved[service] -= self._reservation
             self._spent[service] = self._spent.get(service, 0) + cost[0] + cost[1]

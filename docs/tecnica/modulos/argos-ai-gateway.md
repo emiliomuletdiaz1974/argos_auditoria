@@ -145,7 +145,7 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 
 - **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase.
 - **`check_output(answer) -> bool`.** Recorre todas las cadenas del JSON, por hondas que estén, y rechaza dos cosas con motivo tipificado:
-  - `veredicto_no_citado`: una afirmación de conformidad sobre un activo sin el `verdict_id` del que sale;
+  - `veredicto_no_citado`: una afirmación de conformidad sobre un activo sin el `verdict_id` del que sale. En el gateway que corre sobre PostgreSQL, solo cuenta como cita un `verdict_id` que existe en `argos.verdicts`: el modelo puede escribir cualquier id, y uno inventado no abre la puerta a la afirmación;
   - `escritura_sobre_objetivo`: un verbo de escritura sobre un sistema.
 - **Las tablas de patrones son contenido**, en `library/prompts/guardrails.yaml`, y el equipo las amplía sin una release. **La decisión de rechazar no es contenido:** no tiene interruptor.
 
@@ -273,3 +273,4 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.1.0-alpha | 2026-09-17 | Servicio y contenedor del gateway en su propia red, con la sesión en el rol restringido y el diario abierto solo para añadir | Fase 06 (F06-13) |
 | 0.1.0-alpha | 2026-09-18 | Cuota reservada antes de llamar, cobrada también en los fallos, renovada cada día y respuestas limitadas a 2048 tokens | Auditoría de seguridad (M3) |
 | 0.1.0-alpha | 2026-09-18 | Las sondas de los retos generados pasan la validación de solo lectura de los conectores | Auditoría de seguridad (B2) |
+| 0.1.0-alpha | 2026-09-18 | El guardarraíl de salida solo acepta como cita veredictos que existen | Auditoría de seguridad (B1) |
