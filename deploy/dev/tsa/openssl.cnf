@@ -1,0 +1,21 @@
+# ARG-065 · configuration of the development TSA. The policy OID is a test one on purpose:
+# a stamp from this authority must never be mistaken for a qualified one. Replies carry only the
+# TSA certificate (a DER SET of one needs no ordering); clients bring the root themselves.
+[ tsa ]
+default_tsa = tsa_config
+
+[ tsa_config ]
+dir                     = /data
+serial                  = $dir/serial
+crypto_device           = builtin
+signer_cert             = $dir/tsa.pem
+signer_key              = $dir/tsa.key
+signer_digest           = sha256
+default_policy          = 1.2.3.4.1
+digests                 = sha256, sha384, sha512
+accuracy                = secs:1
+clock_precision_digits  = 0
+ordering                = yes
+tsa_name                = yes
+ess_cert_id_chain       = no
+ess_cert_id_alg         = sha256

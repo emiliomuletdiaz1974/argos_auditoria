@@ -4,8 +4,8 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.5.0-alpha
-commit: ff1b754
+version: 0.6.0-alpha
+commit: pendiente
 date: 2026-09-18
 status: draft
 confidentiality: client
@@ -17,12 +17,12 @@ confidentiality: client
 
 Convierte el resultado de una campaña en evidencia que un tercero puede comprobar sin fiarse de ARGOS: artefactos inmutables, un árbol de Merkle que los encadena, la firma de su raíz, un sello de tiempo, el expediente y la credencial verificable. Implementa ARG-061 a ARG-070.
 
-En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con el anclaje de su raíz, el **cliente del almacén WORM (ARG-061)** , los **artefactos de evidencia (ARG-062)** , la **firma de la raíz de campaña (ARG-064)** y el **anclaje del diario (ARG-066)**. El resto llega en las tareas siguientes de la Fase 07, y este documento está en estado `draft` hasta entonces.
+En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con el anclaje de su raíz, el **cliente del almacén WORM (ARG-061)** , los **artefactos de evidencia (ARG-062)** , la **firma de la raíz de campaña (ARG-064)** , el **anclaje del diario (ARG-066)** y el **sellado temporal RFC 3161 con cola (ARG-065)**. El resto llega en las tareas siguientes de la Fase 07, y este documento está en estado `draft` hasta entonces.
 
 ## 2. Alcance y límites
 
 - **Hace:** convertir cada veredicto en un artefacto canónico, minimizado y con su propio hash, escribirlo una vez, indexarlo y anunciarlo; escribir evidencia una sola vez en un almacén con bloqueo en modo conformidad y releerla; construir el árbol sobre el SHA-256 de los artefactos de una campaña, dar la prueba de inclusión de cada uno, verificarla y señalar qué artefactos ya no coinciden; anclar la raíz de cada campaña una sola vez.
-- **Hará:** sellado temporal (ARG-065), expediente (ARG-067), credencial (ARG-068) y publicación en espacios de datos (ARG-070).
+- **Hará:** expediente (ARG-067), credencial (ARG-068) y publicación en espacios de datos (ARG-070).
 - **No hace:** no decide conformidad (eso es del evaluador del motor de retos) ni modifica una raíz ya anclada.
 
 ## 3. Arquitectura
@@ -32,6 +32,7 @@ En su estado actual contiene el **árbol de Merkle por campaña (ARG-063)** con 
 - `argos_evidence.artifacts`: el artefacto de cada veredicto. JSON canónico con la misma función del diario (`argos_common.journal.canonicalize`), su propio SHA-256 calculado sin ese campo y la fecha en que se registró el veredicto, no la de escritura: el mismo veredicto da siempre los mismos bytes (nota ARG-062). Antes de escribir, rechaza cualquier valor que sea un DNI, NIE, NUSS o IBAN español validado, con los validadores de ARG-024.
 - `argos_evidence.signing`: la firma de la raíz. El objeto firmado es JSON canónico y dice todo lo que la firma cubre: raíz de Merkle, número y orden de hojas, clave del árbol, **sello de campaña de la Fase 05**, cabeza del diario, momento, algoritmo (Ed25519) e identificador de la clave. Solo se firma una campaña sellada y con raíz; se firma una vez y el sobre (objeto, firma y clave pública) va al WORM.
 - `argos_evidence.journal`: el diario anclado en la campaña (ARG-066). No hay un segundo verificador ni una segunda fórmula de hash: la cadena la comprueba `PostgresJournal.verify` (ADR-0002, nota ARG-066). Este módulo ancla la cabeza verificada del diario (`seq` y `entry_hash`) en el objeto firmado de la campaña: después, aunque alguien reescriba toda la historia y recalcule todos los hashes, el asiento anclado ya no tiene el hash anclado. También escribe en el WORM el informe de verificación del diario de cada campaña.
+- `argos_evidence.tsa`: sellado temporal RFC 3161. La firma prueba quién; el sello prueba cuándo, y lo dice una autoridad ajena. El appliance puede estar aislado (P-02), así que el sellado es asíncrono: el sobre firmado entra en la cola al firmarse y se ve «en cola» hasta que exista un token verificado. Hay dos caminos al token, en línea (`process_queue`) y aislado (`export_requests` / `import_replies`), y **un solo verificador** (`verify_reply`, sobre `rfc3161-client`, Apache-2.0): estado, cadena hasta una raíz de confianza, nonce de la última petición, certificado de sellado y SHA-256 de los bytes exactos guardados en el WORM. El token se guarda en el WORM junto al objeto (`<clave>.tsr`).
 - `argos_evidence.worm`: cliente del almacén WORM (VersityGW con *object lock*, ADR-0010). Solo escribe una vez, lee y consulta la retención; **no tiene ninguna primitiva de borrado**.
 
 Reglas del árbol:
@@ -63,6 +64,11 @@ Reglas del árbol:
 | Función pública | `journal.verify_anchor(dsn, head) -> AnchorCheck` | Comprueba la cadena hasta la cabeza anclada y que el asiento anclado conserva su hash; `intact`, `head_matches` y anomalías |
 | Función pública | `journal.journal_report(dsn, store, campaign_id, head, retain_until) -> ReportRecord` | Informe de verificación del diario en `campaigns/{campaign_id}/journal-report.json`, con su propio hash; sin fecha dentro, así que un reintento lo comprueba byte a byte |
 | Función pública | `artifacts.seal_document(document)`, `artifacts.file_digest(body)` | Añadir a un documento su propio SHA-256 autoexcluido y calcular el hash de un fichero guardado; los usan artefactos e informe |
+| Función pública | `tsa.process_queue(dsn, store, transport, roots, retain_until) -> QueueSummary` | Intenta sellar cada objeto en cola; un fallo se anota (intentos y último error) y el objeto sigue en cola |
+| Función pública | `tsa.export_requests(dsn, store)`, `tsa.import_replies(dsn, store, replies, roots, retain_until)` | Modo aislado: consultas para sellar fuera y aceptación de las respuestas traídas de vuelta |
+| Función pública | `tsa.accept_reply(...)`, `tsa.verify_reply(reply, data, nonce, roots)`, `tsa.stamp_of(dsn, key)`, `tsa.enqueue(...)`, `tsa.http_transport(url)` | Verificador único, estado visible de cada objeto y transporte HTTP (`application/timestamp-query`) |
+| Tabla o migración | `argos.tsa_queue` (`0024_tsa_queue.sql`) | Objeto, versión y hash; estado `queued`/`stamped`, intentos, último error, nonce, token, `gen_time` y política. Una entrada sellada es definitiva y ninguna se borra |
+| Servicio del entorno | `tsa` (`127.0.0.1:3180`, red `evidence`, volumen `tsa-data`) | TSA de desarrollo: `openssl ts` con una autoridad de pruebas creada al primer arranque; política `1.2.3.4.1`, **no cualificada**. `GET /ca.pem` da su raíz |
 | Función pública | `signing.signing_payload(...)`, `signing.sign_payload(signer, payload)`, `signing.verify_envelope(bytes, public_key) -> bool`, `signing.key_id(public_key)` | Objeto de firma, sobre y verificación con la clave pública, sin la plataforma |
 | Tabla o migración | `argos.campaign_signatures` (`0023_campaign_signatures.sql`) | Clave y versión del sobre, SHA-256, identificador de la clave y marca `non_production`; se escribe una vez |
 | Servicio del entorno | `evidence-store` (`127.0.0.1:7075`, red `evidence`, volumen `evidence-data`) | VersityGW v1.8.0, backend POSIX con versiones |
@@ -79,6 +85,7 @@ Usa la cadena de conexión a PostgreSQL de la plataforma (`ARGOS_DATABASE_URL`, 
 - El árbol y la raíz solo manejan **hashes** de artefactos, nunca su contenido.
 - `argos.evidence_index` y `argos.campaign_signatures` son de escritura única, como `argos.campaign_roots`.
 - **Custodia de la clave:** la clave privada de firma nunca está en disco ni en memoria de ARGOS; firma el custodio (Vault Transit en desarrollo, TPM en el appliance).
+- **Sellado temporal:** ningún token se acepta sin pasar por el verificador único; un token de otro objeto, de otra petición (nonce) o de una autoridad sin raíz de confianza se rechaza y el objeto sigue en cola. Los sellos de la TSA de desarrollo llevan una política de pruebas y no son cualificados (nota ARG-064-065); la TSA cualificada llega con F07-16.
 - **Diario anclado:** `sign_campaign_root` ancla por defecto la cabeza verificada del diario, y un diario roto no se ancla.
 - **Nada firmado en desarrollo pasa por producción:** un firmante que no se declara `production` marca cada objeto con `non_production: true` dentro de lo firmado; la marca queda también en `argos.campaign_signatures` y en el diario. Solo el `TpmSigner` del appliance se declarará de producción (nota ARG-064-065).
 - `argos.campaign_roots` es de escritura única: un disparador rechaza `UPDATE`, `DELETE` y `TRUNCATE`.
@@ -101,6 +108,7 @@ Por ahora es una librería. El almacén `evidence-store` arranca con `make dev`;
 - `services/evidence/tests/test_signing_pure.py`: objeto estable, verificación con la clave pública, cualquier campo alterado rompe la firma, otra clave no verifica y la marca `non_production`.
 - `tests/integration/test_signing.py`: firma con la clave de Vault de una campaña sellada, sobre en el WORM, anotación en el diario, idempotencia, rechazo de campañas sin sellar o sin raíz y tabla de escritura única.
 - `tests/integration/test_journal_anchor.py`: cabeza anclada tras verificar; diario roto que no se ancla; asiento anterior alterado detectado; reescritura completa de la historia con hashes recalculados detectada por el anclaje; firma que ancla la cabeza por defecto; informe verificable e idempotente en el WORM; y ninguna segunda fórmula de hash del diario.
+- `services/evidence/tests/test_tsa_pure.py` y `tests/integration/test_tsa.py`: la firma encola el sello y el estado se ve; sello verificado y guardado en el WORM; un fallo deja el objeto en cola y el reintento lo sella; un token de otro objeto se rechaza; exportación e importación aisladas; una respuesta a una petición anterior se rechaza por el nonce; una entrada sellada no cambia ni desaparece.
 - `tests/integration/test_worm_conformance.py`: la prueba de conformidad de ADR-0010 contra el almacén real (borrar, sobrescribir y acortar la retención fallan).
 - `tests/architecture/test_worm_has_no_delete.py`: el cliente no expone ni alcanza ninguna primitiva de borrado, ni por nombre ni por acceso dinámico.
 
@@ -118,3 +126,4 @@ Por ahora es una librería. El almacén `evidence-store` arranca con `make dev`;
 | 0.3.0-alpha | 2026-09-18 | Artefactos de evidencia canónicos, minimizados, indexados y anunciados | F07-05 |
 | 0.4.0-alpha | 2026-09-18 | Firma de la raíz de campaña con clave no exportable y marca de no producción | F07-06 |
 | 0.5.0-alpha | 2026-09-18 | Cabeza del diario anclada en la firma e informe de verificación del diario en el WORM | F07-07 |
+| 0.6.0-alpha | 2026-09-18 | Sellado temporal RFC 3161 con cola, modo aislado y TSA de desarrollo | F07-08 |

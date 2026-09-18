@@ -32,6 +32,7 @@ from argos_common.release import Signer
 from argos_evidence.artifacts import canonical_instant
 from argos_evidence.journal import anchor_head
 from argos_evidence.roots import get_root
+from argos_evidence.tsa import enqueue
 from argos_evidence.worm import WormAlreadyStoredError, WormStore
 
 SCHEMA = "argos/root-signature/1"
@@ -171,7 +172,7 @@ def sign_campaign_root(
     retain_until: dt.datetime,
     now: dt.datetime | None = None,
 ) -> SignatureRecord:
-    """Sign the root of a sealed campaign once, store the envelope and journal it.
+    """Sign the root of a sealed campaign once, store the envelope, journal it and queue its stamp.
 
     Without an explicit ``journal_head`` the current, verified head is anchored (ARG-066).
     """
@@ -230,6 +231,7 @@ def sign_campaign_root(
             },
             conn=conn,
         )
+        enqueue(dsn, key, version_id, digest, conn=conn)
     record = _signed(dsn, campaign_id)
     if record is None:  # pragma: no cover - the insert above committed
         raise SigningError(f"the signature of {campaign_id} was not recorded")

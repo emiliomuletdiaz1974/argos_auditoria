@@ -192,6 +192,19 @@ services:
     networks: [evidence]
     ports: ["127.0.0.1:7075:7070"]
 
+  # Development time stamping authority (F07-08, deviation note ARG-064-065): RFC 3161 by
+  # `openssl ts` with a test CA made on first start and kept in its volume. Not qualified.
+  tsa:
+    build: ./tsa
+    image: argos-dev/tsa:dev
+    volumes: ["tsa-data:/data"]
+    networks: [evidence]
+    ports: ["127.0.0.1:3180:3180"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3180/health', timeout=2)"]
+      interval: 5s
+      retries: 30
+
   # ── AI layer (F06-13): the gateway on its own networks, never on the one of the campaign API. ──
   ai-gateway:
     build:
@@ -358,3 +371,4 @@ volumes:
   pg-data:
   nats-data:
   evidence-data:
+  tsa-data:
