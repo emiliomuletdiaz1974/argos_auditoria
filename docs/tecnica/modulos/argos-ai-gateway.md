@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
-commit: ed9eb22
+commit: pendiente
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -22,7 +22,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 ## 2. Alcance y límites
 
 - **Hace:** depurar lo que entra a un prompt, vigilar lo que sale y ser **la única puerta a la inferencia**: colas con dos prioridades, cuota diaria por servicio, JSON forzado con un ciclo de reparación y registro con hash.
-- **Hará:** el RAG normativo con cita obligatoria (ARG-054), clasificación calibrada (ARG-055), generación de retos (ARG-056), dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
+- **Hará:** clasificación calibrada (ARG-055), generación de retos (ARG-056), dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
 - **No hace, y no es una cuestión de configuración:** emitir un veredicto. No hay ruta de importación, ni de red, ni de permisos de base de datos que lleve de aquí al evaluador.
 - **No hace:** escribir en un sistema del cliente, ni proponer que se escriba.
 
@@ -30,7 +30,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 
 - **`argos_ai.guardrails`** (ARG-060): `scrub_input` a la entrada y `check_output` a la salida. Puro, sin modelo y sin entrada/salida, para poder probarlo entero.
 - **`argos_ai.gateway.Gateway`** (ARG-052): la puerta. El diario y el registro de uso se inyectan, así que el gateway se ejerce entero sin base de datos; `argos_ai.quotas.postgres_gateway` lo monta como corre en el appliance.
-- **`argos_ai.rag`** (ARG-053): troceado por estructura jurídica, embeddings e índice sobre pgvector.
+- **`argos_ai.rag`** (ARG-053, ARG-054): troceado por estructura jurídica, embeddings, índice sobre pgvector y el pipeline de respuesta con cita obligatoria.
 - **`argos_ai.backends`**: un contrato (`Backend`, `Completion`) y tres implementaciones. `OpenAiCompatibleBackend` sirve para vLLM y para llama.cpp, porque los dos hablan la misma API; `FakeBackend` responde desde un fichero indexado por el hash del prompt.
 - Dependencias: `argos-common` (errores y configuración) y `argos-connector-sdk`, del que reutiliza los **validadores de identificadores españoles de ARG-024**.
 
@@ -62,6 +62,16 @@ Sin él el CI dependería de una GPU y del humor de un modelo, y un conjunto dor
 - **Dos búsquedas sobre la misma tabla:** vectorial con índice HNSW y léxica con `tsvector`, porque los números de artículo son justo lo que peor tratan los embeddings y justo lo que un DPO escribe.
 - **El embebedor es configuración.** En los tests, `HashEmbedder` da un vector estable por texto: no entiende nada, pero es determinista, y la calidad semántica se mide contra el modelo real en los conjuntos dorados.
 
+### El RAG normativo (ARG-054)
+
+La exigencia está por encima de la habitual: **la cita exacta**. «El RGPD exige X» sin apartado es ruido para un DPO; «art. 32.1.a» con el fragmento al lado es una herramienta.
+
+- **Recuperación híbrida y fusión RRF.** Vectorial y léxica devuelven puntuaciones que no viven en la misma escala, así que no se suman: RRF suma posiciones. Lo que las dos búsquedas encuentran gana a lo que encuentra solo una, aunque esa lo ponga primero. Lo que **no** hace es premiar el término medio: por convexidad, primero en una y tercero en la otra supera a segundo en las dos.
+- **Contexto numerado y cita obligada.** Los fragmentos van numerados y el prompt obliga a citarlos por número.
+- **Toda cita se comprueba contra lo que se recuperó.** Una cita inventada **invalida la respuesta**: es peor que no responder.
+- **Rehúso honesto.** Sin soporte suficiente, la respuesta lo dice y enseña los fragmentos más cercanos por si el humano quiere juzgar. «No encuentro base normativa en el corpus» es una respuesta correcta del producto, no un fallo.
+- Con el corpus vacío ni siquiera se llama al modelo.
+
 ### Guardarraíles (ARG-060)
 
 - **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase.
@@ -84,6 +94,8 @@ Sin él el CI dependería de una GPU y del humor de un modelo, y un conjunto dor
 | `chunk_legal_text` | `(text, norm) -> list[Chunk]` | ARG-053, ingesta del observatorio |
 | `index_document`, `index_chunks` | `(dsn, source, origin, …, embedder) -> int` | ARG-054, documentación del cliente |
 | `search`, `search_lexical` | `(dsn, query, …) -> list[Hit]` | ARG-054, ARG-058 |
+| `answer` | `(dsn, question, gateway, embedder, origins=None) -> Answer` | ARG-056 (contexto), ARG-058 (herramienta normativa) |
+| `reciprocal_rank_fusion` | `(rankings, k=60) -> list[str]` | ARG-054 |
 
 ## 5. Configuración
 
@@ -101,6 +113,10 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 8. Verificación
 
+`services/ai-gateway/tests/test_rag_pure.py`: la fórmula de RRF contra números calculados a mano, la preferencia por el acuerdo, la cita inventada que invalida, la respuesta que se dice suficiente sin citar y el rehúso.
+
+`tests/integration/test_rag_pipeline.py`: respuesta con cita real, cita inventada rechazada, pregunta fuera de corpus rehusada con sus fragmentos cercanos, corpus vacío sin llamar al modelo y número de artículo al alcance gracias a la mitad léxica.
+
 `services/ai-gateway/tests/test_chunking_pure.py`: un apartado por fragmento con su cabecera, numeración no consecutiva respetada, apartado largo partido con sufijo, continuación de una letra que se queda en la letra, hashes estables y sin colisiones, y preámbulo descartado.
 
 `tests/integration/test_rag_index.py`: indexación idempotente, fragmentos citables, dimensión del vector, búsqueda que encuentra lo que se le dio, filtro por origen y búsqueda léxica por número de artículo.
@@ -115,7 +131,7 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 9. Limitaciones conocidas y pendientes
 
-- El paquete está a medias: de los diez componentes están ARG-052, ARG-053 y ARG-060.
+- El paquete está a medias: de los diez componentes están ARG-052, ARG-053, ARG-054 y ARG-060.
 - La telemetría de sustituciones se anota en el asiento de cada completado; falta publicarla como métrica (ARG-059).
 - El presupuesto se cuenta por tokens del backend; con el backend determinista esos números son un proxy por longitud, no tokens reales.
 - La lista de identificadores es la española de ARG-024; otro país necesita sus validadores, no otra expresión regular.
@@ -127,3 +143,4 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 | 0.1.0-alpha | 2026-09-17 | Guardarraíles de entrada y salida, con las tablas como contenido | Fase 06 (ARG-060) |
 | 0.1.0-alpha | 2026-09-17 | Gateway con colas, cuotas en tabla, JSON forzado, registro con hash y backend determinista | Fase 06 (ARG-052) |
 | 0.1.0-alpha | 2026-09-17 | Corpus troceado por estructura jurídica e índice vectorial y léxico sobre pgvector | Fase 06 (ARG-053) |
+| 0.1.0-alpha | 2026-09-17 | RAG normativo con recuperación híbrida, cita comprobada y rehúso honesto | Fase 06 (ARG-054) |
