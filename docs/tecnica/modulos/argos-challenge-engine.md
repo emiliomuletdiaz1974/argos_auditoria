@@ -145,7 +145,7 @@ Una campaña es un proceso de días con personas dentro: sobrevive a reinicios, 
 
 El reparto del pliego es taxativo: **ARGOS ejecuta y evidencia, el cliente aprueba**. Esta API es donde ocurre.
 - **Roles del realm:** `campaign_manager` planifica y lanza; `dpo_reviewer` aprueba compuertas, autoriza la inyección de un sujeto sintético y mueve un hallazgo; cualquier rol puede leer. Sin token, 401; con token sin rol, 403.
-- **Compuertas:** `GET /campaigns/{id}/gates` muestra qué se aprueba y cuántas aprobaciones faltan; `POST …/approve` registra la del usuario, y al alcanzar las necesarias envía la señal al workflow. `sampling` exige **doble control**: dos personas distintas; la misma no cuenta dos veces.
+- **Compuertas:** `GET /campaigns/{id}/gates` muestra qué se aprueba y cuántas aprobaciones faltan; `POST …/approve` registra la del usuario, y al alcanzar las necesarias envía la señal al workflow. `sampling` exige **doble control**: dos personas distintas; la misma no cuenta dos veces. La señal solo avisa: antes de continuar, el workflow comprueba en `argos.approvals` (actividad `check_gate`) que las aprobaciones de personas están registradas, y si no lo están vuelve a esperar. Una señal enviada directamente a Temporal no abre ninguna compuerta.
 - **Sujeto sintético:** autorización del punto de inyección (DPO) y confirmaciones del cliente (inyección, ejercicio del derecho y reversión).
 - **Hallazgos:** `POST /findings/{id}/transition`, con la máquina de estados; una transición ilegal responde 409. Una persona puede llevar un hallazgo hasta `pending_verification`, pero `closed_compliant` solo lo alcanza el actor `system:remediation`: pedirlo por la API también responde 409.
 - **Lectura:** estado de la campaña con `seal_verified` recalculado, veredictos y hallazgos.
@@ -330,3 +330,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Biblioteca de 17 retos de RGPD y AI Act, criterios delegados que leen la sonda y filtro por severidad en SHACL | Fase 05 (ARG-050) |
 | 0.1.0-alpha | 2026-09-17 | Prueba de la fase: campaña completa, reejecución determinista, sello y subsanación | Fase 05 (`fase-05`) |
 | 0.1.0-alpha | 2026-09-18 | Solo la reejecución de subsanación cierra un hallazgo como conforme | Auditoría de seguridad (M5) |
+| 0.1.0-alpha | 2026-09-18 | Las compuertas del workflow comprueban las aprobaciones registradas, no solo la señal | Auditoría de seguridad (M4) |

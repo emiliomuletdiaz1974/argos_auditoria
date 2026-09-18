@@ -21,6 +21,7 @@ from argos_challenges.api.auth import MANAGER_ROLE, REVIEWER_ROLE, role_dependen
 from argos_challenges.seal import verify_seal
 from argos_challenges.store import (
     CampaignStateError,
+    approvals_needed,
     campaign_record,
     create_campaign,
     grant_approval,
@@ -30,7 +31,6 @@ from argos_common.errors import ArgosError
 SERVICE_NAME = "argos-campaigns"
 DEV_HOST = "127.0.0.1"
 DEV_PORT = 8003
-DOUBLE_CONTROL_GATES = frozenset({"sampling"})
 CAMPAIGN_WORKFLOW = "CampaignWorkflow"
 
 TemporalStarter = Callable[[str], Awaitable[str]]
@@ -63,10 +63,6 @@ class Confirmation(BaseModel):
 
 class RemediationScope(BaseModel):
     campaign_id: str | None = None
-
-
-def _approvals_needed(gate: str) -> int:
-    return 2 if gate in DOUBLE_CONTROL_GATES else 1
 
 
 def create_app(
@@ -152,14 +148,14 @@ def create_app(
                 "gate": row[0],
                 "payload": row[1],
                 "approvals": int(row[2]),
-                "needed": _approvals_needed(str(row[0])),
+                "needed": approvals_needed(str(row[0])),
             }
             for row in rows
         ]
 
     @app.post("/campaigns/{campaign_id}/gates/{gate}/approve")
     async def approve(campaign_id: str, gate: str, identity: reviewer) -> dict[str, Any]:
-        needed = _approvals_needed(gate)
+        needed = approvals_needed(gate)
         try:
             granted, enough = grant_approval(dsn, campaign_id, gate, identity.actor, needed)
         except CampaignStateError as error:

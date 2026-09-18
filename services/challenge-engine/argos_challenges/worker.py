@@ -30,6 +30,7 @@ async def create_worker(
         activities += [
             campaign.prepare_campaign,
             campaign.request_approval,
+            campaign.check_gate,
             campaign.set_campaign_status,
             campaign.probe,
             campaign.wait_window,

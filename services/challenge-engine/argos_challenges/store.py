@@ -28,6 +28,7 @@ TRANSITIONS: Mapping[str, frozenset[str]] = {
 }
 JOURNAL_ACTOR = "system:campaign"
 DEFAULT_APPROVALS = 1
+DOUBLE_CONTROL_GATES = frozenset({"sampling"})
 
 _INSERT_VERDICT = (
     "INSERT INTO argos.verdicts (id, campaign_id, unit_id, challenge_id, challenge_version, "
@@ -233,6 +234,21 @@ def grant_approval(
             conn=conn,
         )
     return granted, granted >= needed
+
+
+def approvals_needed(gate: str) -> int:
+    return 2 if gate in DOUBLE_CONTROL_GATES else DEFAULT_APPROVALS
+
+
+def gate_is_open(dsn: str, campaign_id: str, gate: str) -> bool:
+    """What opens a gate is the approvals people recorded, not the signal that announces them."""
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT count(DISTINCT approved_by) FROM argos.approvals "
+            "WHERE campaign_id = %s AND gate = %s AND approved_by LIKE 'user:%%'",
+            (campaign_id, gate),
+        ).fetchone()
+    return row is not None and int(row[0]) >= approvals_needed(gate)
 
 
 def set_status(dsn: str, campaign_id: str, status: str) -> None:

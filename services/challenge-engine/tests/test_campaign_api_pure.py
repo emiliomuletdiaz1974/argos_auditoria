@@ -6,7 +6,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from argos_auth import AuthError, Identity
-from argos_challenges.api.app import DOUBLE_CONTROL_GATES, create_app
+from argos_challenges.api.app import create_app
+from argos_challenges.store import DOUBLE_CONTROL_GATES
 
 MANAGER = Identity(sub="manager", name="Manager", roles=frozenset({"campaign_manager"}))
 REVIEWER = Identity(sub="dpo", name="DPO", roles=frozenset({"dpo_reviewer"}))

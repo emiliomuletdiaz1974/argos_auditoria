@@ -29,6 +29,7 @@ from argos_challenges.snapshot_resolver import SnapshotSelectorResolver
 from argos_challenges.store import (
     campaign_record,
     create_campaign,
+    gate_is_open,
     persist_verdict,
     pin_campaign,
     request_approval,
@@ -208,6 +209,12 @@ class ChallengeActivities:
             str(payload["campaign_id"]),
             str(payload["gate"]),
             dict(payload.get("payload", {})),
+        )
+
+    @activity.defn(name="check_gate")
+    async def check_gate(self, payload: dict[str, Any]) -> bool:
+        return await asyncio.to_thread(
+            gate_is_open, self._dsn, str(payload["campaign_id"]), str(payload["gate"])
         )
 
     @activity.defn(name="set_campaign_status")

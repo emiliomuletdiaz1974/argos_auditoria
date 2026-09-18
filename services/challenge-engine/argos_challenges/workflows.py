@@ -127,7 +127,18 @@ class CampaignWorkflow:
             retry_policy=RETRY_POLICY,
         )
         self._progress["status"] = f"awaiting:{gate}"
-        await workflow.wait_condition(lambda: gate in self._approved, timeout=GATE_TIMEOUT)
+        while True:
+            await workflow.wait_condition(lambda: gate in self._approved, timeout=GATE_TIMEOUT)
+            # The signal only announces the approvals: whoever reaches Temporal can send it.
+            opened = await workflow.execute_activity(
+                "check_gate",
+                {"campaign_id": campaign_id, "gate": gate},
+                start_to_close_timeout=_TIMEOUT,
+                retry_policy=RETRY_POLICY,
+            )
+            if opened:
+                return
+            self._approved.discard(gate)
 
     async def _run_system(
         self, campaign_id: str, system_id: str, units: list[dict[str, Any]]
