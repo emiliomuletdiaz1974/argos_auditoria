@@ -5,7 +5,7 @@ title: Comprobador público de evidencias (argos-verifier)
 module: argos-verifier
 phases: ["07"]
 version: 0.1.0-alpha
-commit: pendiente
+commit: d05f6b4
 date: 2026-09-18
 status: current
 confidentiality: client
