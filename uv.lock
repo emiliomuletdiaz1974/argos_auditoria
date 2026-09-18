@@ -64,6 +64,8 @@ source = { editable = "services/ai-gateway" }
 dependencies = [
     { name = "argos-common" },
     { name = "argos-connector-sdk" },
+    { name = "httpx" },
+    { name = "jsonschema" },
     { name = "pyyaml" },
 ]
 
@@ -71,6 +73,8 @@ dependencies = [
 requires-dist = [
     { name = "argos-common", editable = "libs/common" },
     { name = "argos-connector-sdk", editable = "connectors/sdk" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
 

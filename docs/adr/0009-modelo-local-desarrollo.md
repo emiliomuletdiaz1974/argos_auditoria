@@ -17,7 +17,7 @@ Tres cosas hay que decidir: qué modelo, con qué servidor en desarrollo, y cóm
 
 ## Decisión
 
-**1. El modelo es configuración, no código.** Ningún módulo nombra un modelo. El gateway habla con una API compatible OpenAI cuya dirección y nombre de modelo servido vienen de la configuración tipada (`ARGOS_LLM_BASE_URL`, `ARGOS_LLM_MODEL`). Cambiar de modelo es una actualización de contenido —los pesos viajan como contenido con su hash en el manifiesto firmado (ARG-040)—, nunca una release.
+**1. El modelo es configuración, no código.** Ningún módulo nombra un modelo. El gateway habla con una API compatible OpenAI cuya dirección y nombre de modelo servido vienen de la configuración tipada (`ARGOS_LLM_LOCAL_ENDPOINT`, que existe desde la Fase 01, y `ARGOS_LLM_MODEL`, añadido en F06-04). Cambiar de modelo es una actualización de contenido —los pesos viajan como contenido con su hash en el manifiesto firmado (ARG-040)—, nunca una release.
 
 **2. Modelo de referencia: Qwen2.5-14B-Instruct, licencia Apache 2.0**, cuantizado AWQ a 4 bits para el appliance de talla M. Razones: pesos abiertos con licencia permisiva que admite uso comercial sin cláusulas de usuario activo; multilingüe con castellano sólido, que es la lengua del corpus normativo; tamaño que cabe holgado en la talla S y deja contexto y concurrencia en la M; y soporte de `guided_json` en vLLM, que es lo que el contrato `chat_json` necesita.
 

@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
-commit: 8028048
+commit: pendiente
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -21,14 +21,16 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 
 ## 2. Alcance y límites
 
-- **Hace:** depurar lo que entra a un prompt y vigilar lo que sale.
-- **Hará:** colas, cuotas y JSON forzado (ARG-052), embeddings y RAG normativo (ARG-053, ARG-054), clasificación calibrada (ARG-055), generación de retos (ARG-056), dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
+- **Hace:** depurar lo que entra a un prompt, vigilar lo que sale y ser **la única puerta a la inferencia**: colas con dos prioridades, cuota diaria por servicio, JSON forzado con un ciclo de reparación y registro con hash.
+- **Hará:** embeddings y RAG normativo (ARG-053, ARG-054), clasificación calibrada (ARG-055), generación de retos (ARG-056), dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
 - **No hace, y no es una cuestión de configuración:** emitir un veredicto. No hay ruta de importación, ni de red, ni de permisos de base de datos que lleve de aquí al evaluador.
 - **No hace:** escribir en un sistema del cliente, ni proponer que se escriba.
 
 ## 3. Arquitectura
 
 - **`argos_ai.guardrails`** (ARG-060): `scrub_input` a la entrada y `check_output` a la salida. Puro, sin modelo y sin entrada/salida, para poder probarlo entero.
+- **`argos_ai.gateway.Gateway`** (ARG-052): la puerta. El diario y el registro de uso se inyectan, así que el gateway se ejerce entero sin base de datos; `argos_ai.quotas.postgres_gateway` lo monta como corre en el appliance.
+- **`argos_ai.backends`**: un contrato (`Backend`, `Completion`) y tres implementaciones. `OpenAiCompatibleBackend` sirve para vLLM y para llama.cpp, porque los dos hablan la misma API; `FakeBackend` responde desde un fichero indexado por el hash del prompt.
 - Dependencias: `argos-common` (errores y configuración) y `argos-connector-sdk`, del que reutiliza los **validadores de identificadores españoles de ARG-024**.
 
 ### La barrera (F06-01)
@@ -38,6 +40,17 @@ Tres cierres, no una promesa escrita:
 1. **Importaciones:** `tests/architecture/ai_boundary.py` sigue el grafo de importaciones real del espacio de trabajo y rechaza que cualquier módulo de este paquete alcance `argos_challenges.evaluator`, `.store` o `.findings`, aunque el cable esté atado tres módulos más allá.
 2. **Permisos:** el rol `argos_ai` de PostgreSQL (migración `0015`) lee el esquema y escribe solo `argos.ai_usage`. Leer veredictos y hallazgos sí: redactar el informe desde ellos es el oficio de ARG-057.
 3. **Red:** el contenedor no comparte red con la API de campañas (se comprueba en F06-13).
+
+### El gateway (ARG-052)
+
+- **Dos prioridades con semáforo:** `interactive` (asistente y consola) reserva plazas para que el trabajo por lotes —clasificación nocturna, dictámenes— no la deje sin turno.
+- **Cuota diaria por servicio, en tabla** (`argos.ai_quotas`, migración `0016`), consultada **antes** de llamar al modelo: gastar primero y quejarse después dejaría la cuota de adorno. Un servicio sin fila no puede gastar: el valor por defecto es cero, no infinito. Lo gastado hoy sale de `argos.ai_usage`, así que un reinicio no regala presupuesto.
+- **JSON forzado con un ciclo de reparación:** el esquema viaja al backend para que guíe la decodificación, pero la respuesta **se valida siempre aquí**; si no encaja, vuelve con su error como realimentación. Un ciclo, no un reintento infinito.
+- **Registro:** una fila en `argos.ai_usage` y un asiento `ai.completion` en el diario encadenado, los dos con el **hash del prompt y nunca el prompt**.
+
+### El backend determinista, que es producto
+
+Sin él el CI dependería de una GPU y del humor de un modelo, y un conjunto dorado que cambia bajo los pies no mide nada. Responde desde un fichero indexado por el hash del prompt, y **una entrada que no conoce es un error**: un valor por defecto en silencio convertiría un caso que falta en una suite verde.
 
 ### Guardarraíles (ARG-060)
 
@@ -55,10 +68,13 @@ Tres cierres, no una promesa escrita:
 | `check_output` | `(answer: Mapping[str, Any]) -> bool` | ARG-052, toda inferencia |
 | `load_patterns` | `(path: Path = PATTERNS_FILE) -> dict[str, Any]` | ARG-052, telemetría |
 | `OutputRejectedError` | excepción con el motivo | cada oficio la maneja: reintento con aviso o rehúso |
+| `Gateway.chat_json` | `(service, system, user, schema, priority="batch") -> Answer` | ARG-054…058 |
+| `postgres_gateway` | `(dsn, backend, model="argos-llm") -> Gateway` | el proceso del appliance |
+| `daily_quotas`, `spent_today` | `(dsn) -> dict[str, int]` | operación, panel de calidad |
 
 ## 5. Configuración
 
-`ARGOS_LLM_BASE_URL` y `ARGOS_LLM_MODEL` (ADR-0009), que aún no consume ningún módulo de este paquete. Los guardarraíles no necesitan configuración: sus tablas son contenido.
+`ARGOS_LLM_LOCAL_ENDPOINT` (desde la Fase 01) y `ARGOS_LLM_MODEL` (ADR-0009): dirección del servidor compatible OpenAI y nombre del modelo servido. Ningún módulo nombra un modelo. Los guardarraíles no necesitan configuración: sus tablas son contenido, y la cuota vive en `argos.ai_quotas`.
 
 ## 6. Seguridad y tratamiento de datos
 
@@ -72,14 +88,19 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 8. Verificación
 
+`services/ai-gateway/tests/test_gateway_pure.py`: esquema forzado y reparado en un ciclo, error si tras la reparación sigue sin encajar, cuota mirada antes de llamar, servicio sin cuota que no gasta, registro con hash y sin prompt, entrada depurada antes de llegar al modelo, salida que decide conformidad rechazada, cola interactiva que el trabajo por lotes no mata de hambre y backend determinista que rechaza lo que no conoce.
+
+`tests/integration/test_ai_gateway.py`: cuotas leídas de la tabla, uso y asiento escritos, ni el prompt ni el dato personal en ninguna parte, y lo gastado hoy que sobrevive a un reinicio.
+
 `services/ai-gateway/tests/test_guardrails_pure.py`: identificadores reales sustituidos y falsos intactos, marcador estable, conformidad sin veredicto rechazada y con veredicto permitida, verbos de escritura rechazados, texto anidado alcanzado y recomendación legítima no confundida con una orden.
 
 `tests/architecture/test_ai_boundary.py` y `tests/integration/test_ai_boundary.py`: la barrera.
 
 ## 9. Limitaciones conocidas y pendientes
 
-- El paquete está a medias: de los diez componentes solo está ARG-060.
-- La telemetría de sustituciones se publica cuando exista el gateway (ARG-052).
+- El paquete está a medias: de los diez componentes están ARG-052 y ARG-060.
+- La telemetría de sustituciones se anota en el asiento de cada completado; falta publicarla como métrica (ARG-059).
+- El presupuesto se cuenta por tokens del backend; con el backend determinista esos números son un proxy por longitud, no tokens reales.
 - La lista de identificadores es la española de ARG-024; otro país necesita sus validadores, no otra expresión regular.
 
 ## 10. Historial
@@ -87,3 +108,4 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-17 | Guardarraíles de entrada y salida, con las tablas como contenido | Fase 06 (ARG-060) |
+| 0.1.0-alpha | 2026-09-17 | Gateway con colas, cuotas en tabla, JSON forzado, registro con hash y backend determinista | Fase 06 (ARG-052) |
