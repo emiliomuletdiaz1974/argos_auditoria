@@ -66,7 +66,7 @@ target-version = "py312"
 select = ["E", "F", "W", "I", "B", "UP", "S", "N", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["argos_auth", "argos_challenges", "argos_common", "argos_connector", "argos_dicom", "argos_events", "argos_example", "argos_fhir", "argos_files", "argos_inventory", "argos_ldap", "argos_ontology", "argos_rest", "argos_sql"]
+known-first-party = ["argos_auth", "argos_challenges", "argos_common", "argos_connector", "argos_dicom", "argos_events", "argos_evidence", "argos_example", "argos_fhir", "argos_files", "argos_inventory", "argos_ldap", "argos_ontology", "argos_rest", "argos_sql"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "S105", "S106"]
