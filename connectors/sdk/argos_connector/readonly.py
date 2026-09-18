@@ -4,6 +4,8 @@ The customer's read-only account (first line) and the read-only session opened b
 connector (third line) remain mandatory: this guard never replaces them.
 """
 
+import re
+
 import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ParseError
@@ -75,12 +77,58 @@ DENIED_FUNCTIONS = frozenset(
         "benchmark",
         "get_lock",
         "load_file",
+        "release_lock",
+        "query_to_xml",
+        "query_to_xml_and_xmlschema",
+        "query_to_xmlschema",
+        "cursor_to_xml",
+        "pg_stat_file",
+        "pg_notify",
+        "pg_promote",
+        "pg_rotate_logfile",
+        "pg_switch_wal",
+        "pg_logical_emit_message",
     }
+)
+# Families whose members run arbitrary statements, reach other servers, take locks or touch
+# the server's file system. Checked against every segment of a package-qualified name.
+DENIED_PREFIXES = (
+    "dbms_",
+    "utl_",
+    "dblink",
+    "lo_",
+    "xp_",
+    "sp_",
+    "open",
+    "pg_advisory",
+    "pg_try_advisory",
+    "pg_read",
+    "pg_ls_",
+    "pg_file",
+    "pg_create_",
+    "pg_drop_",
+    "pg_replication_",
+)
+# A string argument that is itself a write statement, as passed to dblink, OPENQUERY and the like.
+_EMBEDDED_WRITE = re.compile(
+    r"^\s*(insert|update|delete|merge|create|drop|alter|truncate|grant|revoke|copy|call"
+    r"|exec|execute|begin|declare)\b",
+    re.IGNORECASE,
 )
 
 
 def _function_name(node: exp.Func) -> str:
-    return (node.name if isinstance(node, exp.Anonymous) else node.sql_name()).lower()
+    name = (node.name if isinstance(node, exp.Anonymous) else node.sql_name()).lower()
+    parent = node.parent
+    if isinstance(parent, exp.Dot) and parent.expression is node:
+        return f"{parent.this.sql().lower()}.{name}"
+    return name
+
+
+def _is_denied(name: str) -> bool:
+    if name in DENIED_FUNCTIONS:
+        return True
+    return any(segment.startswith(DENIED_PREFIXES) for segment in name.split("."))
 
 
 def validate_read_only_sql(statement: str, dialect: str) -> None:
@@ -101,8 +149,15 @@ def validate_read_only_sql(statement: str, dialect: str) -> None:
             raise ReadOnlyViolationError(f"forbidden construct: {type(node).__name__}")
         if isinstance(node, exp.Func):
             name = _function_name(node)
-            if name in DENIED_FUNCTIONS or name.startswith("dbms_"):
+            if _is_denied(name):
                 raise ReadOnlyViolationError(f"function with side effects: {name}")
+        if (
+            isinstance(node, exp.Literal)
+            and node.is_string
+            and node.find_ancestor(exp.Func) is not None
+            and _EMBEDDED_WRITE.match(node.this)
+        ):
+            raise ReadOnlyViolationError("function argument carries a write statement")
 
 
 def assert_safe_http_method(method: str) -> str:

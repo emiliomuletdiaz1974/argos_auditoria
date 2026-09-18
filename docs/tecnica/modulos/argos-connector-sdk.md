@@ -6,7 +6,7 @@ module: argos-connector-sdk
 phases: ["02", "03"]
 version: 0.1.0-alpha
 commit: d018a74
-date: 2026-09-17
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -68,6 +68,7 @@ Otras piezas:
 ## 6. Seguridad y tratamiento de datos
 
 - **Solo lectura en dos capas:** validación en ARGOS y cuenta de solo lectura en el sistema del cliente (ver los permisos en cada documento de conector).
+- **Funciones con efectos:** la validación rechaza, además de las sentencias de escritura, las funciones que ejecutan sentencias en otra sesión o en otro servidor (`dblink`, `OPENQUERY`, `OPENROWSET`, `query_to_xml`), salen a la red o al sistema de ficheros (`UTL_*`, `xp_*`, `pg_read*`, `pg_stat_file`, `lo_*`) o toman bloqueos (`pg_advisory*`, `get_lock`). El nombre se comprueba con su paquete (`utl_http.request`), y cualquier argumento de texto que sea una sentencia de escritura también se rechaza.
 - **Transparencia:** cada consulta queda en `argos.connector_queries` y en el diario encadenado antes de ejecutarse; las rechazadas también quedan anotadas.
 - **Minimización:** las muestras solo salen como hashes con clave y como tasas agregadas de validación, nunca como valores.
 - **Carga:** fuera de ventana o con el cortacircuitos abierto la sonda no se ejecuta, y el evento permite reprogramar la campaña.
@@ -94,3 +95,4 @@ El presupuesto de carga vive en la memoria de cada proceso; con varias réplicas
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Contrato de solo lectura, arnés de escritura, diario previo y presupuesto de carga | Fase 02 (ARG-011…013) |
 | 0.1.0-alpha | 2026-09-15 | Validadores de DNI, NIE, NUSS, IBAN y NHC | Fase 03 (ARG-024) |
+| 0.1.0-alpha | 2026-09-18 | La validación de solo lectura rechaza funciones con efectos por familia y paquete, y sentencias de escritura pasadas como texto | Auditoría de seguridad (A1) |
