@@ -1,22 +1,22 @@
 # ADR-0011 · Credencial verificable: formato, firma, identidad y revocación
 
-- **Estado:** Propuesta
+- **Estado:** Aceptado
 - **Fecha:** 2026-09-17
-- **Decide:** el usuario (tarea F07-00)
+- **Decide:** el usuario (tarea F07-00) · **Aprobado:** 2026-09-18
 - **Contexto:** Fase 07 · Evidencia y credencial (ARG-068, ARG-069) · Pliego P-17
 
 ## Contexto
 
 La credencial es el resumen firmado que viaja: qué organización, qué ámbito, qué campaña, qué resultado agregado, cuándo y verificado por qué appliance. Cualquier tercero tiene que poder comprobarla **sin contactar con nosotros y sin ver un solo dato del cliente**. El documento de fase fija el formato (W3C Verifiable Credentials 2.0 con *Data Integrity*) pero deja abiertas tres elecciones: el conjunto criptográfico, el método de identidad del emisor y el mecanismo de revocación.
 
-## Decisión propuesta
+## Decisión
 
 1. **W3C Verifiable Credentials Data Model 2.0.**
 2. **Conjunto criptográfico `eddsa-jcs-2022`** (*Data Integrity EdDSA Cryptosuites*): la forma canónica es JCS (RFC 8785, canonicalización de JSON), no RDF. Razones: el comprobador público puede ser un fichero pequeño sin procesador RDF; JCS es determinista y fácil de comprobar a mano; y la firma es Ed25519, la misma familia que la clave del appliance.
 3. **Emisor `did:web`** del appliance: el documento DID publica la clave pública registrada en el alta (TPM en el appliance, Vault Transit en desarrollo). Un espacio de datos puede usar en su lugar el DID de su catálogo.
 4. **Revocación con *Bitstring Status List*** (W3C): una lista de bits comprimida, publicada como credencial firmada por el comprobador. Revocar una credencial emitida sobre una campaña impugnada no toca la credencial.
 5. **Nunca datos personales ni contenido del cliente**: el `credentialSubject` lleva el resultado agregado y el anclaje a la evidencia (raíz de Merkle, sello de tiempo), nada más. Un test de producto recorre la credencial emitida y falla si encuentra un valor con forma de identificador personal (los validadores de ARG-024).
-6. **Alineación Gaia-X:** los atributos que esperan los catálogos federados se añaden como contexto propio, sin cambiar el núcleo. La validación contra las herramientas del GXDCH es una tarea manual (`F07-14`), porque exige el alta del participante.
+6. **Alineación Gaia-X:** los atributos que esperan los catálogos federados se añaden como contexto propio, sin cambiar el núcleo. La validación contra las herramientas del GXDCH es una tarea manual (`F07-14`), porque exige el alta del participante, y no bloquea el cierre técnico de la fase (`fase-07`): se registra aparte cuando exista el alta.
 
 ## Consecuencias
 

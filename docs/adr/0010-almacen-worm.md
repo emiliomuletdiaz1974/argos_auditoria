@@ -1,8 +1,8 @@
 # ADR-0010 · Almacén WORM de la evidencia
 
-- **Estado:** Propuesta
+- **Estado:** Aceptado
 - **Fecha:** 2026-09-17
-- **Decide:** el usuario (tarea F07-00)
+- **Decide:** el usuario (tarea F07-00) · **Aprobado:** 2026-09-18
 - **Contexto:** Fase 07 · Evidencia y credencial (ARG-061) · Pliego P-15 y P-16 · Especificación Técnica §4
 
 > El plan de la Fase 07 pedía este ADR con el número 0007, que ya ocupa el motor de retos. Se numera 0010.
@@ -23,7 +23,7 @@ La Especificación (§4) deja abierta la elección entre almacenes autoalojables
 | **SeaweedFS** | Apache-2.0 | Soporte añadido en versiones recientes | Ligero. **El modo conformidad hay que comprobarlo, no suponerlo.** |
 | **VersityGW** | Apache-2.0 | Declara soporte de *object lock* | Ya corre en el entorno de desarrollo como fuente S3 simulada. **Mismo requisito: comprobarlo.** |
 
-## Decisión propuesta
+## Decisión
 
 1. **La garantía no se da por la documentación de nadie: la da una prueba de conformidad que es producto.** `F07-04` escribe un test que, contra el almacén real del entorno, sube un objeto con retención en modo conformidad y exige que **fallen** tres cosas: borrarlo, sobrescribirlo y acortar su retención. El almacén que no pase esa prueba no se usa, diga lo que diga su documentación.
 2. **Licencia permisiva o LGPL**, nunca AGPL: el appliance se entrega al cliente.
