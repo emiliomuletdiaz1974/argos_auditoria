@@ -1,0 +1,43 @@
+# Tablas de los guardarraíles (ARG-060). Esto es **contenido, no código**: viaja con el prompt-pack
+# y el equipo lo amplía sin una release. Lo que no se puede tocar desde aquí es la decisión de
+# rechazar: eso está en el código y no tiene interruptor.
+version: 1
+
+# Identificadores españoles que se sustituyen a la entrada. `validator` es el de ARG-024: solo se
+# sustituye lo que valida, para no destrozar un código de producto que se parezca a un DNI.
+identifiers:
+  - marker: DNI
+    validator: dni
+    pattern: "\\b\\d{8}[A-Za-z]\\b"
+  - marker: NIE
+    validator: nie
+    pattern: "\\b[XYZxyz]\\d{7}[A-Za-z]\\b"
+  - marker: NUSS
+    validator: nuss
+    pattern: "\\b\\d{11,12}\\b"
+  - marker: IBAN
+    validator: iban_es
+    pattern: "\\bES\\d{22}\\b"
+
+# Palabras con las que una respuesta afirma conformidad. Si aparecen aplicadas a un activo y no
+# viene un `verdict_id`, la salida se rechaza: el veredicto nace en el evaluador, no aquí.
+verdict_words:
+  - "es conforme"
+  - "no es conforme"
+  - "resulta conforme"
+  - "cumple con el artículo"
+  - "incumple el artículo"
+  - "es conforme con"
+  - "está en conformidad"
+
+# Verbos de escritura sobre un objetivo. El asistente propone, nunca manda ejecutar.
+write_verbs:
+  - "drop table"
+  - "delete from"
+  - "truncate"
+  - "update "
+  - "insert into"
+  - "alter table"
+  - "modificar la tabla"
+  - "borra la tabla"
+  - "elimina la tabla"

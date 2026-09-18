@@ -8,7 +8,9 @@ Two rules:
 
 1. nothing reachable from `services/ai-gateway/` imports the modules that decide or write a
    verdict (`argos_challenges.evaluator`, `.store`, `.findings`), directly or transitively;
-2. no module of the gateway writes the tables of the verdict either, whatever route it took.
+2. no module of the gateway writes the tables of the verdict either, whatever route it took;
+   its tests are exempt from this second rule, because proving a rejection means quoting the
+   sentence that gets rejected — but not from the first one.
 
 The other two halves of the barrier are checked where they live: the network from inside the
 container (F06-13) and the database privileges against a real server (`tests/integration`).
@@ -84,6 +86,10 @@ def _imports_of(tree: ast.AST, own_module: str) -> set[str]:
     return found
 
 
+def _is_test(path: Path) -> bool:
+    return "tests" in path.parts or path.name.startswith("test_")
+
+
 def _write_lines(tree: ast.AST) -> list[tuple[int, str]]:
     lines: list[tuple[int, str]] = []
     for node in ast.walk(tree):
@@ -135,6 +141,10 @@ def analyse(root: Path, scan_roots: tuple[str, ...] = SCAN_ROOTS) -> list[Violat
         route = _route(graph, name)
         if route is not None and len(route) > 2:
             violations.append(Violation(relative, 0, "ai-reaches-the-verdict", " -> ".join(route)))
-        for line, table in _write_lines(tree):
-            violations.append(Violation(relative, line, "ai-writes-the-verdict", table))
+        if not _is_test(path):
+            # A test of the guardrails has to quote the forbidden sentence to prove it is
+            # rejected. Quoting it is not tying the cable, and tests do not ship; what a test
+            # may not do is import the verdict modules, and that rule does apply above.
+            for line, table in _write_lines(tree):
+                violations.append(Violation(relative, line, "ai-writes-the-verdict", table))
     return sorted(violations)

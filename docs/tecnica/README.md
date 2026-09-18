@@ -22,6 +22,7 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | Paquete | Documento | Fases |
 |---|---|---|
 | `argos-auth` | [argos-auth.md](modulos/argos-auth.md) | 01 |
+| `argos-ai-gateway` | [argos-ai-gateway.md](modulos/argos-ai-gateway.md) | 06 (en construcción) |
 | `argos-challenge-engine` | [argos-challenge-engine.md](modulos/argos-challenge-engine.md) | 01 (base; completo en 05) |
 | `argos-common` | [argos-common.md](modulos/argos-common.md) | 01, 03 |
 | `argos-connector-dicom` | [argos-connector-dicom.md](modulos/argos-connector-dicom.md) | 02 |

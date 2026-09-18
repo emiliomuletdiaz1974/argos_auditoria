@@ -153,3 +153,31 @@ def test_violations_are_reported_with_file_rule_and_route(tmp_path: Path) -> Non
     [violation] = analyse(root)
     assert isinstance(violation, Violation)
     assert violation.path == f"{GATEWAY}/writer.py"
+
+
+def test_a_test_may_quote_the_forbidden_sql_to_prove_it_is_rejected(tmp_path: Path) -> None:
+    """Proving a rejection means writing the sentence that gets rejected."""
+    root = _write(
+        tmp_path,
+        {
+            f"{GATEWAY}/__init__.py": "",
+            "services/ai-gateway/tests/test_guardrails.py": (
+                "CASE = 'Basta con un DELETE FROM argos.findings.'\n"
+            ),
+        },
+    )
+    assert analyse(root) == []
+
+
+def test_a_test_may_not_import_the_verdict_modules_either(tmp_path: Path) -> None:
+    """The exemption is for quoting, not for tying the cable where nobody looks."""
+    root = _write(
+        tmp_path,
+        {
+            f"{GATEWAY}/__init__.py": "",
+            "services/ai-gateway/tests/test_writer.py": (
+                "from argos_challenges.store import save\n"
+            ),
+        },
+    )
+    assert [v.rule for v in analyse(root)] == ["ai-imports-the-verdict"]
