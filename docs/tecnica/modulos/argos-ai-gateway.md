@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
-commit: 1361bee
+commit: pendiente
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -22,7 +22,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 ## 2. Alcance y límites
 
 - **Hace:** depurar lo que entra a un prompt, vigilar lo que sale y ser **la única puerta a la inferencia**: colas con dos prioridades, cuota diaria por servicio, JSON forzado con un ciclo de reparación y registro con hash.
-- **Hará:** generación de retos (ARG-056), dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
+- **Hará:** dictámenes (ARG-057), asistente con herramientas (ARG-058) y el arnés de evaluación (ARG-059).
 - **No hace, y no es una cuestión de configuración:** emitir un veredicto. No hay ruta de importación, ni de red, ni de permisos de base de datos que lleve de aquí al evaluador.
 - **No hace:** escribir en un sistema del cliente, ni proponer que se escriba.
 
@@ -32,6 +32,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 - **`argos_ai.gateway.Gateway`** (ARG-052): la puerta. El diario y el registro de uso se inyectan, así que el gateway se ejerce entero sin base de datos; `argos_ai.quotas.postgres_gateway` lo monta como corre en el appliance.
 - **`argos_ai.rag`** (ARG-053, ARG-054): troceado por estructura jurídica, embeddings, índice sobre pgvector y el pipeline de respuesta con cita obligatoria.
 - **`argos_ai.classify`** (ARG-055): el clasificador semántico que rellena la interfaz ARG-025 de la Fase 03, con la confianza calibrada por las decisiones del DPD.
+- **`argos_ai.generate`** (ARG-056): el generador asistido de retos y la herramienta `tools/new_challenge.py` del equipo normativo.
 - **`argos_ai.backends`**: un contrato (`Backend`, `Completion`) y tres implementaciones. `OpenAiCompatibleBackend` sirve para vLLM y para llama.cpp, porque los dos hablan la misma API; `FakeBackend` responde desde un fichero indexado por el hash del prompt.
 - Dependencias: `argos-common` (errores y configuración) y `argos-connector-sdk`, del que reutiliza los **validadores de identificadores españoles de ARG-024**.
 
@@ -84,6 +85,14 @@ Un modelo dice 0,9 y acierta 0,7. Sin corregirlo, los umbrales de ARG-025 —ace
 - **El prompt es un fichero versionado** (`library/prompts/classify.yaml`) y su SHA-256 va con el clasificador: cambiar el prompt es cambiar el clasificador, y las curvas se reajustan después.
 - **`refit(dsn)`** es el trabajo nocturno: reajusta las curvas con las decisiones nuevas, las guarda en `argos.ai_calibration` y lo anota en el diario. **`drift(dsn)`** da la precisión de los últimos 30 días por categoría, la señal que publicará ARG-059.
 
+### Generación asistida de retos (ARG-056)
+
+El SLA de 30 días de norma a reto y los 300 retos de GA no salen de escribir YAML a mano. **El flujo humano manda:** el jurista pega la obligación, el modelo propone y un ingeniero revisa.
+
+- **El jurista solo ve propuestas que ya compilan.** El prompt lleva el esquema del DSL, el catálogo de sondas y dos retos completos de la biblioteca como ejemplo, leídos del propio repositorio para que no se desfasen. La propuesta pasa por **el mismo `lint_challenge` de la CI**, en memoria; si falla, un ciclo de reparación con sus errores, y si sigue fallando se devuelve como no válida.
+- **Una sonda que escribe no se repara: se rechaza.** Repararla le enseñaría al modelo a colar una escritura por el lint. Toda sentencia declarada tiene que ser `SELECT`, `SHOW` o `WITH` y no contener verbos de escritura; y los guardarraíles de ARG-060 la vuelven a rechazar en el gateway si llegara hasta allí, antes de anotarla como uso válido.
+- **La propuesta entra en Git como rama de revisión, nunca directamente en la biblioteca.** `tools/new_challenge.py` prepara la rama `feature/reto-<id>` en un *worktree* temporal: la copia de trabajo del jurista, su índice y su rama actual quedan exactamente como estaban. Una rama que ya existe no se sobrescribe —la propuesta anterior no se entierra sin revisar—, una propuesta no válida no llega a Git y nada se publica: subir la rama es decisión de una persona.
+
 ### Guardarraíles (ARG-060)
 
 - **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase.
@@ -111,6 +120,8 @@ Un modelo dice 0,9 y acierta 0,7. Sin corregirlo, los umbrales de ARG-025 —ace
 | `SemanticClassifier` | `(gateway, calibrator, record=None).propose(columns)` | ARG-025 (inventario) |
 | `Calibrator` | `fit(decisions)`, `calibrate(category, declared)`, `curves()` | ARG-055, ARG-059 |
 | `refit`, `stored_calibrator`, `drift` | `(dsn, now=None)` | trabajo nocturno, panel de calidad |
+| `propose_challenge` | `(obligation, text, gateway, context, regulation="") -> ChallengeProposal` | equipo normativo |
+| `tools/new_challenge.py` | `OBL-… "texto" [--repo]` → rama `feature/reto-<id>` | equipo normativo |
 
 ## 5. Configuración
 
@@ -127,6 +138,12 @@ Un modelo dice 0,9 y acierta 0,7. Sin corregirlo, los umbrales de ARG-025 —ace
 El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 8. Verificación
+
+`services/ai-gateway/tests/test_challenge_gen_pure.py`: propuesta que compila, reparación en un ciclo con los errores del lint, propuesta que sigue fallando, YAML roto reparado, sonda de escritura rechazada sin reparación y prompt con esquema, sondas y dos ejemplos.
+
+`tests/unit/test_new_challenge_tool.py`, sobre un repositorio git temporal: la propuesta en su propia rama, la copia de trabajo intacta, commit sin firmas, rama existente no sobrescrita y propuesta no válida que no llega a Git.
+
+`tests/integration/test_challenge_generation.py`: la generación consume la cuota del servicio `challenge`, y una propuesta que escribe se para antes de anotarse como uso.
 
 `services/ai-gateway/tests/test_calibration_pure.py`: la curva PAVA contra una calculada a mano, monotonía, empates en la confianza declarada tratados como un solo punto, modelo sobreconfiado bajado a su tasa real, techo por debajo del mínimo de datos, curva por categoría y guardado y lectura idénticos.
 
@@ -152,7 +169,7 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 
 ## 9. Limitaciones conocidas y pendientes
 
-- El paquete está a medias: de los diez componentes están ARG-052, ARG-053, ARG-054, ARG-055 y ARG-060.
+- El paquete está a medias: de los diez componentes están ARG-052 a ARG-056 y ARG-060.
 - El reajuste nocturno de la calibración es una función (`refit`) pero aún no tiene planificador: se engancha a Temporal con la operación.
 - La telemetría de sustituciones se anota en el asiento de cada completado; falta publicarla como métrica (ARG-059).
 - El presupuesto se cuenta por tokens del backend; con el backend determinista esos números son un proxy por longitud, no tokens reales.
@@ -167,3 +184,4 @@ El servicio aún no tiene contenedor propio; llega en F06-13, en su propia red.
 | 0.1.0-alpha | 2026-09-17 | Corpus troceado por estructura jurídica e índice vectorial y léxico sobre pgvector | Fase 06 (ARG-053) |
 | 0.1.0-alpha | 2026-09-17 | RAG normativo con recuperación híbrida, cita comprobada y rehúso honesto | Fase 06 (ARG-054) |
 | 0.1.0-alpha | 2026-09-17 | Clasificación semántica con confianza calibrada por las decisiones del DPD | Fase 06 (ARG-055) |
+| 0.1.0-alpha | 2026-09-17 | Generación asistida de retos que compilan antes de mostrarse, y rama de revisión en un worktree temporal | Fase 06 (ARG-056) |

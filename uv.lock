@@ -62,6 +62,7 @@ name = "argos-ai-gateway"
 version = "0.1.0a0"
 source = { editable = "services/ai-gateway" }
 dependencies = [
+    { name = "argos-challenge-engine" },
     { name = "argos-common" },
     { name = "argos-connector-sdk" },
     { name = "argos-inventory" },
@@ -72,6 +73,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "argos-challenge-engine", editable = "services/challenge-engine" },
     { name = "argos-common", editable = "libs/common" },
     { name = "argos-connector-sdk", editable = "connectors/sdk" },
     { name = "argos-inventory", editable = "services/inventory" },
