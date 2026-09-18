@@ -43,7 +43,7 @@ Sondas del SDK: `scan_schema`, `count` y `sample`.
 
 ## 5. Configuración
 
-- **Por sistema:** `base_dn`, `ca_file`, `tls_valid_names`, `user_filter`, `group_filter`, `page_size`, `connect_timeout_s` (10 s por defecto) y `receive_timeout_s` (30 s por defecto).
+- **Por sistema:** `base_dn`, `ca_file`, `tls_valid_names`, `user_filter`, `group_filter`, `page_size`, `connect_timeout_s` (10 s por defecto), `receive_timeout_s` (30 s por defecto) y `max_group_reads` (1000 por defecto).
 - **Credenciales de enlace:** en Vault.
 
 ## 6. Seguridad y tratamiento de datos
@@ -51,7 +51,7 @@ Sondas del SDK: `scan_schema`, `count` y `sample`.
 **Permisos que necesita la cuenta del cliente:** una cuenta de servicio con **lectura** sobre la base de búsqueda (usuarios, grupos y atributos de estado). No necesita permisos de escritura ni de administración.
 
 - Los filtros LDAP se validan antes de usarse, para evitar inyección.
-- El recorrido de grupos está acotado.
+- El recorrido de grupos está acotado: cada miembro es una búsqueda contra el controlador de dominio, todas bajo el único permiso de la sonda, así que la expansión se detiene tras `max_group_reads` lecturas.
 - **No se siguen referrals.** Un referral a otro servidor recibiría el enlace con la contraseña de la cuenta de servicio, y en claro si fuera `ldap://`. Las entradas fuera del controlador configurado no se consultan.
 - La conexión y cada respuesta tienen tiempo máximo, así que un servidor lento no bloquea al worker.
 
@@ -75,3 +75,4 @@ Ninguna específica del conector.
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Conector LDAP y Active Directory con membresía transitiva y conexión de solo lectura | Fase 02 (ARG-018) |
 | 0.1.0-alpha | 2026-09-18 | Sin seguimiento de referrals y con tiempos máximos de conexión y respuesta | Auditoría de seguridad (A2) |
+| 0.1.0-alpha | 2026-09-18 | Tope configurable de lecturas en la expansión de grupos (`max_group_reads`) | Auditoría de seguridad (M11) |

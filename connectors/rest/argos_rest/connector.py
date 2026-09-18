@@ -21,6 +21,7 @@ SECURITY_HEADERS = (
     "cache-control",
     "server",
 )
+DEFAULT_MAX_PAGES = 100
 _PARAMETER = re.compile(r"^\{[A-Za-z_][A-Za-z0-9_]*\}$")
 _LITERAL = re.compile(r"^[A-Za-z0-9._~$:@!,;=+-]+$")
 
@@ -213,9 +214,13 @@ class RestConnector(Connector):
         if not route.items_field:
             raise ValueError(f"route {route.template} declares neither count_field nor items_field")
         cap = min(int(spec.params.get("cap", 100_000)), 1_000_000)
+        # The probe took one permit from the load budget; its pages must not be unlimited.
+        max_pages = int(self.config.get("max_pages", DEFAULT_MAX_PAGES))
         counted, pages = 0, 0
         path, params = spec.target, query
         while counted < cap:
+            if pages >= max_pages:
+                return {"count": counted, "capped": True, "pages": pages}, counted
             body = self._json(path, params)
             items = dig(body, route.items_field) or []
             counted += len(items)

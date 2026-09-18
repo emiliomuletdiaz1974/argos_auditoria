@@ -8,7 +8,7 @@ from ldap3 import MOCK_SYNC, OFFLINE_AD_2012_R2, Connection, Server
 
 from argos_connector.probes import ProbeSpec
 from argos_connector.testing import InMemoryJournal, assert_no_write_surface, make_context
-from argos_ldap.connector import LdapConnector, to_datetime
+from argos_ldap.connector import DEFAULT_MAX_GROUP_READS, LdapConnector, to_datetime
 
 SYSTEM_ID = "0190f000-0000-7000-8000-000000000001"
 BASE = "dc=hosp,dc=local"
@@ -131,6 +131,16 @@ def test_transitive_membership_survives_cycles() -> None:
     assert result.data["transitive_members"] == 3
     assert result.data["nested_groups"] == 1
     assert len(result.data["dn_digests"]) == 3
+
+
+def test_group_expansion_reads_are_bounded() -> None:
+    # Every member is a BASE search against the domain controller, all under one permit.
+    connector, _ = _connector()
+    connector.config["max_group_reads"] = 2
+    spec = ProbeSpec("check_config", BASE, params={"group_dn": _group("Domain Admins")})
+    result = connector.execute(spec)
+    assert result.ok is False
+    assert DEFAULT_MAX_GROUP_READS == 1_000
 
 
 def test_writable_connection_is_refused() -> None:

@@ -14,7 +14,7 @@ from argos_connector.testing import (
     assert_no_write_surface,
     make_context,
 )
-from argos_rest.connector import RestConnector
+from argos_rest.connector import DEFAULT_MAX_PAGES, RestConnector
 
 SYSTEM_ID = "0190f000-0000-7000-8000-000000000001"
 DESCRIPTOR: dict[str, Any] = {
@@ -140,6 +140,16 @@ def test_count_is_capped() -> None:
     connector, _, _ = _connector()
     result = connector.execute(ProbeSpec("count", "/patients", params={"cap": 3}))
     assert result.data["capped"] is True
+
+
+def test_one_probe_cannot_page_the_api_without_end() -> None:
+    # A probe takes one permit from the load budget: its pages are bounded, not unlimited.
+    connector, api, _ = _connector()
+    connector.config["max_pages"] = 2
+    result = connector.execute(ProbeSpec("count", "/patients"))
+    assert result.data == {"count": 4, "capped": True, "pages": 2}
+    assert len(api.requests) == 2
+    assert DEFAULT_MAX_PAGES == 100
 
 
 def test_link_pagination_stays_on_the_base_origin() -> None:
