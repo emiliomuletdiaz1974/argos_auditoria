@@ -5,7 +5,7 @@ title: Bus de eventos (argos-events)
 module: argos-events
 phases: ["01"]
 version: 0.1.0-alpha
-commit: 1aadd28
+commit: c438d27
 date: 2026-09-18
 status: current
 confidentiality: client
