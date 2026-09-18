@@ -137,7 +137,7 @@ Una campaña es un proceso de días con personas dentro: sobrevive a reinicios, 
 - **`SystemRun`** recorre las unidades de su sistema en serie: espera de ventana, sonda y evaluación. El presupuesto de carga ya marca el ritmo.
 - **Señales y consulta:** `approve(gate)`, `circuit_open(system_id)`, `circuit_closed(system_id)` y `progress`. Un sistema pausado **espera**, no gira en vacío.
 - **Sin entrada/salida en el workflow:** todo pasa por actividades, así que Temporal puede reejecutar su historial.
-- **Sello (`argos_challenges.seal`):** un SHA-256 canónico sobre los veredictos, la instantánea, la versión de ontología y la de la biblioteca; se guarda en la campaña y se ancla en el diario (`campaign.seal`). `verify_seal` lo recalcula desde las tablas y comprueba el asiento; tocar un veredicto lo rompe.
+- **Sello (`argos_challenges.seal`):** un SHA-256 canónico sobre los veredictos, la instantánea, la versión de ontología y la de la biblioteca; se guarda en la campaña y se ancla en el diario (`campaign.seal`). `verify_seal` lo recalcula desde las tablas y comprueba el asiento; tocar un veredicto lo rompe. El asiento se busca por su acción (indexada), campaña y sello, sin recorrer el diario: cada lectura de una campaña verifica su sello, y el diario solo crece.
   - Una campaña **no se sella** con sujetos sintéticos inyectados y sin revertir.
   - La Fase 07 lo envolverá con Merkle y firma sin cambiar lo que se sella.
 - **Parámetros del cliente:** el calendario de conservación y sus columnas de referencia son del cliente; viven junto a los datos de OPA y el compilador resuelve `{$client: …}` desde ahí.
@@ -338,3 +338,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-18 | Las compuertas del workflow comprueban las aprobaciones registradas, no solo la señal | Auditoría de seguridad (M4) |
 | 0.1.0-alpha | 2026-09-18 | API de campañas: ids UUID validados, cuerpos acotados, errores de base sin detalle y descripción solo en desarrollo | Auditoría de seguridad (B5, B6, B8) |
 | 0.1.0-alpha | 2026-09-18 | Sujeto sintético: autorización ligada a su campaña y confirmaciones en orden y sin repetición | Auditoría de seguridad (B4) |
+| 0.1.0-alpha | 2026-09-18 | La verificación del sello consulta su asiento en vez de recorrer el diario | Auditoría de seguridad (B9) |

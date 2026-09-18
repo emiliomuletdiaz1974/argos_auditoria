@@ -122,6 +122,20 @@ async def test_a_campaign_waits_for_its_gate_runs_and_seals(
 
 
 @pytest.mark.asyncio
+async def test_the_seal_is_verified_without_reading_the_whole_journal(
+    migrated_db: str, prepared: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Every GET of a campaign verifies its seal: walking the journal would grow with it forever.
+    await _run_campaign(migrated_db, prepared)
+
+    def whole_journal(*_: Any, **__: Any) -> Any:
+        raise AssertionError("the seal check read the whole journal")
+
+    monkeypatch.setattr("argos_common.journal_pg.PostgresJournal.read", whole_journal)
+    assert verify_seal(migrated_db, prepared)
+
+
+@pytest.mark.asyncio
 async def test_touching_a_verdict_breaks_the_seal(migrated_db: str, prepared: str) -> None:
     await _run_campaign(migrated_db, prepared)
     assert verify_seal(migrated_db, prepared)

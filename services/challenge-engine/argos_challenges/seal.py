@@ -94,12 +94,15 @@ def verify_seal(dsn: str, campaign_id: str) -> bool:
     recomputed = compute_seal(seal_payload(campaign, _verdict_hashes(dsn, campaign_id)))
     if recomputed != stored:
         return False
-    anchored = [
-        entry
-        for entry in PostgresJournal(dsn).read(1)
-        if entry.action == JOURNAL_ACTION and campaign_id in entry.payload_canon
-    ]
-    return any(stored in entry.payload_canon for entry in anchored)
+    # The anchor is looked up by its action (indexed) and its payload, never by walking the
+    # journal: every read of a campaign verifies its seal, and the journal only grows.
+    with psycopg.connect(dsn) as conn:
+        anchored = conn.execute(
+            "SELECT 1 FROM argos.audit_journal "
+            "WHERE action = %s AND payload->>'campaign' = %s AND payload->>'seal' = %s LIMIT 1",
+            (JOURNAL_ACTION, campaign_id, stored),
+        ).fetchone()
+    return anchored is not None
 
 
 async def announce_seal(bus: Any, sealed: Mapping[str, Any]) -> None:
