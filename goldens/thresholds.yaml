@@ -1,0 +1,34 @@
+# Umbrales de la capa de IA (ARG-059, F06-02).
+#
+# Cada número lleva su motivo escrito. Un umbral sin motivo es una cifra que alguien bajará
+# el día que la release no salga, y entonces el arnés deja de medir nada.
+#
+# Los casos marcados `trap` pesan doble: miden el rehúso, que es la virtud más difícil y la que
+# más caro se paga cuando falta. Un conjunto que aprueba fallando todas las trampas no aprueba.
+thresholds:
+  rag:
+    minimum: 0.85
+    why: >-
+      Sobre 24 preguntas, 0,85 admite fallar tres de las llanas o una trampa y media. Por debajo,
+      el asistente cita mal más de una vez cada siete preguntas, y un DPO deja de fiarse de él a
+      la tercera. No se pone en 1,0 porque el corpus v1 tiene apartados que comparten artículo y
+      ahí la cita exacta es discutible incluso entre juristas.
+  classify:
+    minimum: 0.90
+    why: >-
+      El clasificador semántico solo llega a lo que el determinista dejó dudoso, y sus errores los
+      paga una persona revisando la cola. Con 0,90 sobre catorce columnas se tolera un error; el
+      recorte de confianza a 0,8 bajo mínimos de datos (ARG-055) ya evita que un acierto por
+      casualidad se presente como certeza.
+  generate:
+    minimum: 1.00
+    why: >-
+      Aquí no hay nada que tolerar: la propuesta pasa por `challenge_lint` antes de mostrarse, así
+      que un reto que no compila no es un error de calidad del modelo sino un fallo del generador.
+      El umbral es 1,0 porque el jurista solo debe ver propuestas válidas.
+  reports:
+    minimum: 1.00
+    why: >-
+      Cero cifras inventadas. No es una métrica de calidad sino una garantía del producto: una
+      cifra alucinada en el expediente destruye la credibilidad de todo lo demás, incluidos los
+      veredictos, que sí son deterministas. Si este conjunto baja de 1,0, la release no sale.
