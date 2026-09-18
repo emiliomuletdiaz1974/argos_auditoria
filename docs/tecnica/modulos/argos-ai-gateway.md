@@ -6,7 +6,7 @@ module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
 commit: 4dda71d
-date: 2026-09-17
+date: 2026-09-18
 status: draft
 confidentiality: client
 ---
@@ -51,6 +51,10 @@ Tres cierres, no una promesa escrita:
 
 - **Dos prioridades con semáforo:** `interactive` (asistente y consola) reserva plazas para que el trabajo por lotes —clasificación nocturna, dictámenes— no la deje sin turno.
 - **Cuota diaria por servicio, en tabla** (`argos.ai_quotas`, migración `0016`), consultada **antes** de llamar al modelo: gastar primero y quejarse después dejaría la cuota de adorno. Un servicio sin fila no puede gastar: el valor por defecto es cero, no infinito. Lo gastado hoy sale de `argos.ai_usage`, así que un reinicio no regala presupuesto.
+  - **Reserva antes de llamar:** cada petición reserva 8192 tokens contra la cuota mientras está en curso, así que las peticiones en paralelo cuentan con el coste de las demás y no pasan todas el control a la vez.
+  - **Lo consumido se cobra siempre:** una respuesta que no encaja tras la reparación (502) o que los guardarraíles rechazan (422) cuesta la misma inferencia, y se anota en `argos.ai_usage` igual que una buena.
+  - **Por día natural (UTC):** al cambiar de día el contador vuelve a cero y las cuotas se releen de la tabla, sin reiniciar el servicio.
+  - El backend real limita cada respuesta a 2048 tokens (`max_tokens`).
 - **JSON forzado con un ciclo de reparación:** el esquema viaja al backend para que guíe la decodificación, pero la respuesta **se valida siempre aquí**; si no encaja, vuelve con su error como realimentación. Un ciclo, no un reintento infinito.
 - **Registro:** una fila en `argos.ai_usage` y un asiento `ai.completion` en el diario encadenado, los dos con el **hash del prompt y nunca el prompt**.
 
@@ -250,6 +254,7 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 - El reajuste nocturno de la calibración es una función (`refit`) pero aún no tiene planificador: se engancha a Temporal con la operación.
 - La telemetría de sustituciones se anota en el asiento de cada completado; falta publicarla como métrica (ARG-059).
 - El presupuesto se cuenta por tokens del backend; con el backend determinista esos números son un proxy por longitud, no tokens reales.
+- La reserva y el contador viven en la memoria del proceso: con varias réplicas del gateway, cada una lleva su cuenta. Compartirla exige reservar en la base de datos (Fase 10).
 - La lista de identificadores es la española de ARG-024; otro país necesita sus validadores, no otra expresión regular.
 
 ## 10. Historial
@@ -266,3 +271,4 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.1.0-alpha | 2026-09-17 | Asistente de consola con cuatro herramientas cerradas, presupuesto fijo y fuentes comprobadas | Fase 06 (ARG-058) |
 | 0.1.0-alpha | 2026-09-17 | Arnés de evaluación con conjuntos dorados y puerta de calidad; embebedor de pruebas con señal y búsqueda léxica por cualquiera de las palabras | Fase 06 (ARG-059) |
 | 0.1.0-alpha | 2026-09-17 | Servicio y contenedor del gateway en su propia red, con la sesión en el rol restringido y el diario abierto solo para añadir | Fase 06 (F06-13) |
+| 0.1.0-alpha | 2026-09-18 | Cuota reservada antes de llamar, cobrada también en los fallos, renovada cada día y respuestas limitadas a 2048 tokens | Auditoría de seguridad (M3) |

@@ -57,6 +57,7 @@ def postgres_gateway(
         usage=lambda row: record_usage(dsn, row),
         quotas=daily_quotas(dsn),
         spent=spent_today(dsn),
+        reload_quotas=lambda: daily_quotas(dsn),
         model=model,
         **kwargs,
     )
