@@ -150,6 +150,9 @@ El reparto del pliego es taxativo: **ARGOS ejecuta y evidencia, el cliente aprue
 - **Hallazgos:** `POST /findings/{id}/transition`, con la máquina de estados; una transición ilegal responde 409. Una persona puede llevar un hallazgo hasta `pending_verification`, pero `closed_compliant` solo lo alcanza el actor `system:remediation`: pedirlo por la API también responde 409.
 - **Lectura:** estado de la campaña con `seal_verified` recalculado, veredictos y hallazgos.
 - Cada acción entra en el diario con el usuario que la hizo.
+- **Entradas acotadas:** los identificadores de ruta tienen que ser UUID (si no, 422 sin tocar la base), los textos libres tienen como mucho 2000 caracteres y el `scope` de una campaña 16 KiB.
+- **Errores sin detalle interno:** un error de PostgreSQL responde 503 «the campaign store is not available», y solo su tipo queda en el log.
+- **Descripción de la API:** `/docs`, `/redoc` y `/openapi.json` solo se publican con `ARGOS_ENVIRONMENT=development`.
 - Proceso de desarrollo: `python -m argos_challenges.api.main` en `127.0.0.1:8003`.
 
 ### Reejecución de subsanación (ARG-049)
@@ -331,3 +334,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Prueba de la fase: campaña completa, reejecución determinista, sello y subsanación | Fase 05 (`fase-05`) |
 | 0.1.0-alpha | 2026-09-18 | Solo la reejecución de subsanación cierra un hallazgo como conforme | Auditoría de seguridad (M5) |
 | 0.1.0-alpha | 2026-09-18 | Las compuertas del workflow comprueban las aprobaciones registradas, no solo la señal | Auditoría de seguridad (M4) |
+| 0.1.0-alpha | 2026-09-18 | API de campañas: ids UUID validados, cuerpos acotados, errores de base sin detalle y descripción solo en desarrollo | Auditoría de seguridad (B5, B6, B8) |

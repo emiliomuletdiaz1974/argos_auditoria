@@ -158,3 +158,57 @@ def test_the_launch_without_a_runner_says_so(monkeypatch: pytest.MonkeyPatch) ->
     api = TestClient(create_app("postgresql://unused", validator))  # type: ignore[arg-type]
     response = api.post(f"/campaigns/{CAMPAIGN}/launch", headers=_headers("manager"))
     assert response.status_code == 503
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/campaigns/abc/verdicts",
+        "/campaigns/abc/findings",
+        "/campaigns/1;DROP/gates",
+    ],
+)
+def test_an_id_that_is_not_a_uuid_never_reaches_the_database(
+    client: tuple[TestClient, FakeCampaigns], path: str
+) -> None:
+    api, _ = client
+    assert api.get(path, headers=_headers("auditor")).status_code == 422
+
+
+def test_a_database_error_says_nothing_about_the_database(
+    client: tuple[TestClient, FakeCampaigns],
+) -> None:
+    # The DSN of the fixture is unreachable: the answer must not describe it.
+    api, _ = client
+    response = api.get(f"/campaigns/{CAMPAIGN}/verdicts", headers=_headers("auditor"))
+    assert response.status_code == 503
+    assert response.json() == {"detail": "the campaign store is not available"}
+
+
+def test_the_api_description_is_not_published_by_default(
+    client: tuple[TestClient, FakeCampaigns],
+) -> None:
+    api, _ = client
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        assert api.get(path).status_code == 404
+
+
+def test_the_api_description_can_be_published_in_development() -> None:
+    validator = FakeValidator({})
+    api = TestClient(create_app("postgresql://unused", validator, publish_docs=True))  # type: ignore[arg-type]
+    assert api.get("/openapi.json").status_code == 200
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        (f"/findings/{CAMPAIGN}/transition", {"to": "in_remediation", "note": "x" * 2_001}),
+        ("/campaigns", {"name": "Campaña", "scope": {"k": "x" * 20_000}}),
+    ],
+)
+def test_oversized_bodies_are_refused(
+    client: tuple[TestClient, FakeCampaigns], path: str, body: dict[str, Any]
+) -> None:
+    api, _ = client
+    token = "reviewer" if path.startswith("/findings") else "manager"
+    assert api.post(path, json=body, headers=_headers(token)).status_code == 422

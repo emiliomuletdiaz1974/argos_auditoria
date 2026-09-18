@@ -6,13 +6,16 @@ the injection of a synthetic subject and moves a finding; the client confirms wh
 systems. Every one of those actions is a person, and every one of them enters the chained journal.
 """
 
+import json
+import logging
 from collections.abc import Awaitable, Callable
 from datetime import date
 from typing import Annotated, Any
 
 import psycopg
-from fastapi import Depends, FastAPI, HTTPException, status
-from pydantic import BaseModel, Field
+from fastapi import Depends, FastAPI, HTTPException, Path, Request, status
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, field_validator
 
 from argos_auth import Identity, JwtValidator
 from argos_challenges import findings as findings_module
@@ -33,6 +36,15 @@ DEV_HOST = "127.0.0.1"
 DEV_PORT = 8003
 CAMPAIGN_WORKFLOW = "CampaignWorkflow"
 
+# Identifiers are uuid columns: anything else is refused here, not by PostgreSQL with a 500.
+Uuid = Annotated[
+    str,
+    Path(pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"),
+]
+GateName = Annotated[str, Path(pattern=r"^[a-z_]{1,32}$")]
+_log = logging.getLogger(__name__)
+MAX_TEXT = 2_000
+MAX_SCOPE_BYTES = 16_384
 TemporalStarter = Callable[[str], Awaitable[str]]
 RemediationStarter = Callable[[dict[str, Any]], Awaitable[str]]
 TemporalSignaller = Callable[[str, str, str], Awaitable[None]]
@@ -42,27 +54,35 @@ class NewCampaign(BaseModel):
     name: str = Field(min_length=3, max_length=120)
     scope: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("scope")
+    @classmethod
+    def _bounded(cls, scope: dict[str, Any]) -> dict[str, Any]:
+        # The scope lands in JSONB and in the journal: a request cannot be megabytes of it.
+        if len(json.dumps(scope, ensure_ascii=False).encode("utf-8")) > MAX_SCOPE_BYTES:
+            raise ValueError(f"the scope is larger than {MAX_SCOPE_BYTES} bytes")
+        return scope
+
 
 class Transition(BaseModel):
-    to: str
-    note: str = ""
+    to: str = Field(max_length=32)
+    note: str = Field(default="", max_length=MAX_TEXT)
     risk_expiry: date | None = None
 
 
 class Injection(BaseModel):
-    subject_id: str
-    system_id: str
-    point: str = Field(min_length=1)
-    method: str = Field(min_length=1)
-    revert_procedure: str = Field(min_length=1)
+    subject_id: str = Field(max_length=64)
+    system_id: str = Field(max_length=64)
+    point: str = Field(min_length=1, max_length=MAX_TEXT)
+    method: str = Field(min_length=1, max_length=MAX_TEXT)
+    revert_procedure: str = Field(min_length=1, max_length=MAX_TEXT)
 
 
 class Confirmation(BaseModel):
-    right: str = "erasure"
+    right: str = Field(default="erasure", max_length=32)
 
 
 class RemediationScope(BaseModel):
-    campaign_id: str | None = None
+    campaign_id: str | None = Field(default=None, max_length=64)
 
 
 def create_app(
@@ -71,9 +91,31 @@ def create_app(
     start_campaign: TemporalStarter | None = None,
     signal_campaign: TemporalSignaller | None = None,
     start_remediation: RemediationStarter | None = None,
+    publish_docs: bool = False,
 ) -> FastAPI:
-    """The campaign API. The two callables talk to Temporal; tests pass their own."""
-    app = FastAPI(title="ARGOS campaigns", version="1")
+    """The campaign API. The two callables talk to Temporal; tests pass their own.
+
+    The route map and its models are published only when asked for (development): outside it
+    they would describe roles and payloads to anyone on the network, token or not.
+    """
+    app = FastAPI(
+        title="ARGOS campaigns",
+        version="1",
+        docs_url="/docs" if publish_docs else None,
+        redoc_url="/redoc" if publish_docs else None,
+        openapi_url="/openapi.json" if publish_docs else None,
+    )
+
+    @app.exception_handler(psycopg.Error)
+    async def _store_unavailable(request: Request, error: psycopg.Error) -> JSONResponse:
+        # The driver's message names the host, the SQL or the constraint: it stays in the log,
+        # as its type only, and the client learns that the store did not answer.
+        _log.warning("campaign store error", extra={"error": type(error).__name__})
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"detail": "the campaign store is not available"},
+        )
+
     # FastAPI reads the dependency from the annotation, so no call sits in a default value.
     reader = Annotated[Identity, Depends(role_dependency(validator))]  # noqa: N806
     manager = Annotated[Identity, Depends(role_dependency(validator, MANAGER_ROLE))]  # noqa: N806
@@ -92,7 +134,7 @@ def create_app(
         return {"campaign_id": campaign_id}
 
     @app.post("/campaigns/{campaign_id}/launch")
-    async def launch(campaign_id: str, identity: manager) -> dict[str, str]:
+    async def launch(campaign_id: Uuid, identity: manager) -> dict[str, str]:
         if start_campaign is None:
             raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "no campaign runner attached")
         try:
@@ -103,7 +145,7 @@ def create_app(
         return {"campaign_id": campaign_id, "workflow_id": workflow_id}
 
     @app.get("/campaigns/{campaign_id}")
-    def read(campaign_id: str, identity: reader) -> dict[str, Any]:
+    def read(campaign_id: Uuid, identity: reader) -> dict[str, Any]:
         try:
             record = campaign_record(dsn, campaign_id)
         except CampaignStateError as error:
@@ -112,7 +154,7 @@ def create_app(
         return record
 
     @app.get("/campaigns/{campaign_id}/verdicts")
-    def verdicts(campaign_id: str, identity: reader) -> list[dict[str, Any]]:
+    def verdicts(campaign_id: Uuid, identity: reader) -> list[dict[str, Any]]:
         with psycopg.connect(dsn) as conn:
             rows = conn.execute(
                 "SELECT challenge_id, node_key, result, verdict_hash FROM argos.verdicts "
@@ -123,7 +165,7 @@ def create_app(
         return [dict(zip(fields, row, strict=True)) for row in rows]
 
     @app.get("/campaigns/{campaign_id}/findings")
-    def campaign_findings(campaign_id: str, identity: reader) -> list[dict[str, Any]]:
+    def campaign_findings(campaign_id: Uuid, identity: reader) -> list[dict[str, Any]]:
         with psycopg.connect(dsn) as conn:
             rows = conn.execute(
                 "SELECT id::text, challenge_id, node_key, severity, status, occurrences "
@@ -134,7 +176,7 @@ def create_app(
         return [dict(zip(fields, row, strict=True)) for row in rows]
 
     @app.get("/campaigns/{campaign_id}/gates")
-    def gates(campaign_id: str, identity: reader) -> list[dict[str, Any]]:
+    def gates(campaign_id: Uuid, identity: reader) -> list[dict[str, Any]]:
         with psycopg.connect(dsn) as conn:
             rows = conn.execute(
                 "SELECT r.gate, r.payload, count(a.approved_by) "
@@ -154,7 +196,7 @@ def create_app(
         ]
 
     @app.post("/campaigns/{campaign_id}/gates/{gate}/approve")
-    async def approve(campaign_id: str, gate: str, identity: reviewer) -> dict[str, Any]:
+    async def approve(campaign_id: Uuid, gate: GateName, identity: reviewer) -> dict[str, Any]:
         needed = approvals_needed(gate)
         try:
             granted, enough = grant_approval(dsn, campaign_id, gate, identity.actor, needed)
@@ -170,7 +212,7 @@ def create_app(
         }
 
     @app.post("/campaigns/{campaign_id}/synthetic/authorize", status_code=status.HTTP_201_CREATED)
-    def authorize(campaign_id: str, body: Injection, identity: reviewer) -> dict[str, str]:
+    def authorize(campaign_id: Uuid, body: Injection, identity: reviewer) -> dict[str, str]:
         try:
             injection_id = synthetic_module.authorize_injection(
                 dsn,
@@ -186,7 +228,7 @@ def create_app(
         return {"injection_id": injection_id, "campaign_id": campaign_id}
 
     @app.post("/synthetic/{injection_id}/confirm-injection")
-    def confirm_injection(injection_id: str, identity: manager) -> dict[str, str]:
+    def confirm_injection(injection_id: Uuid, identity: manager) -> dict[str, str]:
         try:
             synthetic_module.confirm_injection(dsn, injection_id, identity.actor)
         except synthetic_module.SyntheticError as error:
@@ -195,7 +237,7 @@ def create_app(
 
     @app.post("/synthetic/{injection_id}/confirm-exercise")
     def confirm_exercise(
-        injection_id: str, body: Confirmation, identity: manager
+        injection_id: Uuid, body: Confirmation, identity: manager
     ) -> dict[str, str]:
         try:
             synthetic_module.confirm_exercise(dsn, injection_id, body.right, identity.actor)
@@ -204,7 +246,7 @@ def create_app(
         return {"injection_id": injection_id, "state": "exercised"}
 
     @app.post("/synthetic/{injection_id}/confirm-revert")
-    def confirm_revert(injection_id: str, identity: manager) -> dict[str, str]:
+    def confirm_revert(injection_id: Uuid, identity: manager) -> dict[str, str]:
         try:
             synthetic_module.confirm_revert(dsn, injection_id, identity.actor)
         except synthetic_module.SyntheticError as error:
@@ -224,7 +266,7 @@ def create_app(
         return {"workflow_id": workflow_id}
 
     @app.post("/findings/{finding_id}/transition")
-    def move_finding(finding_id: str, body: Transition, identity: reviewer) -> dict[str, str]:
+    def move_finding(finding_id: Uuid, body: Transition, identity: reviewer) -> dict[str, str]:
         try:
             previous = findings_module.transition(
                 dsn, finding_id, body.to, identity.actor, body.note, body.risk_expiry

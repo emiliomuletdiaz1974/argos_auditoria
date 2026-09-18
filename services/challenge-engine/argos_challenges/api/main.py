@@ -8,7 +8,7 @@ from temporalio.client import Client
 from argos_auth import JwtValidator
 from argos_challenges.api.app import DEV_HOST, DEV_PORT, SERVICE_NAME, create_app
 from argos_challenges.workflows import CampaignWorkflow, RemediationRun
-from argos_common.config import get_config
+from argos_common.config import Environment, get_config
 from argos_common.logs import configure_logging
 
 TASK_QUEUE = "argos-campaigns"
@@ -48,6 +48,7 @@ def main() -> None:  # pragma: no cover - process entry point
         start_campaign=start,
         signal_campaign=signal,
         start_remediation=remediate,
+        publish_docs=cfg.ENVIRONMENT is Environment.DEVELOPMENT,
     )
     # Inside a container the loopback address would hide the API from the published port;
     # the compose service sets ARGOS_API_BIND and docker keeps the port on 127.0.0.1.
