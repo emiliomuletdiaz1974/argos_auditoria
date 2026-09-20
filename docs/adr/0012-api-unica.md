@@ -1,8 +1,8 @@
 # ADR-0012 · La API única v1 y qué pasa con las APIs que ya existen
 
-- **Estado:** Propuesta
+- **Estado:** Aceptado
 - **Fecha:** 2026-09-20
-- **Decide:** el usuario (tarea F08-00)
+- **Decide:** el usuario (tarea F08-00) · **Aprobado:** 2026-09-20
 - **Contexto:** Fase 08 · Consola y APIs (ARG-071, ARG-072) · Pliego P-18, P-19, P-20 · Especificación Técnica §3.7
 
 ## Contexto
@@ -19,7 +19,7 @@ El documento de la Fase 08 es tajante: «no hay endpoints privados de la consola
 
 La pregunta no es si hacemos la API única, sino qué ocurre con estas.
 
-## Decisión propuesta
+## Decisión
 
 1. **Una sola API autenticada: `argos-api` (`services/api`, paquete `argos_api`), bajo `/api/v1`.** Es la que usan la consola y el cliente; no hay rutas reservadas a la consola. Reúne los recursos del dominio: `systems`, `inventory`, `campaigns`, `findings`, `evidence`, `credentials`, `assistant`, `approvals` y `webhooks`.
 2. **La API llama a las librerías del dominio, no a otros servicios**, igual que hace hoy la API de campañas: mismo proceso, mismos módulos (`argos_challenges`, `argos_inventory`, `argos_evidence`). La excepción es el **gateway de IA**, al que llama por HTTP porque vive en su propia red y ese aislamiento es un requisito de la Fase 06.

@@ -1,15 +1,15 @@
 # ADR-0013 · La consola: herramientas, pruebas y cómo se sirve
 
-- **Estado:** Propuesta
+- **Estado:** Aceptado
 - **Fecha:** 2026-09-20
-- **Decide:** el usuario (tarea F08-00)
+- **Decide:** el usuario (tarea F08-00) · **Aprobado:** 2026-09-20
 - **Contexto:** Fase 08 · Consola y APIs (ARG-073…ARG-080) · Pliego P-03 y P-18 · Plan Director §9.3
 
 ## Contexto
 
 El documento de la Fase 08 fija el marco de trabajo del frontend —**React**, servido como estáticos desde el propio appliance, sin CDN (P-03)— y el Plan Director §9.3 dice que el marco que fija el documento se respeta. Lo que el documento no fija es el resto de la cadena: empaquetador, lenguaje, pruebas y cómo llegan los estáticos al appliance. Es la primera vez que este repositorio tiene código que no es Python, así que conviene decidirlo entero y de una vez.
 
-## Decisión propuesta
+## Decisión
 
 1. **React con Vite y TypeScript en modo estricto.** El documento escribe los ejemplos en `.jsx`; se respetan las decisiones de producto (SWR para datos, tokens CSS, estructura de vistas) y se traducen a `.tsx`. Motivo: en este repositorio el tipado estricto es una regla de casa (`mypy --strict` en todo el Python) y la consola consume un contrato OpenAPI del que se pueden **generar los tipos**, de modo que un cambio en la API rompe la compilación de la consola en vez de romperse en la cara del DPO.
 2. **Tipos generados del contrato.** `openapi-typescript` produce `console/src/api/schema.d.ts` desde `services/api/openapi.json`; el CI comprueba que está al día, como con el catálogo de retos.
