@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, model_validator
 
 from argos_api.authz import require_perm
+from argos_api.core import CoreRoute
 from argos_api.http import Page, Paging, pending
 
-router = APIRouter(prefix="/findings", tags=["findings"])
+router = APIRouter(prefix="/findings", tags=["findings"], route_class=CoreRoute)
 RISK_ACCEPTED = "risk_accepted"
 
 

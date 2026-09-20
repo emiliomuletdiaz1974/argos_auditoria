@@ -5,6 +5,7 @@ the same contract and the same authorisation. The contract is generated from thi
 versioned in `services/api/openapi.json`; `tools/api_contract.py --check` fails if they diverge.
 """
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi import FastAPI, Request, status
@@ -13,6 +14,7 @@ from fastapi.openapi.utils import get_openapi
 from starlette.exceptions import HTTPException
 
 from argos_api import API_PREFIX, API_VERSION, SERVICE_NAME
+from argos_api.core import IdempotencyStore
 from argos_api.http import ERRORS, PROBLEM_MEDIA_TYPE, ProblemResponse, problem_response
 from argos_api.routers import (
     approvals,
@@ -27,6 +29,7 @@ from argos_api.routers import (
     webhooks,
 )
 from argos_auth import JwtValidator
+from argos_common import PostgresJournal
 
 DEV_HOST = "127.0.0.1"
 DEV_PORT = 8009
@@ -62,7 +65,17 @@ def _as_problem(document: dict[str, Any]) -> dict[str, Any]:
     return document
 
 
-def create_app(validator: JwtValidator | None = None) -> FastAPI:
+Refresher = Callable[[str], Awaitable[dict[str, Any]]]
+
+
+def create_app(
+    validator: JwtValidator | None = None,
+    *,
+    dsn: str | None = None,
+    refresher: Refresher | None = None,
+) -> FastAPI:
+    """The application. Without `dsn` there is no idempotency store and no journal: the routes
+    still answer, and the tests that do not touch the database do not need one."""
     app = FastAPI(
         title="ARGOS API",
         version=API_VERSION,
@@ -72,6 +85,9 @@ def create_app(validator: JwtValidator | None = None) -> FastAPI:
         redoc_url=None,
     )
     app.state.validator = validator
+    app.state.refresher = refresher
+    app.state.idempotency = IdempotencyStore(dsn) if dsn else None
+    app.state.journal = PostgresJournal(dsn) if dsn else None
 
     # Starlette's HTTPException covers FastAPI's, so the 404 of an unknown route is a problem too.
     @app.exception_handler(HTTPException)

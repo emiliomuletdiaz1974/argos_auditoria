@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 
 from argos_api.auth import CurrentIdentity
 from argos_auth import ROLES, Identity
@@ -48,11 +48,13 @@ class PermissionGuard:
     permission: str
     roles: frozenset[str]
 
-    def __call__(self, identity: CurrentIdentity) -> Identity:
+    def __call__(self, request: Request, identity: CurrentIdentity) -> Identity:
         if not identity.roles & self.roles:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, f"the permission {self.permission} is not yours"
             )
+        # The route already knows who this is; the journal entry of the core route reads it here.
+        request.state.identity = identity
         return identity
 
 

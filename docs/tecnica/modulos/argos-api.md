@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.2.0-alpha
+version: 0.3.0-alpha
 commit: 05f2f89
 date: 2026-09-20
 status: current
@@ -27,7 +27,9 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 
 - `argos_api.app.create_app(validator)`: monta `/health`, los routers de cada recurso bajo `/api/v1` y los manejadores de error; expone el contrato en `/api/v1/openapi.json`.
 - `argos_api.routers.*`: un módulo por recurso (`systems`, `inventory`, `campaigns`, `findings`, `evidence`, `credentials`, `assistant`, `approvals`, `webhooks`, `session`).
-- `argos_api.http`: lo que comparten todos los recursos —el problema RFC 9457, la paginación por cursor y la cabecera de idempotencia—, para que ningún router lo repita.
+- `argos_api.http`: el problema RFC 9457, la cabecera de idempotencia y el `501` de lo que aún no está.
+- `argos_api.paging`: el cursor opaco (`created_at`, `id`), su validación en la dependencia de paginación y el gemelo en memoria del predicado SQL (`apply_keyset`), para que la consulta y la prueba digan lo mismo.
+- `argos_api.core`: `CoreRoute`, la clase de ruta que envuelve a todas. Es clase de ruta y no middleware a propósito: un middleware corre antes de resolver las dependencias y no sabe todavía quién llama. Aquí la identidad ya está resuelta, así que el asiento del diario lleva el actor real y una llamada denegada no deja rastro de algo que no ocurrió.
 - `argos_api.auth`: exige un token del realm `argos` con algún rol de ARGOS.
 - `argos_api.authz`: cada ruta declara un permiso `recurso.acción` y la matriz `permissions.yaml` dice qué roles lo tienen. Un permiso que la matriz no declara es un error de arranque, no una puerta abierta.
 - El contrato **se genera del código**: `tools/api_contract.py` lo escribe en `services/api/openapi.json` y `--check` falla si divergen. `make api-contract` está en `make check` y en el CI.
@@ -42,6 +44,9 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Idempotencia | `Idempotency-Key` en los POST que crean (campañas, credenciales, suscripciones) |
 | Autenticación | `Bearer` del Keycloak del appliance; sin token, `401` con `WWW-Authenticate` |
 | Autorización | Denegación por defecto: `require_perm("recurso.acción")` en cada ruta contra `permissions.yaml` |
+| Idempotencia real | `argos.api_idempotency` guarda la respuesta por (actor, clave); repetirla la devuelve sin volver a ejecutar, y la misma clave con otro cuerpo es `409` |
+| Auditoría (P-19) | Toda mutación con respuesta correcta deja un asiento `api.mutation` en el diario con actor, método, ruta y estado |
+| Sesión | El token de refresco vive en una cookie `HttpOnly`, `Secure`, `SameSite=Strict` y `Path=/api/v1/auth/refresh`; la respuesta solo devuelve el de acceso |
 
 ## 4. Interfaces
 
@@ -52,6 +57,9 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Herramienta | `tools/api_contract.py [--check]` | Genera el contrato o comprueba que el fichero está al día |
 | Rutas | `/api/v1/{systems,inventory,campaigns,findings,evidence,credentials,assistant,approvals,webhooks,auth}` | 33 operaciones declaradas; ver el contrato |
 | Salud | `GET /health` | Sin token |
+| Clase de ruta | `core.CoreRoute` | Idempotencia y asiento en el diario alrededor de cada ruta |
+| Función pública | `paging.paginate(rows, limit) -> Page` y `paging.apply_keyset(rows, position)` | Página y cursor; `position_of()` valida el cursor y un cursor ajeno es `400` |
+| Migración | `0028_api_idempotency.sql` | Estado operativo, no evidencia: lo que hizo la mutación está en el diario |
 | Matriz | `argos_api/authz/permissions.yaml` | Permiso → roles del realm, versionada y revisable por el cliente |
 | Función pública | `authz.require_perm(permiso) -> PermissionGuard` | Dependencia de ruta; permiso no declarado = error de arranque |
 | Función pública | `authz.load_matrix(path) -> dict[str, frozenset[str]]` | Rechaza roles fuera del realm y permisos sin roles |
@@ -73,6 +81,8 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 
 ## 8. Verificación
 
+- `tests/integration/test_api_core.py`: la misma clave no repite el efecto ni el asiento, la misma clave con otro cuerpo es `409`, sin clave cada llamada es nueva, una llamada denegada no deja asiento, el refresco solo sale de la cookie y **se recorre toda ruta mutadora** comprobando que la que responde correctamente deja su asiento (hoy responden `501`; el test aprieta solo según se implementan).
+- `services/api/tests/test_core_pure.py`: el cursor es opaco, uno ajeno se rechaza y la paginación no repite ni salta filas cuando se insertan otras en medio.
 - `tests/contract/test_api_authz.py`: las 72 combinaciones de rol × permiso contra la expectativa escrita a mano en `tests/fixtures/authz_matrix.yaml`, que ninguna ruta de la v1 queda sin permiso (salvo el refresco de sesión) y los invariantes de separación de deberes.
 - `services/api/tests/test_authz_pure.py`: la matriz sola —carga, roles fuera del realm, permiso sin roles, permiso no declarado y el guardián.
 - `tests/contract/test_api_v1.py`: cada recurso declarado, la forma del error, la paginación por cursor, la cabecera de idempotencia, el `401` anónimo y que el fichero versionado es exactamente el generado.
@@ -81,6 +91,7 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 ## 9. Limitaciones conocidas y pendientes
 
 - Las rutas responden `501` hasta su tarea (F08-04 en adelante); `challenge-api` sigue en pie hasta F08-17.
+- La tabla de idempotencia no tiene aún purga por retención: hay un índice por `created_at` esperándola (pendiente registrado).
 - El montaje de GraphQL bajo `/api/v1/inventory/graph` (ADR-0012 §5) llega con el inventario, en F08-04.
 
 ## 10. Historial
@@ -89,3 +100,4 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-20 | Contrato OpenAPI v1, esqueleto de rutas y suite de contrato | F08-01 |
 | 0.2.0-alpha | 2026-09-20 | Matriz de autorización versionada, denegación por defecto y separación de deberes | F08-02 |
+| 0.3.0-alpha | 2026-09-20 | Núcleo: cursor opaco, idempotencia con tabla, auditoría de mutaciones y refresco de sesión | F08-03 |

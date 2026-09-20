@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from argos_api.authz import PERMISSIONS, AuthzError, PermissionGuard, load_matrix, require_perm
 from argos_auth import ROLES, Identity
@@ -14,6 +14,11 @@ MATRIX = Path(__file__).resolve().parents[1] / "argos_api" / "authz" / "permissi
 
 def _identity(*roles: str) -> Identity:
     return Identity(sub="someone", name="Someone", roles=frozenset(roles))
+
+
+def _request() -> Request:
+    """The bare minimum FastAPI would hand the guard."""
+    return Request({"type": "http", "method": "GET", "path": "/", "headers": []})
 
 
 def _write(tmp_path: Path, content: object) -> Path:
@@ -54,14 +59,14 @@ def test_the_guard_lets_through_only_the_roles_of_its_permission() -> None:
     assert guard.permission == "campaigns.create"
 
     identity = _identity("campaign_manager")
-    assert guard(identity) is identity
+    assert guard(_request(), identity) is identity
 
     with pytest.raises(HTTPException) as refused:
-        guard(_identity("read_only_auditor"))
+        guard(_request(), _identity("read_only_auditor"))
     assert refused.value.status_code == 403
     assert "campaigns.create" in str(refused.value.detail)
 
 
 def test_holding_several_roles_is_enough_with_one_of_them() -> None:
     guard = require_perm("campaigns.approve")
-    assert guard(_identity("read_only_auditor", "dpo_reviewer")).roles
+    assert guard(_request(), _identity("read_only_auditor", "dpo_reviewer")).roles

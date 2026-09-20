@@ -3,9 +3,10 @@
 from fastapi import APIRouter, Depends
 
 from argos_api.authz import require_perm
+from argos_api.core import CoreRoute
 from argos_api.http import Page, Paging, pending
 
-router = APIRouter(prefix="/approvals", tags=["approvals"])
+router = APIRouter(prefix="/approvals", tags=["approvals"], route_class=CoreRoute)
 
 
 @router.get(

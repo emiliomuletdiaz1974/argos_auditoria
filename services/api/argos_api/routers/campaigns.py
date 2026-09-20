@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 
 from argos_api.authz import require_perm
+from argos_api.core import CoreRoute
 from argos_api.http import IdempotencyKey, Page, Paging, pending
 
-router = APIRouter(prefix="/campaigns", tags=["campaigns"])
+router = APIRouter(prefix="/campaigns", tags=["campaigns"], route_class=CoreRoute)
 
 
 class NewCampaign(BaseModel):

@@ -7,13 +7,25 @@ write— and every POST that creates accepts an `Idempotency-Key` so a retry doe
 
 from typing import Annotated, Any, NoReturn
 
-from fastapi import Depends, Header, HTTPException, Query, Request, status
+from fastapi import Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from argos_api.paging import Page, PageRequest, Paging
+
 PROBLEM_MEDIA_TYPE = "application/problem+json"
-DEFAULT_PAGE = 50
-MAX_PAGE = 200
+__all__ = [
+    "ERRORS",
+    "PROBLEM_MEDIA_TYPE",
+    "IdempotencyKey",
+    "Page",
+    "PageRequest",
+    "Paging",
+    "Problem",
+    "ProblemResponse",
+    "pending",
+    "problem_response",
+]
 
 
 class Problem(BaseModel):
@@ -30,18 +42,6 @@ class ProblemResponse(JSONResponse):
     media_type = PROBLEM_MEDIA_TYPE
 
 
-class Page(BaseModel):
-    """A page of a listing: the items and the cursor to ask for the next one."""
-
-    items: list[dict[str, Any]] = Field(default_factory=list)
-    next: str | None = Field(default=None, description="cursor of the next page, null at the end")
-
-
-class PageRequest(BaseModel):
-    cursor: str | None = None
-    limit: int = DEFAULT_PAGE
-
-
 def problem_response(
     request: Request, status_code: int, title: str, detail: str | None
 ) -> ProblemResponse:
@@ -51,16 +51,6 @@ def problem_response(
     return ProblemResponse(status_code=status_code, content=body)
 
 
-def page_request(
-    cursor: Annotated[
-        str | None, Query(description="opaque cursor returned by the previous page")
-    ] = None,
-    limit: Annotated[int, Query(ge=1, le=MAX_PAGE, description="items per page")] = DEFAULT_PAGE,
-) -> PageRequest:
-    return PageRequest(cursor=cursor, limit=limit)
-
-
-Paging = Annotated[PageRequest, Depends(page_request)]
 IdempotencyKey = Annotated[
     str | None,
     Header(

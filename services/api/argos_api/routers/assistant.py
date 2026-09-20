@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from argos_api.authz import require_perm
+from argos_api.core import CoreRoute
 from argos_api.http import pending
 
-router = APIRouter(prefix="/assistant", tags=["assistant"])
+router = APIRouter(prefix="/assistant", tags=["assistant"], route_class=CoreRoute)
 
 
 class Question(BaseModel):

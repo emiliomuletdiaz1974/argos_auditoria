@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from argos_api.authz import require_perm
+from argos_api.core import CoreRoute
 from argos_api.http import Page, Paging, pending
 
-router = APIRouter(prefix="/inventory", tags=["inventory"])
+router = APIRouter(prefix="/inventory", tags=["inventory"], route_class=CoreRoute)
 
 
 class ReviewDecision(BaseModel):

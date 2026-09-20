@@ -5,9 +5,10 @@ from typing import Any
 from fastapi import APIRouter, Depends, Response
 
 from argos_api.authz import require_perm
+from argos_api.core import CoreRoute
 from argos_api.http import Page, Paging, pending
 
-router = APIRouter(prefix="/evidence", tags=["evidence"])
+router = APIRouter(prefix="/evidence", tags=["evidence"], route_class=CoreRoute)
 
 
 @router.get(

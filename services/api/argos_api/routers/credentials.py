@@ -6,9 +6,10 @@ from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
 
 from argos_api.authz import require_perm
+from argos_api.core import CoreRoute
 from argos_api.http import IdempotencyKey, pending
 
-router = APIRouter(prefix="/credentials", tags=["credentials"])
+router = APIRouter(prefix="/credentials", tags=["credentials"], route_class=CoreRoute)
 
 
 class NewCredential(BaseModel):
