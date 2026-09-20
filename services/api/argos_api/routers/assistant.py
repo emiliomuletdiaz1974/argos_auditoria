@@ -2,9 +2,10 @@
 
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from argos_api.authz import require_perm
 from argos_api.http import pending
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
@@ -15,6 +16,10 @@ class Question(BaseModel):
     campaign_id: str | None = None
 
 
-@router.post("/ask", summary="Ask the assistant; it answers with citations or refuses")
+@router.post(
+    "/ask",
+    summary="Ask the assistant; it answers with citations or refuses",
+    dependencies=[Depends(require_perm("assistant.ask"))],
+)
 def ask(body: Question) -> dict[str, Any]:
     pending("the assistant")

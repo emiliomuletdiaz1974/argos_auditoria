@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.1.0-alpha
-commit: de46a2e
+version: 0.2.0-alpha
+commit: pendiente
 date: 2026-09-20
 status: current
 confidentiality: client
@@ -28,7 +28,8 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 - `argos_api.app.create_app(validator)`: monta `/health`, los routers de cada recurso bajo `/api/v1` y los manejadores de error; expone el contrato en `/api/v1/openapi.json`.
 - `argos_api.routers.*`: un módulo por recurso (`systems`, `inventory`, `campaigns`, `findings`, `evidence`, `credentials`, `assistant`, `approvals`, `webhooks`, `session`).
 - `argos_api.http`: lo que comparten todos los recursos —el problema RFC 9457, la paginación por cursor y la cabecera de idempotencia—, para que ningún router lo repita.
-- `argos_api.auth`: exige un token del realm `argos` con algún rol de ARGOS. La matriz de permisos por ruta llega en F08-02.
+- `argos_api.auth`: exige un token del realm `argos` con algún rol de ARGOS.
+- `argos_api.authz`: cada ruta declara un permiso `recurso.acción` y la matriz `permissions.yaml` dice qué roles lo tienen. Un permiso que la matriz no declara es un error de arranque, no una puerta abierta.
 - El contrato **se genera del código**: `tools/api_contract.py` lo escribe en `services/api/openapi.json` y `--check` falla si divergen. `make api-contract` está en `make check` y en el CI.
 
 ### Decisiones transversales
@@ -40,6 +41,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Paginación | `cursor` opaco y `limit` (1…200, por defecto 50); nunca `offset` |
 | Idempotencia | `Idempotency-Key` en los POST que crean (campañas, credenciales, suscripciones) |
 | Autenticación | `Bearer` del Keycloak del appliance; sin token, `401` con `WWW-Authenticate` |
+| Autorización | Denegación por defecto: `require_perm("recurso.acción")` en cada ruta contra `permissions.yaml` |
 
 ## 4. Interfaces
 
@@ -50,6 +52,9 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Herramienta | `tools/api_contract.py [--check]` | Genera el contrato o comprueba que el fichero está al día |
 | Rutas | `/api/v1/{systems,inventory,campaigns,findings,evidence,credentials,assistant,approvals,webhooks,auth}` | 33 operaciones declaradas; ver el contrato |
 | Salud | `GET /health` | Sin token |
+| Matriz | `argos_api/authz/permissions.yaml` | Permiso → roles del realm, versionada y revisable por el cliente |
+| Función pública | `authz.require_perm(permiso) -> PermissionGuard` | Dependencia de ruta; permiso no declarado = error de arranque |
+| Función pública | `authz.load_matrix(path) -> dict[str, frozenset[str]]` | Rechaza roles fuera del realm y permisos sin roles |
 
 ## 5. Configuración
 
@@ -57,7 +62,8 @@ Por ahora, el emisor y la audiencia OIDC que recibe el validador (`ARGOS_OIDC_IS
 
 ## 6. Seguridad y tratamiento de datos
 
-- Ninguna ruta autenticada se resuelve sin un token válido con rol del realm; la separación de funciones por ruta es F08-02.
+- Ninguna ruta autenticada se resuelve sin un token válido con rol del realm y sin el permiso que la ruta declara.
+- **Separación de deberes:** quien planifica y lanza (`campaign_manager`) no aprueba compuertas ni mueve hallazgos; `platform_admin` opera la plataforma (integraciones, revocación) y no aprueba ni juzga; `read_only_auditor` solo tiene permisos `.read`. Aceptar un riesgo es de `dpo_reviewer` y exige justificación escrita. El doble control del muestreo sigue siendo el de ARG-047, en el motor de campañas.
 - Los cuerpos se validan con Pydantic y un cuerpo inválido sale como `422` en formato problema, sin filtrar trazas.
 - Decisiones aplicables: ADR-0012 (API única), ADR-0013 (consola), nota de desviación ARG-071-080 (identificadores en inglés y sin `INSERT` propios).
 
@@ -67,6 +73,8 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 
 ## 8. Verificación
 
+- `tests/contract/test_api_authz.py`: las 72 combinaciones de rol × permiso contra la expectativa escrita a mano en `tests/fixtures/authz_matrix.yaml`, que ninguna ruta de la v1 queda sin permiso (salvo el refresco de sesión) y los invariantes de separación de deberes.
+- `services/api/tests/test_authz_pure.py`: la matriz sola —carga, roles fuera del realm, permiso sin roles, permiso no declarado y el guardián.
 - `tests/contract/test_api_v1.py`: cada recurso declarado, la forma del error, la paginación por cursor, la cabecera de idempotencia, el `401` anónimo y que el fichero versionado es exactamente el generado.
 - `make api-contract`, dentro de `make check` y del CI.
 
@@ -80,3 +88,4 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-20 | Contrato OpenAPI v1, esqueleto de rutas y suite de contrato | F08-01 |
+| 0.2.0-alpha | 2026-09-20 | Matriz de autorización versionada, denegación por defecto y separación de deberes | F08-02 |

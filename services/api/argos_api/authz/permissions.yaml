@@ -1,0 +1,40 @@
+# ARG-072 · the authorisation matrix of the v1: permission -> realm roles that hold it.
+#
+# It is versioned here so the client can read it, review it and challenge it. Nothing else grants
+# access: a route asks for a permission, and a permission that is not in this file is a start-up
+# error, never an open door. Deny by default.
+#
+# Separation of duties, as the RACI of the contract requires:
+#   - whoever plans and launches a campaign (campaign_manager) does not approve its gates nor moves
+#     its findings: that is the DPO reviewer;
+#   - platform_admin operates the platform (integrations, revocation) and neither approves nor
+#     judges: administering is not deciding;
+#   - read_only_auditor only holds `.read` permissions.
+# The double control of the sampling gate (two different people) is the one of ARG-047 and lives in
+# the campaign engine, not here.
+
+systems.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
+
+inventory.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
+inventory.review: [dpo_reviewer]
+
+campaigns.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
+campaigns.create: [campaign_manager]
+campaigns.launch: [campaign_manager]
+campaigns.approve: [dpo_reviewer]
+approvals.read: [campaign_manager, dpo_reviewer]
+
+findings.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
+findings.transition: [dpo_reviewer]
+findings.verify: [campaign_manager]
+
+evidence.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
+
+credentials.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
+credentials.create: [campaign_manager]
+credentials.revoke: [platform_admin]
+
+assistant.ask: [platform_admin, campaign_manager, dpo_reviewer]
+
+webhooks.read: [platform_admin, read_only_auditor]
+webhooks.create: [platform_admin]

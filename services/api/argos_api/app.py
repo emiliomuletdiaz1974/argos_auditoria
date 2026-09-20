@@ -7,13 +7,12 @@ versioned in `services/api/openapi.json`; `tools/api_contract.py --check` fails 
 
 from typing import Any
 
-from fastapi import Depends, FastAPI, Request, status
+from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from starlette.exceptions import HTTPException
 
 from argos_api import API_PREFIX, API_VERSION, SERVICE_NAME
-from argos_api.auth import authenticate
 from argos_api.http import ERRORS, PROBLEM_MEDIA_TYPE, ProblemResponse, problem_response
 from argos_api.routers import (
     approvals,
@@ -95,13 +94,9 @@ def create_app(validator: JwtValidator | None = None) -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok", "service": SERVICE_NAME, "version": API_VERSION}
 
+    # Each route declares its permission (ARG-072); the guard resolves the identity on its way.
     for router in AUTHENTICATED:
-        app.include_router(
-            router,
-            prefix=API_PREFIX,
-            responses=ERRORS,
-            dependencies=[Depends(authenticate)],
-        )
+        app.include_router(router, prefix=API_PREFIX, responses=ERRORS)
     app.include_router(session.router, prefix=API_PREFIX, responses=ERRORS)
 
     def contract() -> dict[str, Any]:

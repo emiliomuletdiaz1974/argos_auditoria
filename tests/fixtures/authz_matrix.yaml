@@ -1,0 +1,91 @@
+# ARG-072 · who may do what, written by hand from the RACI of the contract.
+#
+# This file is NOT generated from `permissions.yaml`: it is the expectation against which the
+# matrix that the API enforces is checked. If both change at once, someone has to say why.
+#
+# The rules behind it:
+#   - `read_only_auditor` reads and nothing else.
+#   - `campaign_manager` plans, launches and asks for the remediation check; it does not approve.
+#   - `dpo_reviewer` approves the gates, decides on a column under review and moves a finding.
+#   - `platform_admin` operates the platform (integrations, revocation); it neither approves a gate
+#     nor judges a finding, so nobody can both run a campaign and bless its result.
+
+platform_admin:
+  systems.read: true
+  inventory.read: true
+  inventory.review: false
+  campaigns.read: true
+  campaigns.create: false
+  campaigns.launch: false
+  campaigns.approve: false
+  approvals.read: false
+  findings.read: true
+  findings.transition: false
+  findings.verify: false
+  evidence.read: true
+  credentials.read: true
+  credentials.create: false
+  credentials.revoke: true
+  assistant.ask: true
+  webhooks.read: true
+  webhooks.create: true
+
+campaign_manager:
+  systems.read: true
+  inventory.read: true
+  inventory.review: false
+  campaigns.read: true
+  campaigns.create: true
+  campaigns.launch: true
+  campaigns.approve: false
+  approvals.read: true
+  findings.read: true
+  findings.transition: false
+  findings.verify: true
+  evidence.read: true
+  credentials.read: true
+  credentials.create: true
+  credentials.revoke: false
+  assistant.ask: true
+  webhooks.read: false
+  webhooks.create: false
+
+dpo_reviewer:
+  systems.read: true
+  inventory.read: true
+  inventory.review: true
+  campaigns.read: true
+  campaigns.create: false
+  campaigns.launch: false
+  campaigns.approve: true
+  approvals.read: true
+  findings.read: true
+  findings.transition: true
+  findings.verify: false
+  evidence.read: true
+  credentials.read: true
+  credentials.create: false
+  credentials.revoke: false
+  assistant.ask: true
+  webhooks.read: false
+  webhooks.create: false
+
+read_only_auditor:
+  systems.read: true
+  inventory.read: true
+  inventory.review: false
+  campaigns.read: true
+  campaigns.create: false
+  campaigns.launch: false
+  campaigns.approve: false
+  approvals.read: false
+  findings.read: true
+  findings.transition: false
+  findings.verify: false
+  evidence.read: true
+  credentials.read: true
+  credentials.create: false
+  credentials.revoke: false
+  assistant.ask: false
+  webhooks.read: true
+  webhooks.create: false
