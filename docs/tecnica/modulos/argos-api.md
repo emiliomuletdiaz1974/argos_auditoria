@@ -48,12 +48,12 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Función pública | `app.create_app(validator=None) -> FastAPI` | La aplicación; sin validador, toda ruta autenticada responde `401` |
 | Contrato | `services/api/openapi.json` | OpenAPI 3.1 de la v1, versionado y comprobado en CI |
 | Herramienta | `tools/api_contract.py [--check]` | Genera el contrato o comprueba que el fichero está al día |
-| Rutas | `/api/v1/{systems,inventory,campaigns,findings,evidence,credentials,assistant,approvals,webhooks,auth}` | 32 operaciones declaradas; ver el contrato |
+| Rutas | `/api/v1/{systems,inventory,campaigns,findings,evidence,credentials,assistant,approvals,webhooks,auth}` | 33 operaciones declaradas; ver el contrato |
 | Salud | `GET /health` | Sin token |
 
 ## 5. Configuración
 
-Por ahora, el emisor y la audiencia OIDC que recibe el validador (`ARGOS_OIDC_ISSUER`, `ARGOS_OIDC_AUDIENCE`, ya existentes). El contenedor y su punto de entrada llegan con F08-16.
+Por ahora, el emisor y la audiencia OIDC que recibe el validador (`ARGOS_OIDC_ISSUER`, `ARGOS_OIDC_AUDIENCE`, ya existentes). El contenedor y su punto de entrada llegan con F08-17.
 
 ## 6. Seguridad y tratamiento de datos
 
@@ -63,7 +63,7 @@ Por ahora, el emisor y la audiencia OIDC que recibe el validador (`ARGOS_OIDC_IS
 
 ## 7. Operación
 
-En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio del `compose` y la consola servida como estáticos llegan en F08-16.
+En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio del `compose` y la consola servida como estáticos llegan en F08-17.
 
 ## 8. Verificación
 
@@ -72,8 +72,8 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 
 ## 9. Limitaciones conocidas y pendientes
 
-- Las rutas responden `501` hasta su tarea (F08-04 en adelante); `challenge-api` sigue en pie hasta F08-15.
-- El montaje de GraphQL bajo `/api/v1/inventory/graph` (ADR-0012 §5) llega con el inventario, en F08-05.
+- Las rutas responden `501` hasta su tarea (F08-04 en adelante); `challenge-api` sigue en pie hasta F08-17.
+- El montaje de GraphQL bajo `/api/v1/inventory/graph` (ADR-0012 §5) llega con el inventario, en F08-04.
 
 ## 10. Historial
 
