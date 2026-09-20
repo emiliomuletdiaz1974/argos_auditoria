@@ -22,6 +22,7 @@ jobs:
       - run: make ontology-gates
       - run: make challenge-lint
       - run: make challenge-catalog
+      - run: make api-contract
       - run: make docs-check
 
   integration:

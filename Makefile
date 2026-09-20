@@ -5,7 +5,7 @@ COMPOSE := docker compose -f deploy/dev/compose.yaml --profile sources
 COMPOSE_HEAVY := docker compose -f deploy/dev/compose.yaml --profile sources --profile heavy
 VERSION := $(strip $(file < VERSION))
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog ai-eval ai-eval-release demo demo-reset
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write ai-eval ai-eval-release demo demo-reset
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -22,6 +22,7 @@ help:
 	@echo "make ontology-overlap  overlap matrix between norms (dist/overlap.*)"
 	@echo "make challenge-lint   the challenge library against its schema and rules"
 	@echo "make challenge-catalog  the generated challenge catalog is up to date"
+	@echo "make api-contract   the versioned v1 contract matches the application"
 	@echo "make ai-eval       golden sets of the AI layer with the oracle (also inside make check)"
 	@echo "make ai-eval-release  golden sets against the served model: release gate (needs weights)"
 	@echo "make demo         MVP demonstration end to end, outputs in .scratch/demo (needs make dev)"
@@ -64,7 +65,7 @@ secrets:
 test:
 	uv run pytest -m "not integration"
 
-check: lint typecheck secrets docs-check
+check: lint typecheck secrets docs-check api-contract
 	uv run pytest -m "not heavy"
 
 check-heavy:
@@ -98,6 +99,12 @@ challenge-lint:
 
 challenge-catalog:
 	uv run python tools/challenge_catalog.py --check
+
+api-contract:
+	uv run python tools/api_contract.py --check
+
+api-contract-write:
+	uv run python tools/api_contract.py
 
 ai-eval:
 	uv run pytest -m integration tests/integration/test_ai_goldens.py

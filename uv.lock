@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "argos-ai-gateway",
+    "argos-api",
     "argos-auth",
     "argos-challenge-engine",
     "argos-common",
@@ -85,6 +86,25 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+]
+
+[[package]]
+name = "argos-api"
+version = "0.1.0a0"
+source = { editable = "services/api" }
+dependencies = [
+    { name = "argos-auth" },
+    { name = "argos-common" },
+    { name = "fastapi" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-auth", editable = "libs/auth" },
+    { name = "argos-common", editable = "libs/common" },
+    { name = "fastapi", specifier = ">=0.115" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
@@ -407,6 +427,7 @@ version = "0.1.0a0"
 source = { virtual = "." }
 dependencies = [
     { name = "argos-ai-gateway" },
+    { name = "argos-api" },
     { name = "argos-auth" },
     { name = "argos-challenge-engine" },
     { name = "argos-common" },
@@ -451,6 +472,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "argos-ai-gateway", editable = "services/ai-gateway" },
+    { name = "argos-api", editable = "services/api" },
     { name = "argos-auth", editable = "libs/auth" },
     { name = "argos-challenge-engine", editable = "services/challenge-engine" },
     { name = "argos-common", editable = "libs/common" },
