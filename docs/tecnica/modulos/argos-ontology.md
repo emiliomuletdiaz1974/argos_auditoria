@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: pendiente
+commit: 6654a05
 date: 2026-09-17
 status: current
 confidentiality: client
