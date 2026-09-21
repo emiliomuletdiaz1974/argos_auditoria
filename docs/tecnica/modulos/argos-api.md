@@ -5,7 +5,7 @@ title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
 version: 0.4.0-alpha
-commit: pendiente
+commit: 0855540
 date: 2026-09-20
 status: current
 confidentiality: client
