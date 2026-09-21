@@ -554,7 +554,7 @@
     },
     "/api/v1/campaigns": {
       "get": {
-        "operationId": "list_campaigns_api_v1_campaigns_get",
+        "operationId": "list_all_api_v1_campaigns_get",
         "parameters": [
           {
             "description": "opaque cursor returned by the previous page",
@@ -797,6 +797,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }
@@ -896,6 +897,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }
@@ -995,6 +997,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }
@@ -1113,6 +1116,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }
@@ -1212,6 +1216,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }
@@ -1296,7 +1301,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Plan resolved over the snapshot, before probing",
+        "summary": "What the campaign will ask, literally, before it asks anything",
         "tags": [
           "campaigns"
         ]
@@ -1311,6 +1316,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }
@@ -1395,7 +1401,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Progress of the run",
+        "summary": "Progress of the run, as the workflow tells it",
         "tags": [
           "campaigns"
         ]

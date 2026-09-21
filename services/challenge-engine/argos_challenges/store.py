@@ -28,6 +28,9 @@ TRANSITIONS: Mapping[str, frozenset[str]] = {
 }
 JOURNAL_ACTOR = "system:campaign"
 DEFAULT_APPROVALS = 1
+# Gates two different people must approve (ARG-047): sampling decides what is not looked at.
+DOUBLE_CONTROL_GATES = frozenset({"sampling"})
+START_GATE = "start"
 
 _INSERT_VERDICT = (
     "INSERT INTO argos.verdicts (id, campaign_id, unit_id, challenge_id, challenge_version, "
@@ -277,3 +280,83 @@ def campaign_record(dsn: str, campaign_id: str) -> dict[str, Any]:
     record = dict(zip(fields, row, strict=True))
     record["id"] = campaign_id
     return record
+
+
+def approvals_needed(gate: str) -> int:
+    return 2 if gate in DOUBLE_CONTROL_GATES else DEFAULT_APPROVALS
+
+
+_CAMPAIGNS = (
+    "SELECT id::text, name, status, created_by, created_at, sealed_at FROM argos.campaigns"
+    " WHERE (%(at)s::timestamptz IS NULL OR (created_at, id::text) < (%(at)s, %(id)s))"
+    " ORDER BY created_at DESC, id DESC LIMIT %(limit)s"
+)
+_GATES = (
+    "SELECT r.gate, r.payload, r.requested_at, count(a.approved_by) FROM argos.approval_requests r"
+    " LEFT JOIN argos.approvals a ON a.campaign_id = r.campaign_id AND a.gate = r.gate"
+    " WHERE r.campaign_id = %s GROUP BY r.gate, r.payload, r.requested_at ORDER BY r.requested_at"
+)
+
+
+def list_campaigns(
+    dsn: str, limit: int, after: tuple[str, str] | None = None
+) -> list[dict[str, Any]]:
+    """The campaigns, newest first, in keyset order so a page never repeats one."""
+    at, ident = after if after else (None, None)
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(_CAMPAIGNS, {"at": at, "id": ident, "limit": limit}).fetchall()
+    return [
+        {
+            "id": row[0],
+            "name": row[1],
+            "status": row[2],
+            "created_by": row[3],
+            "created_at": row[4].isoformat(),
+            "sealed_at": row[5].isoformat() if row[5] else None,
+        }
+        for row in rows
+    ]
+
+
+def campaign_gates(dsn: str, campaign_id: str) -> list[dict[str, Any]]:
+    """The gates the campaign asked for, in the order it asked, and their approvals."""
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(_GATES, (campaign_id,)).fetchall()
+    return [
+        {
+            "gate": str(row[0]),
+            "payload": row[1],
+            "requested_at": row[2].isoformat(),
+            "approvals": int(row[3]),
+            "needed": approvals_needed(str(row[0])),
+        }
+        for row in rows
+    ]
+
+
+def campaign_plan(dsn: str, campaign_id: str) -> dict[str, Any] | None:
+    """What the campaign is going to ask, literally, before it asks anything.
+
+    It exists from the moment the campaign is prepared —pinned, compiled and waiting at the start
+    gate— and until then there is nothing honest to show: None. What cannot be verified is not
+    hidden among the units, it has its own section.
+    """
+    campaign_record(dsn, campaign_id)  # an unknown campaign is an error, not an empty plan
+    with psycopg.connect(dsn) as conn:
+        start = conn.execute(
+            "SELECT payload FROM argos.approval_requests WHERE campaign_id = %s AND gate = %s",
+            (campaign_id, START_GATE),
+        ).fetchone()
+        if start is None:
+            return None
+        units = conn.execute(
+            "SELECT unit, status FROM argos.campaign_units WHERE campaign_id = %s ORDER BY unit_id",
+            (campaign_id,),
+        ).fetchall()
+    payload = dict(start[0])
+    return {
+        "campaign_id": campaign_id,
+        "units": [dict(row[0]) for row in units],
+        "unverifiable": list(payload.get("unverifiable", [])),
+        "probes_run": sum(1 for row in units if row[1] != "pending"),
+    }

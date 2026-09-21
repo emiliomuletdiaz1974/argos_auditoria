@@ -95,6 +95,7 @@ version = "0.1.0a0"
 source = { editable = "services/api" }
 dependencies = [
     { name = "argos-auth" },
+    { name = "argos-challenge-engine" },
     { name = "argos-common" },
     { name = "argos-inventory" },
     { name = "fastapi" },
@@ -104,6 +105,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "argos-auth", editable = "libs/auth" },
+    { name = "argos-challenge-engine", editable = "services/challenge-engine" },
     { name = "argos-common", editable = "libs/common" },
     { name = "argos-inventory", editable = "services/inventory" },
     { name = "fastapi", specifier = ">=0.115" },

@@ -29,6 +29,7 @@ from argos_api.routers import (
     systems,
     webhooks,
 )
+from argos_api.runner import CampaignRunner
 from argos_auth import JwtValidator
 from argos_common import PostgresJournal
 
@@ -74,6 +75,7 @@ def create_app(
     *,
     dsn: str | None = None,
     refresher: Refresher | None = None,
+    campaign_runner: CampaignRunner | None = None,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
     still answer, and the tests that do not touch the database do not need one."""
@@ -88,6 +90,7 @@ def create_app(
     app.state.validator = validator
     app.state.dsn = dsn
     app.state.refresher = refresher
+    app.state.campaign_runner = campaign_runner
     app.state.idempotency = IdempotencyStore(dsn) if dsn else None
     app.state.journal = PostgresJournal(dsn) if dsn else None
 
