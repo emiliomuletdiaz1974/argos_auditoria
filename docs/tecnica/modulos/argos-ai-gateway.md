@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.1.0-alpha
-commit: 4dda71d
+commit: pendiente
 date: 2026-09-17
 status: draft
 confidentiality: client
@@ -266,3 +266,4 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.1.0-alpha | 2026-09-17 | Asistente de consola con cuatro herramientas cerradas, presupuesto fijo y fuentes comprobadas | Fase 06 (ARG-058) |
 | 0.1.0-alpha | 2026-09-17 | Arnés de evaluación con conjuntos dorados y puerta de calidad; embebedor de pruebas con señal y búsqueda léxica por cualquiera de las palabras | Fase 06 (ARG-059) |
 | 0.1.0-alpha | 2026-09-17 | Servicio y contenedor del gateway en su propia red, con la sesión en el rol restringido y el diario abierto solo para añadir | Fase 06 (F06-13) |
+| 0.1.0-alpha | 2026-09-21 | `POST /v1/assistant/ask`: el agente del asistente corre dentro del gateway con sus cuatro herramientas y solo viaja su resultado; `ModelUnavailableError` y `503` en ambos endpoints cuando el modelo local no contesta (hasta F06-05, siempre) | F08-08 |

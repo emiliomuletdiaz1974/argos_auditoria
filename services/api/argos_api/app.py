@@ -14,6 +14,7 @@ from fastapi.openapi.utils import get_openapi
 from starlette.exceptions import HTTPException
 
 from argos_api import API_PREFIX, API_VERSION, SERVICE_NAME
+from argos_api.assistant import AssistantClient
 from argos_api.authz import require_perm
 from argos_api.core import IdempotencyStore
 from argos_api.http import ERRORS, PROBLEM_MEDIA_TYPE, ProblemResponse, problem_response
@@ -78,6 +79,7 @@ def create_app(
     refresher: Refresher | None = None,
     campaign_runner: CampaignRunner | None = None,
     evidence: EvidenceActivities | None = None,
+    assistant: AssistantClient | None = None,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
     still answer, and the tests that do not touch the database do not need one."""
@@ -94,6 +96,7 @@ def create_app(
     app.state.refresher = refresher
     app.state.campaign_runner = campaign_runner
     app.state.evidence = evidence
+    app.state.assistant = assistant
     app.state.idempotency = IdempotencyStore(dsn) if dsn else None
     app.state.journal = PostgresJournal(dsn) if dsn else None
 

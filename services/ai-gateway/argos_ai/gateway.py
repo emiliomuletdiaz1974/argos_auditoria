@@ -25,6 +25,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
 import jsonschema
 
 from argos_ai.backends.base import Backend
@@ -41,6 +42,10 @@ REPAIR_INSTRUCTION = (
 
 class GatewayError(ArgosError):
     """The gateway cannot serve this request."""
+
+
+class ModelUnavailableError(GatewayError):
+    """The local model server does not answer: not deployed yet, or down."""
 
 
 class QuotaExceededError(GatewayError):
@@ -157,6 +162,8 @@ class Gateway:
             return await self._backend.complete(system, user, schema)
         except KeyError as exc:  # the deterministic backend does not know this input
             raise GatewayError(f"no recorded answer: {exc}") from exc
+        except httpx.HTTPError as exc:  # an unreachable model is a state to report, not a crash
+            raise ModelUnavailableError(f"the local model is not available: {exc}") from exc
 
 
 def _parse(text: str, schema: dict[str, Any]) -> tuple[dict[str, Any], str | None]:

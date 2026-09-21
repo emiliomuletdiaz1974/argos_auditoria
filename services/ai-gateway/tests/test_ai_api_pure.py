@@ -6,7 +6,9 @@ reachable only on the network of the AI layer, and never on the network of the c
 
 from typing import Any
 
+import httpx
 from argos_ai.api.app import create_app
+from argos_ai.backends.base import Completion
 from argos_ai.backends.fake import FakeBackend
 from argos_ai.gateway import Gateway
 from fastapi.testclient import TestClient
@@ -69,3 +71,67 @@ def test_an_answer_that_never_fits_the_schema_is_a_502() -> None:
 def test_an_unknown_priority_is_refused_before_the_gateway() -> None:
     response = _client([]).post("/v1/chat_json", json={**REQUEST, "priority": "urgentisima"})
     assert response.status_code == 422
+
+
+class UnreachableModel:
+    """The local model server is not there (F06-05 not done yet, or it fell over)."""
+
+    async def complete(
+        self, system: str, user: str, schema: dict[str, object] | None = None
+    ) -> Completion:
+        raise httpx.ConnectError("connection refused")
+
+
+def _gateway_without_model() -> Gateway:
+    return Gateway(
+        UnreachableModel(),
+        journal=lambda _: None,
+        usage=lambda _: None,
+        quotas={"inventory": 1_000_000, "assistant": 1_000_000},
+    )
+
+
+def test_without_the_model_a_completion_is_a_503_that_says_why() -> None:
+    client = TestClient(create_app(_gateway_without_model()))
+    response = client.post("/v1/chat_json", json=REQUEST)
+    assert response.status_code == 503
+    assert "model" in response.json()["detail"]
+
+
+def test_the_assistant_runs_inside_the_gateway_with_its_closed_tools() -> None:
+    from argos_ai.assistant.tools import Tool
+
+    counted = Tool("finding_status", {"type": "object"}, lambda arguments: {"open": 2})
+    replies = [
+        '{"action": "tool", "tool": "finding_status", "arguments": {}}',
+        '{"action": "answer", "answer": "Hay 2 abiertos.",'
+        ' "sources": [{"tool": "finding_status", "detail": "2 abiertos"}]}',
+    ]
+    gateway = Gateway(
+        FakeBackend.of(replies),
+        journal=lambda _: None,
+        usage=lambda _: None,
+        quotas={"assistant": 1_000_000},
+    )
+    client = TestClient(create_app(gateway, tools={"finding_status": counted}))
+    response = client.post("/v1/assistant/ask", json={"question": "¿cuántos abiertos?"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["answer"] == "Hay 2 abiertos."
+    assert body["calls"] == ["finding_status"]
+    assert body["sources"] == [{"tool": "finding_status", "detail": "2 abiertos"}]
+    assert body["complete"] is True
+    assert body["assisted"] is True
+
+
+def test_the_assistant_without_the_model_is_a_503() -> None:
+    client = TestClient(create_app(_gateway_without_model(), tools={}))
+    response = client.post("/v1/assistant/ask", json={"question": "¿cuántos abiertos?"})
+    assert response.status_code == 503
+
+
+def test_a_gateway_without_tools_does_not_pretend_to_have_an_assistant() -> None:
+    client = TestClient(create_app(_gateway_without_model()))
+    response = client.post("/v1/assistant/ask", json={"question": "¿cuántos abiertos?"})
+    assert response.status_code == 503
+    assert "assistant" in response.json()["detail"]

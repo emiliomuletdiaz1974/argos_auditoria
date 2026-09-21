@@ -1,17 +1,25 @@
-"""The AI gateway as an internal HTTP service (ARG-052).
+"""The AI gateway as an internal HTTP service (ARG-052, ARG-058).
 
-Two endpoints, as the phase document designs them: `/health` and `/v1/chat_json`, the contract the
-other services consume. It is internal on purpose: its only protection in development is the
-network, like the NetworkPolicy of the appliance — reachable on the network of the AI layer, never
-on the one of the campaign API. The prompt never comes back and is never logged: only its hash.
+Three endpoints: `/health`, `/v1/chat_json`, the contract the other services consume, and
+`/v1/assistant/ask`, where the console assistant runs with its four closed tools. The agent lives
+here and not in the API on purpose (ADR-0012): what the model says is handled inside this
+perimeter, whose database role has no privilege over a verdict, and only its result travels.
+
+It is internal on purpose: its only protection in development is the network, like the
+NetworkPolicy of the appliance — reachable on the network of the AI layer, where the v1 API asks it
+by HTTP, and never on the one of the campaign engine. The prompt never comes back and is never
+logged: only its hash.
 """
 
+from collections.abc import Mapping
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from argos_ai.gateway import Gateway, GatewayError, QuotaExceededError
+from argos_ai.assistant.agent import AssistantError, ask
+from argos_ai.assistant.tools import Tool
+from argos_ai.gateway import Gateway, GatewayError, ModelUnavailableError, QuotaExceededError
 from argos_ai.guardrails import OutputRejectedError
 
 SERVICE_NAME = "argos-ai-gateway"
@@ -27,7 +35,20 @@ class ChatJsonRequest(BaseModel):
     priority: Literal["interactive", "batch"] = "batch"
 
 
-def create_app(gateway: Gateway) -> FastAPI:
+class Question(BaseModel):
+    question: str = Field(min_length=3, max_length=2000)
+
+
+def _refusal(exc: GatewayError) -> HTTPException:
+    """The same error, the same status, whichever endpoint met it."""
+    if isinstance(exc, QuotaExceededError):
+        return HTTPException(status_code=429, detail=str(exc))
+    if isinstance(exc, ModelUnavailableError):
+        return HTTPException(status_code=503, detail=str(exc))
+    return HTTPException(status_code=502, detail=str(exc))
+
+
+def create_app(gateway: Gateway, tools: Mapping[str, Tool] | None = None) -> FastAPI:
     app = FastAPI(title="ARGOS AI gateway", docs_url=None, redoc_url=None)
 
     @app.get("/health")
@@ -44,12 +65,10 @@ def create_app(gateway: Gateway) -> FastAPI:
                 request.json_schema,
                 priority=request.priority,
             )
-        except QuotaExceededError as exc:
-            raise HTTPException(status_code=429, detail=str(exc)) from exc
         except OutputRejectedError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except GatewayError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            raise _refusal(exc) from exc
         return {
             "data": answer.data,
             "prompt_sha256": answer.prompt_sha256,
@@ -57,6 +76,26 @@ def create_app(gateway: Gateway) -> FastAPI:
             "tokens_out": answer.tokens_out,
             "repaired": answer.repaired,
             "substitutions": answer.substitutions,
+        }
+
+    @app.post("/v1/assistant/ask")
+    async def assistant(request: Question) -> dict[str, Any]:
+        if tools is None:
+            raise HTTPException(status_code=503, detail="this gateway has no assistant tools")
+        try:
+            answer = await ask(request.question, gateway, tools)
+        except OutputRejectedError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except AssistantError as exc:  # it quoted what it did not consult: not an answer
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except GatewayError as exc:
+            raise _refusal(exc) from exc
+        return {
+            "answer": answer.answer,
+            "sources": answer.sources,
+            "complete": answer.complete,
+            "calls": answer.calls,
+            "assisted": True,
         }
 
     return app

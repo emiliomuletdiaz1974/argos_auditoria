@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.7.0-alpha
-commit: 2f52d0c
+version: 0.8.0-alpha
+commit: pendiente
 date: 2026-09-20
 status: current
 confidentiality: client
@@ -21,7 +21,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 
 - **Hace:** publicar el contrato de la v1, resolver las peticiones llamando a las librerías del dominio y dejar asiento en el diario de toda mutación (esto último, desde F08-03).
 - **No hace:** no escribe SQL sobre tablas de otras fases; no expone material público (eso es `evidence-api` y el comprobador, que siguen siendo servicios aparte).
-- **Estado:** implementados sistemas e inventario (F08-04) campañas con su plan previo y compuertas (F08-05) hallazgos con remediación verificada (F08-06) y evidencia y credenciales (F08-07); el resto de rutas están declaradas y validan sus parámetros, pero devuelven `501` hasta su tarea.
+- **Estado:** implementados sistemas e inventario (F08-04) campañas con su plan previo y compuertas (F08-05) hallazgos con remediación verificada (F08-06) evidencia y credenciales (F08-07) y el asistente (F08-08); el resto de rutas están declaradas y validan sus parámetros, pero devuelven `501` hasta su tarea.
 
 ## 3. Arquitectura
 
@@ -62,6 +62,8 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Hallazgos | `GET /findings` (peor primero, filtros `status`, `severity`, `campaign_id`), `GET /findings/{id}`, `POST /findings/{id}/transition`, `POST /findings/{id}/verify` | El detalle trae el porqué completo —veredicto con sus valores, declaración muestral, asiento del diario de la consulta y la obligación con su artículo— y `allowed_transitions`, para que la consola no duplique la máquina de estados. `closed_compliant` y `reopened` no se alcanzan por transición: solo `verify`, que lanza la reejecución de ARG-049 |
 | Evidencia | `GET /evidence/{id}/chain`, `/artifacts`, `/artifacts/{verdict_id}`, `/dossier.json`, `/dossier.pdf`, `/bundle` | La cadena con su estado real (firma con su marca `non_production`, sello en cola o sellado con su política), cada artefacto con su prueba de inclusión contra la raíz firmada, y el expediente en sus bytes exactos (cabecera `X-Dossier-Sha256`). Cada descarga del expediente o del paquete deja un asiento `evidence.download` con quién |
 | Credenciales | `GET /credentials/preview`, `POST /credentials`, `GET /credentials/{id}`, `POST /credentials/{id}/revoke` | Emitir es un acto explícito de `dpo_reviewer`: la vista previa muestra el sujeto exacto y la emisión nombra por su hash el expediente que se vio; si cambió entremedias, `409`. Revocar exige motivo |
+| Asistente | `POST /assistant/ask` | Reenvía la pregunta al gateway de IA **por HTTP** —el único servicio al que llama la API (ADR-0012)— y devuelve respuesta, citas, herramientas consultadas y `complete`; siempre con `assisted: true` y el aviso de que no es un veredicto. Sin modelo local, `503` con el motivo |
+| Cliente | `assistant.AssistantClient(base_url)` y `create_app(assistant=...)` | Sin cliente, la ruta responde `503`; un gateway inalcanzable, también. La API no importa `argos_ai`: un test lo impide |
 | Servicio | `create_app(evidence=EvidenceActivities)` | El dominio de evidencia en el mismo proceso (ADR-0012); sin él, las rutas responden `503` |
 | Protocolo | `runner.CampaignRunner` (`start`, `signal`, `progress`, `remediate`) | Lo que la API pide a Temporal; `create_app(campaign_runner=...)`. La implementación sobre el cliente de Temporal se cablea con el contenedor (F08-17) |
 | Grafo | `POST /api/v1/inventory/graph` | GraphQL de ARG-029 montado dentro de la v1, con el permiso `inventory.read` delante |
@@ -90,6 +92,8 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 
 ## 8. Verificación
 
+- `tests/integration/test_api_assistant.py`: con el gateway real montado por transporte ASGI y un modelo simulado, la respuesta trae citas y herramientas; sin base suficiente lo dice (`complete: false`); sin modelo local, sin gateway o sin cliente, `503` con el motivo; un auditor no gasta la cuota del modelo.
+- `services/api/tests/test_no_ai_imports_pure.py`: ningún módulo de la API importa la capa de IA.
 - `tests/integration/test_api_evidence.py`: cadena con el sello en cola y luego sellada con su política, artefactos paginados cuya prueba verifica contra la raíz firmada, expediente JSON y PDF y paquete descargados con asiento de quién, `404` sin expediente, lo emitido es lo que mostró la vista previa, no se emite sobre un expediente que ya no es el vigente, emitir es del DPO, y una credencial revocada lo dice con su motivo.
 - `tests/integration/test_api_findings.py`: la lista ordena de peor a mejor y filtra, el detalle trae el porqué completo, una persona no cierra ni reabre (ni por la API ni en el dominio), la aceptación de riesgo exige nota y caducidad, `verify` solo sobre lo que espera verificación y la reejecución de un hallazgo trae solo su unidad.
 - `tests/integration/test_api_campaigns.py`: creación que sobrevive a un reintento, lectura y `404`, lanzamiento a Temporal (y `503` sin runner), plan previo con lo no verificable en su sección y `409` antes de preparar, progreso del workflow, compuerta de una aprobación, muestreo con dos personas distintas y `409` si repite la misma, y con tokens reales de Keycloak el diario dice quién aprobó.
@@ -120,3 +124,4 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 | 0.5.0-alpha | 2026-09-21 | Campañas: creación idempotente, plan previo literal, progreso, lanzamiento y compuertas con doble control | F08-05 |
 | 0.6.0-alpha | 2026-09-21 | Hallazgos: porqué completo, transiciones servidas por la API y cierre solo por reejecución | F08-06 |
 | 0.7.0-alpha | 2026-09-21 | Evidencia y credenciales: cadena real, prueba de inclusión, descargas auditadas, vista previa y emisión por el DPO | F08-07 |
+| 0.8.0-alpha | 2026-09-21 | Asistente por HTTP al gateway de IA, marcado como texto asistido y `503` honesto sin modelo | F08-08 |
