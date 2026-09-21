@@ -51,3 +51,19 @@ def test_recurrence_across_campaigns_raises_the_severity(
 ) -> None:
     assert escalate(severity, occurrences) == expected
     assert SEVERITIES[0] == "low" and SEVERITIES[-1] == "critical"
+
+
+def test_the_order_of_the_listing_speaks_the_same_ranks_as_the_code() -> None:
+    from argos_challenges.findings import _LIST, ORDER_KEY_SQL, SEVERITY_RANK
+
+    for severity, rank in SEVERITY_RANK.items():
+        assert f"WHEN '{severity}' THEN {rank}" in ORDER_KEY_SQL
+    assert " ".join(_LIST.split()).count(" ".join(ORDER_KEY_SQL.split())) == 2
+
+
+def test_a_person_never_reaches_what_only_the_re_run_decides() -> None:
+    from argos_challenges.findings import VERIFICATION_ONLY, person_transitions
+
+    for status in TRANSITIONS:
+        assert not set(person_transitions(status)) & VERIFICATION_ONLY
+    assert person_transitions("pending_verification") == []

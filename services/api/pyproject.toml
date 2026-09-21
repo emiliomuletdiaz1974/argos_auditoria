@@ -8,6 +8,7 @@ dependencies = [
     "argos-challenge-engine",
     "argos-common",
     "argos-inventory",
+    "argos-ontology",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
 ]
@@ -17,6 +18,7 @@ argos-auth = { workspace = true }
 argos-challenge-engine = { workspace = true }
 argos-common = { workspace = true }
 argos-inventory = { workspace = true }
+argos-ontology = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

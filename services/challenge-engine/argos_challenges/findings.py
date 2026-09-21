@@ -40,7 +40,11 @@ TRANSITIONS: Mapping[str, frozenset[str]] = {
     "risk_accepted": frozenset({"reopened"}),  # when the acceptance expires
     "closed_compliant": frozenset(),
 }
+# What only a re-run of the challenge decides (ARG-049): a person does not close a finding, nor
+# reopen one; the verification, or an expired acceptance, does.
+VERIFICATION_ONLY = frozenset({"closed_compliant", "reopened"})
 SEVERITIES = ("low", "medium", "high", "critical")
+SEVERITY_RANK = {severity: rank for rank, severity in enumerate(SEVERITIES, start=1)}
 ESCALATION_CAMPAIGNS = 3
 EVENT_SUBJECT = "argos.challenge.finding_opened"
 EVENT_TYPE = "challenge.finding_opened.v1"
@@ -173,6 +177,10 @@ def transition(
         raise FindingError(f"unknown status: {to!r}")
     if not actor.startswith(("user:", "system:")):
         raise FindingError("a transition has an actor: user:<sub> or system:<name>")
+    if to in VERIFICATION_ONLY and actor.startswith("user:"):
+        raise FindingError(
+            f"a person does not move a finding to {to}: only a re-run of its challenge does"
+        )
     if to == "risk_accepted" and (not note.strip() or risk_expiry is None):
         raise FindingError("accepting a risk needs a justification and an expiry date")
     journal = PostgresJournal(dsn)
@@ -212,3 +220,134 @@ def expire_risk_acceptances(dsn: str, today: date | None = None) -> list[str]:
     for finding_id in expired:
         transition(dsn, finding_id, "reopened", SYSTEM_ACTOR)
     return expired
+
+
+def person_transitions(status: str) -> list[str]:
+    """Where a person may move a finding from `status`; the rest belongs to the re-run."""
+    return sorted(TRANSITIONS[status] - VERIFICATION_ONLY)
+
+
+# Worst first as text, so a cursor can point at a place in the order. Written out in full, and a
+# pure test keeps it in step with SEVERITY_RANK.
+ORDER_KEY_SQL = (
+    "(CASE f.severity WHEN 'low' THEN 1 WHEN 'medium' THEN 2 WHEN 'high' THEN 3 "
+    "WHEN 'critical' THEN 4 END)::text || '-' || lpad(f.occurrences::text, 6, '0')"
+)
+_LIST = (
+    "SELECT f.id::text, f.challenge_id, f.obligation, f.system_id::text, f.node_key, f.severity,"
+    " f.status, f.occurrences, f.campaign_id::text, f.risk_expiry, f.updated_at,"
+    " (CASE f.severity WHEN 'low' THEN 1 WHEN 'medium' THEN 2 WHEN 'high' THEN 3 "
+    "WHEN 'critical' THEN 4 END)::text || '-' || lpad(f.occurrences::text, 6, '0') AS order_key"
+    " FROM argos.findings f"
+    " WHERE (%(status)s::text IS NULL OR f.status = %(status)s)"
+    " AND (%(severity)s::text IS NULL OR f.severity = %(severity)s)"
+    " AND (%(campaign)s::uuid IS NULL OR f.campaign_id = %(campaign)s::uuid)"
+    " AND (%(key)s::text IS NULL OR ((CASE f.severity WHEN 'low' THEN 1 WHEN 'medium' THEN 2 "
+    "WHEN 'high' THEN 3 WHEN 'critical' THEN 4 END)::text || '-' || "
+    "lpad(f.occurrences::text, 6, '0'), f.id::text) < (%(key)s, %(id)s))"
+    " ORDER BY order_key DESC, f.id DESC LIMIT %(limit)s"
+)
+_DETAIL = (
+    "SELECT id::text, fingerprint, campaign_id::text, challenge_id, obligation, system_id::text,"
+    " node_key, severity, status, occurrences, campaigns_seen, detail, risk_note, risk_expiry,"
+    " created_at, updated_at, last_verdict::text FROM argos.findings WHERE id = %s"
+)
+# A read of the verdict, on its own: the boundary test of F05-04 looks for write keywords next to
+# the verdict table, and a finding's own columns (its `updated_at`) have no business there.
+_VERDICT = (
+    "SELECT v.id::text, v.result, v.verdict, v.verdict_hash, v.challenge_version,"
+    " v.probe_journal_seq, v.created_at, j.action, j.at_canon FROM argos.verdicts v"
+    " LEFT JOIN argos.audit_journal j ON j.seq = v.probe_journal_seq WHERE v.id = %s"
+)
+
+
+def list_findings(
+    dsn: str,
+    limit: int,
+    after: tuple[str, str] | None = None,
+    *,
+    status: str | None = None,
+    severity: str | None = None,
+    campaign_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """The findings, worst first: severity, then how often they came back, then id.
+
+    `order_key` carries that order as text so a cursor can point at a place in it.
+    """
+    key, ident = after if after else (None, None)
+    params = {
+        "status": status,
+        "severity": severity,
+        "campaign": campaign_id,
+        "key": key,
+        "id": ident,
+        "limit": limit,
+    }
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(_LIST, params).fetchall()
+    return [
+        {
+            "id": row[0],
+            "challenge_id": row[1],
+            "obligation": row[2],
+            "system_id": row[3],
+            "node_key": row[4],
+            "severity": row[5],
+            "severity_rank": SEVERITY_RANK[str(row[5])],
+            "status": row[6],
+            "occurrences": int(row[7]),
+            "campaign_id": row[8],
+            "risk_expiry": row[9].isoformat() if row[9] else None,
+            "updated_at": row[10].isoformat(),
+            "order_key": row[11],
+        }
+        for row in rows
+    ]
+
+
+def finding_detail(dsn: str, finding_id: str) -> dict[str, Any] | None:
+    """A finding with the verdict that opened it and the journal entry of the question asked."""
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(_DETAIL, (finding_id,)).fetchone()
+        seen = (
+            conn.execute(_VERDICT, (row[16],)).fetchone()
+            if row is not None and row[16] is not None
+            else None
+        )
+    if row is None:
+        return None
+    verdict = None
+    if seen is not None:
+        probe = (
+            {"seq": int(seen[5]), "action": seen[7], "at": seen[8]} if seen[5] is not None else None
+        )
+        verdict = {
+            "id": seen[0],
+            "result": seen[1],
+            "verdict": seen[2],
+            "verdict_hash": seen[3],
+            "challenge_version": seen[4],
+            "sampling": (seen[2] or {}).get("sampling"),
+            "probe_journal": probe,
+            "created_at": seen[6].isoformat(),
+        }
+    return {
+        "id": row[0],
+        "fingerprint": row[1],
+        "campaign_id": row[2],
+        "challenge_id": row[3],
+        "obligation": row[4],
+        "system_id": row[5],
+        "node_key": row[6],
+        "severity": row[7],
+        "status": row[8],
+        "occurrences": int(row[9]),
+        "campaigns_seen": list(row[10]),
+        "detail": row[11],
+        "risk_note": row[12],
+        "risk_expiry": row[13].isoformat() if row[13] else None,
+        "created_at": row[14].isoformat(),
+        "updated_at": row[15].isoformat(),
+        "verdict": verdict,
+        "allowed_transitions": person_transitions(str(row[8])),
+    }

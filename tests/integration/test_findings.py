@@ -81,7 +81,7 @@ def test_three_campaigns_raise_the_severity_once(migrated_db: str) -> None:
 def test_a_finding_closes_only_through_the_verification(migrated_db: str) -> None:
     campaign_id = _campaign(migrated_db, "Campaña de cierre")
     finding = _finding(migrated_db, campaign_id)
-    with pytest.raises(FindingError, match="illegal transition"):
+    with pytest.raises(FindingError, match="only a re-run"):
         transition(migrated_db, finding["id"], "closed_compliant", DPO)
     transition(migrated_db, finding["id"], "in_remediation", DPO)
     transition(migrated_db, finding["id"], "pending_verification", DPO)

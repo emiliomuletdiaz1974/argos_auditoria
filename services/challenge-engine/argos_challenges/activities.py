@@ -61,7 +61,8 @@ _PENDING_UNITS = (
     "JOIN argos.verdicts v ON v.id = f.last_verdict "
     "JOIN argos.campaign_units u ON u.campaign_id = v.campaign_id AND u.unit_id = v.unit_id "
     "WHERE f.status = 'pending_verification' "
-    "AND (%s::uuid IS NULL OR f.campaign_id = %s::uuid) ORDER BY f.id"
+    "AND (%(campaign)s::uuid IS NULL OR f.campaign_id = %(campaign)s::uuid) "
+    "AND (%(finding)s::uuid IS NULL OR f.id = %(finding)s::uuid) ORDER BY f.id"
 )
 _SYSTEMS = (
     "SELECT id::text, name, kind, connection->>'connector', connection->'config' FROM argos.systems"
@@ -231,10 +232,10 @@ class ChallengeActivities:
         The unit is the one stored with the verdict, so the remediation is measured with the same
         challenge version that measured the problem, even if the library has moved on (ARG-049).
         """
-        # One statement, two uses: without a campaign the parameter is NULL and the filter is off.
-        campaign = scope.get("campaign_id")
+        # One statement, three uses: a campaign, one finding, or everything awaiting verification.
+        filters = {"campaign": scope.get("campaign_id"), "finding": scope.get("finding_id")}
         with psycopg.connect(self._dsn) as conn:
-            rows = conn.execute(_PENDING_UNITS, (campaign, campaign)).fetchall()
+            rows = conn.execute(_PENDING_UNITS, filters).fetchall()
         if not rows:
             return {"campaign_id": None, "units": []}
         origin = (

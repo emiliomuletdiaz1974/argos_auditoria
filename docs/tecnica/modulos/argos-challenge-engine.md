@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: d6f1254
+commit: pendiente
 date: 2026-09-18
 status: current
 confidentiality: client
@@ -331,3 +331,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Prueba de la fase: campaña completa, reejecución determinista, sello y subsanación | Fase 05 (`fase-05`) |
 | 0.1.0-alpha | 2026-09-18 | El worker se conecta al bus y anuncia cada sello en `argos.campaign.sealed` (dependencia de `argos-events`) | F07-13 |
 | 0.1.0-alpha | 2026-09-21 | Lectores para la API v1 en `store`: `list_campaigns`, `campaign_gates`, `campaign_plan` (unidades literales y lo no verificable, antes de sondear) y `approvals_needed`; la API de la Fase 05 lee las compuertas con la misma función | F08-05 |
+| 0.1.0-alpha | 2026-09-21 | Hallazgos: una persona ya no lleva un hallazgo a `closed_compliant` ni a `reopened` (solo la reejecución, con actor `system:`); `person_transitions`, `list_findings` (peor primero, con filtros) y `finding_detail` (veredicto y asiento de la consulta); la subsanación admite un único hallazgo (`finding_id`) | F08-06 |

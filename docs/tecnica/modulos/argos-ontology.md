@@ -5,7 +5,7 @@ title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
 version: 0.1.0-alpha
-commit: a9cb4ac
+commit: pendiente
 date: 2026-09-17
 status: current
 confidentiality: client
@@ -496,3 +496,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | `OBL-RGPD-32-1` (cifrado en reposo) también sobre todas las categorías especiales | Fase 04 (ARG-031) |
 | 0.1.0-alpha | 2026-09-17 | Cierre técnico de la Fase 04: prueba de extremo a extremo superada; contenido pendiente de validación jurídica | Fase 04 (`fase-04-tecnica`) |
 | 0.1.0-alpha | 2026-09-17 | Formas de documentación técnica y supervisión humana del AI Act, con sus propiedades exportadas al grafo RDF | Fase 05 (F05-18) |
+| 0.1.0-alpha | 2026-09-21 | `editorial.compiler.read_obligation`: la plantilla de una obligación (norma, artículo, título y resumen) para enseñarla junto al hallazgo | F08-06 |

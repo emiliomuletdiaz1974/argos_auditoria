@@ -46,16 +46,19 @@ def position_of(cursor: str | None) -> tuple[str, str] | None:
     return at, ident
 
 
-def apply_keyset(rows: Iterable[Row], position: tuple[str, str] | None) -> list[Row]:
+def apply_keyset(
+    rows: Iterable[Row], position: tuple[str, str] | None, at: str = AT, ident: str = ID
+) -> list[Row]:
     """The rows strictly after `position` in the order the listings use.
 
-    Listings sort by instant descending and, for the same instant, by identifier descending. This is
-    the in-memory twin of the SQL predicate `(created_at, id) < (%s, %s)`, and the two must agree.
+    Listings sort by a key descending (the instant, unless a listing has a better order, like the
+    findings, worst first) and, for the same key, by identifier descending. This is the in-memory
+    twin of the SQL predicate `(key, id) < (%s, %s)`, and the two must agree.
     """
-    ordered = sorted(rows, key=lambda row: (str(row[AT]), str(row[ID])), reverse=True)
+    ordered = sorted(rows, key=lambda row: (str(row[at]), str(row[ident])), reverse=True)
     if position is None:
         return ordered
-    return [row for row in ordered if (str(row[AT]), str(row[ID])) < position]
+    return [row for row in ordered if (str(row[at]), str(row[ident])) < position]
 
 
 class Page(BaseModel):
@@ -92,11 +95,11 @@ def page_request(
 Paging = Annotated[PageRequest, Depends(page_request)]
 
 
-def paginate(rows: Sequence[Row], limit: int) -> Page:
-    """The first `limit` rows of an already ordered sequence, plus the cursor of the last one."""
-    ordered = apply_keyset(rows, None)
+def paginate(rows: Sequence[Row], limit: int, at: str = AT, ident: str = ID) -> Page:
+    """The first `limit` rows in listing order, plus the cursor of the last one."""
+    ordered = apply_keyset(rows, None, at, ident)
     items = [dict(row) for row in ordered[:limit]]
     if len(ordered) <= limit or not items:
         return Page(items=items)
     last = items[-1]
-    return Page(items=items, next=cursor_for(str(last[AT]), str(last[ID])))
+    return Page(items=items, next=cursor_for(str(last[at]), str(last[ident])))

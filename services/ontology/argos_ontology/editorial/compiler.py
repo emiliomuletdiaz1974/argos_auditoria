@@ -14,7 +14,7 @@ from typing import Any
 from rdflib import RDF, RDFS, XSD, Graph, Literal, URIRef
 
 from argos_ontology.editorial.translation import read_editorial, to_internal
-from argos_ontology.vocabulary import ARGOS, NORMS, SEVERITIES, bind_prefixes
+from argos_ontology.vocabulary import ARGOS, LIBRARY_DIR, NORMS, SEVERITIES, bind_prefixes
 
 REQUIRED_FIELDS = ("id", "norm", "article", "title", "in_force_from", "severity")
 OBLIGATION_ID = re.compile(r"^OBL-[A-Z0-9]+(?:-[A-Z0-9]+)*$")
@@ -142,3 +142,20 @@ def compile_obligation(text: str) -> bytes:
 
 def compile_file(path: Path) -> bytes:
     return compile_obligation(path.read_text(encoding="utf-8"))
+
+
+EDITORIAL_DIR = LIBRARY_DIR / "ontology" / "editorial"
+
+
+def read_obligation(obligation_id: str, directory: Path = EDITORIAL_DIR) -> ObligationSpec | None:
+    """The editorial template of one obligation, parsed; None if the population does not have it.
+
+    The id must look like an obligation id before it becomes a file name, so it cannot walk out of
+    the editorial directory.
+    """
+    if not OBLIGATION_ID.match(obligation_id):
+        return None
+    path = directory / f"{obligation_id}.yaml"
+    if not path.is_file():
+        return None
+    return parse_obligation(to_internal(read_editorial(path.read_text(encoding="utf-8"))))

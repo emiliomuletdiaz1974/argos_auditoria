@@ -19,3 +19,7 @@ class CampaignRunner(Protocol):
     async def progress(self, campaign_id: str) -> dict[str, Any]:
         """The `progress` query of the workflow; LookupError when it is not running."""
         ...
+
+    async def remediate(self, scope: dict[str, Any]) -> str:
+        """Start the re-run of ARG-049 over `scope` (a finding or a campaign); its workflow id."""
+        ...

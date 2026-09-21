@@ -2353,8 +2353,63 @@
     },
     "/api/v1/findings": {
       "get": {
-        "operationId": "list_findings_api_v1_findings_get",
+        "operationId": "list_all_api_v1_findings_get",
         "parameters": [
+          {
+            "description": "one of the finding states",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "one of the finding states",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "low, medium, high or critical",
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "low, medium, high or critical",
+              "title": "Severity"
+            }
+          },
+          {
+            "description": "only this campaign",
+            "in": "query",
+            "name": "campaign_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "only this campaign",
+              "title": "Campaign Id"
+            }
+          },
           {
             "description": "opaque cursor returned by the previous page",
             "in": "query",
@@ -2465,7 +2520,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "List the findings",
+        "summary": "List the findings, worst first",
         "tags": [
           "findings"
         ]
@@ -2480,6 +2535,7 @@
             "name": "finding_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Finding Id",
               "type": "string"
             }
@@ -2564,7 +2620,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "A finding with its evidence",
+        "summary": "A finding with its whole why",
         "tags": [
           "findings"
         ]
@@ -2572,13 +2628,14 @@
     },
     "/api/v1/findings/{finding_id}/transition": {
       "post": {
-        "operationId": "transition_api_v1_findings__finding_id__transition_post",
+        "operationId": "move_api_v1_findings__finding_id__transition_post",
         "parameters": [
           {
             "in": "path",
             "name": "finding_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Finding Id",
               "type": "string"
             }
@@ -2600,7 +2657,7 @@
               "application/json": {
                 "schema": {
                   "additionalProperties": true,
-                  "title": "Response Transition Api V1 Findings  Finding Id  Transition Post",
+                  "title": "Response Move Api V1 Findings  Finding Id  Transition Post",
                   "type": "object"
                 }
               }
@@ -2688,6 +2745,7 @@
             "name": "finding_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Finding Id",
               "type": "string"
             }

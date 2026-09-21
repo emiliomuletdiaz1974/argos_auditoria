@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.5.0-alpha
-commit: d6f1254
+version: 0.6.0-alpha
+commit: pendiente
 date: 2026-09-20
 status: current
 confidentiality: client
@@ -21,7 +21,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 
 - **Hace:** publicar el contrato de la v1, resolver las peticiones llamando a las librerías del dominio y dejar asiento en el diario de toda mutación (esto último, desde F08-03).
 - **No hace:** no escribe SQL sobre tablas de otras fases; no expone material público (eso es `evidence-api` y el comprobador, que siguen siendo servicios aparte).
-- **Estado:** implementados sistemas e inventario (F08-04) y campañas con su plan previo y compuertas (F08-05); el resto de rutas están declaradas y validan sus parámetros, pero devuelven `501` hasta su tarea.
+- **Estado:** implementados sistemas e inventario (F08-04) campañas con su plan previo y compuertas (F08-05) y hallazgos con remediación verificada (F08-06); el resto de rutas están declaradas y validan sus parámetros, pero devuelven `501` hasta su tarea.
 
 ## 3. Arquitectura
 
@@ -59,7 +59,8 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Salud | `GET /health` | Sin token |
 | Recursos vivos | `GET /systems`, `GET /inventory/coverage`, `GET /inventory/nodes/{node_key}`, `GET /inventory/review-queue`, `POST /inventory/review-queue/{node_key}` | Llaman a `argos_inventory`; ningún router escribe SQL propio |
 | Campañas | `POST /campaigns` (idempotente), `GET /campaigns`, `GET /campaigns/{id}`, `POST /campaigns/{id}/launch`, `GET /campaigns/{id}/plan`, `GET /campaigns/{id}/progress`, `GET /campaigns/{id}/gates`, `POST /campaigns/{id}/gates/{gate}/approve` | Llaman a `argos_challenges.store`; el plan previo es la lista literal de unidades y lo no verificable, y existe desde que la campaña está preparada (`409` antes) |
-| Protocolo | `runner.CampaignRunner` (`start`, `signal`, `progress`) | Lo que la API pide a Temporal; `create_app(campaign_runner=...)`. La implementación sobre el cliente de Temporal se cablea con el contenedor (F08-17) |
+| Hallazgos | `GET /findings` (peor primero, filtros `status`, `severity`, `campaign_id`), `GET /findings/{id}`, `POST /findings/{id}/transition`, `POST /findings/{id}/verify` | El detalle trae el porqué completo —veredicto con sus valores, declaración muestral, asiento del diario de la consulta y la obligación con su artículo— y `allowed_transitions`, para que la consola no duplique la máquina de estados. `closed_compliant` y `reopened` no se alcanzan por transición: solo `verify`, que lanza la reejecución de ARG-049 |
+| Protocolo | `runner.CampaignRunner` (`start`, `signal`, `progress`, `remediate`) | Lo que la API pide a Temporal; `create_app(campaign_runner=...)`. La implementación sobre el cliente de Temporal se cablea con el contenedor (F08-17) |
 | Grafo | `POST /api/v1/inventory/graph` | GraphQL de ARG-029 montado dentro de la v1, con el permiso `inventory.read` delante |
 | Clase de ruta | `core.CoreRoute` | Idempotencia y asiento en el diario alrededor de cada ruta |
 | Función pública | `paging.paginate(rows, limit) -> Page` y `paging.apply_keyset(rows, position)` | Página y cursor; `position_of()` valida el cursor y un cursor ajeno es `400` |
@@ -85,6 +86,7 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 
 ## 8. Verificación
 
+- `tests/integration/test_api_findings.py`: la lista ordena de peor a mejor y filtra, el detalle trae el porqué completo, una persona no cierra ni reabre (ni por la API ni en el dominio), la aceptación de riesgo exige nota y caducidad, `verify` solo sobre lo que espera verificación y la reejecución de un hallazgo trae solo su unidad.
 - `tests/integration/test_api_campaigns.py`: creación que sobrevive a un reintento, lectura y `404`, lanzamiento a Temporal (y `503` sin runner), plan previo con lo no verificable en su sección y `409` antes de preparar, progreso del workflow, compuerta de una aprobación, muestreo con dos personas distintas y `409` si repite la misma, y con tokens reales de Keycloak el diario dice quién aprobó.
 - `tests/integration/test_api_inventory.py`: listado paginado, cursor ajeno rechazado, cobertura con lo pendiente de revisar, nodo con su vecindario y `404` si no existe, la cola de revisión, y que aceptar una columna escribe la arista humana, el asiento `inventory.review` y la etiqueta que lee la calibración; una columna se decide una sola vez y el grafo responde `401`/`403` según la matriz.
 - `tests/integration/test_api_core.py`: la misma clave no repite el efecto ni el asiento, la misma clave con otro cuerpo es `409`, sin clave cada llamada es nueva, una llamada denegada no deja asiento, el refresco solo sale de la cookie y **se recorre toda ruta mutadora** comprobando que la que responde correctamente deja su asiento (hoy responden `501`; el test aprieta solo según se implementan).
@@ -97,6 +99,7 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 ## 9. Limitaciones conocidas y pendientes
 
 - Las rutas responden `501` hasta su tarea (F08-04 en adelante); `challenge-api` sigue en pie hasta F08-17.
+- El listado de hallazgos pagina por su propio orden (severidad y recurrencia) con el mismo cursor opaco.
 - El vecindario de un nodo se devuelve con `limit` y `has_more`, no con cursor: el cursor por desplazamiento del GraphQL es suyo y no se mezcla con el de las listas.
 - La tabla de idempotencia no tiene aún purga por retención: hay un índice por `created_at` esperándola (pendiente registrado).
 - El montaje de GraphQL bajo `/api/v1/inventory/graph` (ADR-0012 §5) llega con el inventario, en F08-04.
@@ -110,3 +113,4 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 | 0.3.0-alpha | 2026-09-20 | Núcleo: cursor opaco, idempotencia con tabla, auditoría de mutaciones y refresco de sesión | F08-03 |
 | 0.4.0-alpha | 2026-09-20 | Sistemas e inventario: cobertura, nodo, cola de revisión y GraphQL montado bajo la misma matriz | F08-04 |
 | 0.5.0-alpha | 2026-09-21 | Campañas: creación idempotente, plan previo literal, progreso, lanzamiento y compuertas con doble control | F08-05 |
+| 0.6.0-alpha | 2026-09-21 | Hallazgos: porqué completo, transiciones servidas por la API y cierre solo por reejecución | F08-06 |
