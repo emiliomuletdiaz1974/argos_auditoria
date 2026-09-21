@@ -174,6 +174,10 @@ def _record(dsn: str, where: str, value: str) -> CredentialRecord | None:
     )
 
 
+def credential_record(dsn: str, credential_id: str) -> CredentialRecord | None:
+    return _record(dsn, "id", credential_id)
+
+
 def issue_credential(
     dsn: str,
     store: WormStore,

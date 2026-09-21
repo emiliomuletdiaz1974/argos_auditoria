@@ -4,8 +4,8 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.11.0-alpha
-commit: 2ba5cab
+version: 0.12.0-alpha
+commit: pendiente
 date: 2026-09-18
 status: current
 confidentiality: client
@@ -169,3 +169,4 @@ Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. Lo
 | 0.9.0-alpha | 2026-09-18 | Núcleo puro de verificación separado y paquete de verificación para el comprobador público | F07-11 |
 | 0.10.0-alpha | 2026-09-18 | Publicación de la credencial en espacios de datos vía EDC con política ODRL verificable | F07-12 |
 | 0.11.0-alpha | 2026-09-18 | Cierre de campaña encadenado (`EvidenceWorkflow`), worker disparado por el sello, API pública y contenedores | F07-13 |
+| 0.12.0-alpha | 2026-09-21 | Lado de lectura para la API v1 (`argos_evidence.reads`): cadena (la misma función que embebe el expediente), artefactos paginados, artefacto con su prueba de inclusión, expediente vigente, vista previa exacta de la credencial y su estado; `EvidenceActivities` expone `store` y `dsn` | F08-07 |

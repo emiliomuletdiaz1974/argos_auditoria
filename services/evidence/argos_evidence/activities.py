@@ -155,6 +155,14 @@ class EvidenceActivities:
             )
         return record.credential_id
 
+    @property
+    def dsn(self) -> str:
+        return self._dsn
+
+    @property
+    def store(self) -> WormStore:
+        return self._store
+
     def stored(self, key: str, version_id: str) -> bytes:
         return self._store.get(key, version_id)
 

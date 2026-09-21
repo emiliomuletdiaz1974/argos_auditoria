@@ -6,7 +6,8 @@
 # The rules behind it:
 #   - `read_only_auditor` reads and nothing else.
 #   - `campaign_manager` plans, launches and asks for the remediation check; it does not approve.
-#   - `dpo_reviewer` approves the gates, decides on a column under review and moves a finding.
+#   - `dpo_reviewer` approves the gates, decides on a column under review, moves a finding and
+#     issues the credential of a campaign, after reading its preview (F08-07).
 #   - `platform_admin` operates the platform (integrations, revocation); it neither approves a gate
 #     nor judges a finding, so nobody can both run a campaign and bless its result.
 
@@ -44,7 +45,7 @@ campaign_manager:
   findings.verify: true
   evidence.read: true
   credentials.read: true
-  credentials.create: true
+  credentials.create: false
   credentials.revoke: false
   assistant.ask: true
   webhooks.read: false
@@ -64,7 +65,7 @@ dpo_reviewer:
   findings.verify: false
   evidence.read: true
   credentials.read: true
-  credentials.create: false
+  credentials.create: true
   credentials.revoke: false
   assistant.ask: true
   webhooks.read: false

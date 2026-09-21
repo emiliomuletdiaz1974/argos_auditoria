@@ -35,13 +35,20 @@
       "NewCredential": {
         "properties": {
           "campaign_id": {
-            "minLength": 1,
+            "format": "uuid",
             "title": "Campaign Id",
+            "type": "string"
+          },
+          "dossier_sha256": {
+            "description": "the dossier the preview showed",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Dossier Sha256",
             "type": "string"
           }
         },
         "required": [
-          "campaign_id"
+          "campaign_id",
+          "dossier_sha256"
         ],
         "title": "NewCredential",
         "type": "object"
@@ -1525,6 +1532,108 @@
         ]
       }
     },
+    "/api/v1/credentials/preview": {
+      "get": {
+        "operationId": "preview_api_v1_credentials_preview_get",
+        "parameters": [
+          {
+            "description": "the sealed campaign",
+            "in": "query",
+            "name": "campaign_id",
+            "required": true,
+            "schema": {
+              "description": "the sealed campaign",
+              "format": "uuid",
+              "title": "Campaign Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Preview Api V1 Credentials Preview Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "no valid token"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "the role does not allow it"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "it does not exist"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "the state does not allow it"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Exactly what the credential of a campaign would assert, before issuing it",
+        "tags": [
+          "credentials"
+        ]
+      }
+    },
     "/api/v1/credentials/{credential_id}": {
       "get": {
         "operationId": "credential_api_v1_credentials__credential_id__get",
@@ -1742,6 +1851,7 @@
             "name": "verdict_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Verdict Id",
               "type": "string"
             }
@@ -1841,6 +1951,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }
@@ -1970,6 +2081,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }
@@ -1979,11 +2091,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Bundle Api V1 Evidence  Campaign Id  Bundle Get",
-                  "type": "object"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -2069,6 +2177,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }
@@ -2168,6 +2277,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }
@@ -2177,11 +2287,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Dossier Json Api V1 Evidence  Campaign Id  Dossier Json Get",
-                  "type": "object"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -2267,6 +2373,7 @@
             "name": "campaign_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Campaign Id",
               "type": "string"
             }

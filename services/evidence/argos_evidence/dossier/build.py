@@ -212,6 +212,12 @@ def _chain(conn: psycopg.Connection[Any], dsn: str, store: WormStore, campaign_i
     }
 
 
+def evidence_chain(dsn: str, store: WormStore, campaign_id: str) -> Any:
+    """The chain link by link, as the dossier embeds it: the API shows the same thing."""
+    with psycopg.connect(dsn) as conn:
+        return _chain(conn, dsn, store, campaign_id)
+
+
 def assemble(dsn: str, store: WormStore, campaign_id: str, verifier_url: str) -> bytes:
     """Canonical bytes of the dossier of a sealed campaign, with its own SHA-256."""
     with psycopg.connect(dsn) as conn:
