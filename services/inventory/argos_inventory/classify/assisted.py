@@ -11,7 +11,10 @@ import json
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol
+
+import psycopg
+from psycopg.rows import dict_row
 
 from argos_common.journal_pg import PostgresJournal
 from argos_inventory.graph.model import CATEGORIES
@@ -58,6 +61,13 @@ _QUEUE_UPSERT = (
 )
 _REVIEW_FOR_UPDATE = (
     "SELECT proposed_category, status FROM argos.review_queue WHERE node_key = %s FOR UPDATE"
+)
+_PENDING = (
+    "SELECT node_key, system_id, qualified_name, proposed_category,"
+    " confidence::float AS confidence, reason, status, proposed_at"
+    " FROM argos.review_queue WHERE status = 'pending'"
+    " AND (%(at)s::timestamptz IS NULL OR (proposed_at, node_key) < (%(at)s, %(key)s))"
+    " ORDER BY proposed_at DESC, node_key DESC LIMIT %(limit)s"
 )
 _REVIEW_DECIDE = (
     "UPDATE argos.review_queue SET status = %s, decided_at = %s, decided_by = %s "
@@ -259,3 +269,18 @@ def decide_review(
         payload = {"node_key": node_key, "category": category, "status": status}
         journal.append(reviewer, "inventory.review", payload, conn=conn)
     return status
+
+
+def pending_reviews(
+    dsn: str, limit: int, after: tuple[str, str] | None = None
+) -> list[dict[str, Any]]:
+    """What waits for a person, newest first. `id` and `created_at` are there for the cursor."""
+    at, key = after if after else (None, None)
+    with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        rows = list(conn.execute(_PENDING, {"at": at, "key": key, "limit": limit}).fetchall())
+    for row in rows:
+        row["system_id"] = str(row["system_id"])
+        row["proposed_at"] = row["proposed_at"].isoformat()
+        row["id"] = row["node_key"]
+        row["created_at"] = row["proposed_at"]
+    return rows

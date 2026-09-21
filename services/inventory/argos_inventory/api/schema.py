@@ -15,25 +15,12 @@ from strawberry.types import Info
 
 from argos_inventory.api.pagination import after_key, after_offset, check_first, encode_cursor
 from argos_inventory.api.selector import NODE_COLUMNS, Selector, compile_selector, parse_selector
-from argos_inventory.graph.model import NODE_LABELS
+from argos_inventory.graph.reads import node_detail
 from argos_inventory.graph.store import GraphStore
 
 MAX_QUERY_DEPTH = 4
 DEFAULT_PAGE_SIZE = 100
 
-_NODE_FIELDS = (
-    "n.key AS node_key, label(n) AS node_label, n.name AS node_name, "
-    "n.qualified_name AS node_qualified_name, coalesce(n.system_id, n.id) AS node_system_id"
-)
-_FIND_NODE = "MATCH (n:{label} {{key: $key}}) RETURN " + _NODE_FIELDS + ", properties(n) AS props"
-_NEIGHBORS = (
-    "MATCH (n:{label} {{key: $key}})-[e]-(m) "
-    "RETURN label(e) AS edge, CASE WHEN start_id(e) = id(n) THEN 'out' ELSE 'in' END AS direction, "
-    "m.key AS node_key, label(m) AS node_label, m.name AS node_name, "
-    "m.qualified_name AS node_qualified_name, coalesce(m.system_id, m.id) AS node_system_id "
-    "ORDER BY m.key, label(e), start_id(e) SKIP {offset} LIMIT {limit}"
-)
-_NEIGHBOR_COLUMNS = ("edge", "direction", *NODE_COLUMNS)
 _SYSTEMS_OF_KIND = "MATCH (s:System {kind: $kind}) RETURN s.id"
 _SNAPSHOT = (
     "SELECT label, taken_at, node_count, content_hash FROM argos.inventory_snapshots WHERE id = %s"
@@ -119,26 +106,19 @@ def _node(row: dict[str, Any]) -> Node:
 
 
 def _node_detail(store: GraphStore, key: str, limit: int, offset: int) -> NodeDetail | None:
-    with store.connection() as conn:
-        for label in NODE_LABELS:  # one indexed lookup per label beats an unlabelled scan
-            columns = (*NODE_COLUMNS, "props")
-            found = store.query(_FIND_NODE.format(label=label), {"key": key}, columns, conn)
-            if found:
-                break
-        else:
-            return None
-        cypher = _NEIGHBORS.format(label=label, offset=offset, limit=limit + 1)
-        rows = store.query(cypher, {"key": key}, _NEIGHBOR_COLUMNS, conn)
+    detail = node_detail(store, key, limit, offset)
+    if detail is None:
+        return None
     items = [
         Neighbor(edge=str(r["edge"]), direction=str(r["direction"]), node=_node(r))
-        for r in rows[:limit]
+        for r in detail["neighbours"]
     ]
     page = NeighborPage(
         items=items,
         end_cursor=encode_cursor(offset + len(items)) if items else None,
-        has_next_page=len(rows) > limit,
+        has_next_page=bool(detail["has_more"]),
     )
-    return NodeDetail(node=_node(found[0]), props=found[0]["props"], neighbors=page)
+    return NodeDetail(node=_node(detail["node"]), props=detail["props"], neighbors=page)
 
 
 def _resolve(store: GraphStore, selector: Selector, limit: int, after: str | None) -> NodePage:

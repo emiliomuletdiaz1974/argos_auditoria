@@ -5,7 +5,7 @@ title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
 version: 0.1.0-alpha
-commit: 1361bee
+commit: pendiente
 date: 2026-09-17
 status: current
 confidentiality: client
@@ -122,3 +122,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.1.0-alpha | 2026-09-17 | Las instantáneas proyectan el `status` de los nodos, que necesita la resolución de campañas | Fase 05 (ARG-042) |
 | 0.1.0-alpha | 2026-09-17 | Diccionario de categorías especiales no sanitarias y tabla sintética `clinic.staff_affiliations` en la fuente de desarrollo | Fase 04 (ARG-024) |
 | 0.1.0-alpha | 2026-09-17 | La interfaz de ARG-025 tiene servicio: el clasificador semántico calibrado de la Fase 06, sin cambios en la cola ni en los umbrales | Fase 06 (ARG-055) |
+| 0.1.0-alpha | 2026-09-20 | Lectores para la API v1: `catalog.views.systems`, `pending_review_by_system`, `classify.assisted.pending_reviews` y `graph.reads.node_detail` (el Cypher del vecindario deja de vivir en el esquema GraphQL y se comparte) | Fase 08 (ARG-074) |

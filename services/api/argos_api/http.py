@@ -12,12 +12,15 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from argos_api.paging import Page, PageRequest, Paging
+from argos_auth import Identity
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
 __all__ = [
     "ERRORS",
     "PROBLEM_MEDIA_TYPE",
     "IdempotencyKey",
+    "caller",
+    "database",
     "Page",
     "PageRequest",
     "Paging",
@@ -65,7 +68,26 @@ ERRORS: dict[int | str, dict[str, Any]] = {
     status.HTTP_404_NOT_FOUND: {"model": Problem, "description": "it does not exist"},
     status.HTTP_409_CONFLICT: {"model": Problem, "description": "the state does not allow it"},
     status.HTTP_422_UNPROCESSABLE_CONTENT: {"model": Problem, "description": "invalid body"},
+    status.HTTP_503_SERVICE_UNAVAILABLE: {"model": Problem, "description": "not configured yet"},
 }
+
+
+def database(request: Request) -> str:
+    """The DSN the application was built with; without it there is nothing to answer from."""
+    dsn: str | None = getattr(request.app.state, "dsn", None)
+    if not dsn:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "the API has no database configured"
+        )
+    return dsn
+
+
+def caller(request: Request) -> Identity:
+    """Who is calling. The permission guard of the route already resolved and left it here."""
+    identity = getattr(request.state, "identity", None)
+    if not isinstance(identity, Identity):  # pragma: no cover - the guard runs first, always
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "no identity resolved")
+    return identity
 
 
 def pending(what: str) -> NoReturn:

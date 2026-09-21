@@ -172,20 +172,12 @@
       "ReviewDecision": {
         "description": "What a DPO reviewer decides about a column the classifier could not settle.",
         "properties": {
-          "category": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "category when reclassifying",
-            "title": "Category"
-          },
           "decision": {
-            "description": "accept, reject or reclassify",
+            "description": "accept confirms the proposed category; reject leaves the column unclassified",
+            "enum": [
+              "accept",
+              "reject"
+            ],
             "title": "Decision",
             "type": "string"
           },
@@ -360,6 +352,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -448,6 +450,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -522,6 +534,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "summary": "Exchange the refresh cookie for an access token",
@@ -627,6 +649,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -733,6 +765,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -822,6 +864,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -911,6 +963,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1019,6 +1081,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1108,6 +1180,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1197,6 +1279,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1286,6 +1378,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1394,6 +1496,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1483,6 +1595,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1582,6 +1704,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1671,6 +1803,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1790,6 +1932,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1879,6 +2031,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -1968,6 +2130,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -2057,6 +2229,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -2140,6 +2322,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -2250,6 +2442,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -2339,6 +2541,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -2438,6 +2650,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -2527,6 +2749,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -2605,6 +2837,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -2629,6 +2871,20 @@
             "schema": {
               "title": "Node Key",
               "type": "string"
+            }
+          },
+          {
+            "description": "neighbours to return",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "neighbours to return",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],
@@ -2694,6 +2950,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -2804,6 +3070,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -2903,6 +3179,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -3013,6 +3299,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -3123,6 +3419,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -3229,6 +3535,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [
@@ -3348,6 +3664,16 @@
               }
             },
             "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
           }
         },
         "security": [

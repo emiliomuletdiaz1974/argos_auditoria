@@ -22,7 +22,7 @@ from argos_auth import Identity, JwtValidator
 pytestmark = pytest.mark.integration
 
 BEARER = {"Authorization": "Bearer a-token"}
-KEY = {"Idempotency-Key": "38f0c0d2-0b5f-4b0e-9f2e-2a1b3c4d5e6f"}
+KEY = {"Idempotency-Key": "the-same-retry"}
 MUTATING = ("POST", "PUT", "PATCH", "DELETE")
 
 

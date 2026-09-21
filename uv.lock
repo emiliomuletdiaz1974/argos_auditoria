@@ -96,6 +96,7 @@ source = { editable = "services/api" }
 dependencies = [
     { name = "argos-auth" },
     { name = "argos-common" },
+    { name = "argos-inventory" },
     { name = "fastapi" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -104,6 +105,7 @@ dependencies = [
 requires-dist = [
     { name = "argos-auth", editable = "libs/auth" },
     { name = "argos-common", editable = "libs/common" },
+    { name = "argos-inventory", editable = "services/inventory" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]

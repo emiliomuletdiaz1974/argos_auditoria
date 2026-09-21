@@ -11,3 +11,7 @@ eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_
 eb4cd40452c82dda2f7a546b596998981b5d109b:services/api/migrations/0003_inventory_graph.sql:generic-api-key:79
 # Not a secret: the test key the W3C publishes in vc-di-eddsa (Appendix B), used only by its vectors.
 ddb41fb4bf1ddd3df27a9109fa755955bae24791:tests/vectors/vc_eddsa_jcs_2022.json:generic-api-key:4
+
+# Not a secret: the idempotency key of a test, a value the client chooses. Renamed in the
+# working tree so it no longer looks like one; the commit that introduced it stays here.
+efc20dff99251eb13c3d450a8a1570425870dd64:tests/integration/test_api_core.py:generic-api-key:25

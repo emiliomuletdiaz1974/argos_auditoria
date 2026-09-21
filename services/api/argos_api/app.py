@@ -8,12 +8,13 @@ versioned in `services/api/openapi.json`; `tools/api_contract.py --check` fails 
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import FastAPI, Request, status
+from fastapi import APIRouter, Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
 from starlette.exceptions import HTTPException
 
 from argos_api import API_PREFIX, API_VERSION, SERVICE_NAME
+from argos_api.authz import require_perm
 from argos_api.core import IdempotencyStore
 from argos_api.http import ERRORS, PROBLEM_MEDIA_TYPE, ProblemResponse, problem_response
 from argos_api.routers import (
@@ -85,6 +86,7 @@ def create_app(
         redoc_url=None,
     )
     app.state.validator = validator
+    app.state.dsn = dsn
     app.state.refresher = refresher
     app.state.idempotency = IdempotencyStore(dsn) if dsn else None
     app.state.journal = PostgresJournal(dsn) if dsn else None
@@ -114,6 +116,13 @@ def create_app(
     for router in AUTHENTICATED:
         app.include_router(router, prefix=API_PREFIX, responses=ERRORS)
     app.include_router(session.router, prefix=API_PREFIX, responses=ERRORS)
+    if dsn:
+        app.include_router(
+            _graph_router(dsn),
+            prefix=f"{API_PREFIX}/inventory/graph",
+            responses=ERRORS,
+            dependencies=[Depends(require_perm("inventory.read"))],
+        )
 
     def contract() -> dict[str, Any]:
         if app.openapi_schema is None:
@@ -129,6 +138,27 @@ def create_app(
 
     app.openapi = contract  # type: ignore[method-assign]
     return app
+
+
+def _graph_router(dsn: str) -> APIRouter:
+    """The graph keeps GraphQL (ARG-029): a neighbourhood of variable depth is not a REST resource.
+
+    What changes here is the door: same token, same permission, mounted inside the v1.
+    """
+    from strawberry.fastapi import GraphQLRouter
+
+    from argos_inventory.api.schema import build_schema
+    from argos_inventory.graph.store import GraphStore
+
+    store = GraphStore(dsn)
+
+    async def context() -> dict[str, Any]:
+        return {"store": store}
+
+    router: GraphQLRouter[dict[str, Any], None] = GraphQLRouter(
+        build_schema(), context_getter=context, graphql_ide=None
+    )
+    return router
 
 
 def _title(code: int) -> str:

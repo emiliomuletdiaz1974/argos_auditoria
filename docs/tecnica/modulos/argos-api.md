@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.3.0-alpha
-commit: efc20df
+version: 0.4.0-alpha
+commit: pendiente
 date: 2026-09-20
 status: current
 confidentiality: client
@@ -21,7 +21,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 
 - **Hace:** publicar el contrato de la v1, resolver las peticiones llamando a las librerías del dominio y dejar asiento en el diario de toda mutación (esto último, desde F08-03).
 - **No hace:** no escribe SQL sobre tablas de otras fases; no expone material público (eso es `evidence-api` y el comprobador, que siguen siendo servicios aparte).
-- **En esta tarea (F08-01)** solo existe el esqueleto: todas las rutas están declaradas y validan sus parámetros, pero devuelven `501` hasta que su tarea las implemente.
+- **Estado:** implementados los recursos de sistemas e inventario (F08-04); el resto de rutas están declaradas y validan sus parámetros, pero devuelven `501` hasta su tarea.
 
 ## 3. Arquitectura
 
@@ -57,6 +57,8 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Herramienta | `tools/api_contract.py [--check]` | Genera el contrato o comprueba que el fichero está al día |
 | Rutas | `/api/v1/{systems,inventory,campaigns,findings,evidence,credentials,assistant,approvals,webhooks,auth}` | 33 operaciones declaradas; ver el contrato |
 | Salud | `GET /health` | Sin token |
+| Recursos vivos | `GET /systems`, `GET /inventory/coverage`, `GET /inventory/nodes/{node_key}`, `GET /inventory/review-queue`, `POST /inventory/review-queue/{node_key}` | Llaman a `argos_inventory`; ningún router escribe SQL propio |
+| Grafo | `POST /api/v1/inventory/graph` | GraphQL de ARG-029 montado dentro de la v1, con el permiso `inventory.read` delante |
 | Clase de ruta | `core.CoreRoute` | Idempotencia y asiento en el diario alrededor de cada ruta |
 | Función pública | `paging.paginate(rows, limit) -> Page` y `paging.apply_keyset(rows, position)` | Página y cursor; `position_of()` valida el cursor y un cursor ajeno es `400` |
 | Migración | `0028_api_idempotency.sql` | Estado operativo, no evidencia: lo que hizo la mutación está en el diario |
@@ -81,6 +83,7 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 
 ## 8. Verificación
 
+- `tests/integration/test_api_inventory.py`: listado paginado, cursor ajeno rechazado, cobertura con lo pendiente de revisar, nodo con su vecindario y `404` si no existe, la cola de revisión, y que aceptar una columna escribe la arista humana, el asiento `inventory.review` y la etiqueta que lee la calibración; una columna se decide una sola vez y el grafo responde `401`/`403` según la matriz.
 - `tests/integration/test_api_core.py`: la misma clave no repite el efecto ni el asiento, la misma clave con otro cuerpo es `409`, sin clave cada llamada es nueva, una llamada denegada no deja asiento, el refresco solo sale de la cookie y **se recorre toda ruta mutadora** comprobando que la que responde correctamente deja su asiento (hoy responden `501`; el test aprieta solo según se implementan).
 - `services/api/tests/test_core_pure.py`: el cursor es opaco, uno ajeno se rechaza y la paginación no repite ni salta filas cuando se insertan otras en medio.
 - `tests/contract/test_api_authz.py`: las 72 combinaciones de rol × permiso contra la expectativa escrita a mano en `tests/fixtures/authz_matrix.yaml`, que ninguna ruta de la v1 queda sin permiso (salvo el refresco de sesión) y los invariantes de separación de deberes.
@@ -91,6 +94,7 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 ## 9. Limitaciones conocidas y pendientes
 
 - Las rutas responden `501` hasta su tarea (F08-04 en adelante); `challenge-api` sigue en pie hasta F08-17.
+- El vecindario de un nodo se devuelve con `limit` y `has_more`, no con cursor: el cursor por desplazamiento del GraphQL es suyo y no se mezcla con el de las listas.
 - La tabla de idempotencia no tiene aún purga por retención: hay un índice por `created_at` esperándola (pendiente registrado).
 - El montaje de GraphQL bajo `/api/v1/inventory/graph` (ADR-0012 §5) llega con el inventario, en F08-04.
 
@@ -101,3 +105,4 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 | 0.1.0-alpha | 2026-09-20 | Contrato OpenAPI v1, esqueleto de rutas y suite de contrato | F08-01 |
 | 0.2.0-alpha | 2026-09-20 | Matriz de autorización versionada, denegación por defecto y separación de deberes | F08-02 |
 | 0.3.0-alpha | 2026-09-20 | Núcleo: cursor opaco, idempotencia con tabla, auditoría de mutaciones y refresco de sesión | F08-03 |
+| 0.4.0-alpha | 2026-09-20 | Sistemas e inventario: cobertura, nodo, cola de revisión y GraphQL montado bajo la misma matriz | F08-04 |
