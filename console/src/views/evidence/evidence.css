@@ -1,0 +1,68 @@
+/* ARG-077 · the evidence view. Colours only through the tokens, and never gold here. */
+.evidence-detail > .panel,
+.evidence-detail > .credential-seal {
+  margin-bottom: 16px;
+}
+
+.chain {
+  list-style: none;
+  padding: 0;
+}
+
+.chain-link {
+  border-left: 3px solid var(--line);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.chain-ok {
+  border-left-color: var(--accent);
+}
+
+.chain-partial {
+  border-left-color: var(--sev-high);
+}
+
+.chain-missing {
+  border-left-color: var(--sev-low);
+}
+
+.hash {
+  word-break: break-all;
+}
+
+.evidence-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.evidence-table caption {
+  text-align: left;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.evidence-table th,
+.evidence-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.journal-entry {
+  border: 2px solid var(--accent-hi);
+}
+
+.payload {
+  background: var(--panel-2);
+  padding: 8px;
+  overflow-x: auto;
+}
+
+.confirm {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 12px;
+}

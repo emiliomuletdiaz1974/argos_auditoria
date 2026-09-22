@@ -22,6 +22,7 @@ from argos_evidence.activities import EvidenceActivities
 from argos_evidence.reads import (
     artifact_with_proof,
     campaign_artifacts,
+    campaign_journal_entry,
     current_dossier,
     evidence_chain,
 )
@@ -74,6 +75,20 @@ def artifacts(request: Request, campaign_id: UUID, paging: Paging) -> Page:
         database(request), str(campaign_id), paging.limit + 1, paging.position
     )
     return paginate(rows, paging.limit)
+
+
+@router.get(
+    "/{campaign_id}/journal/{seq}",
+    summary="Journal entry cited by a verdict of the campaign",
+    dependencies=[Depends(require_perm("evidence.read"))],
+)
+def journal_entry(request: Request, campaign_id: UUID, seq: int) -> dict[str, Any]:
+    found = campaign_journal_entry(database(request), str(campaign_id), seq)
+    if found is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"no verdict of campaign {campaign_id} cites entry {seq}"
+        )
+    return found
 
 
 @router.get(

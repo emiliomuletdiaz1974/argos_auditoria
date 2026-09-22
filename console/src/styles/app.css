@@ -112,3 +112,11 @@ button:disabled {
 .chip-low {
   border: 1px solid var(--sev-low);
 }
+
+/* a row of buttons under a panel */
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}

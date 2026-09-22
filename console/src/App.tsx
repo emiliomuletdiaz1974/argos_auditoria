@@ -6,6 +6,7 @@ import { ApiProvider } from "./api/context";
 import { Session } from "./auth/session";
 import { CALLBACK_PATH, oidcConfig } from "./config";
 import { CampaignsView } from "./views/campaigns/CampaignsView";
+import { EvidenceView } from "./views/evidence/EvidenceView";
 import { FindingsView } from "./views/findings/FindingsView";
 import { InventoryView } from "./views/inventory/InventoryView";
 
@@ -93,10 +94,13 @@ function Section({ path }: { path: string }) {
   if (path.startsWith("/findings")) {
     return <FindingsView path={path} />;
   }
+  if (path.startsWith("/evidence")) {
+    return <EvidenceView path={path} anchor={window.location.hash} />;
+  }
   return (
     <div className="panel">
       <h1>Consola de ARGOS</h1>
-      <p className="muted">Elige una sección. Las que faltan llegan con las tareas F08-14 y F08-15.</p>
+      <p className="muted">Elige una sección. El asistente llega con la tarea F08-15.</p>
     </div>
   );
 }

@@ -74,6 +74,19 @@ def _utc_seconds(value: dt.datetime) -> str:
     return value.astimezone(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# What stays in the dossier and never travels in the credential: who approved, what was found and
+# where, the drafted texts, the results per obligation and the artifacts themselves. Only counts,
+# versions and hashes leave; the preview lists these so the reviewer sees what is left behind.
+WITHHELD = (
+    "approvals",
+    "campaign.name",
+    "evidence_chain.artifacts",
+    "findings",
+    "results_by_obligation",
+    "texts",
+)
+
+
 def credential_subject(dossier: Mapping[str, Any], dossier_sha256: str) -> dict[str, Any]:
     """What the credential asserts, taken field by field from the dossier."""
     campaign = dossier["campaign"]

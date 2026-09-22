@@ -10,7 +10,7 @@ from typing import Any
 
 import psycopg
 
-from argos_evidence.credential.issue import credential_record, credential_subject
+from argos_evidence.credential.issue import WITHHELD, credential_record, credential_subject
 from argos_evidence.dossier.build import evidence_chain
 from argos_evidence.merkle import proof
 from argos_evidence.roots import get_root, tree_for
@@ -19,6 +19,7 @@ from argos_evidence.worm import WormStore
 __all__ = [
     "artifact_with_proof",
     "campaign_artifacts",
+    "campaign_journal_entry",
     "credential_preview",
     "credential_state",
     "current_dossier",
@@ -96,6 +97,33 @@ def artifact_with_proof(dsn: str, store: WormStore, verdict_id: str) -> dict[str
     return detail
 
 
+_CITED_ENTRY = (
+    "SELECT j.seq, j.at, j.actor, j.action, j.payload, j.entry_hash FROM argos.audit_journal j"
+    " WHERE j.seq = %(seq)s AND EXISTS (SELECT 1 FROM argos.verdicts v"
+    " WHERE v.campaign_id = %(campaign)s AND v.probe_journal_seq = j.seq)"
+)
+
+
+def campaign_journal_entry(dsn: str, campaign_id: str, seq: int) -> dict[str, Any] | None:
+    """A journal entry that a verdict of the campaign cites: the question that produced it.
+
+    Only cited entries are served, so this is a window on the evidence of one campaign and not a
+    way to read the whole journal.
+    """
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(_CITED_ENTRY, {"seq": seq, "campaign": campaign_id}).fetchone()
+    if row is None:
+        return None
+    return {
+        "seq": int(row[0]),
+        "at": row[1].isoformat(),
+        "actor": row[2],
+        "action": row[3],
+        "payload": row[4],
+        "entry_hash": bytes(row[5]).hex(),
+    }
+
+
 def current_dossier(dsn: str, campaign_id: str) -> dict[str, Any] | None:
     """The newest dossier of a campaign: a late time stamp makes a new one, and it is this."""
     with psycopg.connect(dsn) as conn:
@@ -122,6 +150,7 @@ def credential_preview(store: WormStore, dossier: dict[str, Any]) -> dict[str, A
     return {
         "dossier_sha256": dossier["sha256"],
         "credentialSubject": credential_subject(body, str(dossier["sha256"])),
+        "withheld": list(WITHHELD),
     }
 
 

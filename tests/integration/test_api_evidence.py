@@ -142,6 +142,21 @@ def test_every_artifact_proves_its_place_in_the_signed_root(api: TestClient, cam
         assert detail["artifact"]["verdict_id"] == verdict_id
 
 
+def test_the_journal_entry_a_verdict_cites_is_readable_from_its_campaign(
+    api: TestClient, campaign: str
+) -> None:
+    path = f"{API_PREFIX}/evidence/{campaign}/journal"
+    answer = api.get(f"{path}/3", headers=_as("read_only_auditor"))
+    assert answer.status_code == 200, answer.text
+    entry = answer.json()
+    assert entry["seq"] == 3
+    assert {"at", "actor", "action", "payload", "entry_hash"} <= set(entry)
+    assert len(entry["entry_hash"]) == 64
+
+    uncited = api.get(f"{path}/2", headers=_as("read_only_auditor"))
+    assert uncited.status_code == 404, "only the entries its verdicts cite, not the whole journal"
+
+
 def test_an_unknown_artifact_is_a_404(api: TestClient) -> None:
     answer = api.get(
         f"{API_PREFIX}/evidence/artifacts/00000000-0000-4000-8000-0000000000ff",
@@ -202,6 +217,9 @@ def test_what_is_issued_is_what_the_preview_showed(
     assert preview.status_code == 200
     shown = preview.json()
     assert shown["dossier_sha256"] == sha256
+    withheld = shown["withheld"]
+    assert {"approvals", "findings", "texts"} <= set(withheld), "who approved and what was found"
+    assert not set(withheld) & set(shown["credentialSubject"])
 
     issued = api.post(
         f"{API_PREFIX}/credentials",

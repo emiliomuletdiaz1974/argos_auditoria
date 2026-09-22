@@ -21,10 +21,14 @@ export function renderWithApi(ui: ReactElement, routes: Record<string, unknown>)
     requested.push(`${method} ${path}`);
     if (method !== "GET") {
       sent.push({ path, method, body: init.body ? JSON.parse(String(init.body)) : null });
-      const reply = answers[`${method} ${path}`] ?? {};
-      return new Response(JSON.stringify(reply), { status: 200 });
+      const { __status: status = 200, ...reply } = (answers[`${method} ${path}`] ?? {}) as { __status?: number };
+      return new Response(JSON.stringify(reply), { status });
     }
-    const found = Object.entries(answers).find(([route]) => route === path || path.startsWith(`${route}?`));
+    // An exact route wins; otherwise a route answers for its path with any query.
+    const found =
+      path in answers
+        ? ([path, answers[path]] as const)
+        : Object.entries(answers).find(([route]) => path.startsWith(`${route}?`));
     if (!found) {
       return new Response(JSON.stringify({ title: "not found" }), { status: 404 });
     }
