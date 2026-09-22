@@ -6,6 +6,7 @@ import { ApiProvider } from "./api/context";
 import { Session } from "./auth/session";
 import { CALLBACK_PATH, oidcConfig } from "./config";
 import { CampaignsView } from "./views/campaigns/CampaignsView";
+import { FindingsView } from "./views/findings/FindingsView";
 import { InventoryView } from "./views/inventory/InventoryView";
 
 const SECTIONS = [
@@ -89,10 +90,13 @@ function Section({ path }: { path: string }) {
   if (path.startsWith("/campaigns")) {
     return <CampaignsView path={path} />;
   }
+  if (path.startsWith("/findings")) {
+    return <FindingsView path={path} />;
+  }
   return (
     <div className="panel">
       <h1>Consola de ARGOS</h1>
-      <p className="muted">Elige una sección. Las que faltan llegan con las tareas F08-13 a F08-15.</p>
+      <p className="muted">Elige una sección. Las que faltan llegan con las tareas F08-14 y F08-15.</p>
     </div>
   );
 }

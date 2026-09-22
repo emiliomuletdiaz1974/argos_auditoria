@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: b8cbdad
+commit: pendiente
 date: 2026-09-18
 status: current
 confidentiality: client
@@ -334,3 +334,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-21 | Hallazgos: una persona ya no lleva un hallazgo a `closed_compliant` ni a `reopened` (solo la reejecución, con actor `system:`); `person_transitions`, `list_findings` (peor primero, con filtros) y `finding_detail` (veredicto y asiento de la consulta); la subsanación admite un único hallazgo (`finding_id`) | F08-06 |
 | 0.1.0-alpha | 2026-09-21 | La compuerta pendiente se anuncia en el bus (`argos.campaign.approval_requested`) una sola vez, cuando se abre; `request_approval` devuelve si la abrió | F08-09 |
 | 0.1.0-alpha | 2026-09-21 | La señal `circuit_open` admite un motivo opcional y la consulta `progress` devuelve los sistemas en pausa con él; `campaign_gates` incluye `approved_by` | F08-12 |
+| 0.1.0-alpha | 2026-09-22 | `finding_detail` trae `history` (los asientos `finding.open`, `finding.recur` y `finding.transition` del hallazgo, en orden) y lee la declaración muestral de donde la deja el evaluador (`verdict.detail.sampling`); antes salía siempre vacía | F08-13 |

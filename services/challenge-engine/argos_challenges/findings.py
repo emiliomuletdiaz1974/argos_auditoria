@@ -305,8 +305,29 @@ def list_findings(
     ]
 
 
+_HISTORY = (
+    "SELECT seq, at, actor, action, payload FROM argos.audit_journal"
+    " WHERE action IN ('finding.open', 'finding.recur', 'finding.transition')"
+    " AND payload->>'finding' = %s ORDER BY seq"
+)
+
+
+def _history_step(row: tuple[Any, ...]) -> dict[str, Any]:
+    seq, at, actor, action, payload = row
+    to = {"finding.open": "open", "finding.transition": payload.get("to")}.get(action)
+    return {
+        "seq": int(seq),
+        "at": at.isoformat(),
+        "actor": actor,
+        "action": action,
+        "from": payload.get("from"),
+        "to": to,
+        "occurrences": payload.get("occurrences"),
+    }
+
+
 def finding_detail(dsn: str, finding_id: str) -> dict[str, Any] | None:
-    """A finding with the verdict that opened it and the journal entry of the question asked."""
+    """A finding with the verdict that opened it, the question asked and its journal history."""
     with psycopg.connect(dsn) as conn:
         row = conn.execute(_DETAIL, (finding_id,)).fetchone()
         seen = (
@@ -314,6 +335,7 @@ def finding_detail(dsn: str, finding_id: str) -> dict[str, Any] | None:
             if row is not None and row[16] is not None
             else None
         )
+        history = conn.execute(_HISTORY, (finding_id,)).fetchall() if row is not None else []
     if row is None:
         return None
     verdict = None
@@ -327,7 +349,7 @@ def finding_detail(dsn: str, finding_id: str) -> dict[str, Any] | None:
             "verdict": seen[2],
             "verdict_hash": seen[3],
             "challenge_version": seen[4],
-            "sampling": (seen[2] or {}).get("sampling"),
+            "sampling": ((seen[2] or {}).get("detail") or {}).get("sampling"),
             "probe_journal": probe,
             "created_at": seen[6].isoformat(),
         }
@@ -350,4 +372,5 @@ def finding_detail(dsn: str, finding_id: str) -> dict[str, Any] | None:
         "updated_at": row[15].isoformat(),
         "verdict": verdict,
         "allowed_transitions": person_transitions(str(row[8])),
+        "history": [_history_step(step) for step in history],
     }

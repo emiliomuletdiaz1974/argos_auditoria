@@ -14,6 +14,7 @@
   --line: #24365C;
   --text: #E8ECF4;
   --text-muted: #9AA7BF;
+  --overlay: rgb(5 12 24 / 75%); /* behind a modal dialog */
 
   /* action */
   --accent: #1F7A7A;

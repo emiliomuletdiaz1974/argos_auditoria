@@ -1,0 +1,65 @@
+/* ARG-076 · the findings view. Colours only through the tokens. */
+.filters {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.filters label,
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.findings-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.findings-table th,
+.findings-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.finding-detail > .panel {
+  margin-bottom: 16px;
+}
+
+.why {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+}
+
+.why dd {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.history {
+  padding-left: 20px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--overlay);
+}
+
+.modal {
+  max-width: 520px;
+  width: calc(100% - 32px);
+}

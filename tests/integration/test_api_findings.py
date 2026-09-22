@@ -71,7 +71,9 @@ def _as(role: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {role}:{role}"}
 
 
-def _finding(dsn: str, node_key: str) -> dict[str, Any]:
+def _finding(
+    dsn: str, node_key: str, unit_changes: dict[str, Any] | None = None, probe: Any = PROBE
+) -> dict[str, Any]:
     """A non-compliant verdict, with the journal entry of the question that produced it."""
     campaign_id = create_campaign(dsn, f"Campaña {node_key}", {}, "user:campaign_manager")
     pin_campaign(
@@ -84,10 +86,10 @@ def _finding(dsn: str, node_key: str) -> dict[str, Any]:
         library_sha256="b" * 64,
         applicability_run=None,
     )
-    unit = _unit(campaign_id, node_key)
+    unit = {**_unit(campaign_id, node_key), **(unit_changes or {})}
     save_units(dsn, campaign_id, [unit])
     seq = PostgresJournal(dsn).append("system:probe", "probe.issued", {"unit": unit["unit_id"]})
-    verdict = evaluate(unit, PROBE)
+    verdict = evaluate(unit, probe)
     verdict_id, _ = persist_verdict(dsn, campaign_id, unit, verdict, probe_journal_seq=seq)
     finding = open_or_recur(dsn, campaign_id, unit, verdict, verdict_id)
     return {**finding, "journal_seq": seq, "campaign_id": campaign_id}
@@ -137,6 +139,41 @@ def test_a_finding_carries_its_whole_why(api: TestClient, migrated_db: str) -> N
     assert obligation["norm"] and obligation["article"]
 
     assert set(body["allowed_transitions"]) == {"in_remediation", "risk_accepted"}
+
+
+def test_a_sampled_finding_carries_its_sampling_declaration(
+    api: TestClient, migrated_db: str
+) -> None:
+    sampled = {
+        "criterion": {"threshold": {"field": "count", "operator": "==", "value": 0}},
+        "sampling": {"population": 1200, "sample": 300, "confidence": "0.95"},
+    }
+    probe = {"ok": True, "data": {"count": 4}}
+    finding = _finding(migrated_db, "k-sampled-0001", sampled, probe)
+    body = api.get(f"{API_PREFIX}/findings/{finding['id']}", headers=_as("dpo_reviewer")).json()
+    sampling = body["verdict"]["sampling"]
+    assert (sampling["population"], sampling["sample"], sampling["failures"]) == (1200, 300, 4)
+    assert sampling["confidence"] == "0.95"
+
+
+def test_a_reopened_finding_shows_its_history(api: TestClient, migrated_db: str) -> None:
+    finding = _finding(migrated_db, "k-history-0001")
+    expiry = date.today() + timedelta(days=30)
+    transition(migrated_db, finding["id"], "risk_accepted", "user:dpo", "aceptado", expiry)
+    transition(migrated_db, finding["id"], "reopened", "system:risk-expiry")
+
+    body = api.get(f"{API_PREFIX}/findings/{finding['id']}", headers=_as("dpo_reviewer")).json()
+    history = body["history"]
+    assert [step["action"] for step in history] == [
+        "finding.open",
+        "finding.transition",
+        "finding.transition",
+    ]
+    assert [step["to"] for step in history] == ["open", "risk_accepted", "reopened"]
+    assert history[1]["actor"] == "user:dpo"
+    assert history[2]["actor"] == "system:risk-expiry"
+    seqs = [step["seq"] for step in history]
+    assert seqs == sorted(seqs), "in the order the journal wrote them"
 
 
 def test_an_unknown_finding_is_a_404(api: TestClient) -> None:
