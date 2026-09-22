@@ -5,7 +5,7 @@ title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
 version: 0.7.0-alpha
-commit: pendiente
+commit: 59c563a
 date: 2026-09-22
 status: current
 confidentiality: client
