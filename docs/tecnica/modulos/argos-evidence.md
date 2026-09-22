@@ -5,7 +5,7 @@ title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
 version: 0.13.0-alpha
-commit: pendiente
+commit: 8bc16e2
 date: 2026-09-22
 status: current
 confidentiality: client
