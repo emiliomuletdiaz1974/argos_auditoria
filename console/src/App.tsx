@@ -23,7 +23,12 @@ type Status = "starting" | "signed-in" | "signed-out" | "failed";
 
 export function App() {
   const session = useMemo(
-    () => new Session(oidcConfig(), { fetch, navigate: (url) => window.location.assign(url) }),
+    () =>
+      new Session(oidcConfig(), {
+        // Bound: a bare `fetch` loses its window and the browser refuses the call.
+        fetch: (input, init) => window.fetch(input, init),
+        navigate: (url) => window.location.assign(url),
+      }),
     [],
   );
   const api = useMemo(() => createApiFetch(session), [session]);

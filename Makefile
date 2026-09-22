@@ -128,6 +128,13 @@ console-types:
 console-build:
 	npm --prefix console run build
 
+# The browser is downloaded out loud, never behind your back.
+console-e2e-setup:
+	npm --prefix console run e2e:setup
+
+console-e2e:
+	npm --prefix console run e2e
+
 ai-eval:
 	uv run pytest -m integration tests/integration/test_ai_goldens.py
 

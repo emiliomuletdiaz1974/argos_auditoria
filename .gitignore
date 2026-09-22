@@ -22,3 +22,8 @@ deploy/dev/models/*
 
 # Console (ADR-0013): dependencies installed with npm ci, never versioned
 node_modules/
+
+# Console end-to-end: the report and the traces of a run, and the built page it serves
+console/test-results/
+console/playwright-report/
+console/dist/

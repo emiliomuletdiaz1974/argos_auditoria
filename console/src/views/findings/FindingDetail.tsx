@@ -191,8 +191,15 @@ export function FindingDetail({ findingId }: { findingId: string }) {
             <button type="button" className="btn-primary" onClick={verify} disabled={rerun !== null}>
               Volver a ejecutar el reto
             </button>
-            {rerun !== null ? <p role="status">Reejecución en marcha{rerun ? ` (${rerun})` : ""}.</p> : null}
           </>
+        ) : null}
+        {/* The notice outlives the re-run: when the challenge passes, the finding is already closed
+            and its pending-verification section is gone, but the person asked for this and deserves
+            to see what came of it. */}
+        {rerun !== null ? (
+          <p role="status">
+            Reejecución en marcha{rerun ? ` (${rerun})` : ""}. El hallazgo queda como {STATUS_LABELS[data.status] ?? data.status}.
+          </p>
         ) : null}
         {data.allowed_transitions.length > 0 ? (
           <div role="group" aria-label="Acciones" className="actions">

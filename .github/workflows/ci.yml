@@ -32,6 +32,29 @@ jobs:
       - run: make console-install
       - run: make console-lint console-test console-types
 
+  console-e2e:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+      - run: make console-install
+      # The browser is heavy: it is cached by the version of Playwright in the lock file.
+      - id: playwright
+        run: echo "version=$(node -p "require('./console/node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        id: browser
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.playwright.outputs.version }}
+      - if: steps.browser.outputs.cache-hit != 'true'
+        run: make console-e2e-setup
+      - run: make console-e2e
+
   integration:
     needs: verify
     runs-on: ubuntu-latest
