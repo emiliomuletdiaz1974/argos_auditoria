@@ -8,7 +8,8 @@
 #   - `campaign_manager` plans, launches and asks for the remediation check; it does not approve.
 #   - `dpo_reviewer` approves the gates, decides on a column under review, moves a finding and
 #     issues the credential of a campaign, after reading its preview (F08-07).
-#   - `platform_admin` operates the platform (integrations, revocation); it neither approves a gate
+#   - `platform_admin` operates the platform (integrations, revocation) and is the only one who
+#     sees or touches the webhooks towards the ITSM (F08-09); it neither approves a gate
 #     nor judges a finding, so nobody can both run a campaign and bless its result.
 
 platform_admin:
@@ -88,5 +89,5 @@ read_only_auditor:
   credentials.create: false
   credentials.revoke: false
   assistant.ask: false
-  webhooks.read: true
+  webhooks.read: false
   webhooks.create: false

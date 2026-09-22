@@ -10,7 +10,8 @@
 #   - platform_admin operates the platform (integrations, revocation) and neither approves nor
 #     judges: administering is not deciding;
 #   - read_only_auditor only holds `.read` permissions;
-#   - issuing a credential is an explicit act of the DPO reviewer, who reads its preview first.
+#   - issuing a credential is an explicit act of the DPO reviewer, who reads its preview first;
+#   - the integrations with the ITSM (webhooks) are the platform admin's alone.
 # The double control of the sampling gate (two different people) is the one of ARG-047 and lives in
 # the campaign engine, not here.
 
@@ -37,5 +38,5 @@ credentials.revoke: [platform_admin]
 
 assistant.ask: [platform_admin, campaign_manager, dpo_reviewer]
 
-webhooks.read: [platform_admin, read_only_auditor]
+webhooks.read: [platform_admin]
 webhooks.create: [platform_admin]

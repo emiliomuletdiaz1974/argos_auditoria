@@ -27,6 +27,7 @@ from argos_challenges.probes import INVENTORY_QUERIES, minimise, probe_spec
 from argos_challenges.seal import announce_seal, seal_campaign
 from argos_challenges.snapshot_resolver import SnapshotSelectorResolver
 from argos_challenges.store import (
+    announce_approval,
     campaign_record,
     create_campaign,
     persist_verdict,
@@ -203,13 +204,12 @@ class ChallengeActivities:
 
     @activity.defn(name="request_approval")
     async def request_approval(self, payload: dict[str, Any]) -> None:
-        await asyncio.to_thread(
-            request_approval,
-            self._dsn,
-            str(payload["campaign_id"]),
-            str(payload["gate"]),
-            dict(payload.get("payload", {})),
+        campaign_id, gate = str(payload["campaign_id"]), str(payload["gate"])
+        opened = await asyncio.to_thread(
+            request_approval, self._dsn, campaign_id, gate, dict(payload.get("payload", {}))
         )
+        if opened and self._bus is not None:
+            await announce_approval(self._bus, campaign_id, gate)
 
     @activity.defn(name="set_campaign_status")
     async def set_campaign_status(self, payload: dict[str, Any]) -> None:

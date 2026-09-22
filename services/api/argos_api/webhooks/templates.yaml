@@ -1,0 +1,25 @@
+# ARG-079 · What each destination receives, built from the event. Configuration, not code.
+#
+# A text with {field} takes that field of the event (empty if the event does not carry it).
+# "{$json}" is the whole event as JSON text. "$event" is the event itself, unchanged.
+# A mapping with "$map" picks a value by a field of the event, with a default.
+# Adding a destination is adding a block here; no code changes.
+
+servicenow:
+  short_description: "[ARGOS] {severity}: {challenge_id}"
+  description: "{$json}"
+  urgency:
+    $map: severity
+    values:
+      critical: 1
+      high: 2
+    default: 3
+
+jira:
+  fields:
+    summary: "[ARGOS] {challenge_id}"
+    description: "{$json}"
+    issuetype:
+      name: Bug
+
+generic: $event

@@ -34,6 +34,15 @@ class VaultSecretStore:
         data = response["data"]["data"]
         return {str(k): str(v) for k, v in data.items()}
 
+    def write(self, path: str, data: dict[str, str]) -> None:
+        """Keep a secret that arrives from outside (the secret of a webhook, for instance)."""
+        try:
+            self._client.secrets.kv.v2.create_or_update_secret(
+                path=path, secret=dict(data), mount_point=self._mount
+            )
+        except (Forbidden, InvalidPath):
+            raise SecretNotAccessibleError("secret not writable", details={"path": path}) from None
+
 
 class EncryptedFileSecretStore:
     """Development without Vault only: a Fernet file holding {path: {key: value}}."""

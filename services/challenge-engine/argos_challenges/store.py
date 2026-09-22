@@ -31,6 +31,8 @@ DEFAULT_APPROVALS = 1
 # Gates two different people must approve (ARG-047): sampling decides what is not looked at.
 DOUBLE_CONTROL_GATES = frozenset({"sampling"})
 START_GATE = "start"
+APPROVAL_SUBJECT = "argos.campaign.approval_requested"
+APPROVAL_EVENT_TYPE = "challenge.approval_requested.v1"
 
 _INSERT_VERDICT = (
     "INSERT INTO argos.verdicts (id, campaign_id, unit_id, challenge_id, challenge_version, "
@@ -174,8 +176,11 @@ def persist_verdict(
     return verdict_id, True
 
 
-def request_approval(dsn: str, campaign_id: str, gate: str, payload: Mapping[str, Any]) -> None:
-    """Open a gate. Asking twice keeps the first request: what was approved does not change."""
+def request_approval(dsn: str, campaign_id: str, gate: str, payload: Mapping[str, Any]) -> bool:
+    """Open a gate. Asking twice keeps the first request: what was approved does not change.
+
+    Returns whether this call opened it, so the announcement goes out once.
+    """
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:
         created = conn.execute(
@@ -190,6 +195,7 @@ def request_approval(dsn: str, campaign_id: str, gate: str, payload: Mapping[str
                 {"campaign": campaign_id, "gate": gate, "payload": dict(payload)},
                 conn=conn,
             )
+    return bool(created)
 
 
 def grant_approval(
@@ -360,3 +366,12 @@ def campaign_plan(dsn: str, campaign_id: str) -> dict[str, Any] | None:
         "unverifiable": list(payload.get("unverifiable", [])),
         "probes_run": sum(1 for row in units if row[1] != "pending"),
     }
+
+
+async def announce_approval(bus: Any, campaign_id: str, gate: str) -> None:
+    """Tell whoever listens that a gate awaits a person: the ITSM of the client, for one."""
+    await bus.publish(
+        APPROVAL_SUBJECT,
+        APPROVAL_EVENT_TYPE,
+        {"campaign_id": campaign_id, "gate": gate, "approvals_needed": approvals_needed(gate)},
+    )

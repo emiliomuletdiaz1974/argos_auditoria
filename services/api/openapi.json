@@ -64,16 +64,31 @@
             "title": "Events",
             "type": "array"
           },
+          "secret": {
+            "description": "shared secret to sign; never returned",
+            "maxLength": 512,
+            "minLength": 16,
+            "title": "Secret",
+            "type": "string"
+          },
+          "template": {
+            "default": "generic",
+            "description": "servicenow, jira, generic…",
+            "title": "Template",
+            "type": "string"
+          },
           "url": {
-            "description": "https endpoint of the client",
-            "minLength": 8,
+            "description": "endpoint of the client",
+            "maxLength": 2000,
+            "pattern": "^https?://",
             "title": "Url",
             "type": "string"
           }
         },
         "required": [
           "url",
-          "events"
+          "events",
+          "secret"
         ],
         "title": "NewWebhook",
         "type": "object"
@@ -3495,7 +3510,7 @@
     },
     "/api/v1/webhooks": {
       "get": {
-        "operationId": "list_webhooks_api_v1_webhooks_get",
+        "operationId": "list_all_api_v1_webhooks_get",
         "parameters": [
           {
             "description": "opaque cursor returned by the previous page",
@@ -3738,6 +3753,7 @@
             "name": "webhook_id",
             "required": true,
             "schema": {
+              "format": "uuid",
               "title": "Webhook Id",
               "type": "string"
             }

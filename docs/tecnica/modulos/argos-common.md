@@ -5,7 +5,7 @@ title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
 version: 0.1.0-alpha
-commit: d05f6b4
+commit: pendiente
 date: 2026-09-18
 status: current
 confidentiality: client
@@ -114,3 +114,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.1.0-alpha | 2026-09-14 | Configuración, errores, registro, salud, diario v1, migrador, secretos y release firmada | Fase 01 |
 | 0.1.0-alpha | 2026-09-15 | `VAULT_ADDR` y `VAULT_TOKEN` para los servicios que abren conectores | Fase 03 (ARG-022) |
 | 0.1.0-alpha | 2026-09-18 | `PostgresJournal` se carga al primer uso desde `argos_common`; la interfaz no cambia | F07-11 (ARG-069) |
+| 0.1.0-alpha | 2026-09-21 | `VaultSecretStore.write`: guarda un secreto que llega de fuera (el de un webhook), con el mismo error si la ruta no es escribible | F08-09 |

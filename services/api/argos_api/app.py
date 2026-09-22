@@ -31,6 +31,7 @@ from argos_api.routers import (
     webhooks,
 )
 from argos_api.runner import CampaignRunner
+from argos_api.webhooks.store import SecretWriter
 from argos_auth import JwtValidator
 from argos_common import PostgresJournal
 from argos_evidence.activities import EvidenceActivities
@@ -80,6 +81,7 @@ def create_app(
     campaign_runner: CampaignRunner | None = None,
     evidence: EvidenceActivities | None = None,
     assistant: AssistantClient | None = None,
+    webhook_secrets: SecretWriter | None = None,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
     still answer, and the tests that do not touch the database do not need one."""
@@ -97,6 +99,7 @@ def create_app(
     app.state.campaign_runner = campaign_runner
     app.state.evidence = evidence
     app.state.assistant = assistant
+    app.state.webhook_secrets = webhook_secrets
     app.state.idempotency = IdempotencyStore(dsn) if dsn else None
     app.state.journal = PostgresJournal(dsn) if dsn else None
 
