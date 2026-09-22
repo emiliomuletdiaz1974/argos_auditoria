@@ -80,8 +80,25 @@ def test_an_answer_comes_with_its_citations_and_the_tools_it_consulted(migrated_
     assert body["calls"] == ["search_regulation", "finding_status"]
     assert [s["detail"] for s in body["sources"]] == ["RGPD art. 32.1.a", "0 críticos"]
     assert body["complete"] is True
+    assert body["refused"] is False
+    assert any("cifrado" in f["text"] for f in body["fragments"]), "citations unfold to their text"
     assert body["assisted"] is True
     assert "no es un veredicto" in body["notice"]
+
+
+def test_a_refusal_comes_with_the_nearest_fragments(migrated_db: str) -> None:
+    index_document(migrated_db, "RGPD", "norm", RGPD, "RGPD", EMBEDDER)
+    replies = [
+        {"action": "tool", "tool": "search_regulation", "arguments": {"question": "radiografías"}},
+        {"action": "refuse", "answer": "Lo recuperado no cubre esa pregunta."},
+    ]
+    answer = _api(migrated_db, _through_gateway(migrated_db, replies)).post(
+        f"{API_PREFIX}/assistant/ask", json=QUESTION, headers=_as("dpo_reviewer")
+    )
+    assert answer.status_code == 200, answer.text
+    body = answer.json()
+    assert (body["refused"], body["complete"], body["sources"]) == (True, False, [])
+    assert body["fragments"], "the closest fragments, for the person to judge"
 
 
 def test_when_there_is_not_enough_it_says_so(migrated_db: str) -> None:

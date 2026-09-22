@@ -1,0 +1,65 @@
+/* ARG-078 · the assistant. Colours only through the tokens, and no gold: nothing here is accredited. */
+.conversation {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.question {
+  font-weight: 600;
+}
+
+.reply {
+  border-left: 3px solid var(--accent);
+  padding-left: 12px;
+}
+
+.reply-refused {
+  border-left-color: var(--sev-low);
+}
+
+.citation {
+  background: none;
+  border: none;
+  color: var(--accent-hi);
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.citation-body {
+  display: block;
+  background: var(--panel-2);
+  padding: 8px;
+  margin: 4px 0;
+}
+
+.citation-body q {
+  display: block;
+  margin-top: 4px;
+}
+
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+}
+
+.tools li {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+}
+
+.assistant-down {
+  border-left: 3px solid var(--sev-high);
+  padding-left: 12px;
+}
+
+.assistant-notice {
+  border-top: 1px solid var(--line);
+  margin-top: 16px;
+  padding-top: 8px;
+}

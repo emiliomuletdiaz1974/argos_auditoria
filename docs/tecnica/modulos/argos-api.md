@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.13.0-alpha
-commit: 8bc16e2
+version: 0.14.0-alpha
+commit: pendiente
 date: 2026-09-22
 status: current
 confidentiality: client
@@ -62,7 +62,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Hallazgos | `GET /findings` (peor primero, filtros `status`, `severity`, `campaign_id`), `GET /findings/{id}`, `POST /findings/{id}/transition`, `POST /findings/{id}/verify` | El detalle trae el porqué completo —veredicto con sus valores, declaración muestral, asiento del diario de la consulta y la obligación con su artículo—, su historia en el diario (`history`) y `allowed_transitions`, para que la consola no duplique la máquina de estados. `closed_compliant` y `reopened` no se alcanzan por transición: solo `verify`, que lanza la reejecución de ARG-049 |
 | Evidencia | `GET /evidence/{id}/chain`, `/artifacts`, `/artifacts/{verdict_id}`, `/journal/{seq}`, `/dossier.json`, `/dossier.pdf`, `/bundle` | La cadena con su estado real (firma con su marca `non_production`, sello en cola o sellado con su política), cada artefacto con su prueba de inclusión contra la raíz firmada, el asiento del diario que cita un veredicto de la campaña (solo esos: no es una ventana al diario entero) y el expediente en sus bytes exactos (cabecera `X-Dossier-Sha256`). Cada descarga del expediente o del paquete deja un asiento `evidence.download` con quién |
 | Credenciales | `GET /credentials/preview`, `POST /credentials`, `GET /credentials/{id}`, `POST /credentials/{id}/revoke` | Emitir es un acto explícito de `dpo_reviewer`: la vista previa muestra el sujeto exacto y `withheld`, lo que se queda en el expediente, y la emisión nombra por su hash el expediente que se vio; si cambió entremedias, `409`. Revocar exige motivo |
-| Asistente | `POST /assistant/ask` | Reenvía la pregunta al gateway de IA **por HTTP** —el único servicio al que llama la API (ADR-0012)— y devuelve respuesta, citas, herramientas consultadas y `complete`; siempre con `assisted: true` y el aviso de que no es un veredicto. Sin modelo local, `503` con el motivo |
+| Asistente | `POST /assistant/ask` | Reenvía la pregunta al gateway de IA **por HTTP** —el único servicio al que llama la API (ADR-0012)— y devuelve respuesta, citas, herramientas consultadas, `complete`, `refused` y `fragments` (los fragmentos normativos recuperados, para desplegar las citas o juzgar un rehúso); siempre con `assisted: true` y el aviso de que no es un veredicto. Sin modelo local, `503` con el motivo |
 | Cliente | `assistant.AssistantClient(base_url)` y `create_app(assistant=...)` | Sin cliente, la ruta responde `503`; un gateway inalcanzable, también. La API no importa `argos_ai`: un test lo impide |
 | Webhooks | `POST /webhooks`, `GET /webhooks`, `GET /webhooks/{id}/deliveries` | Solo `platform_admin`. El secreto lo elige el cliente, va al almacén de secretos (`webhooks/<id>`) y no sale nunca en una respuesta, en la base de datos ni en el diario. La bandeja guarda cada intento: estado, intentos, último código y error |
 | Firma | `X-Argos-Signature: t=<segundos>,v1=<hex>` | HMAC-SHA256 con el secreto sobre `t`, un punto y los bytes exactos del cuerpo; el receptor rechaza una marca con más de 300 s (`webhooks.signing.verify` es lo que haría él). `X-Argos-Event` lleva el tipo |
@@ -138,3 +138,4 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 | 0.11.0-alpha | 2026-09-21 | La cola de revisión admite `correct` con `category` (rechaza la propuesta y clasifica la columna); el detalle de nodo trae `deltas` | F08-11 |
 | 0.12.0-alpha | 2026-09-22 | El detalle de hallazgo trae `history` y la declaración muestral del veredicto, que antes llegaba vacía | F08-13 |
 | 0.13.0-alpha | 2026-09-22 | `GET /evidence/{id}/journal/{seq}` (asiento citado por un veredicto de la campaña) y `withheld` en la vista previa de la credencial | F08-14 |
+| 0.14.0-alpha | 2026-09-22 | `POST /assistant/ask` devuelve `refused` y `fragments` | F08-15 |

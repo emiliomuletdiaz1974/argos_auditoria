@@ -33,15 +33,17 @@ SYSTEM_PROMPT = (
     "Eres el asistente de la consola de ARGOS. Respondes preguntas sobre la normativa y sobre el "
     "estado del cliente usando solo estas herramientas de lectura: {tools}. En cada paso "
     'devuelves JSON: o bien {{"action": "tool", "tool": nombre, "arguments": {{...}}}}, o bien '
-    '{{"action": "answer", "answer": texto, "sources": [{{"tool": nombre, "detail": texto}}]}}. '
-    "Cita el origen de cada dato: el artículo para la norma, el recuento con su herramienta para "
-    "el estado. Tienes como mucho {budget} consultas. No decides si algo cumple: eso no es tuyo."
+    '{{"action": "answer", "answer": texto, "sources": [{{"tool": nombre, "detail": texto}}]}}, '
+    'o bien {{"action": "refuse", "answer": texto}} si lo consultado no basta para responder. '
+    "Cita el origen de cada dato con [n], el número de su fuente en sources: el artículo para la "
+    "norma, el recuento con su herramienta para el estado. Tienes como mucho {budget} consultas. "
+    "No decides si algo cumple: eso no es tuyo."
 )
 STEP_SCHEMA: dict[str, Any] = {
     "type": "object",
     "required": ["action"],
     "properties": {
-        "action": {"enum": ["tool", "answer"]},
+        "action": {"enum": ["tool", "answer", "refuse"]},
         "tool": {"type": "string"},
         "arguments": {"type": "object"},
         "answer": {"type": "string"},
@@ -61,6 +63,9 @@ OUT_OF_BUDGET = (
 )
 
 
+REGULATION_TOOL = "search_regulation"
+
+
 class AssistantError(ArgosError):
     """The answer quotes a source it did not consult."""
 
@@ -71,6 +76,10 @@ class Answer:
     sources: list[dict[str, str]]
     complete: bool
     calls: list[str] = field(default_factory=list)
+    # The normative fragments the tools retrieved, so each citation unfolds to its text and, when
+    # the assistant refuses, the person can judge the closest ones themselves.
+    fragments: list[dict[str, str]] = field(default_factory=list)
+    refused: bool = False
 
 
 def _step_result(tools: Mapping[str, Tool], step: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -87,12 +96,25 @@ def _step_result(tools: Mapping[str, Tool], step: Mapping[str, Any]) -> tuple[st
     return name, {"result": tool.run(arguments)}
 
 
+def _fragments(result: Mapping[str, Any], seen: list[dict[str, str]]) -> list[dict[str, str]]:
+    """The new fragments a regulation search returned, once each, in the order they came."""
+    known = {fragment["reference"] for fragment in seen}
+    new: list[dict[str, str]] = []
+    for fragment in result.get("fragments", []):
+        reference = str(fragment.get("reference", ""))
+        if reference and reference not in known:
+            known.add(reference)
+            new.append({"reference": reference, "text": str(fragment.get("text", ""))})
+    return new
+
+
 async def ask(question: str, gateway: Gateway, tools: Mapping[str, Tool]) -> Answer:
     """Answer one console question, within the budget and with checked sources."""
     system = SYSTEM_PROMPT.format(tools=", ".join(sorted(tools)), budget=MAX_TOOL_CALLS)
     transcript: list[str] = [f"Pregunta: {question}"]
     used: list[str] = []  # every call, failed ones included: they spend budget too
     consulted: set[str] = set()  # only the calls that returned data can be quoted as sources
+    fragments: list[dict[str, str]] = []
     for _ in range(MAX_TOOL_CALLS + 1):
         answer = await gateway.chat_json(
             SERVICE, system, "\n".join(transcript), STEP_SCHEMA, priority="interactive"
@@ -103,14 +125,18 @@ async def ask(question: str, gateway: Gateway, tools: Mapping[str, Tool]) -> Ans
             unused = sorted({source["tool"] for source in sources} - consulted)
             if unused:
                 raise AssistantError(f"la respuesta cita herramientas que no consultó: {unused}")
-            return Answer(str(step.get("answer", "")), sources, True, used)
+            return Answer(str(step.get("answer", "")), sources, True, used, fragments)
+        if step.get("action") == "refuse":
+            return Answer(str(step.get("answer", "")), [], False, used, fragments, refused=True)
         if len(used) >= MAX_TOOL_CALLS:
             break
         name, outcome = await asyncio.to_thread(_step_result, tools, step)
         used.append(name)
         if "result" in outcome:
             consulted.add(name)
+            if name == REGULATION_TOOL:
+                fragments.extend(_fragments(outcome["result"], fragments))
         transcript.append(
             f"Consulta {len(used)} a {name}: {json.dumps(outcome, ensure_ascii=False, default=str)}"
         )
-    return Answer(OUT_OF_BUDGET.format(budget=MAX_TOOL_CALLS), [], False, used)
+    return Answer(OUT_OF_BUDGET.format(budget=MAX_TOOL_CALLS), [], False, used, fragments)

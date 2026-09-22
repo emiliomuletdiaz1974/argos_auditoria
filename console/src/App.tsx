@@ -5,6 +5,7 @@ import { createApiFetch } from "./api/client";
 import { ApiProvider } from "./api/context";
 import { Session } from "./auth/session";
 import { CALLBACK_PATH, oidcConfig } from "./config";
+import { AssistantView } from "./views/assistant/AssistantView";
 import { CampaignsView } from "./views/campaigns/CampaignsView";
 import { EvidenceView } from "./views/evidence/EvidenceView";
 import { FindingsView } from "./views/findings/FindingsView";
@@ -97,10 +98,13 @@ function Section({ path }: { path: string }) {
   if (path.startsWith("/evidence")) {
     return <EvidenceView path={path} anchor={window.location.hash} />;
   }
+  if (path.startsWith("/assistant")) {
+    return <AssistantView />;
+  }
   return (
     <div className="panel">
       <h1>Consola de ARGOS</h1>
-      <p className="muted">Elige una sección. El asistente llega con la tarea F08-15.</p>
+      <p className="muted">Elige una sección.</p>
     </div>
   );
 }

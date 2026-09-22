@@ -95,6 +95,8 @@ def create_app(gateway: Gateway, tools: Mapping[str, Tool] | None = None) -> Fas
             "sources": answer.sources,
             "complete": answer.complete,
             "calls": answer.calls,
+            "fragments": answer.fragments,
+            "refused": answer.refused,
             "assisted": True,
         }
 

@@ -147,3 +147,60 @@ def test_a_failed_call_cannot_be_quoted_as_a_source() -> None:
     """It spent budget, but it returned no data: there is nothing in it to quote."""
     with pytest.raises(AssistantError, match="finding_status"):
         _ask([_tool("finding_status", severity="gravísima"), _answer("Hay 2.", "finding_status")])
+
+
+FRAGMENTS = [
+    {"reference": "RGPD art. 32.1", "text": "El responsable aplicará medidas técnicas…"},
+    {"reference": "RGPD art. 5.1.f", "text": "Tratados de tal manera que se garantice…"},
+]
+
+
+def _ask_with_regulation(replies: list[dict[str, Any]]) -> Any:
+    calls: list[tuple[str, dict[str, Any]]] = []
+    toolbox = _toolbox(calls)
+    toolbox["search_regulation"] = Tool(
+        "search_regulation",
+        TOOL_SCHEMAS["search_regulation"],
+        lambda arguments: {"fragments": FRAGMENTS},
+    )
+    backend = FakeBackend.of([json.dumps(reply) for reply in replies])
+    gateway = Gateway(
+        backend, journal=lambda _: None, usage=lambda _: None, quotas={"assistant": 1_000_000}
+    )
+    return asyncio.run(ask("¿cifrado?", gateway, toolbox))
+
+
+def test_the_answer_carries_the_fragments_it_retrieved_so_citations_unfold() -> None:
+    result = _ask_with_regulation(
+        [
+            _tool("search_regulation", question="cifrado"),
+            {
+                "action": "answer",
+                "answer": "Hay que cifrar [1].",
+                "sources": [{"tool": "search_regulation", "detail": "RGPD art. 32.1"}],
+            },
+        ]
+    )
+    assert result.complete is True
+    assert result.fragments == FRAGMENTS
+
+
+def test_a_refusal_is_a_refusal_with_the_nearest_fragments() -> None:
+    result = _ask_with_regulation(
+        [
+            _tool("search_regulation", question="plazo de conservación de radiografías"),
+            {"action": "refuse", "answer": "El corpus no cubre esa pregunta."},
+        ]
+    )
+    assert result.complete is False
+    assert result.refused is True
+    assert result.sources == []
+    assert result.answer == "El corpus no cubre esa pregunta."
+    assert result.fragments == FRAGMENTS, "the closest fragments, for the person to judge"
+
+
+def test_running_out_of_budget_is_not_a_refusal() -> None:
+    replies = [_tool("finding_status", severity="high") for _ in range(MAX_TOOL_CALLS + 1)]
+    result, _, _ = _ask(replies)
+    assert result.complete is False
+    assert result.refused is False

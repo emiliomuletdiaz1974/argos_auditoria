@@ -4,8 +4,8 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.5.0-alpha
-commit: 8bc16e2
+version: 0.6.0-alpha
+commit: pendiente
 date: 2026-09-22
 status: current
 confidentiality: client
@@ -35,6 +35,7 @@ Es la interfaz con la que el DPO, el responsable de campañas y el auditor traba
 - `src/views/campaigns/`: `PlanPreview` (la lista literal de lo que se va a preguntar, agrupada por obligación, con lo no verificable en su sección y el aviso de que aún no se ha sondeado nada), `GateTray` (compuertas con su doble control: cuántas aprobaciones hay, de quién y que falta otra persona distinta), `LiveProgress` (progreso del workflow cada 5 s mientras corre, con los sistemas en pausa por cortacircuitos y su motivo) y `CampaignDetail` (descarga del expediente con el token en memoria cuando la campaña está sellada).
 - `src/views/findings/`: `FindingsBoard` (peor primero en el orden que da la API, con filtros de severidad y estado que viven en la dirección y sobreviven a una recarga o a un enlace compartido), `FindingDetail` (el porqué completo —criterio, valor observado, declaración muestral, enlace al asiento del diario de la consulta y la obligación con su artículo—, solo las transiciones que trae `allowed_transitions`, la reejecución cuando el hallazgo espera verificación y su historia) y `AcceptRiskModal` (justificación de al menos 20 caracteres y caducidad obligatorias, con el aviso de que queda en el diario y en el expediente). No hay botón de cerrar: cerrar es lo que hace la reejecución si el reto pasa.
 - `src/views/evidence/`: `EvidenceChain` (cada eslabón con su estado real: artefactos, raíz, firma —la de desarrollo dice que no vale fuera de las pruebas—, sello —en cola se dice en cola— y diario anclado; aquí nunca hay dorado), `ArtifactBrowser` (índice paginado y descarga de cada artefacto con su prueba de inclusión), `EvidenceDownloads` (expediente en JSON y PDF y paquete de verificación para un tercero), `IssueCredential` (tabla de cada campo que viaja con su valor, lista de lo que se queda en el expediente, confirmación explícita del revisor y relectura de la vista previa si el expediente cambió; solo una credencial acreditada lleva `credential-seal`) y `JournalEntry` (el asiento `#journal-<seq>` al que enlaza un hallazgo, con su acción, instante, hash y la consulta literal).
+- `src/views/assistant/`: `AssistantView`, el chat del asistente. Cada `[n]` del texto es un botón que despliega su fuente, la herramienta de la que salió y, si es normativa, el fragmento recuperado. Bajo cada respuesta se listan las herramientas consultadas. Un rehúso se presenta como tal, con los fragmentos más cercanos, y una respuesta cortada por el presupuesto se marca como incompleta. El pie recuerda siempre que las respuestas no son veredictos de conformidad. Sin modelo local (`503`) o con el cupo agotado (`429`), el chat lo dice y sigue usable. La conversación vive solo en la pantalla: nada se guarda en el navegador.
 - `src/api/schema.d.ts`: tipos **generados** del contrato `services/api/openapi.json` (`openapi-typescript`); un cambio en la API rompe la compilación de la consola.
 
 ### Sistema de diseño (ARG-080)
@@ -82,6 +83,7 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 - `src/views/campaigns/campaigns.test.tsx`: plan agrupado con las preguntas literales y lo no verificable aparte, `409` explicado, compuerta con doble control y aprobación, progreso con pausas y su motivo, y expediente descargable solo al sellar.
 - `src/views/findings/findings.test.tsx`: orden de la API, filtros enviados y conservados en la dirección, porqué completo con el enlace al diario, transiciones exactamente las servidas, ausencia de cierre manual, reejecución como única salida de «pendiente de verificación», historia del reabierto y modal que exige justificación y caducidad.
 - `src/views/evidence/evidence.test.tsx`: sello en cola y firma de desarrollo dichos tal cual, eslabones que faltan, sello concedido con su política, paginación y descarga con prueba de inclusión, tres descargas, vista previa de lo que viaja y lo que no, confirmación obligatoria, `409` que obliga a revisar de nuevo, dorado solo en la credencial acreditada y asiento del diario citado o rechazado.
+- `src/views/assistant/assistant.test.tsx`: pregunta enviada, citas desplegables con fragmento y origen, herramientas visibles, rehúso con fragmentos cercanos, respuesta incompleta, aviso permanente en el pie y mensajes distintos sin modelo y sin cupo.
 - `tests/contract/test_api_session.py` (lado de la API): el código se convierte en token de acceso y en una cookie que la página no puede leer.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -99,3 +101,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | 0.3.0-alpha | 2026-09-21 | Vista de campañas: plan previo literal, bandeja de compuertas con doble control, progreso con pausas y expediente | F08-12 |
 | 0.4.0-alpha | 2026-09-22 | Vista de hallazgos: tablero con filtros persistentes, detalle con el porqué completo y transiciones servidas por la API, reejecución, historia y modal de aceptación de riesgo; token `--overlay` | F08-13 |
 | 0.5.0-alpha | 2026-09-22 | Vista de evidencia y credenciales: cadena con su estado real, artefactos con prueba de inclusión, descargas, emisión con vista previa y confirmación, y asiento del diario enlazado desde un hallazgo; `.actions` pasa a `app.css` | F08-14 |
+| 0.6.0-alpha | 2026-09-22 | El chat del asistente: citas desplegables, herramientas visibles, rehúso con fragmentos cercanos, aviso permanente y avisos sin modelo o sin cupo | F08-15 |

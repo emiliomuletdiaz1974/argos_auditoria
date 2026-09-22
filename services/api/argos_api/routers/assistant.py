@@ -43,6 +43,8 @@ async def ask(request: Request, body: Question) -> dict[str, Any]:
         "sources": answer.get("sources", []),
         "calls": answer.get("calls", []),
         "complete": bool(answer.get("complete", False)),
+        "fragments": answer.get("fragments", []),
+        "refused": bool(answer.get("refused", False)),
         "assisted": True,
         "notice": NOTICE,
     }
