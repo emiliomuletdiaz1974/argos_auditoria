@@ -1,8 +1,11 @@
 // ARG-073 · the shell of the console: a session, a navigation and room for the views to come.
 import { useEffect, useMemo, useState } from "react";
 
+import { createApiFetch } from "./api/client";
+import { ApiProvider } from "./api/context";
 import { Session } from "./auth/session";
 import { CALLBACK_PATH, oidcConfig } from "./config";
+import { InventoryView } from "./views/inventory/InventoryView";
 
 const SECTIONS = [
   { path: "/inventory", label: "Inventario" },
@@ -19,6 +22,7 @@ export function App() {
     () => new Session(oidcConfig(), { fetch, navigate: (url) => window.location.assign(url) }),
     [],
   );
+  const api = useMemo(() => createApiFetch(session), [session]);
   const [status, setStatus] = useState<Status>("starting");
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -62,18 +66,29 @@ export function App() {
           <a
             key={section.path}
             href={section.path}
-            aria-current={window.location.pathname === section.path ? "page" : undefined}
+            aria-current={window.location.pathname.startsWith(section.path) ? "page" : undefined}
           >
             {section.label}
           </a>
         ))}
       </nav>
       <main className="shell-main">
-        <div className="panel">
-          <h1>Consola de ARGOS</h1>
-          <p className="muted">Las vistas llegan con las tareas F08-11 a F08-15.</p>
-        </div>
+        <ApiProvider api={api}>
+          <Section path={window.location.pathname} />
+        </ApiProvider>
       </main>
+    </div>
+  );
+}
+
+function Section({ path }: { path: string }) {
+  if (path.startsWith("/inventory")) {
+    return <InventoryView path={path} />;
+  }
+  return (
+    <div className="panel">
+      <h1>Consola de ARGOS</h1>
+      <p className="muted">Elige una sección. Las que faltan llegan con las tareas F08-12 a F08-15.</p>
     </div>
   );
 }

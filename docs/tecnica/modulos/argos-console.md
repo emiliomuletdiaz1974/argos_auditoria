@@ -4,8 +4,8 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.1.0-alpha
-commit: 60960dd
+version: 0.2.0-alpha
+commit: pendiente
 date: 2026-09-21
 status: current
 confidentiality: client
@@ -20,7 +20,8 @@ Es la interfaz con la que el DPO, el responsable de campañas y el auditor traba
 ## 2. Alcance y límites
 
 - **Hace (F08-10):** el armazón —navegación, sesión OIDC con PKCE, cliente de la API con renovación— y el sistema de diseño con sus reglas comprobadas.
-- **No hace todavía:** las vistas de inventario, campañas, hallazgos, evidencia y asistente llegan con F08-11 a F08-15; el guion completo y la accesibilidad de extremo a extremo, con F08-16; servirla desde el contenedor de la API, con F08-17.
+- **Vistas hechas:** inventario (F08-11).
+- **No hace todavía:** las vistas de campañas, hallazgos, evidencia y asistente llegan con F08-12 a F08-15; el guion completo y la accesibilidad de extremo a extremo, con F08-16; servirla desde el contenedor de la API, con F08-17.
 - **No hace nunca:** guardar un token de acceso fuera de la memoria, ni decidir nada que decida el servidor (las transiciones de un hallazgo, por ejemplo, las sirve la API).
 
 ## 3. Arquitectura
@@ -29,6 +30,8 @@ Es la interfaz con la que el DPO, el responsable de campañas y el auditor traba
 - `src/auth/pkce.ts`: verificador y reto S256 con la Web Crypto del navegador, sin librerías.
 - `src/auth/session.ts`: `Session`. Envía a la persona al Keycloak del appliance con el reto; a la vuelta entrega código y verificador a `POST /api/v1/auth/session`, que responde con el token de acceso y deja el de refresco en una cookie `HttpOnly`, `Secure`, `SameSite=Strict` limitada a `/api/v1/auth/refresh`. El token de acceso vive solo en memoria; lo único que sobrevive a la redirección es el verificador y el `state`, y se borran al volver.
 - `src/api/client.ts`: `createApiFetch`. Cada llamada lleva el token en memoria; un `401` renueva una sola vez y reintenta una sola vez. Un segundo `401` se devuelve tal cual: una sesión caducada nunca se convierte en un bucle.
+- `src/api/context.tsx`: `ApiProvider`, `useResource` (SWR sobre la API v1) y `send` (mutaciones que devuelven el problema RFC 9457 como error legible).
+- `src/views/inventory/`: `InventoryMap` (tarjeta por sistema con la cobertura como número grande, categoría especial en ámbar y nunca en dorado, nodos desaparecidos y pendientes), `NodeExplorer` (procedencia —conector, primera y última vez visto—, vecindario navegable y línea temporal de deltas) y `ReviewQueue` (confirmar, corregir a otra categoría o rechazar, en línea).
 - `src/api/schema.d.ts`: tipos **generados** del contrato `services/api/openapi.json` (`openapi-typescript`); un cambio en la API rompe la compilación de la consola.
 
 ### Sistema de diseño (ARG-080)
@@ -72,6 +75,7 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 - `src/auth/session.test.ts`: redirección con reto S256 y sin el verificador, token solo en memoria, `state` ajeno rechazado, renovación y su fallo.
 - `src/api/client.test.ts`: el token viaja; un `401` renueva y reintenta una vez; sin bucles.
 - `src/styles/design.test.ts`: el uso indebido del dorado **plantado** falla, el dorado permitido pasa, ningún componente declara un color, la paleta es la de la marca y todos sus pares de texto llegan a AA.
+- `src/views/inventory/inventory.test.tsx`: la cobertura es el número grande y lo especial va en ámbar (nunca en dorado); el nodo trae procedencia, vecindario enlazado y línea temporal; `404` explicado; la cola confirma y corrige enviando lo que espera la API; todas las acciones son botones reales alcanzables con el teclado.
 - `tests/contract/test_api_session.py` (lado de la API): el código se convierte en token de acceso y en una cookie que la página no puede leer.
 
 ## 9. Limitaciones conocidas y pendientes
@@ -85,3 +89,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-21 | Esqueleto de la consola: sesión OIDC con PKCE, cliente con renovación, sistema de diseño con la regla del dorado y tipos generados del contrato | F08-10 |
+| 0.2.0-alpha | 2026-09-21 | Vista de inventario: mapa, explorador de nodos y cola de revisión con corrección | F08-11 |

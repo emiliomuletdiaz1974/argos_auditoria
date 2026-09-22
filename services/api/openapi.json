@@ -223,11 +223,24 @@
       "ReviewDecision": {
         "description": "What a DPO reviewer decides about a column the classifier could not settle.",
         "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "only when correcting",
+            "title": "Category"
+          },
           "decision": {
-            "description": "accept confirms the proposed category; reject leaves the column unclassified",
+            "description": "accept confirms the proposed category; reject leaves the column unclassified; correct rejects the proposal and classifies the column as `category`",
             "enum": [
               "accept",
-              "reject"
+              "reject",
+              "correct"
             ],
             "title": "Decision",
             "type": "string"

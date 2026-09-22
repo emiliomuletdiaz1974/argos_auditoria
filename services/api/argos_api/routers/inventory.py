@@ -5,10 +5,10 @@ edge in the graph, the entry in the journal and the label the calibration of ARG
 one call, and the three places that have to know about it.
 """
 
-from typing import Any, Literal
+from typing import Any, Literal, Self
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
@@ -17,8 +17,10 @@ from argos_api.paging import Page, Paging, paginate
 from argos_inventory.catalog.views import coverage as catalog_coverage
 from argos_inventory.catalog.views import freshness, pending_review_by_system
 from argos_inventory.classify.assisted import decide_review, pending_reviews
+from argos_inventory.graph.model import CATEGORIES
 from argos_inventory.graph.reads import node_detail
 from argos_inventory.graph.store import GraphStore
+from argos_inventory.versioning.deltas import node_deltas
 
 router = APIRouter(prefix="/inventory", tags=["inventory"], route_class=CoreRoute)
 MAX_NEIGHBOURS = 200
@@ -28,10 +30,20 @@ ALREADY_DECIDED = "already decided"
 class ReviewDecision(BaseModel):
     """What a DPO reviewer decides about a column the classifier could not settle."""
 
-    decision: Literal["accept", "reject"] = Field(
-        description="accept confirms the proposed category; reject leaves the column unclassified"
+    decision: Literal["accept", "reject", "correct"] = Field(
+        description=(
+            "accept confirms the proposed category; reject leaves the column unclassified; "
+            "correct rejects the proposal and classifies the column as `category`"
+        )
     )
+    category: str | None = Field(default=None, description="only when correcting")
     note: str = ""
+
+    @model_validator(mode="after")
+    def _a_correction_names_a_category(self) -> Self:
+        if self.decision == "correct" and self.category not in CATEGORIES:
+            raise ValueError(f"a correction needs a category: one of {list(CATEGORIES)}")
+        return self
 
 
 @router.get(
@@ -77,10 +89,11 @@ def node(
     node_key: str,
     limit: int = Query(50, ge=1, le=MAX_NEIGHBOURS, description="neighbours to return"),
 ) -> dict[str, Any]:
-    detail = node_detail(GraphStore(database(request)), node_key, limit)
+    dsn = database(request)
+    detail = node_detail(GraphStore(dsn), node_key, limit)
     if detail is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"no node with key {node_key}")
-    return detail
+    return {**detail, "deltas": node_deltas(dsn, node_key)}
 
 
 @router.get(
@@ -102,7 +115,12 @@ def review(request: Request, node_key: str, body: ReviewDecision) -> dict[str, A
     dsn = database(request)
     try:
         decided = decide_review(
-            GraphStore(dsn), dsn, node_key, body.decision == "accept", caller(request).actor
+            GraphStore(dsn),
+            dsn,
+            node_key,
+            body.decision == "accept",
+            caller(request).actor,
+            corrected_to=body.category if body.decision == "correct" else None,
         )
     except LookupError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"no review for {node_key}") from None
@@ -110,7 +128,10 @@ def review(request: Request, node_key: str, body: ReviewDecision) -> dict[str, A
         if ALREADY_DECIDED in str(clash):
             raise HTTPException(status.HTTP_409_CONFLICT, str(clash)) from None
         raise
-    return {"node_key": node_key, "status": decided}
+    answer: dict[str, Any] = {"node_key": node_key, "status": decided}
+    if body.decision == "correct":
+        answer["corrected_to"] = body.category
+    return answer
 
 
 def _plain(value: Any) -> Any:

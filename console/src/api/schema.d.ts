@@ -697,11 +697,16 @@ export interface components {
          */
         ReviewDecision: {
             /**
+             * Category
+             * @description only when correcting
+             */
+            category?: string | null;
+            /**
              * Decision
-             * @description accept confirms the proposed category; reject leaves the column unclassified
+             * @description accept confirms the proposed category; reject leaves the column unclassified; correct rejects the proposal and classifies the column as `category`
              * @enum {string}
              */
-            decision: "accept" | "reject";
+            decision: "accept" | "reject" | "correct";
             /**
              * Note
              * @default

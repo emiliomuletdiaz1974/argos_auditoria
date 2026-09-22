@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.10.0-alpha
-commit: 60960dd
+version: 0.11.0-alpha
+commit: pendiente
 date: 2026-09-20
 status: current
 confidentiality: client
@@ -135,3 +135,4 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 | 0.8.0-alpha | 2026-09-21 | Asistente por HTTP al gateway de IA, marcado como texto asistido y `503` honesto sin modelo | F08-08 |
 | 0.9.0-alpha | 2026-09-21 | Webhooks firmados hacia el ITSM: suscripciones con secreto en Vault, plantillas como configuración, reintentos en Temporal y bandeja de entregas | F08-09 |
 | 0.10.0-alpha | 2026-09-21 | `POST /auth/session` para abrir la sesión de la consola con PKCE; el refresco queda en la cookie | F08-10 |
+| 0.11.0-alpha | 2026-09-21 | La cola de revisión admite `correct` con `category` (rechaza la propuesta y clasifica la columna); el detalle de nodo trae `deltas` | F08-11 |

@@ -238,3 +238,60 @@ def test_reading_the_inventory_leaves_no_journal_entry(
     with psycopg.connect(migrated_db) as conn:
         after = conn.execute("SELECT count(*) FROM argos.audit_journal").fetchone()
     assert before == after
+
+
+def test_correcting_a_column_teaches_the_calibration_and_writes_the_right_category(
+    inventory: tuple[str, str], migrated_db: str
+) -> None:
+    _, node_key = inventory
+    answer = _client(migrated_db, "dpo_reviewer").post(
+        f"{API_PREFIX}/inventory/review-queue/{node_key}",
+        json={"decision": "correct", "category": "special_category.other"},
+        headers=BEARER,
+    )
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["status"] == "rejected", "the model was wrong: that is the label"
+    assert answer.json()["corrected_to"] == "special_category.other"
+
+    edges = GraphStore(migrated_db).query(
+        "MATCH (c:Column {key: $key})-[r:CLASSIFIED_AS]->(k:Category) RETURN k.name, r.method",
+        {"key": node_key},
+        ("category", "method"),
+    )
+    assert {"category": "special_category.other", "method": "human"} in edges
+    decided = [d for d in load_decisions(migrated_db) if d.category == "special_category.health"]
+    assert decided and not decided[-1].right
+
+
+def test_a_correction_needs_a_known_category(inventory: tuple[str, str], migrated_db: str) -> None:
+    _, node_key = inventory
+    client = _client(migrated_db, "dpo_reviewer")
+    path = f"{API_PREFIX}/inventory/review-queue/{node_key}"
+    assert client.post(path, json={"decision": "correct"}, headers=BEARER).status_code == 422
+    unknown = client.post(path, json={"decision": "correct", "category": "made_up"}, headers=BEARER)
+    assert unknown.status_code == 422
+
+
+def test_a_node_carries_its_timeline_of_deltas(
+    inventory: tuple[str, str], migrated_db: str
+) -> None:
+    system_id, node_key = inventory
+    with psycopg.connect(migrated_db) as conn:
+        run = conn.execute(
+            "INSERT INTO argos.scan_runs (id, system_id, status, started_at, finished_at)"
+            " VALUES (gen_random_uuid(), %s, 'completed', now(), now()) RETURNING id",
+            (system_id,),
+        ).fetchone()
+        assert run is not None
+        conn.execute(
+            "INSERT INTO argos.inventory_deltas (run_id, kind, node_label, node_key)"
+            " VALUES (%s, 'appeared', 'Column', %s)",
+            (run[0], node_key),
+        )
+    body = (
+        _client(migrated_db, "read_only_auditor")
+        .get(f"{API_PREFIX}/inventory/nodes/{node_key}", headers=BEARER)
+        .json()
+    )
+    assert [delta["kind"] for delta in body["deltas"]] == ["appeared"]
+    assert body["deltas"][0]["at"]

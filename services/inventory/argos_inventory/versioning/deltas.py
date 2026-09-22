@@ -161,3 +161,17 @@ def compute_deltas(
     ready = {"system_id": system_id, "run_id": run_id, "counts": counts}
     asyncio.run(bus.publish("argos.discovery.delta_ready", "discovery.delta_ready.v1", ready))
     return report
+
+
+def node_deltas(dsn: str, node_key: str, limit: int = 50) -> list[dict[str, Any]]:
+    """What happened to a node, newest first: when it appeared, disappeared or grew too fast."""
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(
+            "SELECT d.kind, d.detail, d.created_at, d.run_id::text FROM argos.inventory_deltas d"
+            " WHERE d.node_key = %s ORDER BY d.created_at DESC, d.id DESC LIMIT %s",
+            (node_key, limit),
+        ).fetchall()
+    return [
+        {"kind": row[0], "detail": row[1], "at": row[2].isoformat(), "run_id": row[3]}
+        for row in rows
+    ]

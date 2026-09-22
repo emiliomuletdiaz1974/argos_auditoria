@@ -67,6 +67,24 @@ a {
   background: var(--accent-strong);
 }
 
+.btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background: var(--panel-2);
+}
+
+button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
 .chip {
   display: inline-block;
   border-radius: 999px;

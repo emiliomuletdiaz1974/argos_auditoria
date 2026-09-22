@@ -244,9 +244,19 @@ def decide_review(
     accepted: bool,
     reviewer: str,
     now: Callable[[], datetime] = _utc_now,
+    corrected_to: str | None = None,
 ) -> str:
+    """Accept or reject what the model proposed; rejecting may also say what the column is.
+
+    A correction is a rejection for the calibration —the model was wrong, and that is the label it
+    learns from— and a human classification with the category the person chose.
+    """
     if not reviewer.startswith("user:"):
         raise ValueError("reviews are decided by a person: reviewer must be a user:<sub> actor")
+    if corrected_to is not None and (accepted or corrected_to not in CATEGORIES):
+        raise ValueError(
+            f"a correction rejects the proposal and names a known category: {corrected_to!r}"
+        )
     moment = now().astimezone(UTC)
     journal = PostgresJournal(dsn)
     with store.connection() as conn:
@@ -258,15 +268,17 @@ def decide_review(
             raise ValueError(f"review already decided: {current}")
         status = "accepted" if accepted else "rejected"
         conn.execute(_REVIEW_DECIDE, (status, moment, reviewer, node_key))
-        if accepted:
+        if accepted or corrected_to is not None:
             params = {
                 "key": node_key,
-                "category": category,
+                "category": category if accepted else corrected_to,
                 "reviewer": reviewer,
                 "at": moment.isoformat(),
             }
             store.execute(_HUMAN_EDGE, params, conn)
         payload = {"node_key": node_key, "category": category, "status": status}
+        if corrected_to is not None:
+            payload["corrected_to"] = corrected_to
         journal.append(reviewer, "inventory.review", payload, conn=conn)
     return status
 

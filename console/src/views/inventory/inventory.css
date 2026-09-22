@@ -1,0 +1,46 @@
+/* ARG-074 · the inventory view. Colours only through the tokens; special data in amber, never gold. */
+.inventory-map {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.coverage-figure {
+  font-size: 40px;
+  font-weight: 700;
+  margin: 8px 0;
+}
+
+.system-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.review-row {
+  border-top: 1px solid var(--line);
+  padding: 12px 0;
+}
+
+.review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.review-actions select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 6px;
+}
+
+.neighbours,
+.timeline {
+  padding-left: 20px;
+}
