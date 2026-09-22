@@ -1,0 +1,96 @@
+/* ARG-080 · the shell of the console. Colours only through the tokens. */
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+}
+
+a {
+  color: var(--accent-hi);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-hi);
+  outline-offset: 2px;
+}
+
+.shell {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 100vh;
+}
+
+.shell-nav {
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 20px 12px;
+}
+
+.shell-nav a {
+  display: block;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.shell-nav a[aria-current="page"] {
+  background: var(--panel-2);
+}
+
+.shell-main {
+  padding: 24px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 0;
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: var(--accent-strong);
+}
+
+.chip {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.chip-critical {
+  background: var(--sev-critical);
+  color: var(--on-accent);
+}
+
+.chip-high {
+  background: var(--sev-high);
+  color: var(--on-light);
+}
+
+.chip-medium {
+  background: var(--sev-medium);
+  color: var(--on-light);
+}
+
+.chip-low {
+  border: 1px solid var(--sev-low);
+}

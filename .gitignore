@@ -19,3 +19,6 @@ deploy/dev/sources/ldap/
 # Weights of the local model (F06-05): content downloaded by a person, never versioned.
 deploy/dev/models/*
 !deploy/dev/models/HASHES.txt
+
+# Console (ADR-0013): dependencies installed with npm ci, never versioned
+node_modules/

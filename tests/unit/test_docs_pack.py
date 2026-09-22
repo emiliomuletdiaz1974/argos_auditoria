@@ -186,3 +186,11 @@ def test_the_check_command_exit_code_follows_coverage(tmp_path: Path) -> None:
     assert docs_pack.main(["--root", str(root), "--check"]) == 0
     (root / "docs" / "tecnica" / "modulos" / "argos-common.md").unlink()
     assert docs_pack.main(["--root", str(root), "--check"]) == 1
+
+
+def test_the_console_is_a_module_too_and_needs_its_document(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    (root / "console").mkdir()
+    (root / "console" / "package.json").write_text('{"name": "argos-console"}', encoding="utf-8")
+    assert "argos-console" in docs_pack.workspace_modules(root)
+    assert "module argos-console has no module document" in docs_pack.coverage_errors(root)

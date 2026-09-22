@@ -23,7 +23,8 @@ REPO = Path(__file__).resolve().parents[2]
 EXPECTED: dict[str, dict[str, bool]] = yaml.safe_load(
     (REPO / "tests" / "fixtures" / "authz_matrix.yaml").read_text(encoding="utf-8")
 )
-OPEN_ROUTES = {("POST", "/api/v1/auth/refresh")}
+# Open by design (ADR-0013): there is no access token yet when a session opens or refreshes.
+OPEN_ROUTES = {("POST", "/api/v1/auth/refresh"), ("POST", "/api/v1/auth/session")}
 READING = ".read"
 BEARER = {"Authorization": "Bearer a-token"}
 

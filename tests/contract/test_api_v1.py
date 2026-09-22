@@ -127,7 +127,11 @@ def test_every_creating_post_accepts_an_idempotency_key(path: str) -> None:
 
 
 def test_every_route_but_health_and_refresh_answers_401_as_problem_json() -> None:
-    open_routes = {("get", "/health"), ("post", "/api/v1/auth/refresh")}
+    open_routes = {
+        ("get", "/health"),
+        ("post", "/api/v1/auth/refresh"),
+        ("post", "/api/v1/auth/session"),
+    }
     for (method, path), operation in _operations(_generated()).items():
         if (method, path) in open_routes:
             continue

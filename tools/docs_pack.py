@@ -74,12 +74,20 @@ def load_docs(root: Path = ROOT) -> list[TechnicalDoc]:
     return [parse_doc(path) for path in paths]
 
 
+NPM_MODULES = ("console",)
+
+
 def workspace_modules(root: Path = ROOT) -> list[str]:
+    """The modules of the product: every uv workspace member and the console (npm, ADR-0013)."""
     workspace = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
     names = []
     for member in workspace["tool"]["uv"]["workspace"]["members"]:
         project = tomllib.loads((root / member / "pyproject.toml").read_text(encoding="utf-8"))
         names.append(str(project["project"]["name"]))
+    for folder in NPM_MODULES:
+        package = root / folder / "package.json"
+        if package.is_file():
+            names.append(str(json.loads(package.read_text(encoding="utf-8"))["name"]))
     return sorted(names)
 
 

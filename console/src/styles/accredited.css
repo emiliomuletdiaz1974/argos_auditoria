@@ -1,0 +1,17 @@
+/*
+ * ARG-080 · the only place where gold may shine: the accredited verdict and the credential.
+ * When something glows gold in ARGOS, it is accredited. Nothing else may use --gold.
+ */
+.chip-verdict {
+  background: var(--gold);
+  color: var(--on-light);
+  font-weight: 600;
+}
+
+.credential-seal {
+  font-family: var(--font-seal);
+  border: 2px solid var(--gold);
+  color: var(--gold);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+}

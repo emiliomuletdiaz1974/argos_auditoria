@@ -5,7 +5,7 @@ COMPOSE := docker compose -f deploy/dev/compose.yaml --profile sources
 COMPOSE_HEAVY := docker compose -f deploy/dev/compose.yaml --profile sources --profile heavy
 VERSION := $(strip $(file < VERSION))
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write ai-eval ai-eval-release demo demo-reset
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -23,6 +23,11 @@ help:
 	@echo "make challenge-lint   the challenge library against its schema and rules"
 	@echo "make challenge-catalog  the generated challenge catalog is up to date"
 	@echo "make api-contract   the versioned v1 contract matches the application"
+	@echo "make console-install  install the console dependencies from package-lock.json (npm ci)"
+	@echo "make console-lint   strict TypeScript and the colour rules of the console"
+	@echo "make console-test   the console tests (Vitest)"
+	@echo "make console-types  the console types match the v1 contract"
+	@echo "make console-build  build the console into console/dist"
 	@echo "make ai-eval       golden sets of the AI layer with the oracle (also inside make check)"
 	@echo "make ai-eval-release  golden sets against the served model: release gate (needs weights)"
 	@echo "make demo         MVP demonstration end to end, outputs in .scratch/demo (needs make dev)"
@@ -65,7 +70,7 @@ secrets:
 test:
 	uv run pytest -m "not integration"
 
-check: lint typecheck secrets docs-check api-contract
+check: lint typecheck secrets docs-check api-contract console-lint console-test console-types
 	uv run pytest -m "not heavy"
 
 check-heavy:
@@ -105,6 +110,23 @@ api-contract:
 
 api-contract-write:
 	uv run python tools/api_contract.py
+
+# The console (ADR-0013): npm with its lock file, never a CDN.
+console-install:
+	npm --prefix console ci --no-fund --no-audit
+
+console-lint:
+	npm --prefix console run typecheck
+	npm --prefix console run lint:css
+
+console-test:
+	npm --prefix console run test
+
+console-types:
+	npm --prefix console run api:check
+
+console-build:
+	npm --prefix console run build
 
 ai-eval:
 	uv run pytest -m integration tests/integration/test_ai_goldens.py

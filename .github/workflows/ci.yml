@@ -24,6 +24,13 @@ jobs:
       - run: make challenge-catalog
       - run: make api-contract
       - run: make docs-check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+      - run: make console-install
+      - run: make console-lint console-test console-types
 
   integration:
     needs: verify

@@ -1,0 +1,39 @@
+/*
+ * ARG-080 · the only file of the console that declares a colour.
+ *
+ * Institutional dark skin, teal for action, the severity scale and the golden rule: gold shines
+ * only on the accredited verdict and the credential. Components use these tokens and nothing else;
+ * stylelint rejects a raw colour anywhere but here, and gold anywhere but accredited.css.
+ * Contrast of every text pair is checked against WCAG AA in src/styles/design.test.ts.
+ */
+:root {
+  /* skin */
+  --bg: #0A1830;
+  --panel: #0E1F3D;
+  --panel-2: #16294D;
+  --line: #24365C;
+  --text: #E8ECF4;
+  --text-muted: #9AA7BF;
+
+  /* action */
+  --accent: #1F7A7A;
+  --accent-hi: #2E9C9C; /* focus ring and links on the dark skin */
+  --accent-strong: #186363; /* pressed or hovered button: white text keeps AA */
+
+  /* text on coloured surfaces */
+  --on-accent: #FFFFFF;
+  --on-light: #1C1C1C;
+
+  /* severities */
+  --sev-critical: #8C2F39;
+  --sev-high: #C97B27;
+  --sev-medium: #C9B27F;
+  --sev-low: #6C7A93;
+
+  /* the golden rule: only the accredited verdict and the credential */
+  --gold: #C9A227;
+
+  --radius: 10px;
+  --font: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-seal: Georgia, "Times New Roman", serif; /* seals and credentials only */
+}

@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.9.0-alpha
-commit: fc4ff01
+version: 0.10.0-alpha
+commit: pendiente
 date: 2026-09-20
 status: current
 confidentiality: client
@@ -46,7 +46,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Autorización | Denegación por defecto: `require_perm("recurso.acción")` en cada ruta contra `permissions.yaml` |
 | Idempotencia real | `argos.api_idempotency` guarda la respuesta por (actor, clave); repetirla la devuelve sin volver a ejecutar, y la misma clave con otro cuerpo es `409` |
 | Auditoría (P-19) | Toda mutación con respuesta correcta deja un asiento `api.mutation` en el diario con actor, método, ruta y estado |
-| Sesión | El token de refresco vive en una cookie `HttpOnly`, `Secure`, `SameSite=Strict` y `Path=/api/v1/auth/refresh`; la respuesta solo devuelve el de acceso |
+| Sesión | `POST /auth/session` abre la sesión de la consola desde el código y el verificador PKCE (`create_app(code_exchanger=...)`); `POST /auth/refresh` la renueva. El token de refresco vive en una cookie `HttpOnly`, `Secure`, `SameSite=Strict` y `Path=/api/v1/auth/refresh`; la respuesta solo devuelve el de acceso |
 
 ## 4. Interfaces
 
@@ -134,3 +134,4 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 | 0.7.0-alpha | 2026-09-21 | Evidencia y credenciales: cadena real, prueba de inclusión, descargas auditadas, vista previa y emisión por el DPO | F08-07 |
 | 0.8.0-alpha | 2026-09-21 | Asistente por HTTP al gateway de IA, marcado como texto asistido y `503` honesto sin modelo | F08-08 |
 | 0.9.0-alpha | 2026-09-21 | Webhooks firmados hacia el ITSM: suscripciones con secreto en Vault, plantillas como configuración, reintentos en Temporal y bandeja de entregas | F08-09 |
+| 0.10.0-alpha | 2026-09-21 | `POST /auth/session` para abrir la sesión de la consola con PKCE; el refresco queda en la cookie | F08-10 |

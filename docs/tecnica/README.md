@@ -24,6 +24,7 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 |---|---|---|
 | `argos-api` | [argos-api.md](modulos/argos-api.md) | 08 (en construcción) |
 | `argos-auth` | [argos-auth.md](modulos/argos-auth.md) | 01 |
+| `argos-console` | [argos-console.md](modulos/argos-console.md) | 08 (en construcción) |
 | `argos-ai-gateway` | [argos-ai-gateway.md](modulos/argos-ai-gateway.md) | 06 (en construcción) |
 | `argos-challenge-engine` | [argos-challenge-engine.md](modulos/argos-challenge-engine.md) | 01 (base; completo en 05) |
 | `argos-common` | [argos-common.md](modulos/argos-common.md) | 01, 03 |
