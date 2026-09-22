@@ -1,0 +1,44 @@
+/* ARG-075 · the campaigns view. Colours only through the tokens. */
+.campaign-detail > .panel {
+  margin-bottom: 16px;
+}
+
+.plan-group {
+  border-top: 1px solid var(--line);
+  padding: 8px 0;
+}
+
+.plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.plan-table th,
+.plan-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.plan-unverifiable {
+  border-left: 3px solid var(--sev-high);
+  padding-left: 12px;
+  margin-top: 16px;
+}
+
+.gate-list,
+.campaign-list {
+  list-style: none;
+  padding: 0;
+}
+
+.gate {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+progress {
+  width: 100%;
+  accent-color: var(--accent);
+}

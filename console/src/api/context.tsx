@@ -55,3 +55,21 @@ export async function send<T>(api: ApiFetch, path: string, body: unknown): Promi
   }
   return (await answer.json()) as T;
 }
+
+/**
+ * Download a file of the v1 with the token in memory. A plain link cannot carry the token, so the
+ * file is fetched and handed to the browser as a local object URL.
+ */
+export async function download(api: ApiFetch, path: string, filename: string): Promise<void> {
+  const answer = await api(path);
+  if (!answer.ok) {
+    const problem = (await answer.json().catch(() => ({}))) as { detail?: string };
+    throw new ApiError(answer.status, problem.detail ?? `error ${answer.status}`);
+  }
+  const url = URL.createObjectURL(await answer.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}

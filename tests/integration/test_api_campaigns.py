@@ -307,3 +307,21 @@ def test_with_real_tokens_the_journal_says_who_approved(migrated_db: str, runner
     grants = [e for e in PostgresJournal(migrated_db).read(1) if e.action == "approval.grant"]
     assert grants and grants[-1].actor.startswith("user:")
     assert campaign_id in grants[-1].payload_canon
+
+
+def test_the_tray_says_who_has_approved_so_far(api: TestClient, migrated_db: str) -> None:
+    campaign_id = _plan(api, "Campaña con bandeja")
+    _prepare(migrated_db, campaign_id)
+    request_approval(migrated_db, campaign_id, "sampling", {"units": 1})
+    api.post(
+        f"{API_PREFIX}/campaigns/{campaign_id}/gates/sampling/approve",
+        json={},
+        headers=_as("dpo_reviewer", "ana"),
+    )
+    gates = api.get(f"{API_PREFIX}/campaigns/{campaign_id}/gates", headers=_as("dpo_reviewer"))
+    sampling = next(g for g in gates.json()["items"] if g["gate"] == "sampling")
+    assert (sampling["approved_by"], sampling["approvals"], sampling["needed"]) == (
+        ["user:ana"],
+        1,
+        2,
+    )

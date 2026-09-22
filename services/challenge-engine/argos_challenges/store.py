@@ -298,7 +298,9 @@ _CAMPAIGNS = (
     " ORDER BY created_at DESC, id DESC LIMIT %(limit)s"
 )
 _GATES = (
-    "SELECT r.gate, r.payload, r.requested_at, count(a.approved_by) FROM argos.approval_requests r"
+    "SELECT r.gate, r.payload, r.requested_at, count(a.approved_by),"
+    " coalesce(array_agg(a.approved_by ORDER BY a.approved_at) FILTER"
+    " (WHERE a.approved_by IS NOT NULL), '{}') FROM argos.approval_requests r"
     " LEFT JOIN argos.approvals a ON a.campaign_id = r.campaign_id AND a.gate = r.gate"
     " WHERE r.campaign_id = %s GROUP BY r.gate, r.payload, r.requested_at ORDER BY r.requested_at"
 )
@@ -334,6 +336,7 @@ def campaign_gates(dsn: str, campaign_id: str) -> list[dict[str, Any]]:
             "payload": row[1],
             "requested_at": row[2].isoformat(),
             "approvals": int(row[3]),
+            "approved_by": list(row[4]),
             "needed": approvals_needed(str(row[0])),
         }
         for row in rows

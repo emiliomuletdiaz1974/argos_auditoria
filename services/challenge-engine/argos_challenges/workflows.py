@@ -100,7 +100,7 @@ class CampaignWorkflow:
 
     def __init__(self) -> None:
         self._approved: set[str] = set()
-        self._paused: set[str] = set()
+        self._paused: dict[str, str] = {}  # system -> why its circuit opened
         self._progress: dict[str, Any] = {"status": "preparing", "done": 0, "findings": 0}
 
     @workflow.signal
@@ -108,16 +108,18 @@ class CampaignWorkflow:
         self._approved.add(gate)
 
     @workflow.signal
-    def circuit_open(self, system_id: str) -> None:
-        self._paused.add(system_id)
+    def circuit_open(self, system_id: str, reason: str = "") -> None:
+        # The reason is optional so a sender that only names the system keeps working.
+        self._paused[system_id] = reason
 
     @workflow.signal
     def circuit_closed(self, system_id: str) -> None:
-        self._paused.discard(system_id)
+        self._paused.pop(system_id, None)
 
     @workflow.query
     def progress(self) -> dict[str, Any]:
-        return dict(self._progress)
+        paused = [{"system_id": s, "reason": r} for s, r in sorted(self._paused.items())]
+        return {**self._progress, "paused": paused}
 
     async def _gate(self, campaign_id: str, gate: str, payload: dict[str, Any]) -> None:
         await workflow.execute_activity(

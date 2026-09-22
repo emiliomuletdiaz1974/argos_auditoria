@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: fc4ff01
+commit: pendiente
 date: 2026-09-18
 status: current
 confidentiality: client
@@ -333,3 +333,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-21 | Lectores para la API v1 en `store`: `list_campaigns`, `campaign_gates`, `campaign_plan` (unidades literales y lo no verificable, antes de sondear) y `approvals_needed`; la API de la Fase 05 lee las compuertas con la misma función | F08-05 |
 | 0.1.0-alpha | 2026-09-21 | Hallazgos: una persona ya no lleva un hallazgo a `closed_compliant` ni a `reopened` (solo la reejecución, con actor `system:`); `person_transitions`, `list_findings` (peor primero, con filtros) y `finding_detail` (veredicto y asiento de la consulta); la subsanación admite un único hallazgo (`finding_id`) | F08-06 |
 | 0.1.0-alpha | 2026-09-21 | La compuerta pendiente se anuncia en el bus (`argos.campaign.approval_requested`) una sola vez, cuando se abre; `request_approval` devuelve si la abrió | F08-09 |
+| 0.1.0-alpha | 2026-09-21 | La señal `circuit_open` admite un motivo opcional y la consulta `progress` devuelve los sistemas en pausa con él; `campaign_gates` incluye `approved_by` | F08-12 |
