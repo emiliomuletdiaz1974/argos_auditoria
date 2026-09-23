@@ -98,7 +98,7 @@ def test_a_member_of_a_service_role_works_and_is_refused_what_is_not_its(
             " AS (n agtype)"
         )
         seq = conn.execute(
-            "SELECT argos.journal_append('user:probe', 'probe.role', '{}')"
+            "SELECT argos.journal_append('system:ai-gateway', 'ai.probe', '{}')"
         ).fetchone()
         assert seq is not None
         with pytest.raises(psycopg.errors.InsufficientPrivilege):

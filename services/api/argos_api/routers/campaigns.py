@@ -31,6 +31,7 @@ from argos_challenges.store import (
     list_verdicts,
 )
 from argos_challenges.synthetic import SyntheticError, authorize_injection
+from argos_common.journal_pg import PostgresJournal
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"], route_class=CoreRoute)
 
@@ -111,8 +112,16 @@ def campaign(request: Request, campaign_id: UUID) -> dict[str, Any]:
 )
 async def launch(request: Request, campaign_id: UUID) -> dict[str, Any]:
     runner = _runner(request)
-    await asyncio.to_thread(_record, database(request), str(campaign_id))
+    dsn = database(request)
+    await asyncio.to_thread(_record, dsn, str(campaign_id))
     workflow_id = await runner.start(str(campaign_id))
+    # Who launched which campaign, and not only that a mutation happened (SEC-030).
+    await asyncio.to_thread(
+        PostgresJournal(dsn).append,
+        caller(request).actor,
+        "campaign.launch",
+        {"campaign": str(campaign_id), "workflow": workflow_id},
+    )
     return {"campaign_id": str(campaign_id), "workflow_id": workflow_id}
 
 

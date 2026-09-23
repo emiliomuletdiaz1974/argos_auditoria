@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.23.0-alpha
+version: 0.24.0-alpha
 commit: 8dcef99
 date: 2026-09-23
 status: current
@@ -44,7 +44,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Idempotencia | `Idempotency-Key` en los POST que crean (campañas, credenciales, suscripciones) |
 | Autenticación | `Bearer` del Keycloak del appliance; sin token, `401` con `WWW-Authenticate` |
 | Autorización | Denegación por defecto: `require_perm("recurso.acción")` en cada ruta contra `permissions.yaml` |
-| Idempotencia real | `argos.api_idempotency` guarda la respuesta por (actor, clave); repetirla la devuelve sin volver a ejecutar, y la misma clave con otro cuerpo es `409` |
+| Idempotencia real | `argos.api_idempotency` guarda la respuesta por (actor, clave); repetirla la devuelve sin volver a ejecutar, y la misma clave con otro cuerpo o en otra ruta es `409`. La clave se reserva antes de ejecutar, después del guardián de permisos: de dos peticiones iguales a la vez, una se ejecuta y la otra recibe `409`; si la petición falla, la clave queda libre (F09-26) |
 | Auditoría (P-19) | Toda mutación con respuesta correcta deja un asiento `api.mutation` en el diario con actor, método, ruta y estado |
 | Sesión | `POST /auth/session` abre la sesión de la consola desde el código y el verificador PKCE (`create_app(code_exchanger=...)`); `POST /auth/refresh` la renueva. El token de refresco vive en una cookie `HttpOnly`, `Secure`, `SameSite=Strict` y `Path=/api/v1/auth/refresh`; la respuesta solo devuelve el de acceso |
 
@@ -85,6 +85,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Ninguna acción humana sin asiento** (F09-26, SEC-029, SEC-030, SEC-040, SEC-044): el asiento `api.mutation` se escribe antes de guardar la respuesta idempotente; lanzar una campaña deja `campaign.launch` y emitir una credencial deja `credential.issued`, los dos con la persona y los identificadores; una respuesta guardada nunca se entrega sin pasar antes el guardián de permisos, y validar el token no bloquea el bucle de eventos.
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - **Base de datos con mínimo privilegio** (F09-04, ARG-085): la API se conecta como `login_api`, miembro del rol `svc_api`, y el worker de webhooks como `login_webhook`, miembro de `svc_webhook` (migración `0033`), y nunca como superusuario. El rol tiene solo las tablas y operaciones que usa su código; el diario se escribe únicamente con `argos.journal_append()`. Lo comprueban `tests/integration/test_service_roles.py` (la matriz `tests/fixtures/db_access_matrix.yaml` y el usuario de cada contenedor en marcha).
 - Ninguna ruta autenticada se resuelve sin un token válido con rol del realm y sin el permiso que la ruta declara.
@@ -101,7 +102,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 - **Webhooks sin destinos internos** (F09-30, SEC-031): `webhooks.destination.check_destination` exige `https`, rechaza los nombres de los servicios del appliance y `localhost`, resuelve el nombre y rechaza cualquier dirección que no sea pública (loopback, privada, link-local, reservada). Se comprueba al suscribir (422) y otra vez antes de cada entrega (queda `failed` con `destination_refused`, sin enviar nada). La excepción para el ITSM del cliente en su red privada la escribe quien instala, en `ARGOS_WEBHOOK_ALLOWED_TARGETS` (nombres o redes, separados por comas).
 - **Sesión que se cierra** (F09-30, SEC-041): `POST /auth/logout` revoca el refresco en Keycloak y borra la cookie. La cookie de refresco es de sesión (sin `Max-Age`: muere con el navegador) y su ruta es `/api/v1/auth`, para que la lean el refresco y el cierre. Un refresco que el realm rechaza responde 401 problem+json, y una respuesta del realm que no es JSON (un proxy que contesta HTML) es un rechazo, no un error 500.
 - **Cabeceras de seguridad** (F09-30, SEC-046): toda respuesta, de la consola y de la API, lleva `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff` y `Referrer-Policy: same-origin`. Solo la página de `/api/v1/docs` de desarrollo, que carga de una CDN, queda fuera.
-- **Límites de texto** (F09-30, SEC-045): `Revocation.reason` y `ReviewDecision.note` hasta 2000 caracteres, `Exercise.right` hasta 40 y la cabecera `Idempotency-Key` hasta 200.
+- **Límites de texto** (F09-30, SEC-045): `Revocation.reason` y `ReviewDecision.note` hasta 2000 caracteres, `Exercise.right` hasta 40 y la cabecera `Idempotency-Key` de 1 a 128 letras, cifras, `-` o `_` (F09-26, SEC-029: fuera de ese alfabeto, `400` sin ejecutar nada).
 - **Quién pregunta al asistente** (F09-29, SEC-043): `AssistantClient.ask(question, person)` envía al gateway el actor autenticado (`user:<sub>`), y la cuota del asistente se cuenta por persona.
 - **Fechas del cliente en el ejercicio de un derecho** (F09-27, SEC-014): `POST /synthetic/{id}/confirm-exercise` exige `requested_at` y `answered_at` con zona horaria. El plazo se mide entre ambas, nunca con la hora de la petición; unas fechas futuras o desordenadas responden 409.
 - **Roles incompatibles** (F09-24, SEC-008): `permissions.yaml` declara `_incompatible_roles` (`campaign_manager` con `dpo_reviewer`), y el guardián de permisos rechaza con 403 en toda ruta un token que los traiga juntos. `risk_expiry` fuera de rango responde 422.
@@ -163,3 +164,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.21.0-alpha | 2026-09-23 | Webhooks sin destinos internos y con clase de error, `POST /auth/logout` con cookie de sesión, cabeceras de seguridad, límites de texto y refresco rechazado como 401 | F09-30 |
 | 0.22.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 (API y worker de webhooks) | F09-03 |
 | 0.23.0-alpha | 2026-09-23 | Usuario de base `login_api` en `svc_api` (y `login_webhook` en `svc_webhook`); contraseña en fichero de secreto | F09-04 (ARG-085) |
+| 0.24.0-alpha | 2026-09-23 | Idempotencia tras el guardián, con reserva, clave acotada y huella por ruta real; asientos `campaign.launch` y `credential.issued` con la persona | F09-26 (ARG-005, ARG-071) |

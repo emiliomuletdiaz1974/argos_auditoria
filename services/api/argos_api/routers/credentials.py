@@ -71,7 +71,10 @@ async def issue(
             "the dossier changed since the preview: read the preview again before issuing",
         )
     credential_id = await asyncio.to_thread(
-        evidence.issue_credential_now, str(body.campaign_id), body.dossier_sha256
+        evidence.issue_credential_now,
+        str(body.campaign_id),
+        body.dossier_sha256,
+        caller(request).actor,
     )
     state = await asyncio.to_thread(credential_state, dsn, evidence.store, credential_id)
     if state is None:  # pragma: no cover - issue_credential_now has just stored it

@@ -4,7 +4,7 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.16.0-alpha
+version: 0.17.0-alpha
 commit: 8dcef99
 date: 2026-09-23
 status: current
@@ -81,7 +81,7 @@ Reglas del árbol:
 | Función pública | `dossier.render_pdf(dossier_json, verifier_url) -> bytes`, `dossier.qr_payload(url, sha256)` | PDF reproducible desde el JSON; rechaza un JSON cuyo hash no cuadra (`DossierError`) |
 | Función pública | `dossier.write_dossier(dsn, store, campaign_id, verifier_url, retain_until) -> DossierRecord` | Guarda JSON y PDF en `campaigns/{campaign_id}/dossier/{sha256}.json|.pdf` y los registra; el mismo estado da el mismo registro, uno nuevo (p. ej. con el sello) da otro y se conservan todos |
 | Tabla o migración | `argos.dossiers` (`0025_dossiers.sql`) | Un expediente por hash con sus claves y versiones en el WORM; escritura única |
-| Función pública | `credential.issue.issue_credential(dsn, store, signer, issuer, status_base_url, dossier_sha256, retain_until) -> CredentialRecord` | Emite una vez por expediente y guarda la credencial en `campaigns/{campaign_id}/credential/{id}.json`; diario `credential.issued` |
+| Función pública | `credential.issue.issue_credential(dsn, store, signer, issuer, status_base_url, dossier_sha256, retain_until, issued_by="system:evidence") -> CredentialRecord` | Emite una vez por expediente y guarda la credencial en `campaigns/{campaign_id}/credential/{id}.json`; diario `credential.issued` |
 | Función pública | `credential.issue.revoke_credential(dsn, credential_id, reason, revoked_by)`, `status_list_credential(...)` | Revocación con motivo (diario `credential.revoked`) y lista de estado firmada reconstruida |
 | Función pública | `credential.issue.verify_credential(credential, did_document, status_list) -> CredentialCheck` | Prueba contra el DID, método de verificación del emisor y bit de revocación; motivos explícitos (`proof`, `revoked`, `status not checked`…) |
 | Función pública | `credential.proof.add_proof`, `verify_proof`, `hash_data`, `jcs`; `credential.did.did_web`, `did_web_url`, `did_document`; `credential.status.encode_list`, `decode_list` | Suite `eddsa-jcs-2022`, `did:web` y lista de estado |
@@ -179,3 +179,4 @@ Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. La
 | 0.14.0-alpha | 2026-09-23 | Lista de estado con `validUntil` y firmada solo cuando cambia, 404 para listas inexistentes, `did:web` estricto, límites de base58 y de descompresión, `trust_anchors()` | F09-20 |
 | 0.15.0-alpha | 2026-09-23 | Contenedores con la postura restringida de ARG-084 y perfil seccomp propio | F09-03 |
 | 0.16.0-alpha | 2026-09-23 | Usuario de base `login_evidence` en `svc_evidence` para el worker y la API; contraseña en fichero de secreto | F09-04 (ARG-085) |
+| 0.17.0-alpha | 2026-09-23 | `issued_by`: la credencial emitida desde la API asienta a la persona que la emite (SEC-030) | F09-26 (ARG-005, ARG-071) |

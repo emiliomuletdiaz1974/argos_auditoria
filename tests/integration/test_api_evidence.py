@@ -289,3 +289,26 @@ def test_without_the_evidence_service_the_routes_say_so(migrated_db: str, campai
     client = TestClient(create_app(validator, dsn=migrated_db))
     answer = client.get(f"{API_PREFIX}/evidence/{campaign}/chain", headers=_as("dpo_reviewer"))
     assert answer.status_code == 503
+
+
+def test_issuing_leaves_an_entry_with_the_person_and_the_campaign(
+    api: TestClient, campaign: str, migrated_db: str, evidence: EvidenceActivities
+) -> None:
+    """SEC-030: the journal says which DPO issued which credential, not only that it happened."""
+    sha256 = _dossier(evidence, migrated_db, campaign)
+    issued = api.post(
+        f"{API_PREFIX}/credentials",
+        json={"campaign_id": campaign, "dossier_sha256": sha256},
+        headers=_as("dpo_reviewer"),
+    )
+    assert issued.status_code == 201, issued.text
+    credential_id = issued.json()["credential_id"]
+    with psycopg.connect(migrated_db) as conn:
+        rows = conn.execute(
+            "SELECT actor, payload FROM argos.audit_journal WHERE action = 'credential.issued'"
+            " AND payload->>'credential' = %s",
+            (credential_id,),
+        ).fetchall()
+    assert [(actor, payload["campaign"]) for actor, payload in rows] == [
+        ("user:dpo_reviewer", campaign)
+    ]

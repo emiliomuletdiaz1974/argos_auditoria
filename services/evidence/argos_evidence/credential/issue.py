@@ -210,8 +210,13 @@ def issue_credential(
     dossier_sha256: str,
     retain_until: dt.datetime,
     now: dt.datetime | None = None,
+    issued_by: str = ACTOR,
 ) -> CredentialRecord:
-    """Issue, once per dossier, the credential that points to it by its hash."""
+    """Issue, once per dossier, the credential that points to it by its hash.
+
+    `issued_by` is who issued it: the service when a campaign closes by itself, the person (the
+    DPO) when it is issued from the API (security review F09-02, SEC-030).
+    """
     existing = _record(dsn, "dossier_sha256", dossier_sha256)
     if existing is not None:
         return existing
@@ -269,7 +274,7 @@ def issue_credential(
             ),
         )
         PostgresJournal(dsn).append(
-            ACTOR,
+            issued_by,
             "credential.issued",
             {
                 "credential": credential_id,

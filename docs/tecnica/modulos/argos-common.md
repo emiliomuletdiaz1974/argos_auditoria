@@ -4,7 +4,7 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.4.0-alpha
+version: 0.5.0-alpha
 commit: 8dcef99
 date: 2026-09-23
 status: current
@@ -53,7 +53,7 @@ Dependencias externas: PostgreSQL 16 (esquema `argos`), HashiCorp Vault (kv-v2 y
 | Función | `apply_migrations(dsn, directory)` | Aplica migraciones `NNNN_nombre.sql` bajo bloqueo consultivo; `tools/migrate.py` |
 | Clases | `VaultSecretStore(url, token, mount)`, `EncryptedFileSecretStore`, `TpmSecretStore` | Lectura de secretos por ruta |
 | Funciones y clases | `build_manifest`, `serialize`, `VaultTransitSigner`, `verify_signature`, `key_fingerprint`, `require_trusted_key` | Manifiesto de release firmado; `tools/release.py build`, `sign` y `verify` (este exige `--fingerprint` o `ARGOS_RELEASE_KEY_FINGERPRINT`, porque la clave vive junto al manifiesto en `dist/`) |
-| Tabla | `argos.audit_journal` y función `argos.journal_append` (migración `0001_core.sql`) | Diario de auditoría |
+| Tabla | `argos.audit_journal` y función `argos.journal_append` (migración `0001_core.sql`; permisos y comprobación de forma canónica en `0034_journal_grants.sql`) | Diario de auditoría |
 
 ## 5. Configuración
 
@@ -87,6 +87,8 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
   - la secuencia se asigna bajo bloqueo para que las escrituras concurrentes no bifurquen la cadena;
   - los triggers impiden `UPDATE`, `DELETE` y `TRUNCATE`;
   - la canonicalización rechaza números en coma flotante para que el hash no dependa de su representación;
+  - **el motor comprueba la forma canónica** (F09-26, SEC-017): `journal_append` reconstruye el texto canónico desde la carga (`argos.journal_canon`) y rechaza el asiento si difiere; así una clave duplicada, un espacio o un decimal no llegan al diario;
+  - **cada rol escribe solo lo suyo** (F09-26, SEC-017): la tabla `argos.journal_grants` dice qué actores y acciones admite cada rol de servicio (el gateway de IA, solo `system:ai-gateway` con acciones `ai.*`; la evidencia no escribe en nombre de una persona). Una sesión de superusuario no se restringe porque podría escribir la tabla directamente. La fórmula del hash no cambia: el diario ya escrito verifica igual;
   - una cadena íntegra no prueba por sí sola que no se hayan eliminado los últimos asientos: eso lo cubre el anclaje del hash de cabeza en cada campaña sellada (ARG-066).
 - **Secretos:**
   - nunca se escriben en el registro;
@@ -129,3 +131,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.2.0-alpha | 2026-09-23 | `EMBEDDING_MODEL`: el nombre del modelo de embeddings que usa el asistente del gateway | F09-29 |
 | 0.3.0-alpha | 2026-09-23 | `WEBHOOK_ALLOWED_TARGETS`: la excepción de destinos privados de los webhooks | F09-30 |
 | 0.4.0-alpha | 2026-09-23 | `DATABASE_PASSWORD_FILE`: la contraseña de la base en un fichero de secreto; `DATABASE_URL` fuera del `repr` | F09-04 (ARG-085) |
+| 0.5.0-alpha | 2026-09-23 | `journal_append` exige la forma canónica y los actores y acciones de cada rol (`argos.journal_grants`) | F09-26 (ARG-005, ARG-071) |

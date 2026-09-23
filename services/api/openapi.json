@@ -981,21 +981,22 @@
         "operationId": "plan_api_v1_campaigns_post",
         "parameters": [
           {
-            "description": "key chosen by the client; repeating it returns the first result",
+            "description": "key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409",
             "in": "header",
             "name": "Idempotency-Key",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 200,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]{1,128}$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "key chosen by the client; repeating it returns the first result",
+              "description": "key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409",
               "title": "Idempotency-Key"
             }
           }
@@ -2064,21 +2065,22 @@
         "operationId": "issue_api_v1_credentials_post",
         "parameters": [
           {
-            "description": "key chosen by the client; repeating it returns the first result",
+            "description": "key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409",
             "in": "header",
             "name": "Idempotency-Key",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 200,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]{1,128}$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "key chosen by the client; repeating it returns the first result",
+              "description": "key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409",
               "title": "Idempotency-Key"
             }
           }
@@ -4687,21 +4689,22 @@
         "operationId": "subscribe_api_v1_webhooks_post",
         "parameters": [
           {
-            "description": "key chosen by the client; repeating it returns the first result",
+            "description": "key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409",
             "in": "header",
             "name": "Idempotency-Key",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 200,
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]{1,128}$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "key chosen by the client; repeating it returns the first result",
+              "description": "key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409",
               "title": "Idempotency-Key"
             }
           }

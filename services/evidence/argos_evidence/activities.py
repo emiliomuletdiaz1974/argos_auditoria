@@ -135,7 +135,9 @@ class EvidenceActivities:
         )
         return record.sha256
 
-    def issue_credential_now(self, campaign_id: str, dossier_sha256: str) -> str:
+    def issue_credential_now(
+        self, campaign_id: str, dossier_sha256: str, issued_by: str = ACTOR
+    ) -> str:
         record = issue_credential(
             self._dsn,
             self._store,
@@ -144,6 +146,7 @@ class EvidenceActivities:
             self._settings.STATUS_BASE_URL,
             dossier_sha256,
             self._until(),
+            issued_by=issued_by,
         )
         with psycopg.connect(self._dsn) as conn:
             older = conn.execute(

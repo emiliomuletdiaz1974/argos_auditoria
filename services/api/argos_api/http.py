@@ -58,8 +58,12 @@ IdempotencyKey = Annotated[
     str | None,
     Header(
         alias="Idempotency-Key",
-        description="key chosen by the client; repeating it returns the first result",
-        max_length=200,
+        description=(
+            "key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the"
+            " same request returns the first result, and with another request answers 409"
+        ),
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_-]{1,128}$",
     ),
 ]
 

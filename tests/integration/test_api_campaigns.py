@@ -454,3 +454,26 @@ def test_a_remediation_run_is_asked_for_by_the_manager(api: TestClient, runner: 
     assert started.status_code == 202, started.text
     assert started.json()["workflow_id"]
     assert runner.remediations == [{"campaign_id": campaign_id, "requested_by": "user:marta"}]
+
+
+def test_launching_leaves_an_entry_with_the_person_and_the_campaign(
+    api: TestClient, runner: Runner, migrated_db: str
+) -> None:
+    """SEC-030: who launched which campaign is in the journal, not only in Temporal."""
+    import psycopg
+
+    campaign_id = _plan(api, "Campaña con asiento de lanzamiento")
+    launched = api.post(
+        f"{API_PREFIX}/campaigns/{campaign_id}/launch",
+        headers=_as("campaign_manager", "ana"),
+    )
+    assert launched.status_code == 200
+    with psycopg.connect(migrated_db) as conn:
+        rows = conn.execute(
+            "SELECT actor, payload FROM argos.audit_journal WHERE action = 'campaign.launch'"
+            " AND payload->>'campaign' = %s",
+            (campaign_id,),
+        ).fetchall()
+    assert [(actor, payload["workflow"]) for actor, payload in rows] == [
+        ("user:ana", f"campaign-{campaign_id}")
+    ]

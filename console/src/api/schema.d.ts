@@ -1394,7 +1394,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description key chosen by the client; repeating it returns the first result */
+                /** @description key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409 */
                 "Idempotency-Key"?: string | null;
             };
             path?: never;
@@ -2191,7 +2191,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description key chosen by the client; repeating it returns the first result */
+                /** @description key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409 */
                 "Idempotency-Key"?: string | null;
             };
             path?: never;
@@ -4094,7 +4094,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description key chosen by the client; repeating it returns the first result */
+                /** @description key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409 */
                 "Idempotency-Key"?: string | null;
             };
             path?: never;
