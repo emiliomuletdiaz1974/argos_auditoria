@@ -230,6 +230,12 @@ def grant_approval(
         ).fetchone()
         if request is None:
             raise CampaignStateError(f"the gate {gate} was not requested")
+        owner = conn.execute(
+            "SELECT created_by FROM argos.campaigns WHERE id = %s", (campaign_id,)
+        ).fetchone()
+        if owner is not None and owner[0] == approver:
+            # Whatever roles the realm gave them, nobody approves what they asked for (SEC-008).
+            raise CampaignStateError(f"{approver} created the campaign and does not approve it")
         already = conn.execute(
             "SELECT 1 FROM argos.approvals "
             "WHERE campaign_id = %s AND gate = %s AND approved_by = %s",

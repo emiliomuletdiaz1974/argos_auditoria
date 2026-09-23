@@ -101,16 +101,26 @@ def test_accepting_a_risk_is_documented_and_expires(migrated_db: str) -> None:
     finding = _finding(migrated_db, campaign_id)
     with pytest.raises(FindingError, match="justification"):
         transition(migrated_db, finding["id"], "risk_accepted", DPO)
-    yesterday = date.today() - timedelta(days=1)
+    with pytest.raises(FindingError, match="future"):
+        transition(
+            migrated_db,
+            finding["id"],
+            "risk_accepted",
+            DPO,
+            note="Migración del sistema prevista para el trimestre siguiente.",
+            risk_expiry=date.today() - timedelta(days=1),
+        )
+    expiry = date.today() + timedelta(days=30)
     transition(
         migrated_db,
         finding["id"],
         "risk_accepted",
         DPO,
         note="Migración del sistema prevista para el trimestre siguiente.",
-        risk_expiry=yesterday,
+        risk_expiry=expiry,
     )
-    assert expire_risk_acceptances(migrated_db) == [finding["id"]]
+    assert expire_risk_acceptances(migrated_db, today=expiry) == []
+    assert expire_risk_acceptances(migrated_db, today=expiry + timedelta(days=1)) == [finding["id"]]
     with psycopg.connect(migrated_db) as conn:
         row = conn.execute(
             "SELECT status FROM argos.findings WHERE id = %s", (finding["id"],)

@@ -15,6 +15,12 @@
 # The double control of the sampling gate (two different people) is the one of ARG-047 and lives in
 # the campaign engine, not here.
 
+# Roles no single person may hold together, whatever the realm assigns: a token that carries both is
+# refused on every route (security review F09-02, SEC-008). The engine also refuses that whoever
+# created a campaign approves it, and that whoever authorised an injection confirms it.
+_incompatible_roles:
+  - [campaign_manager, dpo_reviewer]
+
 systems.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
 
 inventory.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]

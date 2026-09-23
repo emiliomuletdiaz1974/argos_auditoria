@@ -256,12 +256,15 @@ def _confirm(
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:
         row = conn.execute(
-            f"SELECT injected_confirmed_by, {done} "  # noqa: S608 - literal of this module
+            f"SELECT injected_confirmed_by, {done}, authorized_by "  # noqa: S608 - literal
             "FROM argos.synthetic_injections WHERE id = %s FOR UPDATE",
             (injection_id,),
         ).fetchone()
         if row is None:
             raise SyntheticError(f"unknown synthetic injection: {injection_id}")
+        if row[2] == actor:
+            # The DPO who authorised and the client who confirms are two people (SEC-008).
+            raise SyntheticError(f"{actor} authorised this injection and does not confirm it")
         if needs_injection and row[0] is None:
             raise SyntheticError("the subject is not injected yet: confirm the injection first")
         if row[1] is not None and (repeated is None or row[1] == repeated):

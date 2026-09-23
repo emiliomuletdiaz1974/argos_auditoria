@@ -123,3 +123,20 @@ def test_accepting_a_risk_asks_for_a_reason() -> None:
     )
     assert response.status_code == 422
     assert "note" in response.json()["detail"]
+
+
+class TwoRolesValidator:
+    """A person the realm gave two roles that must never meet in one pair of hands."""
+
+    def validate(self, token: str) -> Identity:
+        roles = frozenset({"campaign_manager", "dpo_reviewer"})
+        return Identity(sub="both", name="Both", roles=roles)
+
+
+def test_a_token_with_incompatible_roles_is_refused_everywhere() -> None:
+    """SEC-008: planning and approving are never one person, whatever the realm says."""
+    client = TestClient(create_app(cast(JwtValidator, TwoRolesValidator())))
+    for path in ("/api/v1/campaigns", "/api/v1/findings"):
+        response = client.get(path, headers=BEARER)
+        assert response.status_code == 403, path
+        assert "incompatible" in response.json()["detail"]

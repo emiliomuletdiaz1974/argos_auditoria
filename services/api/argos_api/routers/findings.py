@@ -24,6 +24,7 @@ from argos_challenges.findings import (
     STATUSES,
     VERIFICATION_ONLY,
     FindingError,
+    check_risk_expiry,
     finding_detail,
     list_findings,
     transition,
@@ -49,6 +50,11 @@ class Transition(BaseModel):
             raise ValueError("accepting a risk needs a note saying why")
         if self.to == RISK_ACCEPTED and self.risk_expiry is None:
             raise ValueError("accepting a risk needs an expiry date")
+        if self.to == RISK_ACCEPTED and self.risk_expiry is not None:
+            try:
+                check_risk_expiry(self.risk_expiry)
+            except FindingError as refused:
+                raise ValueError(f"risk_expiry: {refused}") from None
         return self
 
 

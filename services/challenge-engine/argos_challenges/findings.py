@@ -165,6 +165,20 @@ async def announce(bus: Any, finding: Mapping[str, Any], campaign_id: str) -> No
     )
 
 
+# A risk is accepted for a while, never for ever: the finding comes back when it expires (SEC-042).
+RISK_ACCEPTANCE_MAX_DAYS = 365
+
+
+def check_risk_expiry(expiry: date, today: date | None = None) -> None:
+    today = today or date.today()
+    if expiry <= today:
+        raise FindingError("a risk is accepted until a future date")
+    if (expiry - today).days > RISK_ACCEPTANCE_MAX_DAYS:
+        raise FindingError(
+            f"a risk is accepted for {RISK_ACCEPTANCE_MAX_DAYS} days at most, then reviewed again"
+        )
+
+
 def check_request(to: str, actor: str, note: str = "", risk_expiry: date | None = None) -> None:
     """The rules of a transition that do not depend on the current status."""
     if to not in STATUSES:
@@ -180,6 +194,8 @@ def check_request(to: str, actor: str, note: str = "", risk_expiry: date | None 
         raise FindingError(f"only {REMEDIATION_ACTOR} closes a finding as compliant")
     if to == "risk_accepted" and (not note.strip() or risk_expiry is None):
         raise FindingError("accepting a risk needs a justification and an expiry date")
+    if to == "risk_accepted" and risk_expiry is not None:
+        check_risk_expiry(risk_expiry)
 
 
 def transition(

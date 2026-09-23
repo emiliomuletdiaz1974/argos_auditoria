@@ -15,14 +15,22 @@ PROBLEM = "application/problem+json"
 UNREACHABLE = "postgresql://argos@127.0.0.1:1/argos?connect_timeout=1"
 
 
-class EveryRole:
+class Holding:
+    """A person with the given roles; never planning and approving at once (F09-24)."""
+
+    def __init__(self, roles: frozenset[str]) -> None:
+        self._roles = roles
+
     def validate(self, token: str) -> Identity:
-        roles = {"platform_admin", "campaign_manager", "dpo_reviewer", "read_only_auditor"}
-        return Identity(sub="someone", name="Someone", roles=frozenset(roles))
+        return Identity(sub="someone", name="Someone", roles=self._roles)
 
 
-def _client(**kwargs: Any) -> TestClient:
-    return TestClient(create_app(cast(JwtValidator, EveryRole()), **kwargs))
+REVIEWER = frozenset({"platform_admin", "dpo_reviewer", "read_only_auditor"})
+MANAGER = frozenset({"campaign_manager"})
+
+
+def _client(roles: frozenset[str] = REVIEWER, **kwargs: Any) -> TestClient:
+    return TestClient(create_app(cast(JwtValidator, Holding(roles)), **kwargs))
 
 
 def test_the_route_map_is_not_published_unless_asked() -> None:
@@ -47,7 +55,7 @@ def test_a_store_that_does_not_answer_is_a_503_without_its_message() -> None:
 
 def test_a_scope_of_megabytes_is_refused() -> None:
     scope = {"systems": ["x" * 100] * 200}
-    response = _client().post(
+    response = _client(MANAGER).post(
         "/api/v1/campaigns", json={"name": "Grande", "scope": scope}, headers=BEARER
     )
     assert response.status_code == 422
@@ -111,3 +119,22 @@ def test_the_authorisation_is_bound_to_the_campaign_of_the_route(
         headers=BEARER,
     )
     assert seen.get("campaign_id") == campaign_id, response.text
+
+
+@pytest.mark.parametrize("days", [-1, 0, 400, 5 * 365])
+def test_a_risk_is_accepted_for_a_future_bounded_time(days: int) -> None:
+    """SEC-042: no acceptance in the past, and none for ever (12 months at most by default)."""
+    from datetime import date, timedelta
+
+    expiry = (date.today() + timedelta(days=days)).isoformat()
+    response = _client().post(
+        f"/api/v1/findings/{uuid4()}/transition",
+        json={
+            "to": "risk_accepted",
+            "note": "Riesgo asumido por la dirección",
+            "risk_expiry": expiry,
+        },
+        headers=BEARER,
+    )
+    assert response.status_code == 422, days
+    assert "risk_expiry" in response.json()["detail"]

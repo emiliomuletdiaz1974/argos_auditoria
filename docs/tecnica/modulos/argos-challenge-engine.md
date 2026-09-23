@@ -4,7 +4,7 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.2.0-alpha
+version: 0.3.0-alpha
 commit: 4d9b209
 date: 2026-09-23
 status: current
@@ -223,6 +223,7 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
   - **Entrada de OPA:** el `input_map` no puede declarar la evidencia (`EVIDENCE_INPUT_KEYS`) y sus referencias se resuelven. El veredicto OPA guarda el SHA-256 de lo que vio OPA. Un fallo de OPA se reintenta.
   - **Sello v2 (`argos/seal/2`):** cubre también el plan y las aprobaciones, solo se sella una campaña en curso y es válido solo si es el único anclaje. Los disparadores de `0031_campaign_integrity.sql` impiden cambiar el sello o añadir veredictos a una campaña sellada.
   - **Subsanación:** `RemediationRun` exige quién la pide y pasa por las compuertas de su campaña de subsanación, que consulta cada `GATE_POLL`.
+- **Separación de deberes por persona** (F09-24; SEC-008 y SEC-042): `grant_approval` rechaza que apruebe quien creó la campaña (en una subsanación, quien la pidió), y las confirmaciones del sujeto sintético rechazan a quien autorizó el punto. Aceptar un riesgo exige una fecha futura a 365 días como mucho (`RISK_ACCEPTANCE_MAX_DAYS`).
 
 ## 7. Operación
 
@@ -354,3 +355,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-22 | Retirada de `argos_challenges.api`: las rutas son las de la API única. Nuevos `store.list_verdicts` y `store.running_campaigns`, y el puente `bridge.on_circuit_open`, que convierte el cortacircuitos del conector en la pausa de la campaña | F08-17 |
 | 0.1.0-alpha | 2026-09-22 | La pausa de un sistema caduca: el workflow espera `circuit_closed` como mucho `PAUSE_MAX` (300 s, el enfriamiento del conector). Nadie envía hoy esa señal —el conector solo anuncia la apertura—, y sin cota una campaña se quedaba esperando para siempre | F08-17 |
 | 0.2.0-alpha | 2026-09-23 | Veredictos solo del plan en campañas en curso, doble control derivado del muestreo, evidencia de OPA no declarable, sello v2 con plan y aprobaciones y disparadores, subsanación con compuertas y fallos de OPA reintentables | F09-23 |
+| 0.3.0-alpha | 2026-09-23 | Nadie aprueba ni confirma lo que pidió; riesgo aceptado con fecha futura y tope | F09-24 |

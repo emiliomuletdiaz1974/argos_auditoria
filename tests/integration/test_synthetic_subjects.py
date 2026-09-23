@@ -187,3 +187,10 @@ def test_the_client_script_leaves_the_subject_planted_in_the_replica() -> None:
     finally:
         script.revert(subject)
     assert _in_billing(subject.national_id) == 0
+
+
+def test_whoever_authorised_the_injection_does_not_confirm_it(migrated_db: str) -> None:
+    """SEC-008: the DPO who authorises and the client who confirms are never the same person."""
+    _, injection_id = _authorised(migrated_db)
+    with pytest.raises(SyntheticError, match="authorised"):
+        confirm_injection(migrated_db, injection_id, REVIEWER)

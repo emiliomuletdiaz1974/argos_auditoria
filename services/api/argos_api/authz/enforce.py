@@ -22,13 +22,34 @@ class AuthzError(Exception):
     """The matrix cannot be trusted: the API must not start."""
 
 
-def load_matrix(path: Path = MATRIX_FILE) -> dict[str, frozenset[str]]:
+INCOMPATIBLE_KEY = "_incompatible_roles"
+
+
+def _raw(path: Path) -> dict[str, Any]:
     raw: Any = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(raw, dict) or not raw:
         raise AuthzError(f"{path} does not hold a permission matrix")
+    return raw
 
+
+def load_incompatible(path: Path = MATRIX_FILE) -> tuple[frozenset[str], ...]:
+    """Pairs (or sets) of roles that one person may not hold together."""
+    groups = _raw(path).get(INCOMPATIBLE_KEY) or []
+    parsed = []
+    for group in groups:
+        roles = frozenset(str(r) for r in group)
+        if len(roles) < 2 or not roles <= set(ROLES):
+            raise AuthzError(f"{INCOMPATIBLE_KEY} names an invalid group: {group}")
+        parsed.append(roles)
+    return tuple(parsed)
+
+
+def load_matrix(path: Path = MATRIX_FILE) -> dict[str, frozenset[str]]:
+    raw = _raw(path)
     matrix: dict[str, frozenset[str]] = {}
     for permission, roles in raw.items():
+        if str(permission).startswith("_"):
+            continue  # a declaration about the matrix, not a permission
         if not isinstance(roles, list) or not roles:
             raise AuthzError(f"{permission} grants nothing: remove it or give it a role")
         unknown = sorted(set(roles) - set(ROLES))
@@ -39,6 +60,7 @@ def load_matrix(path: Path = MATRIX_FILE) -> dict[str, frozenset[str]]:
 
 
 PERMISSIONS: dict[str, frozenset[str]] = load_matrix()
+INCOMPATIBLE: tuple[frozenset[str], ...] = load_incompatible()
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +71,11 @@ class PermissionGuard:
     roles: frozenset[str]
 
     def __call__(self, request: Request, identity: CurrentIdentity) -> Identity:
+        if any(group <= identity.roles for group in INCOMPATIBLE):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "this identity holds incompatible roles: planning and approving are two people",
+            )
         if not identity.roles & self.roles:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, f"the permission {self.permission} is not yours"
