@@ -82,6 +82,7 @@ IN_FORCE = date(2024, 8, 1)
 MANAGER = "user:campaign-manager"
 DPO = "user:dpo"
 CLIENT = "user:client-dba"
+PREPARE_WAIT_SECONDS = 600
 SECOND_DPO = "user:dpo-2"
 SEED = "demo-campaign"
 STAR_CHALLENGE = "dsr-erasure-effective"
@@ -253,10 +254,16 @@ async def _campaign(dsn: str, campaign_id: str, subject: Any) -> dict[str, Any]:
         handle = await client.start_workflow(
             CampaignWorkflow.run, campaign_id, id=f"campaign-{campaign_id}", task_queue=queue
         )
-        for _ in range(120):
+        # Preparing takes the snapshot and checks the signed content: on a loaded machine it can
+        # take minutes, and approving a gate nobody asked for yet is refused.
+        for _ in range(PREPARE_WAIT_SECONDS):
             if (await handle.query(CampaignWorkflow.progress)).get("status") == "awaiting:start":
                 break
             await asyncio.sleep(1)
+        else:
+            raise RuntimeError(
+                f"the campaign did not ask for its start in {PREPARE_WAIT_SECONDS} s"
+            )
         # A person approves, and the approval is recorded with their name before the signal.
         grant_approval(dsn, campaign_id, "start", DPO)
         await handle.signal(CampaignWorkflow.approve, "start")

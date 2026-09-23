@@ -251,7 +251,7 @@ async def _approve_sampling_if_asked(dsn: str, campaign_id: str, handle: Any) ->
         await asyncio.sleep(1)
 
 
-async def _wait_for(handle: Any, state: str, tries: int = 120) -> None:
+async def _wait_for(handle: Any, state: str, tries: int = 600) -> None:
     for _ in range(tries):
         progress = await handle.query(CampaignWorkflow.progress)
         if progress.get("status") == state:
