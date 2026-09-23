@@ -1,6 +1,6 @@
 # Revisión de seguridad de las Fases 01 a 08
 
-**Versión:** 1.12 · **Fecha:** 2026-09-23 · **Base:** `main` en `47711f5` (con la auditoría del 2026-09-18 integrada) · **Confidencialidad:** `client`
+**Versión:** 1.13 · **Fecha:** 2026-09-23 · **Base:** `main` en `47711f5` (con la auditoría del 2026-09-18 integrada) · **Confidencialidad:** `client`
 **Tarea:** F09-02 · **Referencia:** [modelo de amenazas](modelo-amenazas.md)
 
 Tratamos nuestros hallazgos como los de un cliente: cada uno queda **registrado** aquí, se **corrige** en una tarea con un test que lo reproduce primero, y la corrección queda **evidenciada** en el commit y en este registro.
@@ -95,7 +95,7 @@ Tratamos nuestros hallazgos como los de un cliente: cada uno queda **registrado*
 
 - **El asistente no está conectado en el contenedor:** `argos_ai/api/main.py:22` crea la aplicación sin herramientas, así que `/v1/assistant/ask` responde siempre 503. Se corrige en F09-29.
 - **`/auth/refresh` responde 500 ante un refresco rechazado** (`routers/session.py:81`), y `keycloak.py:32` también da 500 si Keycloak devuelve un error que no es JSON. Se corrige en F09-30.
-- **Carrera en la idempotencia:** dos peticiones concurrentes con la misma clave ejecutan las dos. Se corrige en F09-26, junto con SEC-040.
+- **Carrera en la idempotencia:** dos peticiones concurrentes con la misma clave ejecutaban las dos. Corregida en F09-26, junto con SEC-040: la clave se reserva antes de ejecutar.
 
 ## 4. Lo revisado sin hallazgos
 
@@ -132,6 +132,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | SEC-031, SEC-041, SEC-045, SEC-046 | Corregido | F09-30 | `9b6d580` | 2026-09-23 |
 | SEC-022, SEC-024, SEC-027, SEC-028, SEC-054, SEC-055 | Corregido (SEC-027: TLS verificado solo con ODBC 18, pendiente la decisión sobre su licencia) | F09-31 | `e3f540f` | 2026-09-23 |
 | SEC-051 | Corregido | F09-04 | `8dcef99` | 2026-09-23 |
+| SEC-017, SEC-029, SEC-030, SEC-040, SEC-044 | Corregido | F09-26 | `f920e7f` | 2026-09-23 |
 
 ## 7. Historial
 
@@ -150,3 +151,4 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | 1.10 | 2026-09-23 | Corregidos SEC-031, 041, 045 y 046 (F09-30) |
 | 1.11 | 2026-09-23 | Corregidos SEC-022, 024, 027, 028, 054 y 055 (F09-31) |
 | 1.12 | 2026-09-23 | Corregido SEC-051 (F09-04) |
+| 1.13 | 2026-09-23 | Corregidos SEC-017, 029, 030, 040 y 044 (F09-26) |
