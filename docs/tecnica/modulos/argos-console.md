@@ -4,8 +4,8 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.7.0-alpha
-commit: 59c563a
+version: 0.8.0-alpha
+commit: pendiente
 date: 2026-09-22
 status: current
 confidentiality: client
@@ -107,3 +107,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | 0.5.0-alpha | 2026-09-22 | Vista de evidencia y credenciales: cadena con su estado real, artefactos con prueba de inclusión, descargas, emisión con vista previa y confirmación, y asiento del diario enlazado desde un hallazgo; `.actions` pasa a `app.css` | F08-14 |
 | 0.6.0-alpha | 2026-09-22 | El chat del asistente: citas desplegables, herramientas visibles, rehúso con fragmentos cercanos, aviso permanente y avisos sin modelo o sin cupo | F08-15 |
 | 0.7.0-alpha | 2026-09-22 | Guion completo con Playwright y pruebas de foco visible; arreglado el `fetch` sin enlazar que impedía iniciar sesión en un navegador real; el aviso de la reejecución sobrevive al cierre del hallazgo | F08-16 |
+| 0.8.0-alpha | 2026-09-22 | La consola se construye dentro de la imagen de la API y se sirve desde su mismo origen; el realm acepta la vuelta a `http://127.0.0.1:8000/callback` | F08-17 |

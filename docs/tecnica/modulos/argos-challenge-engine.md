@@ -5,7 +5,7 @@ title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
 version: 0.1.0-alpha
-commit: 78266aa
+commit: pendiente
 date: 2026-09-18
 status: current
 confidentiality: client
@@ -150,7 +150,7 @@ El reparto del pliego es taxativo: **ARGOS ejecuta y evidencia, el cliente aprue
 - **Hallazgos:** `POST /findings/{id}/transition`, con la máquina de estados; una transición ilegal responde 409.
 - **Lectura:** estado de la campaña con `seal_verified` recalculado, veredictos y hallazgos.
 - Cada acción entra en el diario con el usuario que la hizo.
-- Proceso de desarrollo: `python -m argos_challenges.api.main` en `127.0.0.1:8003`.
+- Desde F08-17 estas rutas son las de la API única (`argos_api`, `127.0.0.1:8000`): este módulo ya no expone HTTP.
 
 ### Reejecución de subsanación (ARG-049)
 
@@ -179,7 +179,8 @@ El cierre de un hallazgo no lo declara el cliente: lo confirma **el mismo reto q
 | Tabla | `argos.findings` (migración `0014`) | Hallazgos con huella única, contador, severidad y caducidad del riesgo aceptado |
 | Funciones | `open_or_recur`, `transition`, `expire_risk_acceptances`, `fingerprint`, `escalate`, `announce`; `FindingError`, `STATUSES`, `TRANSITIONS` | Ciclo de vida de los hallazgos |
 | Asientos y evento | `finding.open`, `finding.recur`, `finding.transition`; `challenge.finding_opened.v1` en `argos.challenge.finding_opened` | Trazabilidad y aviso de hallazgos |
-| API | `argos_challenges.api.app.create_app(dsn, validator, start_campaign, signal_campaign)`; `DEV_PORT = 8003`, `DOUBLE_CONTROL_GATES = {"sampling"}`; proceso `python -m argos_challenges.api.main` | API de campañas |
+| Lecturas | `store.list_campaigns`, `store.list_verdicts`, `store.campaign_gates`, `store.campaign_plan`, `store.running_campaigns`; `DOUBLE_CONTROL_GATES = {"sampling"}` | Lo que sirve la API única |
+| Puente | `bridge.on_circuit_open(running, signal)`, `bridge.SUBJECT`/`DURABLE`/`SIGNAL` | El cortacircuitos del conector pausa la campaña |
 | Rutas | `POST /campaigns`, `POST /campaigns/{id}/launch`, `GET /campaigns/{id}`, `/verdicts`, `/findings`, `/gates`, `POST /campaigns/{id}/gates/{gate}/approve`, `POST /campaigns/{id}/synthetic/authorize`, `POST /synthetic/{id}/confirm-injection\|confirm-exercise\|confirm-revert`, `POST /findings/{id}/transition` | Puntos de control humanos |
 | Workflows | `RemediationRun` (actividades `start_remediation` y `transition_finding`); ruta `POST /remediation` | Verificación de subsanaciones |
 | Workflows | `CampaignWorkflow` (señales `approve`, `circuit_open`, `circuit_closed`; consulta `progress`) y `SystemRun` | Orquestación de la campaña |
@@ -218,8 +219,8 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
 ## 7. Operación
 
 - Temporal en desarrollo en `127.0.0.1:7233`.
-- Una sola imagen, `argos-challenge-engine`, con dos puntos de entrada: `python -m argos_challenges.worker` (cola `argos-campaigns`) y `python -m argos_challenges.api.main` (API en el puerto 8003).
-- `make dev` levanta los servicios `challenge-worker` y `challenge-api` de `deploy/dev/compose.yaml`; la API publica `127.0.0.1:8003` y tiene healthcheck sobre `/health`.
+- Una sola imagen, `argos-challenge-engine`, con un punto de entrada: `python -m argos_challenges.worker` (cola `argos-campaigns`). El worker también escucha `argos.campaign.circuit_open` y lo traduce en la señal `circuit_open` de cada campaña en marcha.
+- `make dev` levanta el servicio `challenge-worker` de `deploy/dev/compose.yaml`; las rutas las sirve el servicio `api`.
 - `make build` construye la imagen etiquetada con `org.argos.component=ARG-043` y `org.argos.version`; el CI genera su SBOM junto al de `argos-example`.
 - Fuera del contenedor, ambos procesos se arrancan igual con `uv run python -m …`.
 
@@ -335,3 +336,5 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-21 | La compuerta pendiente se anuncia en el bus (`argos.campaign.approval_requested`) una sola vez, cuando se abre; `request_approval` devuelve si la abrió | F08-09 |
 | 0.1.0-alpha | 2026-09-21 | La señal `circuit_open` admite un motivo opcional y la consulta `progress` devuelve los sistemas en pausa con él; `campaign_gates` incluye `approved_by` | F08-12 |
 | 0.1.0-alpha | 2026-09-22 | `finding_detail` trae `history` (los asientos `finding.open`, `finding.recur` y `finding.transition` del hallazgo, en orden) y lee la declaración muestral de donde la deja el evaluador (`verdict.detail.sampling`); antes salía siempre vacía | F08-13 |
+| 0.1.0-alpha | 2026-09-22 | Retirada de `argos_challenges.api`: las rutas son las de la API única. Nuevos `store.list_verdicts` y `store.running_campaigns`, y el puente `bridge.on_circuit_open`, que convierte el cortacircuitos del conector en la pausa de la campaña | F08-17 |
+| 0.1.0-alpha | 2026-09-22 | La pausa de un sistema caduca: el workflow espera `circuit_closed` como mucho `PAUSE_MAX` (300 s, el enfriamiento del conector). Nadie envía hoy esa señal —el conector solo anuncia la apertura—, y sin cota una campaña se quedaba esperando para siempre | F08-17 |

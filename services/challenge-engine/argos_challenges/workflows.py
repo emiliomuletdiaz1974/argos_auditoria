@@ -6,6 +6,7 @@ breaker, and it ends by sealing what it measured. Everything it does goes throug
 workflow itself only decides and waits.
 """
 
+import contextlib
 from datetime import timedelta
 from typing import Any
 
@@ -53,6 +54,10 @@ class SmokeCampaign:
 
 CAMPAIGN_TIMEOUT = timedelta(minutes=30)
 GATE_TIMEOUT = timedelta(hours=72)
+# What the connector waits before trying a source whose circuit it opened (ARG-013): the campaign
+# waits the same, so a pause nobody closes does not become an eternal one.
+PAUSE_MAX_SECONDS = 300.0
+PAUSE_MAX = timedelta(seconds=PAUSE_MAX_SECONDS)
 PROBE_TIMEOUT = timedelta(minutes=30)
 START_GATE = "start"
 SAMPLING_GATE = "sampling"
@@ -134,8 +139,16 @@ class CampaignWorkflow:
     async def _run_system(
         self, campaign_id: str, system_id: str, units: list[dict[str, Any]]
     ) -> dict[str, Any]:
-        # A paused system does not spin: it waits until its circuit closes again.
-        await workflow.wait_condition(lambda: system_id not in self._paused)
+        # A paused system does not spin: it waits until its circuit closes again, and no longer
+        # than the cooldown the connector itself uses to try the source again. Nobody sends
+        # `circuit_closed` today —the connector only announces the opening—, so a pause without
+        # an end would hold the campaign for ever.
+        if system_id in self._paused:
+            with contextlib.suppress(TimeoutError):
+                await workflow.wait_condition(
+                    lambda: system_id not in self._paused, timeout=PAUSE_MAX
+                )
+            self._paused.pop(system_id, None)
         result: dict[str, Any] = await workflow.execute_child_workflow(
             SystemRun.run,
             args=[campaign_id, system_id, units],

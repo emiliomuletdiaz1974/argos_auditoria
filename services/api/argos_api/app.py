@@ -6,6 +6,7 @@ versioned in `services/api/openapi.json`; `tools/api_contract.py --check` fails 
 """
 
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, FastAPI, Request, status
@@ -27,6 +28,7 @@ from argos_api.routers import (
     findings,
     inventory,
     session,
+    synthetic,
     systems,
     webhooks,
 )
@@ -49,6 +51,7 @@ AUTHENTICATED = (
     assistant.router,
     approvals.router,
     webhooks.router,
+    synthetic.router,
 )
 DESCRIPTION = (
     "Campaigns, inventory, findings and evidence of the ARGOS appliance. "
@@ -84,6 +87,7 @@ def create_app(
     assistant: AssistantClient | None = None,
     webhook_secrets: SecretWriter | None = None,
     code_exchanger: CodeExchanger | None = None,
+    console: Path | None = None,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
     still answer, and the tests that do not touch the database do not need one."""
@@ -152,7 +156,32 @@ def create_app(
         return app.openapi_schema
 
     app.openapi = contract  # type: ignore[method-assign]
+    if console is not None and (console / "index.html").is_file():
+        _serve_console(app, console)
     return app
+
+
+def _serve_console(app: FastAPI, built: Path) -> None:
+    """The console as static files of this same origin (ADR-0013): no CDN, no second server.
+
+    Its routes live in the browser, so any path that is not the API answers the single page and a
+    reload of `/findings/<id>` works. Under the API prefix nothing is rewritten: an unknown route
+    there is a problem+json, as every other error of the v1.
+    """
+    from fastapi.responses import FileResponse
+    from fastapi.staticfiles import StaticFiles
+
+    page = built / "index.html"
+    app.mount("/assets", StaticFiles(directory=built / "assets"), name="console-assets")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def console_page(path: str) -> FileResponse:
+        if f"/{path}".startswith(API_PREFIX):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"no route /{path}")
+        asked = (built / path).resolve()
+        if path and asked.is_file() and asked.is_relative_to(built.resolve()):
+            return FileResponse(asked)
+        return FileResponse(page)
 
 
 def _graph_router(dsn: str) -> APIRouter:

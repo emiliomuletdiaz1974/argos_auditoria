@@ -10,7 +10,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
@@ -27,7 +27,9 @@ from argos_challenges.store import (
     create_campaign,
     grant_approval,
     list_campaigns,
+    list_verdicts,
 )
+from argos_challenges.synthetic import SyntheticError, authorize_injection
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"], route_class=CoreRoute)
 
@@ -168,3 +170,69 @@ async def approve(
         "needed": needed,
         "state": "approved" if enough else "awaiting_second_approval",
     }
+
+
+class Injection(BaseModel):
+    """One injection point of the synthetic subject, as the DPO authorises it (ADR-0008)."""
+
+    subject_id: UUID = Field(description="a subject already generated and recorded")
+    system_id: UUID
+    point: str = Field(min_length=1)
+    method: str = Field(min_length=1)
+    revert_procedure: str = Field(min_length=1, description="how the client undoes it")
+
+    @field_validator("revert_procedure")
+    @classmethod
+    def _undoing_it_is_written_down(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("an injection is authorised only with its revert procedure")
+        return value
+
+
+@router.get(
+    "/{campaign_id}/verdicts",
+    summary="Verdicts of the campaign, as they were written",
+    dependencies=[Depends(require_perm("campaigns.read"))],
+)
+def verdicts(request: Request, campaign_id: UUID, paging: Paging) -> Page:
+    dsn = database(request)
+    _record(dsn, str(campaign_id))
+    rows = list_verdicts(dsn, str(campaign_id), paging.limit + 1, paging.position)
+    return paginate(rows, paging.limit)
+
+
+@router.post(
+    "/{campaign_id}/synthetic/authorize",
+    status_code=status.HTTP_201_CREATED,
+    summary="Authorise one injection point of the synthetic subject",
+    dependencies=[Depends(require_perm("synthetic.authorize"))],
+)
+def authorize(request: Request, campaign_id: UUID, body: Injection) -> dict[str, str]:
+    dsn = database(request)
+    _record(dsn, str(campaign_id))
+    try:
+        injection_id = authorize_injection(
+            dsn,
+            str(body.subject_id),
+            str(body.system_id),
+            body.point,
+            body.method,
+            body.revert_procedure,
+            caller(request).actor,
+        )
+    except SyntheticError as refused:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(refused)) from None
+    return {"injection_id": injection_id, "campaign_id": str(campaign_id)}
+
+
+@router.post(
+    "/{campaign_id}/remediation",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Re-run what a campaign found, to verify the remediation",
+    dependencies=[Depends(require_perm("campaigns.remediate"))],
+)
+async def remediation(request: Request, campaign_id: UUID) -> dict[str, str]:
+    runner = _runner(request)
+    await asyncio.to_thread(_record, database(request), str(campaign_id))
+    scope = {"campaign_id": str(campaign_id), "requested_by": caller(request).actor}
+    return {"workflow_id": await runner.remediate(scope)}

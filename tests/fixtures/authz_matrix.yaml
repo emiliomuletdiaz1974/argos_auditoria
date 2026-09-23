@@ -5,9 +5,11 @@
 #
 # The rules behind it:
 #   - `read_only_auditor` reads and nothing else.
-#   - `campaign_manager` plans, launches and asks for the remediation check; it does not approve.
+#   - `campaign_manager` plans, launches and asks for the remediation check; it does not approve,
+#     and of the synthetic subject it only confirms what the client really did (ADR-0008).
 #   - `dpo_reviewer` approves the gates, decides on a column under review, moves a finding and
-#     issues the credential of a campaign, after reading its preview (F08-07).
+#     issues the credential of a campaign, after reading its preview (F08-07); it is also the one
+#     who authorises an injection point of the synthetic subject, never the one who confirms it.
 #   - `platform_admin` operates the platform (integrations, revocation) and is the only one who
 #     sees or touches the webhooks towards the ITSM (F08-09); it neither approves a gate
 #     nor judges a finding, so nobody can both run a campaign and bless its result.
@@ -20,6 +22,9 @@ platform_admin:
   campaigns.create: false
   campaigns.launch: false
   campaigns.approve: false
+  campaigns.remediate: false
+  synthetic.authorize: false
+  synthetic.confirm: false
   approvals.read: false
   findings.read: true
   findings.transition: false
@@ -40,6 +45,9 @@ campaign_manager:
   campaigns.create: true
   campaigns.launch: true
   campaigns.approve: false
+  campaigns.remediate: true
+  synthetic.authorize: false
+  synthetic.confirm: true
   approvals.read: true
   findings.read: true
   findings.transition: false
@@ -60,6 +68,9 @@ dpo_reviewer:
   campaigns.create: false
   campaigns.launch: false
   campaigns.approve: true
+  campaigns.remediate: false
+  synthetic.authorize: true
+  synthetic.confirm: false
   approvals.read: true
   findings.read: true
   findings.transition: true
@@ -80,6 +91,9 @@ read_only_auditor:
   campaigns.create: false
   campaigns.launch: false
   campaigns.approve: false
+  campaigns.remediate: false
+  synthetic.authorize: false
+  synthetic.confirm: false
   approvals.read: false
   findings.read: true
   findings.transition: false

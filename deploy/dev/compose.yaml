@@ -161,13 +161,41 @@ services:
       opa:
         condition: service_started
 
-  challenge-api:
-    build: *challenge_engine_build
-    image: argos-challenge-engine:dev
-    command: ["/app/.venv/bin/python", "-m", "argos_challenges.api.main"]
-    environment:
-      <<: *challenge_engine_env
+  # ── The single API (ADR-0012) with the console inside (ADR-0013). The campaign API of Phase 05
+  # is gone: its routes live under /api/v1. It is the only service that reaches the AI gateway. ──
+  api:
+    build: &api_build
+      context: ../..
+      dockerfile: services/api/Dockerfile
+    image: argos-api:dev
+    command: ["/app/.venv/bin/python", "-m", "argos_api.main"]
+    environment: &api_env
+      ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos
+      ARGOS_TEMPORAL_ADDRESS: temporal:7233
+      ARGOS_NATS_URL: nats://nats:4222
+      ARGOS_OPA_URL: http://opa:8181
+      ARGOS_VAULT_ADDR: http://vault:8200
+      ARGOS_VAULT_TOKEN: root   # development Vault started with -dev-root-token-id=root
+      # The container validates tokens issued through the internal address; from the host,
+      # Keycloak answers on 127.0.0.1:8180 and the issuers would not match.
+      ARGOS_OIDC_ISSUER: http://keycloak:8080/realms/argos
+      ARGOS_OIDC_AUDIENCE: argos-api
+      # The assistant is the one thing the API asks another service for, over HTTP (ADR-0012).
+      ARGOS_AI_GATEWAY_URL: http://ai-gateway:8005
+      ARGOS_EVIDENCE_ISSUER_DID: did:web:127.0.0.1%3A8008
+      ARGOS_EVIDENCE_STATUS_BASE_URL: http://127.0.0.1:8008/status
+      ARGOS_EVIDENCE_CREDENTIAL_BASE_URL: http://127.0.0.1:8008/credentials
+      ARGOS_EVIDENCE_VERIFIER_URL: http://127.0.0.1:8007/verify
+      ARGOS_EVIDENCE_RETENTION_DAYS: "1"
+      ARGOS_EVIDENCE_S3_ENDPOINT: http://evidence-store:7070
+      ARGOS_EVIDENCE_S3_ACCESS_KEY: dev-only-evidence
+      ARGOS_EVIDENCE_S3_SECRET_KEY: dev-only-evidence-secret
+      ARGOS_EVIDENCE_TSA_URL: http://tsa:3180
+      ARGOS_EVIDENCE_TSA_ROOTS_URL: http://tsa:3180/ca.pem
+      ARGOS_LOG_LEVEL: INFO
       ARGOS_API_BIND: 0.0.0.0   # published below on 127.0.0.1 only
+    # `ai` gives it the gateway; the campaign worker is not on that network and never will be.
+    networks: [default, ai, evidence]
     depends_on:
       postgres:
         condition: service_healthy
@@ -177,11 +205,32 @@ services:
         condition: service_started
       vault:
         condition: service_healthy
-    ports: ["127.0.0.1:8003:8003"]
+      evidence-store:
+        condition: service_started
+      tsa:
+        condition: service_healthy
+    ports: ["127.0.0.1:8000:8000"]
     healthcheck:
-      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/health', timeout=2)"]
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
       interval: 5s
       retries: 30
+
+  # The deliveries towards the ITSM (ARG-079): the bus writes them, Temporal retries them. Nothing
+  # is delivered from the request that caused it.
+  webhook-worker:
+    build: *api_build
+    image: argos-api:dev
+    command: ["/app/.venv/bin/python", "-m", "argos_api.webhooks.worker"]
+    environment: *api_env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+      nats:
+        condition: service_started
+      vault:
+        condition: service_healthy
 
   # ── Evidence (F07-04): the WORM store, VersityGW with object lock (ADR-0010). Development keeps a
   # one-day default retention; resetting it means dropping the `evidence-data` volume. ──

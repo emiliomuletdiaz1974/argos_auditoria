@@ -1,8 +1,10 @@
-"""ARG-043/047 · the campaign worker and API run as containers of the development environment."""
+"""ARG-043 · the campaign worker runs as a container of the development environment.
 
-import json
+Its API is gone: since F08-17 the routes are those of the single API (`tests/integration/
+test_api_containers.py`), served from one container with the console.
+"""
+
 import re
-import urllib.request
 from pathlib import Path
 
 import pytest
@@ -19,13 +21,6 @@ REPO = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO / "services" / "challenge-engine" / "Dockerfile"
 COMPOSE = REPO / "deploy" / "dev" / "compose.yaml"
 TASK_QUEUE = "argos-campaigns"
-HEALTH = "http://127.0.0.1:8003/health"
-
-
-def test_the_api_container_answers_its_health_check() -> None:
-    with urllib.request.urlopen(HEALTH, timeout=10) as response:  # noqa: S310 - fixed localhost
-        assert response.status == 200
-        assert json.loads(response.read()) == {"status": "ok", "service": TASK_QUEUE}
 
 
 @pytest.mark.asyncio
@@ -52,6 +47,10 @@ def test_the_image_carries_no_secrets() -> None:
     assert not forbidden.search(DOCKERFILE.read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("service", ["challenge-worker", "challenge-api"])
-def test_both_services_are_declared_in_the_development_compose(service: str) -> None:
-    assert re.search(rf"^  {service}:$", COMPOSE.read_text(encoding="utf-8"), re.MULTILINE)
+def test_the_worker_is_declared_in_the_development_compose() -> None:
+    assert re.search(r"^  challenge-worker:$", COMPOSE.read_text(encoding="utf-8"), re.MULTILINE)
+
+
+def test_the_campaign_api_is_gone_from_the_development_compose() -> None:
+    """Its routes live in the single API since F08-17; two doors would be two stories."""
+    assert "challenge-api" not in COMPOSE.read_text(encoding="utf-8")

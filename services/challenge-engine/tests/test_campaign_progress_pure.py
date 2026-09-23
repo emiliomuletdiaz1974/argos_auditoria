@@ -18,3 +18,16 @@ def test_a_system_whose_circuit_closes_is_no_longer_paused() -> None:
     campaign.circuit_open("s-1", "latencia")
     campaign.circuit_closed("s-1")
     assert campaign.progress()["paused"] == []
+
+
+def test_a_pause_does_not_outlive_the_cooldown_of_the_connector() -> None:
+    """The connector reopens its circuit by itself; the campaign cannot wait for ever.
+
+    Nobody sends `circuit_closed` today —the connector only announces the opening—, so a pause
+    that never expired would hold a campaign until someone noticed. It lasts what the connector's
+    cooldown lasts, and then the system is tried again.
+    """
+    from argos_challenges.workflows import PAUSE_MAX_SECONDS
+    from argos_connector.budget import DEFAULTS
+
+    assert float(DEFAULTS["open_cooldown_s"]) <= PAUSE_MAX_SECONDS

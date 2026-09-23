@@ -306,6 +306,49 @@ _GATES = (
 )
 
 
+_VERDICTS = (
+    "SELECT id::text, unit_id, challenge_id, challenge_version, obligation, system_id::text,"
+    " node_key, result, verdict_hash, created_at FROM argos.verdicts"
+    " WHERE campaign_id = %(campaign)s"
+    " AND (%(at)s::timestamptz IS NULL OR (created_at, id::text) > (%(at)s, %(id)s))"
+    " ORDER BY created_at, id LIMIT %(limit)s"
+)
+
+
+def list_verdicts(
+    dsn: str, campaign_id: str, limit: int, after: tuple[str, str] | None = None
+) -> list[dict[str, Any]]:
+    """The verdicts of a campaign, in the order they were written, for a page at a time."""
+    at, ident = after if after else (None, None)
+    params = {"campaign": campaign_id, "at": at, "id": ident, "limit": limit}
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(_VERDICTS, params).fetchall()
+    fields = (
+        "id",
+        "unit_id",
+        "challenge_id",
+        "challenge_version",
+        "obligation",
+        "system_id",
+        "node_key",
+        "result",
+        "verdict_hash",
+    )
+    return [
+        {**dict(zip(fields, row[:-1], strict=True)), "created_at": row[-1].isoformat()}
+        for row in rows
+    ]
+
+
+def running_campaigns(dsn: str) -> list[str]:
+    """The campaigns a signal can still reach: the ones Temporal is running right now."""
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(
+            "SELECT id::text FROM argos.campaigns WHERE status = 'running' ORDER BY created_at"
+        ).fetchall()
+    return [str(row[0]) for row in rows]
+
+
 def list_campaigns(
     dsn: str, limit: int, after: tuple[str, str] | None = None
 ) -> list[dict[str, Any]]:

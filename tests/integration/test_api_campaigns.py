@@ -67,6 +67,11 @@ class Runner:
         self.started: list[str] = []
         self.signals: list[tuple[str, str, str]] = []
         self.live: dict[str, dict[str, Any]] = {}
+        self.remediations: list[dict[str, Any]] = []
+
+    async def remediate(self, scope: dict[str, Any]) -> str:
+        self.remediations.append(scope)
+        return f"remediation-{len(self.remediations)}"
 
     async def start(self, campaign_id: str) -> str:
         self.started.append(campaign_id)
@@ -103,6 +108,19 @@ def runner() -> Runner:
 def api(migrated_db: str, runner: Runner) -> TestClient:
     validator = cast(JwtValidator, PersonValidator())
     return TestClient(create_app(validator, dsn=migrated_db, campaign_runner=runner))
+
+
+def _journal_rows(dsn: str, injection_id: str) -> list[tuple[str, ...]]:
+    import psycopg
+
+    with psycopg.connect(dsn) as conn:
+        return [
+            tuple(str(value) for value in row)
+            for row in conn.execute(
+                "SELECT action FROM argos.audit_journal WHERE payload_canon LIKE %s ORDER BY seq",
+                (f"%{injection_id}%",),
+            ).fetchall()
+        ]
 
 
 def _plan(api: TestClient, name: str, key: str | None = None) -> str:
@@ -325,3 +343,107 @@ def test_the_tray_says_who_has_approved_so_far(api: TestClient, migrated_db: str
         1,
         2,
     )
+
+
+# ── What came over from the campaign API of Phase 05 when it was retired (F08-17) ──
+
+
+def test_the_verdicts_of_a_campaign_are_readable(api: TestClient, migrated_db: str) -> None:
+    from argos_challenges.evaluator import evaluate
+    from argos_challenges.store import persist_verdict
+
+    campaign_id = _plan(api, "Campaña con veredictos")
+    _prepare(migrated_db, campaign_id)
+    unit = _unit(campaign_id)
+    verdict = evaluate(unit, {"ok": True, "data": {"rows": [{"ssl": "off"}]}})
+    persist_verdict(migrated_db, campaign_id, unit, verdict, probe_journal_seq=None)
+
+    answer = api.get(
+        f"{API_PREFIX}/campaigns/{campaign_id}/verdicts",
+        params={"limit": 200},
+        headers=_as("read_only_auditor"),
+    )
+    assert answer.status_code == 200, answer.text
+    items = answer.json()["items"]
+    assert [(item["challenge_id"], item["result"]) for item in items] == [
+        ("sec-encryption-in-transit", "non_compliant")
+    ]
+    assert len(items[0]["verdict_hash"]) == 64
+
+
+def test_the_synthetic_subject_is_authorised_by_the_dpo_and_confirmed_by_the_client(
+    api: TestClient, migrated_db: str
+) -> None:
+    from argos_challenges.synthetic import generate_subjects, register_subjects
+
+    campaign_id = _plan(api, "Campaña con sujeto sintético")
+    subject = generate_subjects("semilla-f08-17", 1)[0]
+    register_subjects(migrated_db, campaign_id, [subject])
+    body = {
+        "subject_id": subject.id,
+        "system_id": SYSTEM,
+        "point": "public.patients",
+        "method": "alta manual en el sistema del cliente",
+        "revert_procedure": "borrado del registro tras el ejercicio",
+    }
+    path = f"{API_PREFIX}/campaigns/{campaign_id}/synthetic/authorize"
+
+    refused = api.post(path, json=body, headers=_as("campaign_manager"))
+    assert refused.status_code == 403, "authorising an injection is the DPO's"
+
+    authorized = api.post(path, json=body, headers=_as("dpo_reviewer", "ana"))
+    assert authorized.status_code == 201, authorized.text
+    injection_id = authorized.json()["injection_id"]
+
+    confirmations = f"{API_PREFIX}/synthetic/{injection_id}"
+    assert (
+        api.post(f"{confirmations}/confirm-injection", headers=_as("dpo_reviewer")).status_code
+        == 403
+    )
+    for step, sent in (
+        ("confirm-injection", {}),
+        ("confirm-exercise", {"right": "erasure"}),
+        ("confirm-revert", {}),
+    ):
+        done = api.post(f"{confirmations}/{step}", json=sent, headers=_as("campaign_manager"))
+        assert done.status_code == 200, done.text
+    assert done.json()["state"] == "reverted"
+
+    actions = [
+        row[0] for row in _journal_rows(migrated_db, injection_id) if row[0].startswith("synthetic")
+    ]
+    assert actions == [
+        "synthetic.authorize",
+        "synthetic.injected",
+        "synthetic.exercised",
+        "synthetic.revert",
+    ]
+
+
+def test_an_injection_without_a_revert_procedure_is_refused(api: TestClient) -> None:
+    campaign_id = _plan(api, "Campaña sin vuelta atrás")
+    answer = api.post(
+        f"{API_PREFIX}/campaigns/{campaign_id}/synthetic/authorize",
+        json={
+            "subject_id": "00000000-0000-4000-8000-0000000000aa",
+            "system_id": SYSTEM,
+            "point": "public.patients",
+            "method": "alta manual",
+            "revert_procedure": "   ",
+        },
+        headers=_as("dpo_reviewer"),
+    )
+    assert answer.status_code == 422, answer.text
+
+
+def test_a_remediation_run_is_asked_for_by_the_manager(api: TestClient, runner: Runner) -> None:
+    campaign_id = _plan(api, "Campaña a subsanar")
+    path = f"{API_PREFIX}/campaigns/{campaign_id}/remediation"
+
+    refused = api.post(path, headers=_as("dpo_reviewer"))
+    assert refused.status_code == 403
+
+    started = api.post(path, headers=_as("campaign_manager", "marta"))
+    assert started.status_code == 202, started.text
+    assert started.json()["workflow_id"]
+    assert runner.remediations == [{"campaign_id": campaign_id, "requested_by": "user:marta"}]

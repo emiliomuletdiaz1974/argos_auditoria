@@ -24,6 +24,11 @@ campaigns.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_audit
 campaigns.create: [campaign_manager]
 campaigns.launch: [campaign_manager]
 campaigns.approve: [dpo_reviewer]
+campaigns.remediate: [campaign_manager]
+# ADR-0008: the DPO authorises an injection point of the synthetic subject; the client —through the
+# campaign manager— confirms each step it really did. Never the same person for both.
+synthetic.authorize: [dpo_reviewer]
+synthetic.confirm: [campaign_manager]
 approvals.read: [campaign_manager, dpo_reviewer]
 
 findings.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]

@@ -35,18 +35,25 @@ def test_the_gateway_answers_its_health_check() -> None:
         assert json.loads(response.read()) == {"status": "ok", "service": "argos-ai-gateway"}
 
 
-def test_the_campaign_api_does_not_exist_from_inside_the_gateway() -> None:
-    """Not «refused», not «forbidden»: there is no route and no name to resolve."""
+def test_from_inside_the_gateway_the_api_answers_only_with_a_token() -> None:
+    """The API calls the gateway (ADR-0012), so they share a network and the name resolves.
+
+    What does not travel back is authority: inside the gateway there is no token of the realm, so
+    every route of the v1 answers 401. The barrier that matters is the one below —the gateway's
+    database role cannot touch a verdict— and it does not depend on the network.
+    """
     probe = _inside(
-        "import socket\n"
+        "import urllib.error, urllib.request\n"
         "try:\n"
-        "    socket.create_connection(('challenge-api', 8003), timeout=5)\n"
-        "    print('REACHABLE')\n"
+        "    urllib.request.urlopen('http://api:8000/api/v1/campaigns', timeout=5)\n"
+        "    print('ANSWERED')\n"
+        "except urllib.error.HTTPError as exc:\n"
+        "    print('REFUSED', exc.code)\n"
         "except OSError as exc:\n"
         "    print('UNREACHABLE', type(exc).__name__)\n"
     )
     assert probe.returncode == 0, probe.stderr
-    assert probe.stdout.startswith("UNREACHABLE"), probe.stdout
+    assert probe.stdout.startswith(("REFUSED 401", "UNREACHABLE")), probe.stdout
 
 
 def test_the_database_is_reached_as_the_restricted_role() -> None:

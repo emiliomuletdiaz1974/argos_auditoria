@@ -16,6 +16,8 @@ from argos_common.secret_stores import VaultSecretStore
 from argos_events import Bus
 
 from .activities import ChallengeActivities, record_in_journal, smoke_probe
+from .bridge import DURABLE, SIGNAL, SUBJECT, on_circuit_open
+from .store import running_campaigns
 from .workflows import CampaignWorkflow, RemediationRun, SmokeCampaign, SystemRun
 
 TASK_QUEUE = "argos-campaigns"
@@ -62,12 +64,23 @@ def campaign_activities(
     return ChallengeActivities(config.DATABASE_URL, secrets, config.OPA_URL, bus)
 
 
+async def listen_for_open_circuits(client: Client, bus: Bus, dsn: str) -> None:
+    """A source that is suffering pauses in the campaigns that are asking it (ARG-013 → ARG-043)."""
+
+    async def signal(campaign_id: str, arguments: list[Any]) -> None:
+        handle = client.get_workflow_handle(f"campaign-{campaign_id}")
+        await handle.signal(SIGNAL, args=arguments)
+
+    await bus.subscribe(SUBJECT, DURABLE, on_circuit_open(lambda: running_campaigns(dsn), signal))
+
+
 async def main() -> None:
     cfg = get_config()
     configure_logging("argos-campaign-worker", cfg.LOG_LEVEL)
     client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")
     bus = Bus("argos-campaign-worker", cfg.NATS_URL)
     await bus.connect()
+    await listen_for_open_circuits(client, bus, cfg.DATABASE_URL)
     worker = await create_worker(client, campaign=campaign_activities(cfg, bus))
     get_logger(__name__, "ARG-007").info(f"worker ready on queue {TASK_QUEUE}")
     await worker.run()

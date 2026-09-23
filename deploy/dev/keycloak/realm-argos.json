@@ -34,10 +34,12 @@
         "pkce.code.challenge.method": "S256"
       },
       "redirectUris": [
-        "http://127.0.0.1:5173/*"
+        "http://127.0.0.1:5173/*",
+        "http://127.0.0.1:8000/*"
       ],
       "webOrigins": [
-        "http://127.0.0.1:5173"
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8000"
       ],
       "protocolMappers": [
         {

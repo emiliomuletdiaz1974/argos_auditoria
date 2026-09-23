@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.14.0-alpha
-commit: 61756ff
+version: 0.15.0-alpha
+commit: pendiente
 date: 2026-09-22
 status: current
 confidentiality: client
@@ -81,7 +81,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 
 ## 5. Configuración
 
-Por ahora, el emisor y la audiencia OIDC que recibe el validador (`ARGOS_OIDC_ISSUER`, `ARGOS_OIDC_AUDIENCE`, ya existentes). El contenedor y su punto de entrada llegan con F08-17.
+El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORAL_ADDRESS`, `ARGOS_VAULT_ADDR`/`ARGOS_VAULT_TOKEN`, `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, la configuración de evidencia (`ARGOS_EVIDENCE_*`), `ARGOS_AI_GATEWAY_URL` (el asistente; sin ella, la ruta responde 503) y `ARGOS_CONSOLE_DIR` (los estáticos de la consola, `/app/console` en la imagen). `ARGOS_API_BIND` existe solo para el contenedor: docker publica el puerto en `127.0.0.1`.
 
 ## 6. Seguridad y tratamiento de datos
 
@@ -94,7 +94,7 @@ Por ahora, el emisor y la audiencia OIDC que recibe el validador (`ARGOS_OIDC_IS
 
 ## 7. Operación
 
-En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio del `compose` y la consola servida como estáticos llegan en F08-17.
+Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero de bloqueo y la copia junto a la API: un origen, sin CDN, como exige un equipo aislado. `make dev` levanta el servicio `api` en `127.0.0.1:8000` —con healthcheck sobre `/health`— y `webhook-worker`, que entrega los webhooks (cola `argos-webhooks`) y escucha el bus con un durable por asunto. El servicio `api` está en las redes `default`, `ai` (el gateway, el único al que llama) y `evidence`; el worker de campañas no está en `ai`.
 
 ## 8. Verificación
 
@@ -115,7 +115,7 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 
 ## 9. Limitaciones conocidas y pendientes
 
-- Las rutas responden `501` hasta su tarea (F08-04 en adelante); `challenge-api` sigue en pie hasta F08-17.
+- La API de campañas de la Fase 05 (`challenge-api`) está retirada: sus rutas viven aquí desde F08-17.
 - El listado de hallazgos pagina por su propio orden (severidad y recurrencia) con el mismo cursor opaco.
 - El vecindario de un nodo se devuelve con `limit` y `has_more`, no con cursor: el cursor por desplazamiento del GraphQL es suyo y no se mezcla con el de las listas.
 - La tabla de idempotencia no tiene aún purga por retención: hay un índice por `created_at` esperándola (pendiente registrado).
@@ -139,3 +139,4 @@ En desarrollo, `uv run uvicorn argos_api.app:create_app --factory`. El servicio 
 | 0.12.0-alpha | 2026-09-22 | El detalle de hallazgo trae `history` y la declaración muestral del veredicto, que antes llegaba vacía | F08-13 |
 | 0.13.0-alpha | 2026-09-22 | `GET /evidence/{id}/journal/{seq}` (asiento citado por un veredicto de la campaña) y `withheld` en la vista previa de la credencial | F08-14 |
 | 0.14.0-alpha | 2026-09-22 | `POST /assistant/ask` devuelve `refused` y `fragments` | F08-15 |
+| 0.15.0-alpha | 2026-09-22 | Proceso `argos_api.main` con todo cableado (realm, Temporal, evidencia, gateway y Vault), consola servida como estáticos del mismo origen, veredictos de campaña, sujeto sintético y reejecución de subsanación; retirada de `challenge-api` | F08-17 |
