@@ -127,6 +127,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | SEC-008, SEC-042 | Corregido | F09-24 | `03c53c6` | 2026-09-23 |
 | SEC-011, SEC-019, SEC-020 | Corregido | F09-25 | `216d7a0` | 2026-09-23 |
 | SEC-014, SEC-015, SEC-036 | Corregido | F09-27 | `63bc69c` | 2026-09-23 |
+| SEC-032, SEC-033, SEC-034, SEC-035, SEC-049 | Corregido | F09-28 | `6dcc267` | 2026-09-23 |
 
 ## 7. Historial
 
@@ -140,3 +141,4 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | 1.5 | 2026-09-23 | Corregidos SEC-008 y 042 (F09-24) |
 | 1.6 | 2026-09-23 | Corregidos SEC-011, 019 y 020 (F09-25) |
 | 1.7 | 2026-09-23 | Corregidos SEC-014, 015 y 036 (F09-27) |
+| 1.8 | 2026-09-23 | Corregidos SEC-032, 033, 034, 035 y 049 (F09-28) |

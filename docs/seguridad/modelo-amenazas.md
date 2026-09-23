@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.8 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.9 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -71,7 +71,7 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-05 | T/R: alterar o borrar el diario | PostgreSQL | A2, A3 | Cadena hash v1 con `seq` sin huecos, escritura solo por `journal_append` y triggers contra UPDATE, DELETE y TRUNCATE; verificador independiente (huecos de la revisión F09-02, ver `docs/seguridad/revision-f01-f08.md`) | ARG-005, ARG-066 | F1-04b, F09-26 | en desarrollo | `services/api/migrations/0001_core.sql`, `tests/integration/test_journal_pg.py` |
 | M-06 | T: fabricar un veredicto | Motor de retos | A2, A8 | Solo el evaluador determinista escribe veredictos, y solo de unidades del plan guardado en campañas en curso con sus compuertas aprobadas; sello v2 que cubre plan y aprobaciones y que la base no deja cambiar | ARG-046 | F05-04, F09-23 | implementada | `tests/architecture/test_verdict_boundary.py`, `tests/integration/test_campaign_integrity.py` |
 | M-07 | E: el LLM decide un veredicto | Gateway de IA | A7, A2 | Barrera: ningún import del gateway alcanza el veredicto y el rol de base de datos del gateway no ve los veredictos | ARG-052, ARG-060 | F06-01 | implementada | `tests/architecture/test_ai_boundary.py`, `tests/integration/test_ai_boundary.py` |
-| M-08 | T/I: inyección de instrucciones desde los datos | Gateway de IA | A7 | Guardarraíles de entrada y salida, salida JSON forzada y asistente con cuatro herramientas cerradas de solo lectura | ARG-060, ARG-058 | F06-03 | implementada | `services/ai-gateway/argos_ai/guardrails` |
+| M-08 | T/I: inyección de instrucciones desde los datos | Gateway de IA | A7 | Guardarraíles de entrada y salida sobre texto normalizado (identificadores con separadores, afirmaciones como patrones, escrituras como sentencia), salida JSON forzada, asistente con cuatro herramientas cerradas de solo lectura que no puede dar cifras, citas ni veredictos que sus herramientas no devolvieron, y casos hostiles en los conjuntos dorados | ARG-060, ARG-058 | F06-03, F09-28 | implementada | `services/ai-gateway/argos_ai/guardrails`, `services/ai-gateway/tests/test_hostile_guardrails_pure.py`, `goldens/guardrails/` |
 | M-09 | E: el gateway se quita su rol con `RESET ROLE` | Gateway de IA | A2 | Credencial propia del gateway en lugar de `SET ROLE` sobre el superusuario | ARG-052, ARG-085 | F09-04 | en desarrollo | — |
 | M-10 | T: borrar o sobrescribir evidencia | WORM | A2, A3 | Object lock en modo conformidad probado con un test, y un cliente del almacén sin método de borrado | ARG-061 | F07-04 | implementada | `tests/integration/test_worm_conformance.py`, `tests/architecture/test_worm_has_no_delete.py` |
 | M-11 | T/R: alterar la evidencia después de sellar | Evidencia | A3 | Árbol de Merkle, raíz firmada, sello de tiempo RFC 3161 y anclaje del diario | ARG-063, ARG-064, ARG-065, ARG-066 | F07-06 | implementada | `services/evidence/argos_evidence/merkle.py`, `services/evidence/argos_evidence/signing.py` |
@@ -135,3 +135,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.6 | 2026-09-23 | M-06 vuelve a «implementada» tras F09-23 |
 | 1.7 | 2026-09-23 | M-13 vuelve a «implementada» tras F09-24 |
 | 1.8 | 2026-09-23 | M-28 vuelve a «implementada» tras F09-25 |
+| 1.9 | 2026-09-23 | M-08 recoge los guardarraíles normalizados y las cifras con respaldo de F09-28 |
