@@ -106,7 +106,7 @@
       "connector": "argos_dicom.connector:DicomConnector",
       "profile": "sources",
       "credentials": {"host": "127.0.0.1", "port": "4242", "called_ae": "ORTHANC"},
-      "config": {"ae_title": "ARGOS_QR"}
+      "config": {"ae_title": "ARGOS_QR", "allow_insecure": true}
     }
   ]
 }

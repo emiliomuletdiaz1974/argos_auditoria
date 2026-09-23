@@ -4,8 +4,8 @@ kind: module
 title: Conector DICOM (argos-connector-dicom)
 module: argos-connector-dicom
 phases: ["02"]
-version: 0.2.0-alpha
-commit: 4ed4faf
+version: 0.3.0-alpha
+commit: 7524569
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -40,6 +40,8 @@ Sondas del SDK `count` y `sample` sobre estudios.
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Asociación con TLS** (F09-31, SEC-028): con `ca_file` en la configuración, la asociación va con TLS 1.2 o superior y verifica el certificado del PACS contra esa CA y su nombre (`tls_server_name`, por defecto el host). Sin `ca_file`, `open()` se niega salvo `allow_insecure: true`, como el resto de conectores.
+- **La muestra no pide al paciente** (F09-31, SEC-028): el C-FIND ya no solicita `PatientID`; la muestra devuelve el digest del estudio y su año. Para saber si hay estudios basta el recuento.
 **Permisos que necesita en el PACS del cliente:** un AE Title para ARGOS (por ejemplo `ARGOS_QR`) con permiso **solo de consulta** (C-ECHO y C-FIND); sin C-MOVE, C-GET ni C-STORE.
 
 Las muestras de atributos de estudio se minimizan con el hash con clave del SDK.
@@ -66,3 +68,4 @@ Ninguna específica del conector.
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Conector DICOM limitado a C-ECHO y C-FIND con muestras minimizadas | Fase 02 (ARG-020) |
 | 0.2.0-alpha | 2026-09-23 | Asociación y C-ECHO de la apertura registrados y pagados | F09-22 |
+| 0.3.0-alpha | 2026-09-23 | Asociación con TLS verificado o declarada sin él, y muestra sin `PatientID` | F09-31 |

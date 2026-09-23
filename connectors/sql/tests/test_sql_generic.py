@@ -106,9 +106,9 @@ def test_named_check_and_declared_statement(db: Path) -> None:
     )
     assert named.data == {"rows": [{"name": "patients"}]}
     declared = connector.execute(
-        ProbeSpec("check_config", "patients", "SELECT count(*) AS n FROM patients")
+        ProbeSpec("check_config", "catalog", "SELECT name FROM sqlite_master WHERE type = 'table'")
     )
-    assert declared.data == {"rows": [{"n": 50}]}
+    assert declared.data == {"rows": [{"name": "patients"}]}
 
 
 def test_check_without_statement_is_refused_before_journaling(db: Path) -> None:
@@ -123,9 +123,9 @@ def test_check_without_statement_is_refused_before_journaling(db: Path) -> None:
 @pytest.mark.parametrize(
     ("target", "columns"),
     [
-        ("patients; DROP TABLE patients", ["id"]),
-        ("patients", ["national_id FROM x"]),
-        ("a.b.c", ["id"]),
+        ("patients\x00", ["id"]),
+        ("patients", ["national_id\nFROM x"]),
+        ("", ["id"]),
     ],
 )
 def test_invalid_identifiers_are_refused(db: Path, target: str, columns: list[str]) -> None:
@@ -133,6 +133,21 @@ def test_invalid_identifiers_are_refused(db: Path, target: str, columns: list[st
     with pytest.raises(ValueError, match="identifier"):
         connector.execute(ProbeSpec("sample", target, params={"columns": columns}))
     assert journal.records == []
+
+
+@pytest.mark.parametrize(
+    ("target", "columns"),
+    [("patients; DROP TABLE patients", ["id"]), ("patients", ["national_id FROM x"])],
+)
+def test_a_hostile_name_is_quoted_and_never_executed_as_sql(
+    db: Path, target: str, columns: list[str]
+) -> None:
+    """SEC-024: names are quoted, not refused; quoted, the text is a name and nothing else."""
+    connector, _ = _open(db)
+    result = connector.execute(ProbeSpec("sample", target, params={"columns": columns}))
+    assert result.ok is False  # no such table or column: the probe fails, nothing runs
+    with sqlite3.connect(db) as conn:
+        assert conn.execute("SELECT count(*) FROM patients").fetchone() == (50,)
 
 
 def test_write_harness_rejects_every_attempt_and_the_table_is_intact(db: Path) -> None:
@@ -189,7 +204,7 @@ def test_a_filter_on_an_invalid_column_is_refused(db: Path) -> None:
     spec = ProbeSpec(
         "count",
         "patients",
-        params={"filters": [{"column": "national_id; DROP TABLE patients", "value": "x"}]},
+        params={"filters": [{"column": "national_id\x00", "value": "x"}]},
     )
     with pytest.raises(ValueError, match="invalid SQL identifier"):
         connector.execute(spec)

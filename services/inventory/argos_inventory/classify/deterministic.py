@@ -4,6 +4,7 @@ A validator with a high acceptance rate wins over the dictionary; the dictionary
 Only acceptance rates ever leave the connector (deviation note ARG-024-025).
 """
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -21,6 +22,7 @@ from .dictionary import (
     validator_hints,
 )
 
+_log = logging.getLogger(__name__)
 DICTIONARY_CONFIDENCE = 0.6
 VALIDATOR_ACCEPT = 0.9
 SAMPLE_SIZE = 200
@@ -162,7 +164,16 @@ def classify_new_columns(
             "k": sample_size,
             "validators": names,
         }
-        result = runner(system_id, ProbeSpec("sample", table, params=params))
+        try:
+            result = runner(system_id, ProbeSpec("sample", table, params=params))
+        except ValueError as refused:
+            # A name the connector cannot probe stops that table, never the whole phase: it is
+            # recorded and counted, and the rest of the system is still classified (SEC-024).
+            _log.warning(
+                "table not sampled", extra={"table": table, "error": type(refused).__name__}
+            )
+            failures += 1
+            continue
         if not result.ok:
             failures += 1
             continue

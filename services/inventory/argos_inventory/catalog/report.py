@@ -5,6 +5,7 @@ reach it. Inferred flows and AI candidates are always labelled as such, never pr
 The visible text lives in LABELS: the report is product copy for the customer's DPO.
 """
 
+import re
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -105,7 +106,20 @@ def markdown_cell(value: Any, labels: dict[str, str]) -> str:
         return str(value)
     if isinstance(value, datetime):
         return value.astimezone(UTC).isoformat()
-    return str(value).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+    return code_span(str(value))
+
+
+def code_span(text: str) -> str:
+    """The client's text as a Markdown code span: never rendered as Markdown nor HTML (SEC-055).
+
+    A name like `<img src=x onerror=…>` is shown, not executed. The fence is one backtick longer
+    than the longest run inside, the pipe is escaped for the table and line breaks become spaces.
+    """
+    flat = text.replace("\r", " ").replace("\n", " ").replace("|", "\\|")
+    longest = max((len(run) for run in re.findall(r"`+", flat)), default=0)
+    fence = "`" * (longest + 1)
+    padded = f" {flat} " if longest else flat
+    return f"{fence}{padded}{fence}"
 
 
 def markdown_table(
@@ -272,9 +286,9 @@ def render_inventory_report(
     )
     warnings: list[str] = []
     if without_owner:
-        warnings.append(labels["warn_owner"].format(names=", ".join(without_owner)))
+        warnings.append(labels["warn_owner"].format(names=", ".join(map(code_span, without_owner))))
     if never_scanned:
-        warnings.append(labels["warn_scan"].format(names=", ".join(never_scanned)))
+        warnings.append(labels["warn_scan"].format(names=", ".join(map(code_span, never_scanned))))
     if unconfirmed:
         warnings.append(labels["warn_flows"].format(count=len(unconfirmed)))
     pending_total = sum(int(r["pending"]) for r in pending)

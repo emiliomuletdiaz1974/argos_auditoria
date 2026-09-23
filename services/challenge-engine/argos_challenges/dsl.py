@@ -17,6 +17,7 @@ from rdflib import URIRef
 
 from argos_challenges.library.translation import read_challenge, to_internal
 from argos_common.errors import ArgosError
+from argos_connector.config_sources import check_config_sources
 from argos_ontology.applicability import asset_classes, load_asset_classes
 from argos_ontology.traceability import library_graph
 from argos_ontology.vocabulary import ARGOS, LIBRARY_DIR, NORMS
@@ -147,6 +148,13 @@ def library_challenges(challenges_dir: Path = CHALLENGES_DIR) -> list[Path]:
 # What an OPA policy reads as evidence: the probe brings it, a challenge may never declare it
 # (a declared `out_of_term: 0` would absolve without looking; security review F09-02, SEC-012).
 EVIDENCE_INPUT_KEYS = frozenset({"result", "out_of_term", "max_age_days", "documented_exceptions"})
+# The dialect of each SQL connector, to check what its declared configuration checks read.
+CHECK_DIALECTS = {
+    "rdbms.postgresql": "postgres",
+    "rdbms.generic": "mysql",
+    "rdbms.mssql": "tsql",
+    "rdbms.oracle": "oracle",
+}
 
 
 def intrinsic_errors(spec: ChallengeSpec) -> list[str]:
@@ -160,6 +168,16 @@ def intrinsic_errors(spec: ChallengeSpec) -> list[str]:
     declared = set((opa or {}).get("input_map", {}) or {})
     for key in sorted(declared & EVIDENCE_INPUT_KEYS):
         errors.append(f"{spec.id}: input_map may not declare {key}: the probe brings it")
+    if spec.probe_kind == "check_config":
+        # A declared check reads configuration, never a table of the client (SEC-022).
+        for connector, variant in sorted(spec.by_connector.items()):
+            statement, dialect = variant.get("statement"), CHECK_DIALECTS.get(connector)
+            if not statement or dialect is None:
+                continue
+            try:
+                check_config_sources(str(statement), dialect)
+            except ValueError as refused:
+                errors.append(f"{spec.id} ({connector}): {refused}")
     return errors
 
 

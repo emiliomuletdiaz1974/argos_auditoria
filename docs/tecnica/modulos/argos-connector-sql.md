@@ -4,8 +4,8 @@ kind: module
 title: Conectores de bases de datos (argos-connector-sql)
 module: argos-connector-sql
 phases: ["02", "03"]
-version: 0.3.0-alpha
-commit: 4ed4faf
+version: 0.4.0-alpha
+commit: 7524569
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -57,6 +57,10 @@ Sondas `scan_schema`, `count`, `sample` (con `validators`) y `check_config`, a t
 
 ## 6. Seguridad y tratamiento de datos
 
+- **`check_config` sin datos de negocio** (F09-31, SEC-022): una sentencia declarada pasa, tras el validador de solo lectura, por `check_config_sources`: una tabla del cliente se rechaza antes del diario. Las filas salen minimizadas (columnas de ajuste en claro, el resto como digest) y con tope de filas.
+- **Nombres del cliente entre comillas** (F09-31, SEC-024): los identificadores los entrecomilla SQLAlchemy según el dialecto (`año-2024`, `Pacientes.2024`); solo se rechazan los vacíos, los de más de 128 caracteres y los que llevan caracteres de control. El objetivo `esquema.tabla` se parte por el primer punto.
+- **SQL Server con TLS verificado** (F09-31, SEC-027): cuenta como cifrado solo con `mssql+pyodbc` y ODBC Driver 18, con `Encrypt` activo (por defecto en el 18) y sin `TrustServerCertificate`. Con `pymssql`, que no verifica el certificado, hace falta `allow_insecure`.
+- **Privilegios por oid en PostgreSQL** (F09-31, SEC-054): la parte efectiva de `PRIVILEGES_SQL` pregunta `has_table_privilege(rol, c.oid, 'SELECT')`, no por el nombre como texto.
 **Permisos que necesita la cuenta del cliente** (comprobados en los scripts del entorno simulado):
 
 | Motor | Permisos |
@@ -86,6 +90,7 @@ Una sentencia lenta queda cortada por el límite de tiempo configurado, y la lat
 
 ## 9. Limitaciones conocidas y pendientes
 
+- **El driver ODBC 18 de Microsoft no viene en la imagen:** instalarlo exige aceptar su licencia (EULA) para una imagen que se entrega a clientes, y esa aceptación queda para una decisión de la dirección. Hasta entonces SQL Server se conecta con `pymssql` y `allow_insecure` declarado.
 La integración real con Oracle y SQL Server está escrita pero **no se ha ejecutado todavía**: necesita unos 6 GB de RAM libres para el perfil pesado.
 
 ## 10. Historial
@@ -98,3 +103,4 @@ La integración real con Oracle y SQL Server está escrita pero **no se ha ejecu
 | 0.1.0-alpha | 2026-09-18 | TLS verificado obligatorio por dialecto salvo `allow_insecure` declarado | Auditoría de seguridad (M10) |
 | 0.2.0-alpha | 2026-09-23 | `driver_options`: tiempo máximo de sentencia en `pymssql` | F09-21 |
 | 0.3.0-alpha | 2026-09-23 | Exploración con `COLUMNS_SQL` y `CATALOG_SQL` literales en lugar del inspector | F09-22 |
+| 0.4.0-alpha | 2026-09-23 | `check_config` limitado a catálogo y minimizado, identificadores entre comillas, SQL Server verificado solo con ODBC 18 y privilegios por oid | F09-31 |

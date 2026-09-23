@@ -4,8 +4,8 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.5.0-alpha
-commit: 3bf7634
+version: 0.6.0-alpha
+commit: 7524569
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -214,6 +214,7 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Lint de `check_config`** (F09-31, SEC-022): `intrinsic_errors` comprueba con `check_config_sources` que la sentencia declarada de cada conector SQL (`CHECK_DIALECTS`) solo lee catálogo y configuración. Se aplica en el CI y al cargar la biblioteca.
 - Cada actividad que produce un resultado relevante lo anota en el diario de auditoría encadenado.
 - El workflow de humo no accede a sistemas del cliente.
 - **La IA no puede emitir un veredicto, y no es una promesa escrita sino tres cierres** (F06-01): ningún módulo del gateway de IA alcanza `evaluator`, `store` ni `findings` por ninguna ruta de importación (test arquitectónico que sigue el grafo real); el rol `argos_ai` de PostgreSQL puede leer veredictos y hallazgos —redactar el informe es su oficio— pero no tiene privilegio para escribirlos; y el contenedor no comparte red con la API de campañas.
@@ -369,3 +370,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.3.0-alpha | 2026-09-23 | Nadie aprueba ni confirma lo que pidió; riesgo aceptado con fecha futura y tope | F09-24 |
 | 0.4.0-alpha | 2026-09-23 | La campaña solo arranca si el disco y OPA tienen el contenido firmado en vigor | F09-25 |
 | 0.5.0-alpha | 2026-09-23 | Plazo de los derechos con las fechas del cliente, sujeto siempre de su campaña, precondición en el compilador, reversión comprobada antes del sello, SHACL sobre la instantánea y subsanación reproducible y sellada | F09-27 |
+| 0.6.0-alpha | 2026-09-23 | El lint rechaza un `check_config` que lea tablas del cliente | F09-31 |

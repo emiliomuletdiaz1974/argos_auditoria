@@ -3,8 +3,10 @@
 import inspect
 import re
 import socket
+import ssl
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -17,6 +19,7 @@ from pynetdicom.sop_class import (  # type: ignore[attr-defined]
 )
 
 import argos_dicom.connector as connector_module
+from argos_common.errors import ConfigurationError
 from argos_connector.probes import ProbeSpec
 from argos_connector.testing import InMemoryJournal, assert_no_write_surface, make_context
 from argos_dicom.connector import DicomConnector
@@ -74,7 +77,10 @@ def _connector(port: int, **config: Any) -> tuple[DicomConnector, InMemoryJourna
     journal = InMemoryJournal()
     credentials = {"host": "127.0.0.1", "port": str(port), "called_ae": "PACS"}
     context = make_context(credentials, journal=journal)
-    connector = DicomConnector(SYSTEM_ID, {"timeout_s": 5, **config}, context)
+    # The test PACS listens without TLS: the connector accepts it only because it is declared.
+    connector = DicomConnector(
+        SYSTEM_ID, {"timeout_s": 5, "allow_insecure": True, **config}, context
+    )
     connector.open()
     return connector, journal
 
@@ -114,9 +120,11 @@ def test_sample_reveals_presence_not_identifiers(pacs: Pacs) -> None:
     result = connector.execute(ProbeSpec("sample", "*", params={"k": 5}))
     assert result.data["n"] == 5
     studies = result.data["studies"]
-    assert all(s["patient_id_present"] for s in studies)
     assert all(len(s["study_uid_digest"]) == 32 and len(s["study_year"]) == 4 for s in studies)
     assert "P000" not in repr(result) and "1.2.826" not in repr(result)
+    # SEC-028: the sample does not even ask for the patient; the count says whether studies exist.
+    assert all("patient_id_present" not in s for s in studies)
+    assert all("PatientID" not in query for query in pacs.queries)
 
 
 def test_capped_find_aborts_the_association(pacs: Pacs) -> None:
@@ -142,7 +150,9 @@ def test_retrieval_and_storage_are_absent_from_the_code() -> None:
 
 def test_unreachable_pacs_fails_at_open() -> None:
     credentials = {"host": "127.0.0.1", "port": str(_free_port()), "called_ae": "PACS"}
-    connector = DicomConnector(SYSTEM_ID, {"timeout_s": 2}, make_context(credentials))
+    connector = DicomConnector(
+        SYSTEM_ID, {"timeout_s": 2, "allow_insecure": True}, make_context(credentials)
+    )
     with pytest.raises(ConnectionError):
         connector.open()
 
@@ -158,3 +168,37 @@ def test_the_association_and_its_echo_are_journaled_and_paid(pacs: Pacs) -> None
     assert budget.acquired == 1
     assert [r.spec.target for r in journal.emitted] == ["association"]
     assert journal.emitted[0].outcome is not None and journal.emitted[0].outcome["ok"]
+
+
+# ---------- SEC-028 · TLS on the association, unless declared ----------
+
+CA = Path(__file__).resolve().parents[3] / "deploy" / "dev" / "sources" / "certs" / "ca.crt"
+
+
+def test_a_pacs_without_tls_is_refused_unless_declared() -> None:
+    credentials = {"host": "127.0.0.1", "port": str(_free_port()), "called_ae": "PACS"}
+    connector = DicomConnector(SYSTEM_ID, {"timeout_s": 2}, make_context(credentials))
+    with pytest.raises(ConfigurationError, match="allow_insecure"):
+        connector.open()
+
+
+def test_with_its_ca_the_association_verifies_the_pacs(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    class Refused:
+        is_established = False
+
+    def associate(self: AE, host: str, port: int, **kwargs: Any) -> Refused:
+        seen.update(kwargs)
+        return Refused()
+
+    monkeypatch.setattr(AE, "associate", associate)
+    credentials = {"host": "pacs.hospital.local", "port": "11112", "called_ae": "PACS"}
+    connector = DicomConnector(
+        SYSTEM_ID, {"timeout_s": 2, "ca_file": str(CA)}, make_context(credentials)
+    )
+    with pytest.raises(ConnectionError):
+        connector.open()
+    context, server_name = seen["tls_args"]
+    assert isinstance(context, ssl.SSLContext) and context.verify_mode == ssl.CERT_REQUIRED
+    assert context.check_hostname and server_name == "pacs.hospital.local"

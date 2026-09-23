@@ -34,6 +34,7 @@ from sqlalchemy.sql.elements import BindParameter
 from sqlalchemy.types import NullType
 
 from argos_connector.base import Connector
+from argos_connector.config_sources import check_config_sources, minimise_config_rows
 from argos_connector.probes import ProbeSpec
 from argos_connector.tls import require_tls
 from argos_connector.validators import acceptance_rates, resolve_validators
@@ -60,7 +61,9 @@ COLUMNS_SQL = (
     "WHERE t.table_type = 'BASE TABLE' "
     "ORDER BY c.table_schema, c.table_name, c.ordinal_position"
 )
-_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$#]{0,127}$")
+# A name the client chose is quoted by SQLAlchemy, whatever its letters (`año-2024`); what is
+# refused is only what no catalogue holds: empty names, control characters, absurd lengths.
+_IDENTIFIER = re.compile(r"^[^\x00-\x1f\x7f]{1,128}$")
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,7 +103,15 @@ def transport_encrypted(raw_url: str) -> bool:
     if backend in ("mysql", "mariadb"):
         return "ssl_ca" in query
     if backend == "mssql":
-        return query.get("encrypt") in ("yes", "true", "strict", "mandatory")
+        # Only ODBC Driver 18 verifies the server: pymssql cannot, whatever the URL says (SEC-027).
+        if url.get_driver_name() != "pyodbc":
+            return False
+        encrypt = query.get("encrypt")
+        driver_18 = "18" in query.get("driver", "")
+        encrypted = encrypt in ("yes", "true", "strict", "mandatory") or (
+            encrypt is None and driver_18  # Driver 18 encrypts by default
+        )
+        return encrypted and query.get("trustservercertificate") not in ("yes", "true")
     if backend == "oracle":
         return query.get("protocol") == "tcps" or "(protocol=tcps)" in raw_url.lower()
     return False
@@ -138,9 +149,11 @@ def driver_options(url: Any, timeout_ms: int) -> dict[str, Any]:
     PostgreSQL, MySQL and Oracle get their deadline in the session; pymssql has none by default
     and takes it only when connecting, in whole seconds.
     """
+    seconds = max(1, round(timeout_ms / 1000))
     if url.get_backend_name() == "mssql" and url.get_driver_name() == "pymssql":
-        seconds = max(1, round(timeout_ms / 1000))
         return {"connect_args": {"timeout": seconds, "login_timeout": seconds}}
+    if url.get_backend_name() == "mssql" and url.get_driver_name() == "pyodbc":
+        return {"connect_args": {"timeout": seconds}}  # the login timeout of ODBC
     return {}
 
 
@@ -264,6 +277,13 @@ class SqlConnector(Connector):
                 raise ValueError("check_config needs a named check or a declared statement")
         return spec
 
+    def validate(self, spec: ProbeSpec) -> None:
+        """Read-only first, and then: a declared check reads configuration, never a table of the
+        client (SEC-022). Both before the journal, so a refused statement never reaches it."""
+        super().validate(spec)
+        if spec.kind == "check_config" and "check" not in spec.params and spec.statement:
+            check_config_sources(spec.statement, self.statement_dialect())
+
     def _compiled(self, spec: ProbeSpec, statement: Select[Any]) -> ProbeSpec:
         compiled = statement.compile(
             dialect=self.compile_dialect, compile_kwargs={"render_postcompile": True}
@@ -271,13 +291,20 @@ class SqlConnector(Connector):
         binds = {**compiled.params, **dict(spec.params.get("binds", {}))}
         return replace(spec, statement=compiled.string, params={**spec.params, "binds": binds})
 
+    @staticmethod
+    def _split_target(target: str) -> tuple[str | None, str]:
+        """`schema.table`, split at the first dot: a table may have dots in its name, a schema
+        name with one is far rarer (`public.Pacientes.2024` is the table `Pacientes.2024`)."""
+        schema, dot, name = target.partition(".")
+        return (schema, name) if dot else (None, schema)
+
     def _table(self, target: str, columns: list[str]) -> TableClause:
-        parts = target.split(".")
-        if len(parts) > 2:
-            raise ValueError(f"invalid SQL identifier: {target!r}")
-        name = _identifier(parts[-1])
-        schema = _identifier(parts[0]) if len(parts) == 2 else None
-        return table(name, *[column(_identifier(c)) for c in columns], schema=schema)
+        schema, name = self._split_target(target)
+        return table(
+            _identifier(name),
+            *[column(_identifier(c)) for c in columns],
+            schema=_identifier(schema) if schema is not None else None,
+        )
 
     def _count_statement(self, spec: ProbeSpec) -> Select[Any]:
         filters = list(spec.params.get("filters") or [])
@@ -406,5 +433,10 @@ class SqlConnector(Connector):
         return data, len(rows)
 
     def _do_check_config(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
-        rows = [{k: _jsonable(v) for k, v in row._mapping.items()} for row in self._rows(spec)]
+        rows = minimise_config_rows(
+            ({str(k): v for k, v in row._mapping.items()} for row in self._rows(spec)),
+            self.context.hasher,
+            self.context.budget.max_rows_per_probe,
+            _jsonable,
+        )
         return {"rows": rows}, len(rows)

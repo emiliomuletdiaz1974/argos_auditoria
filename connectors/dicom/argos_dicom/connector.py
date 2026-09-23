@@ -2,6 +2,7 @@
 
 import json
 import re
+import ssl
 from collections.abc import Iterator
 from dataclasses import replace
 from typing import Any
@@ -18,6 +19,7 @@ from pynetdicom.sop_class import (  # type: ignore[attr-defined]
 
 from argos_connector.base import Connector
 from argos_connector.probes import ProbeSpec
+from argos_connector.tls import require_tls
 
 REQUESTED_CONTEXTS = (Verification, StudyRootQueryRetrieveInformationModelFind)
 ALLOWED_ABSTRACT_SYNTAXES = frozenset(str(uid) for uid in REQUESTED_CONTEXTS)
@@ -32,6 +34,7 @@ class DicomConnector(Connector):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._ae: AE | None = None
+        self._tls_context: ssl.SSLContext | None = None
 
     @property
     def ae(self) -> AE:
@@ -44,7 +47,22 @@ class DicomConnector(Connector):
         return int(self.config.get("max_studies", 100_000))
 
     # ---------- lifecycle ----------
+    def _tls(self) -> ssl.SSLContext | None:
+        """The TLS of the association: verified against the CA of the PACS, or declared absent.
+
+        A study list travels with patient metadata, so a clear association is refused unless the
+        system declares `allow_insecure`, as every other connector does (SEC-028).
+        """
+        ca_file = self.config.get("ca_file")
+        require_tls(ca_file is not None, self.config, str(self.context.credentials.get("host")))
+        if ca_file is None:
+            return None
+        context = ssl.create_default_context(cafile=str(ca_file))
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        return context
+
     def open(self) -> None:
+        self._tls_context = self._tls()
         ae = AE(ae_title=str(self.config.get("ae_title", "ARGOS_QR")))
         for context in REQUESTED_CONTEXTS:
             ae.add_requested_context(context)
@@ -66,9 +84,12 @@ class DicomConnector(Connector):
 
     def _associate(self) -> Association:
         credentials = self.context.credentials
-        association = self.ae.associate(
-            credentials["host"], int(credentials["port"]), ae_title=credentials["called_ae"]
-        )
+        host = str(credentials["host"])
+        options: dict[str, Any] = {"ae_title": credentials["called_ae"]}
+        if self._tls_context is not None:
+            server_name = str(self.config.get("tls_server_name", host))
+            options["tls_args"] = (self._tls_context, server_name)
+        association = self.ae.associate(host, int(credentials["port"]), **options)
         if not association.is_established:
             raise ConnectionError("DICOM association was rejected, aborted or timed out")
         return association
@@ -86,8 +107,7 @@ class DicomConnector(Connector):
         query.StudyInstanceUID = ""
         query.StudyDate = dates
         query.ModalitiesInStudy = modality
-        if spec.kind == "sample":
-            query.PatientID = ""
+        # The patient is never asked for: whether a study exists is what the count says (SEC-028).
         return query
 
     def render(self, spec: ProbeSpec) -> ProbeSpec:
@@ -155,7 +175,6 @@ class DicomConnector(Connector):
         studies = [
             {
                 "study_uid_digest": hasher.digest(str(identifier.StudyInstanceUID)),
-                "patient_id_present": bool(str(getattr(identifier, "PatientID", ""))),
                 "study_year": str(getattr(identifier, "StudyDate", ""))[:4],
             }
             for identifier in self._find(self._study_query(spec), limit)

@@ -33,8 +33,13 @@ def connector_token() -> str:
     return str(created["auth"]["client_token"])
 
 
-def open_source_connector[C: Connector](name: str, cls: type[C], dsn: str, **budget: Any) -> C:
-    """Register the catalog system in `dsn`, read its credentials with the SDK policy and open."""
+def open_source_connector[C: Connector](
+    name: str, cls: type[C], dsn: str, config: dict[str, Any] | None = None, **budget: Any
+) -> C:
+    """Register the catalog system in `dsn`, read its credentials with the SDK policy and open.
+
+    `config` replaces the catalog configuration, to open a source as a different system would.
+    """
     system = catalog_system(name)
     with psycopg.connect(dsn) as conn:
         conn.execute(
@@ -49,7 +54,7 @@ def open_source_connector[C: Connector](name: str, cls: type[C], dsn: str, **bud
         hasher=ValueHasher.from_hex(credentials["hash_key"]),
         credentials=credentials,
     )
-    connector = cls(system["id"], system.get("config", {}), context)
+    connector = cls(system["id"], system.get("config", {}) if config is None else config, context)
     connector.open()
     return connector
 

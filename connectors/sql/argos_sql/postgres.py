@@ -29,8 +29,11 @@ PRIVILEGES_SQL = (
     "JOIN pg_roles AS grantee ON grantee.oid = acl.grantee "
     "WHERE n.nspname = :schema AND c.relname = :table "
     "UNION "
-    "SELECT r.rolname AS role_name, 'SELECT (effective)' AS privilege_type FROM pg_roles AS r "
-    "WHERE r.rolcanlogin AND has_table_privilege(r.rolname, :schema || '.' || :table, 'SELECT')"
+    # By oid, never by the name as text: `Pacientes.2024` would need quoting (SEC-054).
+    "SELECT r.rolname AS role_name, 'SELECT (effective)' AS privilege_type "
+    "FROM pg_roles AS r, pg_class AS c JOIN pg_namespace AS n ON n.oid = c.relnamespace "
+    "WHERE n.nspname = :schema AND c.relname = :table "
+    "AND r.rolcanlogin AND has_table_privilege(r.rolname, c.oid, 'SELECT')"
 )
 ENCRYPTION_SQL = (
     "SELECT name, setting FROM pg_settings "

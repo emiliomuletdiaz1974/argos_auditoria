@@ -38,8 +38,9 @@ def test_natural_keys_are_deterministic_and_unambiguous() -> None:
 
 
 def test_natural_keys_reject_ambiguous_parts() -> None:
-    with pytest.raises(ValueError, match="separator"):
-        natural_key("a\x1fb")
+    # The separator inside a part is escaped since F09-31 (SEC-024), not refused: the key stays
+    # unambiguous and the node is not dropped.
+    assert natural_key("a\x1fb") != natural_key("a", "b")
     with pytest.raises(ValueError, match="at least one"):
         natural_key()
     with pytest.raises(ValueError, match="unknown category"):
@@ -79,3 +80,10 @@ def test_statement_builder_guards_the_dollar_quote_and_columns() -> None:
         store.statement("RETURN 1", ["v; DROP"])
     with pytest.raises(ValueError, match="columns"):
         store.statement("RETURN 1", [])
+
+
+def test_a_separator_inside_a_name_does_not_drop_the_node() -> None:
+    """SEC-024: a column named with the separator gets its own key instead of being refused."""
+    glued = natural_key("C", "s", "t", "ab")
+    assert glued != natural_key("C", "s", "t", "a", "b")
+    assert glued == natural_key("C", "s", "t", "ab")

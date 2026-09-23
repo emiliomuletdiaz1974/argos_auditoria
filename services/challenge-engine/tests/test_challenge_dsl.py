@@ -157,3 +157,22 @@ def test_an_opa_input_may_not_declare_the_evidence() -> None:
     assert any("out_of_term" in e for e in intrinsic_errors(forged))
     unsampled = replace(spec, probe_kind="sample", approval_required=False)
     assert any("approval_required" in e for e in intrinsic_errors(unsampled))
+
+
+@pytest.mark.parametrize(
+    ("connector", "statement", "refused"),
+    [
+        ("rdbms.postgresql", "SELECT dni, diagnostico FROM pacientes", True),
+        ("rdbms.generic", "SELECT amount FROM billing.invoices", True),
+        ("rdbms.postgresql", "SELECT setting FROM pg_settings WHERE name = 'ssl'", False),
+    ],
+)
+def test_a_check_config_reads_configuration_not_business_tables(
+    connector: str, statement: str, refused: bool
+) -> None:
+    """SEC-022: the lint refuses a challenge that would bring a table of the client as evidence."""
+    from argos_challenges.dsl import intrinsic_errors
+
+    probe = {"kind": "check_config", "by_connector": {connector: {"statement": statement}}}
+    errors = intrinsic_errors(parse_challenge(_spec(probe=probe)))
+    assert any("configuration" in e for e in errors) is refused

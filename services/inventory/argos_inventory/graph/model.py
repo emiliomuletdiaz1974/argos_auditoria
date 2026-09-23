@@ -47,9 +47,15 @@ def natural_key(*parts: str) -> str:
     """Deterministic natural key of a node: what makes every upsert idempotent."""
     if not parts:
         raise ValueError("a natural key needs at least one part")
-    if any(KEY_SEPARATOR in part for part in parts):
-        raise ValueError("natural key parts must not contain the key separator")
-    return hashlib.sha256(KEY_SEPARATOR.join(parts).encode("utf-8")).hexdigest()[:40]
+    # A name of the client may hold the separator: it is escaped, never refused, so the node is
+    # not dropped from the inventory and two different names never share a key (SEC-024).
+    escaped = [_escape(part) for part in parts]
+    return hashlib.sha256(KEY_SEPARATOR.join(escaped).encode("utf-8")).hexdigest()[:40]
+
+
+def _escape(part: str) -> str:
+    """Injective: the backslash first, then the separator."""
+    return part.replace("\\", "\\\\").replace(KEY_SEPARATOR, "\\x1f")
 
 
 def system_key(system_id: str) -> str:
