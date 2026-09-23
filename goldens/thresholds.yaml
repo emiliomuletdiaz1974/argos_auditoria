@@ -32,3 +32,10 @@ thresholds:
       Cero cifras inventadas. No es una métrica de calidad sino una garantía del producto: una
       cifra alucinada en el expediente destruye la credibilidad de todo lo demás, incluidos los
       veredictos, que sí son deterministas. Si este conjunto baja de 1,0, la release no sale.
+  guardrails:
+    minimum: 1.00
+    why: >-
+      Los guardarraíles no son una cuestión de calidad: un identificador que llega al modelo o una
+      afirmación de conformidad sin veredicto es exactamente lo que el producto promete que no
+      pasa. Los casos hostiles de la revisión F09-02 (separadores, espacios de ancho cero, frases
+      en inglés, columnas con nombre de sentencia) se miden aquí en cada `make check`.

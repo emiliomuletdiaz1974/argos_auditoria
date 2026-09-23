@@ -50,6 +50,18 @@ describe("AssistantView", () => {
     expect(within(answer).getByRole("region", { name: /cita 2/i })).toHaveTextContent(/0 críticos.*hallazgos/i);
   });
 
+  it("a citation without its detail unfolds to no fragment rather than to the first one", async () => {
+    // Security review F09-02, SEC-033: an empty detail matched every fragment.
+    renderWithApi(<AssistantView />, {
+      [ASK]: { ...ANSWER, answer: "Hay que cifrar [1].", sources: [{ tool: "search_regulation", detail: "" }] },
+    });
+    ask("¿qué pide el RGPD de cifrado?");
+    const answer = await screen.findByRole("article", { name: /respuesta/i });
+    fireEvent.click(within(answer).getByRole("button", { name: "Cita 1" }));
+    const cited = within(answer).getByRole("region", { name: /cita 1/i });
+    expect(cited).not.toHaveTextContent(/cifrado de los datos personales/);
+  });
+
   it("shows under each answer the tools it consulted", async () => {
     renderWithApi(<AssistantView />, { [ASK]: ANSWER });
     ask("¿qué pide el RGPD de cifrado?");

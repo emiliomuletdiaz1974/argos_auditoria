@@ -49,7 +49,12 @@ const REFUSALS: Record<number, string> = {
 const CITATION = /\[(\d+)\]/g;
 
 function fragmentOf(source: Source, fragments: Fragment[]): Fragment | undefined {
-  return fragments.find((fragment) => source.detail.includes(fragment.reference) || fragment.reference.includes(source.detail));
+  // An empty detail is contained in every reference: it cites nothing, so it unfolds nothing.
+  const detail = source.detail.trim();
+  if (!detail) {
+    return undefined;
+  }
+  return fragments.find((fragment) => detail.includes(fragment.reference) || fragment.reference.includes(detail));
 }
 
 function Citation({ number, source, fragments }: { number: number; source: Source | undefined; fragments: Fragment[] }) {

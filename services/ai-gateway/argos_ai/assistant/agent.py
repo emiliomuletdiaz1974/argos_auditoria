@@ -9,7 +9,11 @@ answer. Three things are fixed and none of them can be moved from the question:
 - **the arguments**: validated against the tool's schema before the tool runs; an invalid call is
   answered with the error, so the model can correct itself, and it still spends budget;
 - **the sources**: every source the answer quotes has to be a tool it actually called, the same way
-  a citation of the RAG has to be a fragment it retrieved.
+  a citation of the RAG has to be a fragment it retrieved; a normative source has to be one of the
+  fragments the search returned, word for word;
+- **the figures and the verdicts**: every number of the answer has to be one the tools returned (or
+  the question asked), and it can only quote a verdict a tool returned in this conversation
+  (security review F09-02, SEC-033 and SEC-034).
 
 The conversation lives only in memory, for the question at hand. What is logged is the hash of each
 prompt, by the gateway, never its content.
@@ -25,6 +29,7 @@ import jsonschema
 
 from argos_ai.assistant.tools import Tool
 from argos_ai.gateway import Gateway
+from argos_ai.reports.figures import extract_figures, unsupported_figures
 from argos_common.errors import ArgosError
 
 MAX_TOOL_CALLS = 5
@@ -96,6 +101,55 @@ def _step_result(tools: Mapping[str, Tool], step: Mapping[str, Any]) -> tuple[st
     return name, {"result": tool.run(arguments)}
 
 
+def _returned(value: Any, numbers: list[float], verdicts: set[str], key: str = "") -> None:
+    """Every number and verdict id a tool returned, however deep it sits."""
+    if isinstance(value, bool):
+        return
+    if isinstance(value, int | float):
+        numbers.append(float(value))
+    elif isinstance(value, str):
+        if "verdict" in key:
+            verdicts.add(value)
+        numbers.extend(figure for _, figure, _ in extract_figures(value))
+    elif isinstance(value, Mapping):
+        for name, item in value.items():
+            _returned(item, numbers, verdicts, str(name))
+    elif isinstance(value, list):
+        for item in value:
+            _returned(item, numbers, verdicts, key)
+
+
+def _checked(
+    step: Mapping[str, Any],
+    consulted: set[str],
+    fragments: list[dict[str, str]],
+    numbers: list[float],
+) -> list[dict[str, str]]:
+    """The sources of an answer, or `AssistantError` naming what it could not back."""
+    sources = [dict(source) for source in step.get("sources", [])]
+    unused = sorted({source["tool"] for source in sources} - consulted)
+    if unused:
+        raise AssistantError(f"la respuesta cita herramientas que no consultó: {unused}")
+    retrieved = {fragment["reference"] for fragment in fragments}
+    invented = [
+        source["detail"]
+        for source in sources
+        if source["tool"] == REGULATION_TOOL and source["detail"] not in retrieved
+    ]
+    if invented:
+        raise AssistantError(f"la respuesta cita fragmentos que no se recuperaron: {invented}")
+    stated = " ".join(
+        [str(step.get("answer", ""))]
+        + [source["detail"] for source in sources if source["tool"] != REGULATION_TOOL]
+    )
+    offending = unsupported_figures(stated, numbers)
+    if offending:
+        raise AssistantError(
+            f"la respuesta da cifras que ninguna herramienta devolvió: {offending}"
+        )
+    return sources
+
+
 def _fragments(result: Mapping[str, Any], seen: list[dict[str, str]]) -> list[dict[str, str]]:
     """The new fragments a regulation search returned, once each, in the order they came."""
     known = {fragment["reference"] for fragment in seen}
@@ -115,16 +169,22 @@ async def ask(question: str, gateway: Gateway, tools: Mapping[str, Tool]) -> Ans
     used: list[str] = []  # every call, failed ones included: they spend budget too
     consulted: set[str] = set()  # only the calls that returned data can be quoted as sources
     fragments: list[dict[str, str]] = []
+    # What the answer may state: the numbers of the question and of what the tools returned, and
+    # the verdicts the tools returned. Nothing the model writes on its own.
+    numbers: list[float] = [figure for _, figure, _ in extract_figures(question)]
+    verdicts: set[str] = set()
     for _ in range(MAX_TOOL_CALLS + 1):
         answer = await gateway.chat_json(
-            SERVICE, system, "\n".join(transcript), STEP_SCHEMA, priority="interactive"
+            SERVICE,
+            system,
+            "\n".join(transcript),
+            STEP_SCHEMA,
+            priority="interactive",
+            allowed_verdicts=frozenset(verdicts),
         )
         step = answer.data
         if step.get("action") == "answer":
-            sources = [dict(source) for source in step.get("sources", [])]
-            unused = sorted({source["tool"] for source in sources} - consulted)
-            if unused:
-                raise AssistantError(f"la respuesta cita herramientas que no consultó: {unused}")
+            sources = _checked(step, consulted, fragments, numbers)
             return Answer(str(step.get("answer", "")), sources, True, used, fragments)
         if step.get("action") == "refuse":
             return Answer(str(step.get("answer", "")), [], False, used, fragments, refused=True)
@@ -134,6 +194,7 @@ async def ask(question: str, gateway: Gateway, tools: Mapping[str, Tool]) -> Ans
         used.append(name)
         if "result" in outcome:
             consulted.add(name)
+            _returned(outcome["result"], numbers, verdicts)
             if name == REGULATION_TOOL:
                 fragments.extend(_fragments(outcome["result"], fragments))
         transcript.append(

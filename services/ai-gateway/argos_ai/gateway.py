@@ -21,7 +21,7 @@ route to the evaluator, and `tests/architecture/ai_boundary.py` makes sure it ne
 import asyncio
 import hashlib
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
@@ -136,7 +136,13 @@ class Gateway:
         user: str,
         schema: dict[str, Any],
         priority: str = "batch",
+        allowed_verdicts: Collection[str] | None = None,
     ) -> Answer:
+        """One JSON answer of the model, scrubbed on the way in and checked on the way out.
+
+        `allowed_verdicts` narrows which verdicts the answer may quote: the assistant passes the ids
+        its tools returned, so an existing verdict nobody consulted is not a source (SEC-034).
+        """
         if priority not in PRIORITIES:
             raise GatewayError(f"unknown priority: {priority!r}")
         clean_system, substituted_system = scrub_input(system)
@@ -151,7 +157,7 @@ class Gateway:
         try:
             async with self._slots[priority]:
                 data, repaired = await self._complete(clean_system, clean_user, schema, cost)
-            check_output(data, self._verdict_exists)
+            check_output(data, self._verdict_exists, allowed_verdicts)
         finally:
             self._reserved[service] -= self._reservation
             self._spent[service] = self._spent.get(service, 0) + cost[0] + cost[1]

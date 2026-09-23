@@ -1,43 +1,56 @@
 # Tablas de los guardarraíles (ARG-060). Esto es **contenido, no código**: viaja con el prompt-pack
 # y el equipo lo amplía sin una release. Lo que no se puede tocar desde aquí es la decisión de
 # rechazar: eso está en el código y no tiene interruptor.
-version: 1
+#
+# Versión 2 (revisión de seguridad F09-02, SEC-032, SEC-034 y SEC-049): límites propios en lugar
+# de `\b` (que no separa un DNI de un `_`), separadores dentro de los identificadores, afirmaciones
+# como patrones sobre texto normalizado y escrituras ancladas como sentencia SQL.
+version: 2
 
 # Identificadores españoles que se sustituyen a la entrada. `validator` es el de ARG-024: solo se
-# sustituye lo que valida, para no destrozar un código de producto que se parezca a un DNI.
+# sustituye lo que valida (sin separadores), para no destrozar un código de producto que se parezca
+# a un DNI. Los límites son solo «ni un dígito más» a cada lado: un `_`, un guion o una letra
+# pegada no protegen un DNI (`dni_12345678Z`, `columna12345678Zfin`), y el validador descarta lo que
+# no lo es. Se admiten espacio, guion, punto y barra como separadores. El IBAN va primero: sus
+# dígitos no deben leerse como otro identificador.
 identifiers:
-  - marker: DNI
-    validator: dni
-    pattern: "\\b\\d{8}[A-Za-z]\\b"
-  - marker: NIE
-    validator: nie
-    pattern: "\\b[XYZxyz]\\d{7}[A-Za-z]\\b"
-  - marker: NUSS
-    validator: nuss
-    pattern: "\\b\\d{11,12}\\b"
   - marker: IBAN
     validator: iban_es
-    pattern: "\\bES\\d{22}\\b"
+    pattern: "[Ee][Ss]\\d{2}(?:[ \\-]?\\d{4}){5}(?!\\d)"
+  - marker: DNI
+    validator: dni
+    pattern: "(?<!\\d)\\d{2}[ .]?\\d{3}[ .]?\\d{3}[ .\\-/]?[A-Za-z]"
+  - marker: NIE
+    validator: nie
+    pattern: "[XYZxyz][ .\\-/]?\\d{7}[ .\\-/]?[A-Za-z]"
+  - marker: NUSS
+    validator: nuss
+    pattern: "(?<!\\d)\\d{2}[ .\\-/]?\\d{7,8}[ .\\-/]?\\d{2}(?!\\d)"
 
-# Palabras con las que una respuesta afirma conformidad. Si aparecen aplicadas a un activo y no
-# viene un `verdict_id`, la salida se rechaza: el veredicto nace en el evaluador, no aquí.
-verdict_words:
-  - "es conforme"
-  - "no es conforme"
-  - "resulta conforme"
-  - "cumple con el artículo"
-  - "incumple el artículo"
-  - "es conforme con"
-  - "está en conformidad"
+# Cómo afirma una respuesta que algo cumple. Se comparan sobre el texto normalizado: NFKC, sin
+# caracteres de formato (espacios de ancho cero), sin tildes, en minúsculas y con los blancos
+# reducidos a uno. Si una aparece y la respuesta no cita un veredicto que existe (y, en el
+# asistente, que devolvió una herramienta), la salida se rechaza: el veredicto nace en el evaluador.
+# Se buscan formas verbales, no la raíz: «el cumplimiento del artículo 32 exige…» explica la norma
+# y no afirma nada de ningún activo. Tras «que» no cuentan: «los tratamientos que incumplen la
+# forma» describe un criterio (así lo escriben los retos), no afirma nada de un activo concreto.
+verdict_patterns:
+  - "(?<!\\bque )\\b(in)?cumpl(e|en|ia|ian|io|ieron|ira|iran|ido|ida|idos|idas)\\b"
+  - "\\b(es|son|resulta|resultan|esta|estan|sea|sean|era|eran)\\s+(no\\s+)?(conforme|conformes|en\\s+conformidad)\\b"
+  - "\\bno\\s+conforme(s)?\\b"
+  - "\\b(is|are|was|were|be)\\s+(not\\s+)?(compliant|conformant|in\\s+compliance)\\b"
+  - "\\bcompl(y|ies|ied)\\s+with\\b"
+  - "\\bnon[\\s-]?compliant\\b"
 
-# Verbos de escritura sobre un objetivo. El asistente propone, nunca manda ejecutar.
-write_verbs:
-  - "drop table"
-  - "delete from"
-  - "truncate"
-  - "update "
-  - "insert into"
-  - "alter table"
-  - "modificar la tabla"
-  - "borra la tabla"
-  - "elimina la tabla"
+# Escrituras sobre un objetivo, como sentencia y no como subcadena: `last_update` es una columna y
+# no un UPDATE. El asistente propone, nunca manda ejecutar.
+write_patterns:
+  - "\\bdrop\\s+(table|schema|database|view|index)\\b"
+  - "\\bdelete\\s+from\\s+\\S"
+  - "\\btruncate\\s+(table\\s+)?[\\w.\"]+"
+  - "\\bupdate\\s+[\\w.\"]+\\s+set\\b"
+  - "\\binsert\\s+into\\s+\\S"
+  - "\\balter\\s+(table|schema|database)\\b"
+  - "\\bmodifica(r)?\\s+la\\s+tabla\\b"
+  - "\\bborra(r)?\\s+la\\s+tabla\\b"
+  - "\\belimina(r)?\\s+la\\s+tabla\\b"

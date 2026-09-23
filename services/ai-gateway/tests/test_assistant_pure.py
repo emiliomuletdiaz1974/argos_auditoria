@@ -21,7 +21,10 @@ def _toolbox(calls: list[tuple[str, dict[str, Any]]]) -> dict[str, Tool]:
     def recorder(name: str) -> Tool:
         def run(arguments: dict[str, Any]) -> dict[str, Any]:
             calls.append((name, arguments))
-            return {"tool": name, "ok": True}
+            # What the answers below quote has to come from here: the fragment «x» and one finding.
+            if name == "search_regulation":
+                return {"fragments": [{"reference": "x", "text": "texto del artículo"}]}
+            return {"tool": name, "ok": True, "total": 1}
 
         return Tool(name, TOOL_SCHEMAS[name], run)
 

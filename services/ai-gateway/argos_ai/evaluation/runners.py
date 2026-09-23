@@ -26,7 +26,7 @@ from argos_ai.evaluation.goldens import EDITORIAL_DIR, Case
 from argos_ai.evaluation.metrics import Outcome
 from argos_ai.gateway import Gateway, GatewayError
 from argos_ai.generate.challenge_gen import propose_challenge
-from argos_ai.guardrails import OutputRejectedError
+from argos_ai.guardrails import OutputRejectedError, check_output, scrub_input
 from argos_ai.rag.chunking import Chunk
 from argos_ai.rag.embeddings import Embedder
 from argos_ai.rag.indexer import index_chunks
@@ -180,4 +180,28 @@ async def run_reports(cases: list[Case], backend_for: BackendFor) -> list[Outcom
         except (DraftRejectedError, OutputRejectedError) as exc:
             accepted, detail = False, str(exc)
         outcomes.append(Outcome(case.id, case.kind, accepted == case.expected["accepted"], detail))
+    return outcomes
+
+
+def run_guardrails(cases: list[Case]) -> list[Outcome]:
+    """The hostile inputs of the guardrails, without a model: they are the product's own checks.
+
+    `in` cases count what the scrubber replaced; `out` cases say which refusal, if any, an answer
+    gets (security review F09-02, SEC-032, SEC-034 and SEC-049).
+    """
+    outcomes: list[Outcome] = []
+    for case in cases:
+        text = str(case.input["text"])
+        if case.input["direction"] == "in":
+            _, substitutions = scrub_input(text)
+            correct = substitutions == case.expected["substitutions"]
+            outcomes.append(Outcome(case.id, case.kind, correct, f"{substitutions} sustituidos"))
+            continue
+        try:
+            check_output({"answer": text})
+            rejected = None
+        except OutputRejectedError as exc:
+            rejected = str(exc)
+        correct = rejected == case.expected["rejected"]
+        outcomes.append(Outcome(case.id, case.kind, correct, str(rejected)))
     return outcomes

@@ -15,6 +15,7 @@ from argos_ai.evaluation.runners import (
     oracle_backends,
     run_classify,
     run_generate,
+    run_guardrails,
     run_rag,
     run_reports,
 )
@@ -44,6 +45,8 @@ async def evaluate_all(
             outcomes = await run_classify(cases, backend_for)
         elif suite == "generate":
             outcomes = await run_generate(cases, backend_for)
+        elif suite == "guardrails":
+            outcomes = run_guardrails(cases)
         else:
             outcomes = await run_reports(cases, backend_for)
         minimum = float(thresholds[suite]["minimum"])

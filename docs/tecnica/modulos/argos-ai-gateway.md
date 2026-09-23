@@ -4,9 +4,9 @@ kind: module
 title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
-version: 0.1.0-alpha
-commit: 61756ff
-date: 2026-09-17
+version: 0.2.0-alpha
+commit: 47f474c
+date: 2026-09-23
 status: draft
 confidentiality: client
 ---
@@ -143,10 +143,12 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 
 ### Guardarraíles (ARG-060)
 
-- **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase.
+- **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase. Desde F09-28 (SEC-032) el identificador se reconoce aunque vaya pegado a `_` o a letras (los límites solo exigen que no siga otro dígito) y con espacio, guion, punto o barra dentro (`12.345.678-Z`, `ES91 2100 …`, `28/12345678/40`); el validador juzga el valor sin separadores.
 - **`check_output(answer) -> bool`.** Recorre todas las cadenas del JSON, por hondas que estén, y rechaza dos cosas con motivo tipificado:
   - `veredicto_no_citado`: una afirmación de conformidad sobre un activo sin el `verdict_id` del que sale. En el gateway que corre sobre PostgreSQL, solo cuenta como cita un `verdict_id` que existe en `argos.verdicts`: el modelo puede escribir cualquier id, y uno inventado no abre la puerta a la afirmación;
-  - `escritura_sobre_objetivo`: un verbo de escritura sobre un sistema.
+  - `escritura_sobre_objetivo`: una sentencia de escritura sobre un sistema (`update x set`, `delete from x`, `truncate table x`…), anclada como sentencia y no como subcadena: `last_update` es una columna (SEC-049).
+  - El texto se compara normalizado (NFKC, sin caracteres de formato, sin tildes, en minúsculas) y leído dos veces, con los caracteres de ancho cero quitados y como espacios. Las afirmaciones son patrones (formas de «cumplir» salvo tras «que», «es/está/resulta conforme», sus equivalentes en inglés), no frases exactas (SEC-034).
+  - Con `allowed_verdicts`, solo cuentan como cita los veredictos de ese conjunto: el asistente pasa los que le devolvieron sus herramientas.
 - **Las tablas de patrones son contenido**, en `library/prompts/guardrails.yaml`, y el equipo las amplía sin una release. **La decisión de rechazar no es contenido:** no tiene interruptor.
 
 ## 4. Interfaces
@@ -172,7 +174,10 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | `GET /health`, `POST /v1/chat_json` | servicio interno en `8005` | servicios de la plataforma |
 | `tools/new_challenge.py` | `OBL-… "texto" [--repo]` → rama `feature/reto-<id>` | equipo normativo |
 | `draft_summary`, `draft_finding_narrative` | `(dsn, id, gateway) -> str` (id del texto guardado) | Fase 07 (expediente) |
-| `unsupported_figures`, `extract_figures` | `(text, data) -> list[str]` | ARG-057, ARG-059 |
+| `unsupported_figures`, `extract_figures`, `data_numbers` | `(text, data) -> list[str]` | ARG-057, ARG-059 |
+| `check_output(answer, verdict_exists=None, allowed_verdicts=None)`, `normalise(text)` | Guardarraíl de salida | ARG-060 |
+| `Gateway.chat_json(..., allowed_verdicts=None)` | Restringe qué veredictos puede citar una respuesta | ARG-058, ARG-060 |
+| Conjunto dorado `goldens/guardrails/` y umbral `guardrails` (1,00) | Casos hostiles del depurador y del guardarraíl de salida, medidos por `make ai-eval` | ARG-059, ARG-060 |
 | `ask` | `(question, gateway, tools) -> Answer(answer, sources, complete, calls)` | Fase 08 (chat de la consola) |
 | `default_toolbox` | `(dsn, embedder) -> dict[str, Tool]` | ARG-058 |
 | `evaluate_all` | `(dsn, embedder, backends=oracle_backends) -> list[SuiteReport]` | CI, release, panel de calidad |
@@ -188,6 +193,9 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 - Ningún prompt se escribe en un log ni en una tabla; lo que se registra es su hash (ARG-052, `argos.ai_usage`).
 - El rol `argos_ai` puede **añadir** asientos al diario encadenado (migración `0020`, permiso de ejecución sobre `journal_append`, que es `SECURITY DEFINER`) y nada más sobre él. Hasta F06-13 no lo tenía: los tests del gateway conectaban como propietario y no lo veían. Ejecutar el gateway como lo hace el contenedor lo destapó.
 - El paquete no puede escribir veredictos ni hallazgos, por código y por permisos.
+- **Cifras y citas con respaldo** (F09-28; SEC-033 y SEC-035):
+  - El verificador de cifras reconoce decimales con punto o coma, porcentajes, rangos (`15-20`) y números pegados a su unidad (`30días`), y rechaza siempre las cantidades escritas en letra. Deja fuera identificadores, fechas y marcas de cita `[n]`.
+  - El asistente comprueba sus cifras contra lo que devolvieron sus herramientas (y la pregunta). Cada fuente normativa tiene que ser, literalmente, un fragmento recuperado.
 
 ## 7. Operación
 
@@ -256,6 +264,8 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 - El presupuesto se cuenta por tokens del backend; con el backend determinista esos números son un proxy por longitud, no tokens reales.
 - La reserva y el contador viven en la memoria del proceso: con varias réplicas del gateway, cada una lleva su cuenta. Compartirla exige reservar en la base de datos (Fase 10).
 - La lista de identificadores es la española de ARG-024; otro país necesita sus validadores, no otra expresión regular.
+- **Una afirmación de conformidad en una oración de relativo se escapa** («el sistema, que cumple el artículo 32, …»): las formas de «cumplir» tras «que» no cuentan, porque así describen los retos su criterio («los tratamientos que incumplen la forma»).
+- **Las cantidades en letra se rechazan salvo «un», «una» y «uno»**, que son artículos mucho más a menudo que números.
 
 ## 10. Historial
 
@@ -276,3 +286,4 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.1.0-alpha | 2026-09-18 | El guardarraíl de salida solo acepta como cita veredictos que existen | Auditoría de seguridad (B1) |
 | 0.1.0-alpha | 2026-09-21 | `POST /v1/assistant/ask`: el agente del asistente corre dentro del gateway con sus cuatro herramientas y solo viaja su resultado; `ModelUnavailableError` y `503` en ambos endpoints cuando el modelo local no contesta (hasta F06-05, siempre) | F08-08 |
 | 0.1.0-alpha | 2026-09-22 | El agente admite el paso `refuse` (rehúso explícito, `refused: true`) y la respuesta lleva `fragments`, los fragmentos que devolvió `search_regulation` en la conversación, sin repetir; el prompt pide citar con `[n]`, el número de la fuente | F08-15 |
+| 0.2.0-alpha | 2026-09-23 | Guardarraíles normalizados (identificadores con separadores, afirmaciones como patrones, escrituras como sentencia), cifras con decimales, rangos y números en letra, y el asistente sin cifras, citas ni veredictos sin respaldo | F09-28 |

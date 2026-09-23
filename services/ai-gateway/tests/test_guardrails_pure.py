@@ -124,5 +124,5 @@ def test_recommending_encryption_is_not_an_instruction_to_write() -> None:
 def test_the_patterns_are_content_not_code() -> None:
     """The team widens the tables without a release: they travel with the prompt-pack."""
     patterns = load_patterns()
-    assert patterns["verdict_words"] and patterns["write_verbs"]
-    assert all(entry.strip() for entry in patterns["write_verbs"])
+    assert patterns["verdict_patterns"] and patterns["write_patterns"]
+    assert all(entry.strip() for entry in patterns["write_patterns"])
