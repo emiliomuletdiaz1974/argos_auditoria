@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.3 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.4 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -64,7 +64,7 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 
 | ID | Amenaza (STRIDE) | Superficie | Adversarios | Mitigación | Componente | Tarea | Estado | Evidencia |
 |---|---|---|---|---|---|---|---|---|
-| M-01 | T: escribir en un sistema del cliente | Conectores | A2, A3 | Solo lectura por construcción: validación sintáctica con sqlglot (una sentencia, sin nodos de escritura ni funciones con efectos), sesión de solo lectura y `execute()` final (huecos de la revisión F09-02, ver `docs/seguridad/revision-f01-f08.md`) | ARG-011, ARG-014 | F02-01, F09-21 | en desarrollo | `connectors/sdk/argos_connector/readonly.py`, `connectors/sdk/tests/test_sdk_readonly.py` |
+| M-01 | T: escribir en un sistema del cliente | Conectores | A2, A3 | Solo lectura por construcción: validación sintáctica con sqlglot (una sentencia, sin nodos de escritura, sin comentarios que el motor ejecute, sin pistas de bloqueo, funciones denegadas por segmento y funciones no modeladas solo de catálogo), sesión de solo lectura con tiempo máximo y `execute()` final | ARG-011, ARG-014 | F02-01, F09-21 | implementada | `connectors/sdk/argos_connector/readonly.py`, `connectors/sdk/tests/test_sdk_readonly.py` |
 | M-02 | R: negar qué se consultó en un sistema del cliente | Conectores | A2, A3 | Diario previo de consultas: la sentencia literal queda asentada antes de tocar el sistema, y los rechazos también | ARG-012 | F02-02 | implementada | `connectors/sdk/argos_connector/journal.py`, `tests/integration/test_query_journal_pg.py` |
 | M-03 | D: saturar un sistema del cliente | Conectores | A2 | Presupuesto de carga, ventanas horarias, tope de filas por sonda y cortacircuitos (huecos de la revisión F09-02, ver `docs/seguridad/revision-f01-f08.md`) | ARG-013 | F02-03, F09-22 | en desarrollo | `connectors/sdk/argos_connector/budget.py`, `connectors/sdk/tests/test_sdk_budget.py` |
 | M-04 | I: traer datos del cliente a ARGOS | Conectores | A2, A3 | Minimización: digests HMAC por sistema y tasas de validación, nunca valores en claro | ARG-011, ARG-024 | F02-01 | implementada | `connectors/sdk/argos_connector/minimize.py`, `connectors/sdk/tests/test_sdk_minimize.py` |
@@ -130,3 +130,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.1 | 2026-09-23 | M-39 pasa a implementada al integrar la auditoría del 2026-09-18 (F09-17) |
 | 1.2 | 2026-09-23 | M-01, M-03, M-05, M-06, M-12, M-13, M-14 y M-28 vuelven a «en desarrollo» por los huecos que encontró la revisión F09-02, con su tarea de corrección |
 | 1.3 | 2026-09-23 | M-12 vuelve a «implementada» tras F09-20 |
+| 1.4 | 2026-09-23 | M-01 vuelve a «implementada» tras F09-21 |
