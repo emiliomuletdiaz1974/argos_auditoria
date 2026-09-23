@@ -181,4 +181,4 @@ def test_the_session_is_refreshed_from_the_cookie_and_never_from_a_header(migrat
 
     cookie = answer.headers["set-cookie"]
     assert "HttpOnly" in cookie and "SameSite=strict" in cookie.replace("Strict", "strict")
-    assert f"Path={API_PREFIX}/auth/refresh" in cookie
+    assert f"Path={API_PREFIX}/auth" in cookie  # refresh and logout (F09-30)
