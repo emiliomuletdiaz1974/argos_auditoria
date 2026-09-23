@@ -21,7 +21,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 
 - **Hace:** publicar el contrato de la v1, resolver las peticiones llamando a las librerías del dominio y dejar asiento en el diario de toda mutación (esto último, desde F08-03).
 - **No hace:** no escribe SQL sobre tablas de otras fases; no expone material público (eso es `evidence-api` y el comprobador, que siguen siendo servicios aparte).
-- **Estado:** implementados sistemas e inventario (F08-04) campañas con su plan previo y compuertas (F08-05) hallazgos con remediación verificada (F08-06) evidencia y credenciales (F08-07) el asistente (F08-08) y los webhooks hacia el ITSM (F08-09); el resto de rutas están declaradas y validan sus parámetros, pero devuelven `501` hasta su tarea.
+- **Estado:** implementados sistemas e inventario (F08-04), campañas con su plan previo y compuertas (F08-05), hallazgos con remediación verificada (F08-06), evidencia y credenciales (F08-07), el asistente (F08-08) y los webhooks hacia el ITSM (F08-09). Queda una sola ruta declarada sin comportamiento: `GET /approvals` (lo pendiente de aprobar por esta persona en todas sus campañas) valida permiso y paginación, pero responde `501`; las compuertas de cada campaña sí se sirven en `GET /campaigns/{id}/gates`.
 
 ## 3. Arquitectura
 

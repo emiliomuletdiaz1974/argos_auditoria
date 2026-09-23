@@ -17,14 +17,15 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | 04 · Ontología normativa | [F04-ontologia-normativa.md](fases/F04-ontologia-normativa.md) | Cierre técnico (`fase-04-tecnica`); contenido pendiente de validación jurídica |
 | 05 · Motor de retos | [F05-motor-retos.md](fases/F05-motor-retos.md) | Cerrada (`fase-05`); contenido normativo pendiente de validación jurídica |
 | 07 · Evidencia y credencial | [F07-evidencia-credencial.md](fases/F07-evidencia-credencial.md) | Cerrada (`fase-07`) con firma, sello y EDC de desarrollo; TPM, TSA cualificada, EDC real y GXDCH pendientes |
+| 08 · Consola y APIs | [F08-consola-apis.md](fases/F08-consola-apis.md) | Cerrada (`fase-08`); falta la prueba con un usuario de negocio (F08-98) y el asistente espera al modelo local (F06-05) |
 
 ## Módulos
 
 | Paquete | Documento | Fases |
 |---|---|---|
-| `argos-api` | [argos-api.md](modulos/argos-api.md) | 08 (en construcción) |
+| `argos-api` | [argos-api.md](modulos/argos-api.md) | 08 |
 | `argos-auth` | [argos-auth.md](modulos/argos-auth.md) | 01 |
-| `argos-console` | [argos-console.md](modulos/argos-console.md) | 08 (en construcción) |
+| `argos-console` | [argos-console.md](modulos/argos-console.md) | 08 |
 | `argos-ai-gateway` | [argos-ai-gateway.md](modulos/argos-ai-gateway.md) | 06 (en construcción) |
 | `argos-challenge-engine` | [argos-challenge-engine.md](modulos/argos-challenge-engine.md) | 01 (base; completo en 05) |
 | `argos-common` | [argos-common.md](modulos/argos-common.md) | 01, 03 |
