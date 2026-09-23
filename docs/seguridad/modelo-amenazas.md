@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.5 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.6 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -69,7 +69,7 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-03 | D: saturar un sistema del cliente | Conectores | A2 | Presupuesto de carga compartido por sistema entre todos los procesos (fila en PostgreSQL), ventanas horarias, tope de filas por sonda y cortacircuitos que pausa las campañas | ARG-013 | F02-03, F09-22 | implementada | `connectors/sdk/argos_connector/budget_pg.py`, `tests/integration/test_shared_budget.py` |
 | M-04 | I: traer datos del cliente a ARGOS | Conectores | A2, A3 | Minimización: digests HMAC por sistema y tasas de validación, nunca valores en claro | ARG-011, ARG-024 | F02-01 | implementada | `connectors/sdk/argos_connector/minimize.py`, `connectors/sdk/tests/test_sdk_minimize.py` |
 | M-05 | T/R: alterar o borrar el diario | PostgreSQL | A2, A3 | Cadena hash v1 con `seq` sin huecos, escritura solo por `journal_append` y triggers contra UPDATE, DELETE y TRUNCATE; verificador independiente (huecos de la revisión F09-02, ver `docs/seguridad/revision-f01-f08.md`) | ARG-005, ARG-066 | F1-04b, F09-26 | en desarrollo | `services/api/migrations/0001_core.sql`, `tests/integration/test_journal_pg.py` |
-| M-06 | T: fabricar un veredicto | Motor de retos | A2, A8 | Solo el evaluador determinista escribe veredictos, vigilado por un test arquitectónico (huecos de la revisión F09-02, ver `docs/seguridad/revision-f01-f08.md`) | ARG-046 | F05-04, F09-23 | en desarrollo | `tests/architecture/test_verdict_boundary.py` |
+| M-06 | T: fabricar un veredicto | Motor de retos | A2, A8 | Solo el evaluador determinista escribe veredictos, y solo de unidades del plan guardado en campañas en curso con sus compuertas aprobadas; sello v2 que cubre plan y aprobaciones y que la base no deja cambiar | ARG-046 | F05-04, F09-23 | implementada | `tests/architecture/test_verdict_boundary.py`, `tests/integration/test_campaign_integrity.py` |
 | M-07 | E: el LLM decide un veredicto | Gateway de IA | A7, A2 | Barrera: ningún import del gateway alcanza el veredicto y el rol de base de datos del gateway no ve los veredictos | ARG-052, ARG-060 | F06-01 | implementada | `tests/architecture/test_ai_boundary.py`, `tests/integration/test_ai_boundary.py` |
 | M-08 | T/I: inyección de instrucciones desde los datos | Gateway de IA | A7 | Guardarraíles de entrada y salida, salida JSON forzada y asistente con cuatro herramientas cerradas de solo lectura | ARG-060, ARG-058 | F06-03 | implementada | `services/ai-gateway/argos_ai/guardrails` |
 | M-09 | E: el gateway se quita su rol con `RESET ROLE` | Gateway de IA | A2 | Credencial propia del gateway en lugar de `SET ROLE` sobre el superusuario | ARG-052, ARG-085 | F09-04 | en desarrollo | — |
@@ -132,3 +132,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.3 | 2026-09-23 | M-12 vuelve a «implementada» tras F09-20 |
 | 1.4 | 2026-09-23 | M-01 vuelve a «implementada» tras F09-21 |
 | 1.5 | 2026-09-23 | M-03 vuelve a «implementada» y M-02 cubre la exploración y las peticiones adicionales tras F09-22 |
+| 1.6 | 2026-09-23 | M-06 vuelve a «implementada» tras F09-23 |
