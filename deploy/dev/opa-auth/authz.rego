@@ -3,8 +3,9 @@
 # OPA decides verdicts of the challenge engine, so who may talk to it is part of the product:
 # - without a token, only the liveness endpoint answers;
 # - with a known token, a client may only evaluate an argos.* package;
-# - nobody may load, replace or read policies, nor read data outside argos.* over the API:
-#   policies come from the read-only mount of the library.
+# - nobody may load or replace policies, nor read data outside argos.* over the API: policies
+#   come from the read-only mount of the library;
+# - a known client may list the policies OPA runs, to compare them with the signed bundle.
 #
 # Tokens are compared by their SHA-256 (clients.json), so the data OPA holds reveals none.
 package system.authz

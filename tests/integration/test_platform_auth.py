@@ -147,7 +147,7 @@ def test_even_a_known_client_cannot_load_a_policy() -> None:
 @pytest.mark.parametrize(
     ("method", "path"),
     [
-        ("GET", "/v1/policies"),
+        ("GET", "/v1/policies/auth/authz.rego"),
         ("GET", "/v1/data/opa_clients"),
         ("POST", "/v1/data/system/authz/allow"),
     ],
@@ -156,3 +156,13 @@ def test_even_a_known_client_cannot_read_outside_argos(method: str, path: str) -
     headers = {"Authorization": f"Bearer {OPA_TOKEN}"}
     response = httpx.request(method, f"{OPA}{path}", headers=headers, timeout=5)
     assert _refused(response)
+
+
+def test_a_known_client_may_list_the_policies_but_not_the_token_hashes() -> None:
+    # Campaigns compare the Rego OPA runs with the signed bundle (SEC-011). The rules are already
+    # public in the repository; what identifies a client (clients.json) stays unreadable.
+    headers = {"Authorization": f"Bearer {OPA_TOKEN}"}
+    listed = httpx.get(f"{OPA}/v1/policies", headers=headers, timeout=5)
+    assert listed.status_code == 200
+    assert OPA_TOKEN not in listed.text
+    assert _refused(httpx.get(f"{OPA}/v1/policies", timeout=5))
