@@ -126,19 +126,21 @@ def test_report_contains_every_section_from_metadata(migrated_db: str) -> None:
     for heading in HEADINGS:
         assert heading in report, heading
     assert "2026-09-15T12:00:00+00:00" in report
+    # Every text cell is a code span since F09-31 (SEC-055): the report shows names, never renders.
     special_row = (
-        "| dev-source-postgres | clinic.patient_documents.diagnosis_code "
-        "| special_category.health | dict | 0.60 |"
+        "| `dev-source-postgres` | `clinic.patient_documents.diagnosis_code` "
+        "| `special_category.health` | `dict` | 0.60 |"
     )
     assert special_row in report
     assert "engine_catalog" in report and "inferido" in report
     assert "table:readmission_risk" in report and "pendiente" in report
     assert "score_column" in report
     treatment_row = (
-        "| T-001 | Synthetic clinical record | GDPR 9.2.h | 15 years | dev-source-postgres |"
+        "| `T-001` | `Synthetic clinical record` | `GDPR 9.2.h` | `15 years` "
+        "| `dev-source-postgres` |"
     )
     assert treatment_row in report
-    assert "| dev-source-postgres | 1 |" in report  # pending reviews per system
+    assert "| `dev-source-postgres` | 1 |" in report  # pending reviews per system
 
 
 def test_report_warns_about_gaps(migrated_db: str) -> None:

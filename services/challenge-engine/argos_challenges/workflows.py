@@ -103,12 +103,18 @@ async def await_reversions(campaign_id: str, progress: dict[str, Any] | None = N
 
 
 async def await_gate(
-    campaign_id: str, gate: str, payload: dict[str, Any], approved: set[str]
+    campaign_id: str,
+    gate: str,
+    payload: dict[str, Any],
+    approved: set[str],
+    progress: dict[str, Any] | None = None,
 ) -> None:
     """Ask for a gate and wait until the approvals people recorded open it.
 
     A signal only wakes the wait early; what opens the gate is `check_gate`, which reads the
-    recorded approvals (whoever reaches Temporal can send a signal).
+    recorded approvals (whoever reaches Temporal can send a signal). The campaign says it awaits
+    the gate only once the request is stored: a person who approves on seeing that state always
+    finds the request to approve.
     """
     await workflow.execute_activity(
         "request_approval",
@@ -116,6 +122,8 @@ async def await_gate(
         start_to_close_timeout=_TIMEOUT,
         retry_policy=RETRY_POLICY,
     )
+    if progress is not None:
+        progress["status"] = f"awaiting:{gate}"
     deadline = workflow.now() + GATE_TIMEOUT
     while True:
         with contextlib.suppress(TimeoutError):
@@ -191,8 +199,7 @@ class CampaignWorkflow:
         return {**self._progress, "paused": paused}
 
     async def _gate(self, campaign_id: str, gate: str, payload: dict[str, Any]) -> None:
-        self._progress["status"] = f"awaiting:{gate}"
-        await await_gate(campaign_id, gate, payload, self._approved)
+        await await_gate(campaign_id, gate, payload, self._approved, self._progress)
 
     async def _run_system(
         self, campaign_id: str, system_id: str, units: list[dict[str, Any]]

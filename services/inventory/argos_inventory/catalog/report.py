@@ -102,7 +102,7 @@ def markdown_cell(value: Any, labels: dict[str, str]) -> str:
         return labels["yes"] if value else labels["no"]
     if isinstance(value, float):
         return f"{value:.2f}"
-    if isinstance(value, Decimal):
+    if isinstance(value, int | Decimal):  # a count is not text of the client
         return str(value)
     if isinstance(value, datetime):
         return value.astimezone(UTC).isoformat()

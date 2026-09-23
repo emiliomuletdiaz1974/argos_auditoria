@@ -49,6 +49,7 @@ CLEAR_COLUMNS = frozenset(
         "lag_s",
         "member_name",
         "name",
+        "options",  # of a declared engine link: host, database, port (passwords live elsewhere)
         "policy_name",
         "privilege_type",
         "profile",

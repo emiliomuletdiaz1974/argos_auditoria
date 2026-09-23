@@ -214,6 +214,7 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Compuertas sin carrera** (F09-31): el workflow pasa a `awaiting:<compuerta>` cuando `request_approval` ya guardó la solicitud, no antes. Quien aprueba al ver ese estado (la consola, un test) siempre encuentra la solicitud.
 - **Lint de `check_config`** (F09-31, SEC-022): `intrinsic_errors` comprueba con `check_config_sources` que la sentencia declarada de cada conector SQL (`CHECK_DIALECTS`) solo lee catálogo y configuración. Se aplica en el CI y al cargar la biblioteca.
 - Cada actividad que produce un resultado relevante lo anota en el diario de auditoría encadenado.
 - El workflow de humo no accede a sistemas del cliente.
@@ -370,4 +371,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.3.0-alpha | 2026-09-23 | Nadie aprueba ni confirma lo que pidió; riesgo aceptado con fecha futura y tope | F09-24 |
 | 0.4.0-alpha | 2026-09-23 | La campaña solo arranca si el disco y OPA tienen el contenido firmado en vigor | F09-25 |
 | 0.5.0-alpha | 2026-09-23 | Plazo de los derechos con las fechas del cliente, sujeto siempre de su campaña, precondición en el compilador, reversión comprobada antes del sello, SHACL sobre la instantánea y subsanación reproducible y sellada | F09-27 |
-| 0.6.0-alpha | 2026-09-23 | El lint rechaza un `check_config` que lea tablas del cliente | F09-31 |
+| 0.6.0-alpha | 2026-09-23 | El lint rechaza un `check_config` que lea tablas del cliente, y la campaña anuncia `awaiting:<compuerta>` solo cuando la solicitud ya está guardada | F09-31 |
