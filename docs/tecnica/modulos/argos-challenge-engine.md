@@ -4,8 +4,8 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.3.0-alpha
-commit: 03c53c6
+version: 0.4.0-alpha
+commit: 324fcd2
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -224,6 +224,7 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
   - **Sello v2 (`argos/seal/2`):** cubre también el plan y las aprobaciones, solo se sella una campaña en curso y es válido solo si es el único anclaje. Los disparadores de `0031_campaign_integrity.sql` impiden cambiar el sello o añadir veredictos a una campaña sellada.
   - **Subsanación:** `RemediationRun` exige quién la pide y pasa por las compuertas de su campaña de subsanación, que consulta cada `GATE_POLL`.
 - **Separación de deberes por persona** (F09-24; SEC-008 y SEC-042): `grant_approval` rechaza que apruebe quien creó la campaña (en una subsanación, quien la pidió), y las confirmaciones del sujeto sintético rechazan a quien autorizó el punto. Aceptar un riesgo exige una fecha futura a 365 días como mucho (`RISK_ACCEPTANCE_MAX_DAYS`).
+- **Contenido firmado en ejecución** (F09-25, SEC-011): `_prepare` comprueba, antes de fijar versiones o compilar, que la biblioteca del disco (`verify_on_disk`) y las políticas que OPA tiene cargadas (`verify_running_policies`) son las del bundle firmado en vigor. Si no, la campaña se para sin fijar nada. Tests y demo publican la biblioteca con `publish_library` y la clave `argos-content` de Vault de desarrollo.
 
 ## 7. Operación
 
@@ -356,3 +357,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-22 | La pausa de un sistema caduca: el workflow espera `circuit_closed` como mucho `PAUSE_MAX` (300 s, el enfriamiento del conector). Nadie envía hoy esa señal —el conector solo anuncia la apertura—, y sin cota una campaña se quedaba esperando para siempre | F08-17 |
 | 0.2.0-alpha | 2026-09-23 | Veredictos solo del plan en campañas en curso, doble control derivado del muestreo, evidencia de OPA no declarable, sello v2 con plan y aprobaciones y disparadores, subsanación con compuertas y fallos de OPA reintentables | F09-23 |
 | 0.3.0-alpha | 2026-09-23 | Nadie aprueba ni confirma lo que pidió; riesgo aceptado con fecha futura y tope | F09-24 |
+| 0.4.0-alpha | 2026-09-23 | La campaña solo arranca si el disco y OPA tienen el contenido firmado en vigor | F09-25 |

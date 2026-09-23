@@ -56,3 +56,25 @@ def evaluate(
     if not isinstance(result, dict):
         raise OpaError(f"verdict of {package} is not an object")
     return result
+
+
+def loaded_policies(base_url: str = DEFAULT_OPA_URL, *, token: str | None = None) -> dict[str, str]:
+    """The Rego modules OPA is running, by id, with their text (read-only, SEC-011).
+
+    A campaign compares them with the signed bundle in force: OPA reads its own mount, so what it
+    runs has to be checked where it runs, not where the worker reads its copy.
+    """
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    try:
+        with httpx.Client(timeout=TIMEOUT_SECONDS) as http:
+            response = http.get(f"{base_url.rstrip('/')}/v1/policies", headers=headers)
+            response.raise_for_status()
+            body = response.json()
+    except httpx.HTTPStatusError as exc:
+        raise OpaError(f"OPA answered {exc.response.status_code} for its policies") from exc
+    except httpx.HTTPError as exc:
+        raise OpaError(f"cannot reach OPA at {base_url}: {exc}") from exc
+    modules = body.get("result") if isinstance(body, dict) else None
+    if not isinstance(modules, list):
+        raise OpaError("OPA did not list its policies")
+    return {str(m["id"]): str(m["raw"]) for m in modules if isinstance(m, dict)}

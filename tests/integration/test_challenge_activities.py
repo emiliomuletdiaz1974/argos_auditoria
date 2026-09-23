@@ -1,14 +1,23 @@
 """ARG-044/046 · the probe and evaluation activities against the simulated sources."""
 
 import asyncio
+import os
+import shutil
+from datetime import date
+from pathlib import Path
 from typing import Any
 
 import pytest
 from temporalio.exceptions import ApplicationError
 
+from argos_challenges import activities as activities_module
 from argos_challenges.activities import ChallengeActivities
-from argos_challenges.store import create_campaign, pin_campaign
+from argos_challenges.store import campaign_record, create_campaign, pin_campaign
+from argos_common.errors import IntegrityError
 from argos_common.journal_pg import PostgresJournal
+from argos_common.release import VaultTransitSigner
+from argos_ontology.bundle import publish_library
+from argos_ontology.vocabulary import LIBRARY_DIR
 
 from .campaign_helpers import running
 from .inventory_helpers import secret_store
@@ -126,3 +135,22 @@ def test_the_probe_writes_its_previous_journal_entry(
     entries = {entry.seq: entry for entry in PostgresJournal(migrated_db).read(1, 500)}
     assert result["journal_seq"] in entries
     assert entries[result["journal_seq"]].action == "query.emit"
+
+
+def test_a_rego_changed_on_disk_stops_the_campaign_before_it_is_pinned(
+    migrated_db: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    signer = VaultTransitSigner(
+        os.environ.get("ARGOS_TEST_VAULT", "http://127.0.0.1:8200"), "root", key="argos-content"
+    )
+    publish_library(migrated_db, LIBRARY_DIR, "1.0.0", date(2026, 1, 1), signer)
+    copy = tmp_path / "library"
+    shutil.copytree(LIBRARY_DIR, copy)
+    rego = copy / "policies" / "retention.rego"
+    rego.write_text(rego.read_text(encoding="utf-8") + "\n# softened\n", encoding="utf-8")
+    monkeypatch.setattr(activities_module, "LIBRARY_DIR", copy)
+    campaign_id = create_campaign(migrated_db, CAMPAIGN_NAME, {}, MANAGER)
+    activities = ChallengeActivities(migrated_db, secret_store())
+    with pytest.raises(IntegrityError, match="policies/retention.rego"):
+        activities._prepare(campaign_id)
+    assert campaign_record(migrated_db, campaign_id)["ontology_version"] is None

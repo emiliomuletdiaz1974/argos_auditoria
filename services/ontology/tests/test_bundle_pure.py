@@ -95,9 +95,9 @@ def test_a_signed_bundle_verifies_and_yields_its_graph(library: Path) -> None:
     ("change", "message"),
     [
         ({"ontology/core/argos-core.ttl": b"# softened\n"}, "altered file"),
-        ({"policies/extra.rego": b"package argos.extra\n"}, "extra \\['policies/extra.rego'\\]"),
+        ({"policies/extra.rego": b"package argos.extra\n"}, "not signed: 'policies/extra.rego'"),
         ({"challenges/catalog.yaml": None}, "missing \\['challenges/catalog.yaml'\\]"),
-        ({MANIFEST_NAME: None}, "no manifest"),
+        ({MANIFEST_NAME: None}, "manifest must be the first member"),
         ({"../evil.ttl": b"x"}, "unsafe bundle member"),
     ],
 )
@@ -163,3 +163,54 @@ def test_the_publish_tool_verifies_and_rejects(library: Path, tmp_path: Path) ->
     assert tool.main(["verify", str(target)]) == 1
     target.write_bytes(_repack(bundle, {"policies/retention.rego": b"package argos.softened\n"}))
     assert tool.main(["verify", str(target), *pinned]) == 1
+
+
+# ---------- hostile bundles (security review F09-02, SEC-019) ----------
+
+
+def test_the_manifest_comes_first_so_nothing_is_read_before_the_signature(library: Path) -> None:
+    bundle, manifest = build_bundle(library, "1.0.0", IN_FORCE)
+    signer = LocalSigner()
+    raw_manifest = serialize(manifest)
+    moved = _repack(bundle, {MANIFEST_NAME: None})
+    moved = _repack(moved, {MANIFEST_NAME: raw_manifest})  # now the last member
+    with pytest.raises(BundleRejectedError, match="first"):
+        verify_bundle(moved, sign_bundle(manifest, signer), signer.public_key())
+
+
+def test_a_bundle_that_inflates_beyond_the_ceiling_is_refused(
+    library: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from argos_ontology import bundle as module
+
+    bundle, manifest = build_bundle(library, "1.0.0", IN_FORCE)
+    signer = LocalSigner()
+    monkeypatch.setattr(module, "MAX_TOTAL_BYTES", 64)
+    with pytest.raises(BundleRejectedError, match="large"):
+        verify_bundle(bundle, sign_bundle(manifest, signer), signer.public_key())
+
+
+def test_a_member_nobody_signed_is_refused_before_it_is_read(library: Path) -> None:
+    bundle, manifest = build_bundle(library, "1.0.0", IN_FORCE)
+    signer = LocalSigner()
+    padded = _repack(bundle, {"policies/zz-extra.rego": b"x" * 1024})
+    with pytest.raises(BundleRejectedError, match="not signed"):
+        verify_bundle(padded, sign_bundle(manifest, signer), signer.public_key())
+
+
+def test_a_bundle_declaring_100_gb_is_refused_without_reading_it(library: Path) -> None:
+    bundle, manifest = build_bundle(library, "1.0.0", IN_FORCE)
+    signer = LocalSigner()
+    raw_manifest = serialize(manifest)
+    head = tarfile.TarInfo(MANIFEST_NAME)
+    head.size = len(raw_manifest)
+    huge = tarfile.TarInfo("ontology/core/argos-core.ttl")
+    huge.size = 100 * 1024**3  # declared, never written: the header alone must stop it
+    raw = io.BytesIO()
+    raw.write(head.tobuf(format=tarfile.USTAR_FORMAT) + raw_manifest)
+    raw.write(b"\0" * (-len(raw_manifest) % tarfile.BLOCKSIZE))
+    raw.write(huge.tobuf(format=tarfile.GNU_FORMAT) + b"\0" * tarfile.BLOCKSIZE)
+    with pytest.raises(BundleRejectedError, match="too large"):
+        verify_bundle(
+            gzip.compress(raw.getvalue()), sign_bundle(manifest, signer), signer.public_key()
+        )

@@ -14,6 +14,7 @@ The ground truth is never adjusted to the output: it is loaded from the fixture 
 
 import asyncio
 import contextlib
+import os
 import uuid
 from collections import defaultdict
 from collections.abc import Iterator
@@ -52,13 +53,13 @@ from argos_challenges.synthetic import (
 from argos_challenges.workflows import CampaignWorkflow, RemediationRun, SystemRun
 from argos_common.config import get_config
 from argos_common.migrations import apply_migrations
+from argos_common.release import VaultTransitSigner
 from argos_inventory.ai_discovery.detect import discover_ai
 from argos_inventory.catalog.treatments import import_treatments
 from argos_inventory.classify.deterministic import classify_new_columns
 from argos_inventory.graph.store import GraphStore
-from argos_ontology.store import store_version
-from argos_ontology.traceability import library_graph
-from argos_ontology.vocabulary import NORMS
+from argos_ontology.bundle import publish_library
+from argos_ontology.vocabulary import LIBRARY_DIR, NORMS
 
 pytestmark = pytest.mark.integration
 
@@ -110,7 +111,16 @@ def demo(phase5_db: str) -> dict[str, str]:
     discover_ai(store)
     apply_demo_review(store, phase5_db, systems)
     import_treatments(store, phase5_db, TREATMENTS.read_bytes(), DPO)
-    store_version(phase5_db, ONTOLOGY_VERSION, IN_FORCE, library_graph(), "e" * 64, {}, b"demo")
+    # The campaign runs from signed content only (SEC-011): the library is published as a bundle.
+    publish_library(
+        phase5_db,
+        LIBRARY_DIR,
+        ONTOLOGY_VERSION,
+        IN_FORCE,
+        VaultTransitSigner(
+            os.environ.get("ARGOS_TEST_VAULT", "http://127.0.0.1:8200"), "root", key="argos-content"
+        ),
+    )
     _inject_the_subject(phase5_db, systems)
     return systems
 

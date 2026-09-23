@@ -26,7 +26,7 @@ from integration.inventory_helpers import probe_runner, scan_and_ingest
 from psycopg import sql
 
 from argos_common.migrations import apply_migrations
-from argos_common.release import VaultTransitSigner
+from argos_common.release import VaultTransitSigner, key_fingerprint
 from argos_inventory.ai_discovery.detect import discover_ai
 from argos_inventory.classify.deterministic import classify_new_columns
 from argos_inventory.graph.model import system_key
@@ -111,10 +111,14 @@ def test_signed_bundle_applicability_and_engines_on_the_demo_snapshot(
     catalog.write_text(catalog.read_text(encoding="utf-8") + "# altered\n", encoding="utf-8")
     altered, _ = build_bundle(altered_library, VERSION, IN_FORCE)
     with pytest.raises(BundleRejectedError):
-        load_bundle(phase4_db, altered, signature, public_key)
+        load_bundle(
+            phase4_db, altered, signature, public_key, fingerprint=key_fingerprint(public_key)
+        )
     with psycopg.connect(phase4_db) as conn:
         assert conn.execute("SELECT count(*) FROM argos.ontology_bundles").fetchone() == (0,)
-    record = load_bundle(phase4_db, bundle, signature, public_key)
+    record = load_bundle(
+        phase4_db, bundle, signature, public_key, fingerprint=key_fingerprint(public_key)
+    )
     assert (record.version, record.in_force_from) == (VERSION, IN_FORCE)
 
     # 3. Applicability on the demo snapshot equals the ground truth on every date.

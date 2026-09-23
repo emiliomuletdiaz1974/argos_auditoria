@@ -60,6 +60,7 @@ from argos_challenges.synthetic import (  # noqa: E402
 from argos_challenges.workflows import CampaignWorkflow, SystemRun  # noqa: E402
 from argos_common.config import get_config  # noqa: E402
 from argos_common.migrations import apply_migrations  # noqa: E402
+from argos_common.release import VaultTransitSigner  # noqa: E402
 from argos_connector.testing import assert_sql_writes_rejected  # noqa: E402
 from argos_evidence.service import build_activities  # noqa: E402
 from argos_evidence.settings import EvidenceSettings  # noqa: E402
@@ -68,8 +69,8 @@ from argos_inventory.ai_discovery.detect import discover_ai  # noqa: E402
 from argos_inventory.catalog.treatments import import_treatments  # noqa: E402
 from argos_inventory.classify.deterministic import classify_new_columns  # noqa: E402
 from argos_inventory.graph.store import GraphStore  # noqa: E402
-from argos_ontology.store import store_version  # noqa: E402
-from argos_ontology.traceability import library_graph  # noqa: E402
+from argos_ontology.bundle import publish_library  # noqa: E402
+from argos_ontology.vocabulary import LIBRARY_DIR  # noqa: E402
 from argos_sql.postgres import PostgresConnector  # noqa: E402
 from argos_verifier.checks import Trust, verify_bundle  # noqa: E402
 
@@ -81,6 +82,7 @@ DPO = "user:dpo"
 SECOND_DPO = "user:dpo-2"
 SEED = "demo-campaign"
 STAR_CHALLENGE = "dsr-erasure-effective"
+DEV_VAULT = "http://127.0.0.1:8200"
 DEV_VAULT_TOKEN = "root"  # noqa: S105 - development Vault started with -dev-root-token-id=root
 # The same values the evidence containers run with (deploy/dev/compose.yaml), seen from the host.
 DEV_EVIDENCE = {
@@ -146,7 +148,14 @@ def _inventory(dsn: str, systems: list[str]) -> dict[str, str]:
     discover_ai(store)
     apply_demo_review(store, dsn, ids)
     import_treatments(store, dsn, TREATMENTS.read_bytes(), DPO)
-    store_version(dsn, ONTOLOGY_VERSION, IN_FORCE, library_graph(), "e" * 64, {}, b"demo")
+    # The campaign runs from signed content only (SEC-011): the library is published as a bundle.
+    publish_library(
+        dsn,
+        LIBRARY_DIR,
+        ONTOLOGY_VERSION,
+        IN_FORCE,
+        VaultTransitSigner(DEV_VAULT, DEV_VAULT_TOKEN, key="argos-content"),
+    )
     return ids
 
 

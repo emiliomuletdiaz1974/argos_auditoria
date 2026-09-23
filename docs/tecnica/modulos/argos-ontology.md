@@ -4,9 +4,9 @@ kind: module
 title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
-version: 0.1.0-alpha
-commit: 6654a05
-date: 2026-09-17
+version: 0.2.0-alpha
+commit: 324fcd2
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -95,13 +95,19 @@ La ontología viaja del equipo editorial a los appliances, incluidos los aislado
 - **Manifiesto** (`manifest.json`): versión, fecha de entrada en vigor y SHA-256 de cada fichero.
 - **Firma:** el manifiesto se firma con la clave Ed25519 **`argos-content`** de Vault Transit. La clave no es exportable y es distinta de la de releases de software.
 
-**Antes de cargar se verifica siempre** (`verify_bundle`, `load_bundle`), y el bundle se rechaza (`BundleRejectedError`) si:
+**Antes de cargar se verifica siempre** (`verify_bundle`, `load_bundle`). El bundle se lee como flujo: primero el manifiesto, que tiene que ser el primer miembro, y su firma; después solo los miembros que el manifiesto lista. Se rechaza (`BundleRejectedError`) si:
 - la firma no es válida o es de otra clave, incluida la de releases;
-- el manifiesto no está en forma canónica o no describe un bundle de ontología;
-- sobran, faltan o cambiaron ficheros respecto al manifiesto;
-- el archivo no es un tar.gz válido, trae rutas inseguras o nombres repetidos, o supera los límites (5000 ficheros, 20 MB por fichero).
+- el manifiesto no es el primer miembro, no está en forma canónica o no describe un bundle de ontología;
+- aparece un miembro que el manifiesto no firmó (se rechaza antes de leer su contenido), falta alguno o cambió;
+- el archivo no es un tar.gz válido, trae rutas inseguras o nombres repetidos, o supera los límites: 5000 ficheros, 20 MB por fichero (se mira en la cabecera, sin leer) y 200 MB descomprimidos en total (`MAX_TOTAL_BYTES`).
+
+`load_bundle` exige además la huella fijada de la clave (`fingerprint`, `require_trusted_key`) y rechaza una versión semver anterior a la más reciente ya cargada salvo `allow_rollback=True`. Cargar de nuevo la misma versión con otro contenido ya lo impedía `store_version` (`BundleConflictError`).
 
 Solo un bundle verificado llega al almacén versionado.
+
+**En ejecución** (F09-25, SEC-011): lo que decide un veredicto se lee del disco del worker y de OPA, así que antes de cada campaña se compara con el manifiesto firmado de la versión en vigor:
+- `verify_on_disk(dsn, version, library_dir)`: todos los ficheros de la biblioteca (retos, Rego, SHACL, ontología) tienen el hash firmado, sin que sobre ni falte ninguno.
+- `verify_running_policies(dsn, version, loaded_policies(...))`: los módulos Rego que OPA tiene cargados son exactamente los firmados (sin los `_test`). El montaje `auth` es la regla de acceso del propio OPA y no cuenta como contenido.
 
 ### Plano de aplicabilidad (ARG-033)
 
@@ -363,7 +369,8 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | Funciones | `store_version(dsn, version, in_force_from, graph, sha256, manifest, signature)`, `version_in_force(dsn, at)`, `bundle_record(dsn, version)` | Carga y consulta de versiones |
 | Clase | `OntologyStore(dsn, version=None, at=None)` con `sparql(query, bindings)` | SPARQL sobre una versión |
 | Asiento | `ontology.load` | Carga de una versión en el diario |
-| Funciones | `build_bundle(library_dir, version, in_force_from)`, `sign_bundle(manifest, signer)`, `verify_bundle(bundle, signature, public_key)`, `bundle_graph(verified)`, `load_bundle(dsn, bundle, signature, public_key)` | Construcción, firma, verificación y carga |
+| Funciones | `build_bundle(library_dir, version, in_force_from)`, `sign_bundle(manifest, signer)`, `verify_bundle(bundle, signature, public_key)`, `bundle_graph(verified)`, `load_bundle(dsn, bundle, signature, public_key, *, fingerprint, allow_rollback=False)`, `publish_library(dsn, library_dir, version, in_force_from, signer)` | Construcción, firma, verificación y carga (`publish_library` construye, firma y carga con la huella de su propio firmante: desarrollo, tests y demo) |
+| Funciones | `signed_files(dsn, version)`, `verify_on_disk(dsn, version, library_dir)`, `verify_running_policies(dsn, version, loaded)`, `opa.loaded_policies(base_url, *, token)` | Comprobación en ejecución del contenido firmado (SEC-011) |
 | Herramienta | `tools/ontology_publish.py build --version X.Y.Z --in-force-from AAAA-MM-DD [--output DIR]` | Escribe `argos-ontology-X.Y.Z.tar.gz`, su firma `.sig` y la clave pública `content.pub`, e imprime la huella de la clave para guardarla aparte |
 | Herramienta | `tools/ontology_publish.py verify <bundle> [--public-key FICHERO \| --fingerprint HUELLA]` | Verifica un bundle sin cargarlo. La `content.pub` que acompaña al bundle solo se acepta si coincide con `--fingerprint`: quien sustituye el bundle puede sustituir también la clave de al lado |
 | Clave | Vault Transit `argos-content` (Ed25519) | Firma de contenidos normativos |
@@ -399,13 +406,16 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 - La ontología no contiene datos personales ni del cliente: solo normas, obligaciones y su relación con clases abstractas de activo.
 - **Vocabulario cerrado:** el núcleo no puede declarar términos fuera de la lista (lo comprueba un test).
 - **Idioma** (ADR-0005): identificadores y valores en inglés; etiquetas en castellano.
+- **Contenido firmado de punta a punta** (F09-25; SEC-011, SEC-019, SEC-020): bundle leído en flujo con tope total, huella obligatoria, anti-retroceso y comprobación en ejecución del disco y de OPA frente al manifiesto firmado.
+- **OPA:** su autorización deja a un cliente conocido leer `GET /v1/policies` (las reglas no llevan secretos). Cargar o sustituir políticas sigue prohibido.
 - **Decisiones aplicables:** ADR-0006 y nota de desviación ARG-031-033.
 
 ## 7. Operación
 
 - **Publicar una versión:** `uv run --env-file .env.example python tools/ontology_publish.py build --version X.Y.Z --in-force-from AAAA-MM-DD`, con un token de Vault con permiso de firma sobre `argos-content`.
 - **Verificar un bundle recibido:** `tools/ontology_publish.py verify <bundle> --fingerprint <huella registrada al publicarlo>`.
-- **Cargar un bundle en el appliance:** `load_bundle`, que verifica antes de guardar.
+- **Cargar un bundle en el appliance:** `load_bundle` con la huella registrada al publicarlo; verifica antes de guardar. Volver a una versión anterior exige `allow_rollback=True` y queda en el diario como cualquier carga (`ontology.load`).
+- **Una campaña se para con `the content on disk is not the signed bundle`** u `OPA is not running the signed bundle`: la biblioteca del worker o las políticas de OPA no son las firmadas en vigor. Se restaura la biblioteca de la versión publicada (o se publica una versión nueva) y se reinicia OPA.
 - **Proceso editorial:** seguir `docs/ontologia/proceso-editorial.md` (SLA de 30 días) y publicar con cada versión las matrices de trazabilidad y de solapamiento (`make ontology-overlap`).
 - **Probar las políticas Rego:** `make policy-test` (ejecuta `opa test` en el contenedor; paso del job `verify` del CI).
 - **Servidor OPA de desarrollo:** `docker compose -f deploy/dev/compose.yaml up -d --wait opa`. Tras cambiar políticas o datos se reinicia con `restart opa`: no se usa `--watch` porque los montajes de Windows no propagan eventos.
@@ -505,3 +515,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-18 | La verificación no confía en la clave que viaja con el bundle sin su huella fijada | Auditoría de seguridad (B3) |
 | 0.1.0-alpha | 2026-09-18 | Cliente de OPA con token y OPA con autenticación y autorización propias | Auditoría de seguridad (M7) |
 | 0.1.0-alpha | 2026-09-21 | `editorial.compiler.read_obligation`: la plantilla de una obligación (norma, artículo, título y resumen) para enseñarla junto al hallazgo | F08-06 |
+| 0.2.0-alpha | 2026-09-23 | Bundle en flujo con manifiesto primero y tope total, huella obligatoria y anti-retroceso en `load_bundle`, `publish_library` y comprobación en ejecución del disco y de OPA | F09-25 |

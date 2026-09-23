@@ -52,13 +52,15 @@ from argos_inventory.discovery.probes import run_probe
 from argos_inventory.graph.model import system_key
 from argos_inventory.graph.store import GraphStore
 from argos_inventory.versioning.snapshots import take_snapshot
+from argos_ontology.bundle import verify_on_disk, verify_running_policies
 from argos_ontology.library_hash import library_fingerprint
-from argos_ontology.opa import OpaError
+from argos_ontology.opa import OpaError, loaded_policies
 from argos_ontology.opa import evaluate as opa_evaluate
 from argos_ontology.resolver import resolve as resolve_applicability
 from argos_ontology.shacl import run_shapes
 from argos_ontology.store import OntologyStore, version_in_force
 from argos_ontology.traceability import load_challenge_catalog
+from argos_ontology.vocabulary import LIBRARY_DIR
 
 INTERNAL_PROBES = frozenset({"shacl", "inventory_query"})
 _DECLARED_TREATMENTS = "MATCH (s:System)-[:DECLARED_IN]->(t:Treatment) RETURN s.key, t.key"
@@ -169,6 +171,12 @@ class ChallengeActivities:
         store = GraphStore(self._dsn)
         snapshot = take_snapshot(store, self._dsn, f"campaign-{campaign_id}")
         ontology_version = version_in_force(self._dsn)
+        # What decides the verdicts is the signed bundle in force, on this disk and in OPA; a
+        # changed challenge, policy or shape stops the campaign before it compiles (SEC-011).
+        verify_on_disk(self._dsn, ontology_version, LIBRARY_DIR)
+        verify_running_policies(
+            self._dsn, ontology_version, loaded_policies(self._opa_url, token=self._opa_token)
+        )
         library_version, library_sha256 = library_fingerprint()
         pin_campaign(
             self._dsn,

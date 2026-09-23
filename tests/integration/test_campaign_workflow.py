@@ -1,6 +1,7 @@
 """ARG-043 · a campaign from end to end against Temporal: gates, pause, verdicts and seal."""
 
 import asyncio
+import os
 import uuid
 from typing import Any
 
@@ -14,11 +15,12 @@ from argos_challenges.seal import verify_seal
 from argos_challenges.store import campaign_record, create_campaign, grant_approval
 from argos_challenges.workflows import CampaignWorkflow, SystemRun
 from argos_common.config import get_config
+from argos_common.release import VaultTransitSigner
 from argos_inventory.ai_discovery.detect import discover_ai
 from argos_inventory.classify.deterministic import classify_new_columns
 from argos_inventory.graph.store import GraphStore
-from argos_ontology.store import store_version
-from argos_ontology.traceability import library_graph
+from argos_ontology.bundle import publish_library
+from argos_ontology.vocabulary import LIBRARY_DIR
 
 from .inventory_helpers import probe_runner, scan_and_ingest, secret_store
 
@@ -39,14 +41,15 @@ def prepared(migrated_db: str) -> str:
         system_id = scan_and_ingest(migrated_db, name)
         classify_new_columns(store, probe_runner(migrated_db), system_id)
     discover_ai(store)
-    store_version(
+    # The campaign runs from signed content only (SEC-011): the library is published as a bundle.
+    publish_library(
         migrated_db,
+        LIBRARY_DIR,
         ONTOLOGY_VERSION,
         __import__("datetime").date(2024, 8, 1),
-        library_graph(),
-        "e" * 64,
-        {},
-        b"demo",
+        VaultTransitSigner(
+            os.environ.get("ARGOS_TEST_VAULT", "http://127.0.0.1:8200"), "root", key="argos-content"
+        ),
     )
     return create_campaign(migrated_db, "Campaña de integración", {}, MANAGER)
 

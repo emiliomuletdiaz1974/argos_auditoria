@@ -18,6 +18,14 @@ allow if {
 	input.path == ["health"]
 }
 
+# A known client may read which policies run, to compare them with the signed bundle (SEC-011).
+# Rego holds rules, not secrets; loading or replacing a policy stays forbidden.
+allow if {
+	input.method == "GET"
+	input.path == ["v1", "policies"]
+	known_client
+}
+
 allow if {
 	input.method == "POST"
 	input.path[0] == "v1"
