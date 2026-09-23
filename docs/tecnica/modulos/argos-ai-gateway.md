@@ -4,8 +4,8 @@ kind: module
 title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
-version: 0.3.0-alpha
-commit: 2a18039
+version: 0.4.0-alpha
+commit: 9e38a6c
 date: 2026-09-23
 status: draft
 confidentiality: client
@@ -189,6 +189,7 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - Ningún dato personal validado llega al modelo: se sustituye antes por un marcador.
 - Ningún prompt se escribe en un log ni en una tabla; lo que se registra es su hash (ARG-052, `argos.ai_usage`).
 - El rol `argos_ai` puede **añadir** asientos al diario encadenado (migración `0020`, permiso de ejecución sobre `journal_append`, que es `SECURITY DEFINER`) y nada más sobre él. Hasta F06-13 no lo tenía: los tests del gateway conectaban como propietario y no lo veían. Ejecutar el gateway como lo hace el contenedor lo destapó.
@@ -297,3 +298,4 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.1.0-alpha | 2026-09-22 | El agente admite el paso `refuse` (rehúso explícito, `refused: true`) y la respuesta lleva `fragments`, los fragmentos que devolvió `search_regulation` en la conversación, sin repetir; el prompt pide citar con `[n]`, el número de la fuente | F08-15 |
 | 0.2.0-alpha | 2026-09-23 | Guardarraíles normalizados (identificadores con separadores, afirmaciones como patrones, escrituras como sentencia), cifras con decimales, rangos y números en letra, y el asistente sin cifras, citas ni veredictos sin respaldo | F09-28 |
 | 0.3.0-alpha | 2026-09-23 | Asistente con cuota por persona, herramientas con tiempo máximo y concurrencia acotada, solo norma como norma, errores de herramienta devueltos al modelo y conectado en el contenedor; clasificador que solo registra su lote | F09-29 |
+| 0.4.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 | F09-03 |

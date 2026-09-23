@@ -1,0 +1,56 @@
+# ARG-084 · admission of the appliance: every pod of ARGOS declares the restricted posture, or it
+# does not start. Written and validated statically now (tests/security/test_k8s_manifests.py);
+# applied on k3s with the hardware (F09-92). In development the same rule is a test of the compose
+# (tests/security/test_compose_posture.py).
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: argos-pod-baseline
+  annotations:
+    policies.kyverno.io/title: Restricted posture of ARGOS (ARG-084, P-22)
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: require-restricted-posture
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [argos-core, argos-services, argos-ai, argos-connect]
+      validate:
+        message: "Postura restringida obligatoria (ARG-084): sin root, sin capacidades, raíz de solo lectura y sin escalada."
+        pattern:
+          spec:
+            =(securityContext):
+              =(seccompProfile):
+                type: "RuntimeDefault | Localhost"
+            containers:
+              - securityContext:
+                  runAsNonRoot: true
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop: ["ALL"]
+            =(initContainers):
+              - securityContext:
+                  runAsNonRoot: true
+                  allowPrivilegeEscalation: false
+                  readOnlyRootFilesystem: true
+                  capabilities:
+                    drop: ["ALL"]
+    - name: forbid-host-access
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [argos-core, argos-services, argos-ai, argos-connect]
+      validate:
+        message: "hostNetwork, hostPID, hostIPC y hostPath prohibidos en ARGOS (ARG-084)."
+        pattern:
+          spec:
+            =(hostNetwork): false
+            =(hostPID): false
+            =(hostIPC): false
+            =(volumes):
+              - X(hostPath): "null"

@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.21.0-alpha
-commit: fdc1311
+version: 0.22.0-alpha
+commit: 9e38a6c
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -85,6 +85,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - Ninguna ruta autenticada se resuelve sin un token válido con rol del realm y sin el permiso que la ruta declara.
 - **Integraciones:** `webhooks.read` pasa a ser solo de `platform_admin` (F08-09); el auditor ya no ve la configuración de las integraciones.
 - **Emisión de credenciales:** pasa de `campaign_manager` a `dpo_reviewer` (F08-07): es el DPO quien firma lo que se afirma ante terceros, después de leer la vista previa.
@@ -159,3 +160,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.19.0-alpha | 2026-09-23 | `confirm-exercise` recibe las fechas de solicitud y respuesta del cliente | F09-27 |
 | 0.20.0-alpha | 2026-09-23 | El asistente recibe quién pregunta para su cuota por persona | F09-29 |
 | 0.21.0-alpha | 2026-09-23 | Webhooks sin destinos internos y con clase de error, `POST /auth/logout` con cookie de sesión, cabeceras de seguridad, límites de texto y refresco rechazado como 401 | F09-30 |
+| 0.22.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 (API y worker de webhooks) | F09-03 |

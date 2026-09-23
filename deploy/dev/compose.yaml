@@ -22,6 +22,17 @@
 #   source-oracle    gvenzl/oracle-free:23-slim (heavy profile; pin the digest after the first pull)
 name: argos-dev
 
+# ARG-084 · the restricted posture of every ARGOS service (P-22). Kyverno enforces the same in
+# k3s (platform/k8s/security/pod-baseline.yaml); here tests/security/test_compose_posture.py
+# refuses a service of ARGOS that does not declare it. The seccomp profile is Docker's default,
+# except for evidence, which has its own.
+x-argos-posture: &argos-posture
+  user: "10001:10001"
+  cap_drop: [ALL]
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp:size=64m"]
+
 services:
   postgres:
     build: ./postgres
@@ -122,6 +133,7 @@ services:
     ports: ["127.0.0.1:3000:3000"]
 
   example:
+    <<: *argos-posture
     build:
       context: ../..
       dockerfile: services/example/Dockerfile
@@ -139,6 +151,7 @@ services:
 
   # ── Campaign engine (F05-17): one image, the worker and the API as two entry points. ──
   challenge-worker:
+    <<: *argos-posture
     build: &challenge_engine_build
       context: ../..
       dockerfile: services/challenge-engine/Dockerfile
@@ -172,6 +185,7 @@ services:
   # ── The single API (ADR-0012) with the console inside (ADR-0013). The campaign API of Phase 05
   # is gone: its routes live under /api/v1. It is the only service that reaches the AI gateway. ──
   api:
+    <<: *argos-posture
     build: &api_build
       context: ../..
       dockerfile: services/api/Dockerfile
@@ -224,6 +238,7 @@ services:
   # The deliveries towards the ITSM (ARG-079): the bus writes them, Temporal retries them. Nothing
   # is delivered from the request that caused it.
   webhook-worker:
+    <<: *argos-posture
     build: *api_build
     image: argos-api:dev
     command: ["/app/.venv/bin/python", "-m", "argos_api.webhooks.worker"]
@@ -269,6 +284,8 @@ services:
   # to its credential; the API publishes only what verification needs (DID, status lists,
   # credentials). Both reach the WORM store, the TSA and the EDC on the evidence network.
   evidence-worker:
+    <<: *argos-posture
+    security_opt: ["no-new-privileges:true", "seccomp=../../platform/k8s/security/seccomp/evidence.json"]
     build: &evidence_build
       context: ../..
       dockerfile: services/evidence/Dockerfile
@@ -309,6 +326,8 @@ services:
         condition: service_healthy
 
   evidence-api:
+    <<: *argos-posture
+    security_opt: ["no-new-privileges:true", "seccomp=../../platform/k8s/security/seccomp/evidence.json"]
     build: *evidence_build
     image: argos-evidence:dev
     command: ["/app/.venv/bin/python", "-m", "argos_evidence.api"]
@@ -346,6 +365,7 @@ services:
   # Public verifier (F07-11): checks an evidence bundle with nothing but what it carries. It has its
   # own network and reaches no other service: no database, no store, no secret.
   verifier:
+    <<: *argos-posture
     build:
       context: ../..
       dockerfile: services/verifier/Dockerfile
@@ -364,6 +384,7 @@ services:
 
   # ── AI layer (F06-13): the gateway on its own networks, never on the one of the campaign API. ──
   ai-gateway:
+    <<: *argos-posture
     build:
       context: ../..
       dockerfile: services/ai-gateway/Dockerfile

@@ -8,6 +8,8 @@ COPY libs ./libs
 COPY connectors ./connectors
 COPY services ./services
 RUN uv sync --locked --no-dev --package argos-verifier
-USER 10001
+# ARG-084: no extra shell in the final image (sh stays: it is the base of the system).
+RUN rm -f /bin/bash /usr/bin/bash
+USER 10001:10001
 EXPOSE 8007
 CMD ["/app/.venv/bin/python", "-m", "argos_verifier.main"]

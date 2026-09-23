@@ -4,8 +4,8 @@ kind: module
 title: Comprobador público de evidencias (argos-verifier)
 module: argos-verifier
 phases: ["07"]
-version: 0.2.0-alpha
-commit: 90790cf
+version: 0.3.0-alpha
+commit: 9e38a6c
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -58,6 +58,7 @@ Ninguna de la plataforma. `ARGOS_API_BIND` solo indica en qué dirección escuch
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - Sin estado: nada de lo recibido se guarda. El registro anota solo el SHA-256 del paquete y el resultado.
 - El cuerpo de la petición está limitado a 16 MiB y se rechaza antes de leerse si su longitud declarada lo supera.
 - La confianza parte de dos anclas explícitas: el documento DID del emisor y las raíces de la TSA. El comprobador no descarga nada por su cuenta; quien lo usa decide de dónde obtiene esas anclas.
@@ -90,3 +91,4 @@ Ninguna de la plataforma. `ARGOS_API_BIND` solo indica en qué dirección escuch
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-18 | Comprobador público: librería, API, línea de órdenes y contenedor | F07-11 |
 | 0.2.0-alpha | 2026-09-23 | Confianza por configuración (`Trust`, `ARGOS_VERIFIER_TRUST_FILE`, `--trust`), `dossier_authenticated`, lectura por partes con tope, límites de base58 y de la lista de estado, frescura de la revocación (`--at`) y tamaño del árbol contra la raíz firmada | F09-20 |
+| 0.3.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 | F09-03 |

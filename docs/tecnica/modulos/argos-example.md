@@ -4,9 +4,9 @@ kind: module
 title: Servicio de ejemplo (argos-example)
 module: argos-example
 phases: ["01"]
-version: 0.1.0-alpha
-commit: 1aadd28
-date: 2026-09-17
+version: 0.2.0-alpha
+commit: 9e38a6c
+date: 2026-09-23
 status: current
 confidentiality: internal
 ---
@@ -46,6 +46,7 @@ Aplicación FastAPI con ciclo de vida que abre el diario y monta las rutas de sa
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 Solo escribe asientos sintéticos de demostración en el diario.
 
 ## 7. Operación
@@ -66,3 +67,4 @@ Ninguna: es un servicio de referencia.
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-14 | Servicio de ejemplo con salud, diario y verificación | Fase 01 |
+| 0.2.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 | F09-03 |

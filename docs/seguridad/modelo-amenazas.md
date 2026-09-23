@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.11 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.12 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -87,8 +87,8 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-21 | I: un servicio lee las credenciales de un conector | Vault | A2 | Política de Vault exclusiva del SDK de conectores para `argos/data/connectors/*` (P-04) | ARG-009 | F1-05 | implementada | `deploy/dev/vault/setup.sh` |
 | M-22 | S/I: suplantar un servicio o escuchar la red interna | Red interna | A1, A2 | mTLS entre servicios con certificados de la PKI de Vault (30 días, rotación automática); PostgreSQL y NATS con TLS | ARG-083 | F09-06 | en desarrollo | — |
 | M-23 | S: llamar al gateway de IA haciéndose pasar por otro servicio | Gateway de IA | A2 | Identidad del servicio que llama por mTLS en lugar de un campo del cuerpo | ARG-052, ARG-083 | F09-06 | en desarrollo | — |
-| M-24 | E: un contenedor comprometido escala o se mueve | Contenedores | A2 | Usuario sin privilegios, `cap_drop ALL`, raíz de solo lectura, `no-new-privileges` y seccomp; en el compose lo comprueba un test | ARG-084 | F09-03 | en desarrollo | — |
-| M-25 | E: desplegar un pod sin postura o una imagen sin firma | k3s | A2, A5 | Admisión con Kyverno (postura y `verifyImages`), perfiles AppArmor | ARG-084, ARG-087 | F09-92 | pendiente de hardware | — |
+| M-24 | E: un contenedor comprometido escala o se mueve | Contenedores | A2 | Usuario sin privilegios (`10001:10001`), `cap_drop ALL`, raíz de solo lectura, `no-new-privileges`, seccomp por defecto y propio en evidencia, imágenes sin `bash`; en el compose lo exige un test y en marcha lo comprueba otro | ARG-084 | F09-03 | implementada | `tests/security/test_compose_posture.py`, `tests/integration/test_container_posture.py`, `platform/k8s/security/seccomp/evidence.json` |
+| M-25 | E: desplegar un pod sin postura o una imagen sin firma | k3s | A2, A5 | Admisión con Kyverno (postura y `verifyImages`), perfiles AppArmor; los manifiestos de postura están escritos y validados en estático | ARG-084, ARG-087 | F09-03, F09-92 | pendiente de hardware | `platform/k8s/security/pod-baseline.yaml`, `tests/security/test_k8s_manifests.py` |
 | M-26 | E/I: una credencial de base de datos robada sirve para todo | PostgreSQL | A2, A3 | Un rol por servicio con mínimo privilegio y credenciales dinámicas de Vault (24 h) | ARG-085 | F09-04, F09-05 | en desarrollo | — |
 | M-27 | T: aplicar una actualización manipulada o antigua | Actualizador | A5, A3 | Firma del manifiesto y digests verificados antes de tocar nada, anti-retroceso, aplicación transaccional con plan inverso | ARG-086, ARG-010 | F09-10 | en desarrollo | — |
 | M-28 | T: cargar contenido normativo manipulado | Ontología | A5 | Bundle determinista firmado con clave propia, leído en flujo con tope y verificado antes de cargar con la huella fijada y sin retroceso; cada campaña comprueba que el disco del worker y las políticas cargadas en OPA son las firmadas en vigor | ARG-040 | F04-04, F09-25 | implementada | `services/ontology/argos_ontology/bundle.py`, `tests/integration/test_opa_signed_policies.py`, `tests/integration/test_challenge_activities.py` |
@@ -138,3 +138,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.9 | 2026-09-23 | M-08 recoge los guardarraíles normalizados y las cifras con respaldo de F09-28 |
 | 1.10 | 2026-09-23 | M-16 y M-19 recogen el cierre de sesión, las cabeceras y los webhooks sin destinos internos de F09-30 |
 | 1.11 | 2026-09-23 | M-04 y M-39 recogen la minimización de `check_config`, SQL Server verificado y DICOM con TLS de F09-31 |
+| 1.12 | 2026-09-23 | M-24 pasa a «implementada» con la postura de los contenedores de F09-03; M-25 cita los manifiestos ya escritos |

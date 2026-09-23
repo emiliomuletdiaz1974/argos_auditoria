@@ -1,0 +1,32 @@
+# ARG-084 · AppArmor profile of the files connector: it reads the share it was given, and nothing
+# else is writable. The share is mounted read-only at /mnt/argos-source by the pod (F09-92).
+#include <tunables/global>
+
+profile argos-connector-files flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+  #include <abstractions/python>
+  #include <abstractions/nameservice>
+  #include <abstractions/ssl_certs>
+
+  network inet stream,
+  network inet6 stream,
+
+  # The code of the connector and its runtime.
+  /app/** r,
+  /app/.venv/bin/python* ix,
+  /usr/lib/** mr,
+  /usr/local/lib/** mr,
+  /etc/** r,
+  /proc/@{pid}/** r,
+
+  # The share of the client: read, never written.
+  /mnt/argos-source/ r,
+  /mnt/argos-source/** r,
+
+  # Nothing is written anywhere; the connector keeps nothing on disk.
+  deny /** w,
+  deny @{PROC}/sys/** rw,
+  deny /sys/** rw,
+  deny mount,
+  deny ptrace,
+}

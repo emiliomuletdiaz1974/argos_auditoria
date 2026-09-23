@@ -10,6 +10,8 @@ COPY services ./services
 RUN uv sync --locked --no-dev --package argos-challenge-engine
 # The challenge library and the ontology are read at runtime, never baked as data.
 COPY library ./library
-USER 10001
+# ARG-084: no extra shell in the final image (sh stays: it is the base of the system).
+RUN rm -f /bin/bash /usr/bin/bash
+USER 10001:10001
 EXPOSE 8003
 CMD ["/app/.venv/bin/python", "-m", "argos_challenges.worker"]
