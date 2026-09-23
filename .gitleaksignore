@@ -15,3 +15,7 @@ ddb41fb4bf1ddd3df27a9109fa755955bae24791:tests/vectors/vc_eddsa_jcs_2022.json:ge
 # Not a secret: the idempotency key of a test, a value the client chooses. Renamed in the
 # working tree so it no longer looks like one; the commit that introduced it stays here.
 efc20dff99251eb13c3d450a8a1570425870dd64:tests/integration/test_api_core.py:generic-api-key:25
+
+# Not a secret: the container URL of the gateway barrier test (`http://api:8000/api/v1/...`).
+# What looks like a key is the port followed by the path of the v1.
+72a7663bd690fcd095cbba6cb8077fd279355a43:tests/integration/test_ai_containers.py:generic-api-key:48
