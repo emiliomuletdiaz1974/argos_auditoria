@@ -238,3 +238,7 @@ Formato: `tarea` — **qué decidimos** — por qué (y qué medimos, si consta)
 
 ### Fase 09
 - `F09-R` — **añadir roles de base de datos por servicio, MFA y registro de seguridad**, que el documento de fase no traía y el Plan Director pide; **revisión de F1–F8** (no F1–F7), porque la Fase 08 ya estaba cerrada; **F09-17** para integrar la rama de auditoría.
+- `F09-01` — **la revisión cruzada del modelo de amenazas es un test**, no una lectura: toda mitigación `implementada` tiene que apuntar a rutas que existen en el repositorio, o `tests/docs/test_threat_model.py` falla. Así el modelo no puede afirmar más de lo que hay.
+- `F09-01` — **el test comprueba el formato del identificador de tarea, no que exista en la tabla del plan** — la tabla vive en `CLAUDE.md`, fuera del repositorio, y el test tiene que pasar también en el CI. El componente `ARG-NNN`, en cambio, es obligatorio en cada mitigación.
+- `F09-01` — **las correcciones de la auditoría del 2026-09-18 cuentan como `en desarrollo` (F09-17)** — están en una rama sin integrar, no en `main`, y el modelo solo da por hecho lo que está en `main`.
+- `F09-01` — **cada riesgo residual lleva quién lo acepta** — el organismo (medidas físicas y de personal, talla elegida) o nosotros (texto del LLM, material de desarrollo marcado `non_production`, vulnerabilidades sin parche con excepción que caduca).
