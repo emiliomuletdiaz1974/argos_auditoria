@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.0 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.1 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -102,7 +102,7 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-36 | E: superficie del sistema operativo | Sistema operativo | A1, A3 | Imagen endurecida con el perfil CIS Level 1 (umbral 90 %), SSH solo con llave y auditd | ARG-081 | F09-14, F09-90 | pendiente de hardware | — |
 | M-37 | R: actividad maliciosa que nadie ve | Toda la plataforma | A1, A3, A8 | Registro de seguridad separado y encadenado (autenticación, denegaciones, administración, actualizaciones, esclusa) con alertas | ARG-005, ARG-072 | F09-08 | en desarrollo | — |
 | M-38 | D/T: consultas abusivas a la API del grafo | API GraphQL | A1, A8 | Etiquetas en lista blanca, prefijos acotados, paginación y profundidad máxima 4 | ARG-029 | F03-12 | implementada | `services/inventory/argos_inventory/api/schema.py`, `services/inventory/tests/test_api_http.py` |
-| M-39 | I/T: tráfico en claro hacia los sistemas del cliente | Conectores | A1 | Transporte cifrado y verificado obligatorio en SQL, ficheros, LDAPS, REST y FHIR (corregido en la auditoría del 2026-09-18) | ARG-014, ARG-017, ARG-018, ARG-019 | F09-17 | en desarrollo | — |
+| M-39 | I/T: tráfico en claro hacia los sistemas del cliente | Conectores | A1 | Transporte cifrado y verificado obligatorio en SQL, ficheros, LDAPS, REST y FHIR, salvo declaración explícita por sistema (auditoría del 2026-09-18, integrada en F09-17) | ARG-014, ARG-017, ARG-018, ARG-019 | F09-17 | implementada | `connectors/sdk/tests/test_sdk_tls.py`, `connectors/sql/tests/test_sql_generic.py`, `connectors/rest/tests/test_rest_connector.py` |
 | M-40 | I: el material público revela algo que no debe | `evidence-api` y comprobador | A1 | Solo sirven material público; la credencial no lleva datos personales (lo comprueba un test con los validadores de ARG-024) | ARG-068, ARG-069 | F07-10 | implementada | `tests/integration/test_credential.py` |
 
 ## 6. Qué cambia al pasar al appliance
@@ -127,3 +127,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 2026-09-23 | Primera versión (F09-01) |
+| 1.1 | 2026-09-23 | M-39 pasa a implementada al integrar la auditoría del 2026-09-18 (F09-17) |
