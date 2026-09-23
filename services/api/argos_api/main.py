@@ -15,6 +15,7 @@ from typing import Any
 
 import uvicorn
 from temporalio.client import Client
+from temporalio.service import RPCError, RPCStatusCode
 
 from argos_api import SERVICE_NAME
 from argos_api.app import create_app
@@ -55,7 +56,12 @@ class TemporalCampaigns:
 
     async def signal(self, campaign_id: str, name: str, argument: str) -> None:
         client = await self._client()
-        await client.get_workflow_handle(f"campaign-{campaign_id}").signal(name, argument)
+        try:
+            await client.get_workflow_handle(f"campaign-{campaign_id}").signal(name, argument)
+        except RPCError as missing:
+            # A remediation campaign has no workflow of that name: it polls its gates on its own.
+            if missing.status != RPCStatusCode.NOT_FOUND:
+                raise
 
     async def progress(self, campaign_id: str) -> dict[str, Any]:
         client = await self._client()

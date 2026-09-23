@@ -140,13 +140,31 @@ def _unit(
         "system_id": str(system["id"]),
         "node_key": node_key,
         "probe": probe,
-        "criterion": dict(spec.criterion),
+        "criterion": _criterion(spec, properties, context, where),
         "evidence": {"capture": list(spec.capture), "minimisation": spec.minimisation},
         "severity": spec.severity,
         "sampling": dict(spec.sampling) if spec.sampling else None,
-        "needs_approval": spec.approval_required,
+        # Sampling decides what is not looked at: it always takes the double control, whatever
+        # the challenge says (security review F09-02, SEC-009).
+        "needs_approval": bool(
+            spec.approval_required or spec.sampling or spec.probe_kind == "sample"
+        ),
         "preconditions": list(spec.preconditions),
     }
+
+
+def _criterion(
+    spec: ChallengeSpec, properties: Mapping[str, Any], context: Mapping[str, Any], where: str
+) -> dict[str, Any]:
+    """The criterion with the references of its OPA input resolved, as for the probe (SEC-012)."""
+    criterion = dict(spec.criterion)
+    opa = criterion.get("opa")
+    if isinstance(opa, Mapping) and opa.get("input_map"):
+        criterion["opa"] = {
+            **opa,
+            "input_map": _resolve(dict(opa["input_map"]), properties, context, where),
+        }
+    return criterion
 
 
 def compile_campaign(

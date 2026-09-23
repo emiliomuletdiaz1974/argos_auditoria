@@ -12,6 +12,7 @@ from typing import Any
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
+from temporalio.exceptions import ApplicationError
 
 with workflow.unsafe.imports_passed_through():
     from .activities import record_in_journal, smoke_probe
@@ -54,6 +55,9 @@ class SmokeCampaign:
 
 CAMPAIGN_TIMEOUT = timedelta(minutes=30)
 GATE_TIMEOUT = timedelta(hours=72)
+# A gate is also checked every so often, not only when a signal arrives: a remediation run has no
+# workflow the API can signal, and a lost signal must not hold a campaign.
+GATE_POLL = timedelta(seconds=5)
 # What the connector waits before trying a source whose circuit it opened (ARG-013): the campaign
 # waits the same, so a pause nobody closes does not become an eternal one.
 PAUSE_MAX_SECONDS = 300.0
@@ -67,6 +71,37 @@ PROBE_RETRY = RetryPolicy(
     initial_interval=timedelta(seconds=1),
     non_retryable_error_types=["ReadOnlyViolation", "UnknownQuery"],
 )
+
+
+async def await_gate(
+    campaign_id: str, gate: str, payload: dict[str, Any], approved: set[str]
+) -> None:
+    """Ask for a gate and wait until the approvals people recorded open it.
+
+    A signal only wakes the wait early; what opens the gate is `check_gate`, which reads the
+    recorded approvals (whoever reaches Temporal can send a signal).
+    """
+    await workflow.execute_activity(
+        "request_approval",
+        {"campaign_id": campaign_id, "gate": gate, "payload": payload},
+        start_to_close_timeout=_TIMEOUT,
+        retry_policy=RETRY_POLICY,
+    )
+    deadline = workflow.now() + GATE_TIMEOUT
+    while True:
+        with contextlib.suppress(TimeoutError):
+            await workflow.wait_condition(lambda: gate in approved, timeout=GATE_POLL)
+        opened = await workflow.execute_activity(
+            "check_gate",
+            {"campaign_id": campaign_id, "gate": gate},
+            start_to_close_timeout=_TIMEOUT,
+            retry_policy=RETRY_POLICY,
+        )
+        if opened:
+            return
+        approved.discard(gate)
+        if workflow.now() >= deadline:
+            raise ApplicationError(f"the gate {gate} was not approved in time", non_retryable=True)
 
 
 @workflow.defn
@@ -127,25 +162,8 @@ class CampaignWorkflow:
         return {**self._progress, "paused": paused}
 
     async def _gate(self, campaign_id: str, gate: str, payload: dict[str, Any]) -> None:
-        await workflow.execute_activity(
-            "request_approval",
-            {"campaign_id": campaign_id, "gate": gate, "payload": payload},
-            start_to_close_timeout=_TIMEOUT,
-            retry_policy=RETRY_POLICY,
-        )
         self._progress["status"] = f"awaiting:{gate}"
-        while True:
-            await workflow.wait_condition(lambda: gate in self._approved, timeout=GATE_TIMEOUT)
-            # The signal only announces the approvals: whoever reaches Temporal can send it.
-            opened = await workflow.execute_activity(
-                "check_gate",
-                {"campaign_id": campaign_id, "gate": gate},
-                start_to_close_timeout=_TIMEOUT,
-                retry_policy=RETRY_POLICY,
-            )
-            if opened:
-                return
-            self._approved.discard(gate)
+        await await_gate(campaign_id, gate, payload, self._approved)
 
     async def _run_system(
         self, campaign_id: str, system_id: str, units: list[dict[str, Any]]
@@ -216,7 +234,18 @@ class RemediationRun:
 
     The campaign is not relaunched: exactly the non-compliant units come back. A verdict that is
     neither compliant nor non-compliant leaves the finding where it was, with its reason.
+
+    It goes through the gates of any campaign: a DPO approves the start, and two people the
+    sampling when a unit samples. Otherwise a campaign manager alone could re-run probes against
+    the client until one closes the finding (security review F09-02, SEC-010).
     """
+
+    def __init__(self) -> None:
+        self._approved: set[str] = set()
+
+    @workflow.signal
+    def approve(self, gate: str) -> None:
+        self._approved.add(gate)
 
     @workflow.run
     async def run(self, scope: dict[str, Any]) -> dict[str, Any]:
@@ -227,6 +256,18 @@ class RemediationRun:
             retry_policy=RETRY_POLICY,
         )
         summary = {"verified": 0, "closed": 0, "reopened": 0, "unchanged": 0}
+        campaign_id = started["campaign_id"]
+        if campaign_id is not None and started["units"]:
+            units = [entry["unit"] for entry in started["units"]]
+            await await_gate(campaign_id, "start", {"units": len(units)}, self._approved)
+            if any(unit.get("needs_approval") for unit in units):
+                await await_gate(campaign_id, "sampling", {"units": len(units)}, self._approved)
+            await workflow.execute_activity(
+                "set_campaign_status",
+                {"campaign_id": campaign_id, "status": "running"},
+                start_to_close_timeout=_TIMEOUT,
+                retry_policy=RETRY_POLICY,
+            )
         for entry in started["units"]:
             unit = entry["unit"]
             probe_result = await workflow.execute_activity(

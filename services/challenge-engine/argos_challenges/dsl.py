@@ -6,6 +6,7 @@ criterion delegates, at a Rego package that is shipped. Both run in CI and when 
 """
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -143,15 +144,30 @@ def library_challenges(challenges_dir: Path = CHALLENGES_DIR) -> list[Path]:
     )
 
 
-def lint_challenge(
-    spec: ChallengeSpec, context: LintContext, path: Path | None = None
-) -> list[str]:
-    """The product rules a schema cannot express. Returns one message per breach, sorted."""
+# What an OPA policy reads as evidence: the probe brings it, a challenge may never declare it
+# (a declared `out_of_term: 0` would absolve without looking; security review F09-02, SEC-012).
+EVIDENCE_INPUT_KEYS = frozenset({"result", "out_of_term", "max_age_days", "documented_exceptions"})
+
+
+def intrinsic_errors(spec: ChallengeSpec) -> list[str]:
+    """The rules that need nothing but the challenge: checked in CI and every time it is loaded."""
     errors: list[str] = []
     if spec.probe_kind == "sample" and not spec.approval_required:
         errors.append(f"{spec.id}: a sample probe needs approval_required: true")
     if "hashed_sample" in spec.capture and spec.probe_kind != "sample":
         errors.append(f"{spec.id}: hashed_sample is only captured by a sample probe")
+    opa = spec.criterion.get("opa") if isinstance(spec.criterion, Mapping) else None
+    declared = set((opa or {}).get("input_map", {}) or {})
+    for key in sorted(declared & EVIDENCE_INPUT_KEYS):
+        errors.append(f"{spec.id}: input_map may not declare {key}: the probe brings it")
+    return errors
+
+
+def lint_challenge(
+    spec: ChallengeSpec, context: LintContext, path: Path | None = None
+) -> list[str]:
+    """The product rules a schema cannot express. Returns one message per breach, sorted."""
+    errors = intrinsic_errors(spec)
     verifiers = context.obligations.get(spec.obligation)
     if verifiers is None:
         errors.append(f"{spec.id}: unknown obligation {spec.obligation}")

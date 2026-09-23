@@ -140,3 +140,20 @@ def test_the_shipped_challenges_pass_the_schema_and_the_rules() -> None:
     assert len(paths) >= 2
     for path in paths:
         assert lint_challenge(load_challenge_file(path), context) == [], path
+
+
+def test_an_opa_input_may_not_declare_the_evidence() -> None:
+    """SEC-012: `out_of_term: 0` in a challenge would absolve without looking."""
+    from dataclasses import replace
+
+    from argos_challenges.dsl import intrinsic_errors
+    from argos_challenges.library.catalog import load_library
+
+    spec = next(iter(load_library().values()))
+    forged = replace(
+        spec,
+        criterion={"opa": {"package": "argos.retention", "input_map": {"out_of_term": 0}}},
+    )
+    assert any("out_of_term" in e for e in intrinsic_errors(forged))
+    unsampled = replace(spec, probe_kind="sample", approval_required=False)
+    assert any("approval_required" in e for e in intrinsic_errors(unsampled))

@@ -22,13 +22,13 @@ EXECUTED = re.compile(r"execute_activity\(\s*\"(\w+)\"")
 
 
 def _executed_by_the_campaign() -> set[str]:
+    """Activities the campaign classes run, directly or through a module function they call."""
     source = WORKFLOWS.read_text("utf-8")
-    blocks = re.split(r"^class (\w+)", source, flags=re.MULTILINE)
-    names: set[str] = set()
-    for name, body in zip(blocks[1::2], blocks[2::2], strict=True):
-        if name in CAMPAIGN_CLASSES:
-            names |= set(EXECUTED.findall(body))
-    return names
+    parts = re.split(r"^(?:class|async def|def) (\w+)", source, flags=re.MULTILINE)
+    blocks = dict(zip(parts[1::2], parts[2::2], strict=True))
+    campaign = "".join(blocks[name] for name in CAMPAIGN_CLASSES)
+    helpers = [body for name, body in blocks.items() if re.search(rf"\b{name}\(", campaign)]
+    return set(EXECUTED.findall(campaign + "".join(helpers)))
 
 
 def _activity_names() -> dict[str, str]:

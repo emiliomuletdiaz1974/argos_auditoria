@@ -13,6 +13,7 @@ by the suite of F05-03.
 """
 
 import hashlib
+import json
 import operator
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -167,8 +168,14 @@ def evaluate(
     unit: Mapping[str, Any],
     probe_result: Mapping[str, Any],
     opa_decision: Mapping[str, Any] | None = None,
+    *,
+    opa_input: Mapping[str, Any] | None = None,
 ) -> Verdict:
-    """The verdict of a unit. Pure: the same inputs always give the same bytes."""
+    """The verdict of a unit. Pure: the same inputs always give the same bytes.
+
+    With `opa_input`, an OPA verdict carries the SHA-256 of what OPA saw, evidence included: two
+    different pieces of evidence can no longer give the same verdict hash (SEC-013).
+    """
     if not probe_result.get("ok", False):
         error = ""
         data = probe_result.get("data")
@@ -183,7 +190,10 @@ def evaluate(
         compliant = None if opa_decision is None else opa_decision.get("compliant")
         if not isinstance(compliant, bool):
             return _verdict(unit, "inconclusive", "opa_invalid", {"package": package})
-        detail = {"compliant": compliant, "package": package}
+        detail: dict[str, Any] = {"compliant": compliant, "package": package}
+        if opa_input is not None:
+            seen = json.dumps(opa_input, sort_keys=True, separators=(",", ":"), default=str)
+            detail["input_sha256"] = hashlib.sha256(seen.encode("utf-8")).hexdigest()
         return _verdict(unit, "compliant" if compliant else "non_compliant", "opa", detail)
 
     threshold = criterion["threshold"]

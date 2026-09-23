@@ -14,6 +14,7 @@ from typing import Any
 from argos_challenges.dsl import (
     CHALLENGES_DIR,
     ChallengeSpec,
+    intrinsic_errors,
     library_challenges,
     load_challenge_file,
 )
@@ -71,6 +72,10 @@ def load_library(challenges_dir: Path = CHALLENGES_DIR) -> dict[str, ChallengeSp
         if ARCHIVE_DIR in path.parts:
             continue
         spec = load_challenge_file(path)
+        # What CI checks is checked again here: a challenge that slipped past it does not run.
+        broken = intrinsic_errors(spec)
+        if broken:
+            raise ArgosError("; ".join(broken))
         if spec.id in challenges:
             raise ArgosError(f"repeated challenge id in the library: {spec.id}")
         challenges[spec.id] = spec

@@ -4,9 +4,9 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: 72a7663
-date: 2026-09-18
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -216,6 +216,13 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
 - El workflow de humo no accede a sistemas del cliente.
 - **La IA no puede emitir un veredicto, y no es una promesa escrita sino tres cierres** (F06-01): ningún módulo del gateway de IA alcanza `evaluator`, `store` ni `findings` por ninguna ruta de importación (test arquitectónico que sigue el grafo real); el rol `argos_ai` de PostgreSQL puede leer veredictos y hallazgos —redactar el informe es su oficio— pero no tiene privilegio para escribirlos; y el contenedor no comparte red con la API de campañas.
 - La imagen no lleva secretos: ninguna instrucción `ENV` ni `ARG` define credenciales, y las que necesita el entorno de desarrollo las pone el compose. Corre como el usuario sin privilegios `10001`.
+- **Integridad de la campaña** (F09-23; SEC-007, 009, 010, 012, 013, 016 y 037):
+  - **Veredictos del plan:** el evaluador solo escribe veredictos de la unidad guardada en `argos.campaign_units`, con la campaña en curso y sus compuertas aprobadas. Un segundo veredicto distinto para la misma unidad es un error.
+  - **Muestreo:** la compuerta `sampling` (dos personas) se deriva de que haya muestreo o sonda de muestra.
+  - **Biblioteca:** `load_library` aplica las reglas intrínsecas del lint (`intrinsic_errors`).
+  - **Entrada de OPA:** el `input_map` no puede declarar la evidencia (`EVIDENCE_INPUT_KEYS`) y sus referencias se resuelven. El veredicto OPA guarda el SHA-256 de lo que vio OPA. Un fallo de OPA se reintenta.
+  - **Sello v2 (`argos/seal/2`):** cubre también el plan y las aprobaciones, solo se sella una campaña en curso y es válido solo si es el único anclaje. Los disparadores de `0031_campaign_integrity.sql` impiden cambiar el sello o añadir veredictos a una campaña sellada.
+  - **Subsanación:** `RemediationRun` exige quién la pide y pasa por las compuertas de su campaña de subsanación, que consulta cada `GATE_POLL`.
 
 ## 7. Operación
 
@@ -346,3 +353,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-22 | `finding_detail` trae `history` (los asientos `finding.open`, `finding.recur` y `finding.transition` del hallazgo, en orden) y lee la declaración muestral de donde la deja el evaluador (`verdict.detail.sampling`); antes salía siempre vacía | F08-13 |
 | 0.1.0-alpha | 2026-09-22 | Retirada de `argos_challenges.api`: las rutas son las de la API única. Nuevos `store.list_verdicts` y `store.running_campaigns`, y el puente `bridge.on_circuit_open`, que convierte el cortacircuitos del conector en la pausa de la campaña | F08-17 |
 | 0.1.0-alpha | 2026-09-22 | La pausa de un sistema caduca: el workflow espera `circuit_closed` como mucho `PAUSE_MAX` (300 s, el enfriamiento del conector). Nadie envía hoy esa señal —el conector solo anuncia la apertura—, y sin cota una campaña se quedaba esperando para siempre | F08-17 |
+| 0.2.0-alpha | 2026-09-23 | Veredictos solo del plan en campañas en curso, doble control derivado del muestreo, evidencia de OPA no declarable, sello v2 con plan y aprobaciones y disparadores, subsanación con compuertas y fallos de OPA reintentables | F09-23 |

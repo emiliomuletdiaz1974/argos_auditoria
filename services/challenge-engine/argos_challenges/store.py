@@ -150,11 +150,18 @@ def persist_verdict(
         ).fetchone()
         if row is None:
             existing = conn.execute(
-                "SELECT id::text FROM argos.verdicts WHERE campaign_id = %s AND unit_id = %s",
+                "SELECT id::text, verdict_hash FROM argos.verdicts "
+                "WHERE campaign_id = %s AND unit_id = %s",
                 (campaign_id, verdict.unit_id),
             ).fetchone()
             if existing is None:  # pragma: no cover - only if someone deleted it, which is barred
                 raise CampaignStateError("the verdict disappeared between write and read")
+            if str(existing[1]) != verdict.hash:
+                # A retry writes the same verdict; a different one for the same unit means
+                # someone evaluated it with other inputs (security review F09-02, SEC-007).
+                raise CampaignStateError(
+                    f"the unit {verdict.unit_id} already has a different verdict"
+                )
             return str(existing[0]), False
         conn.execute(
             "UPDATE argos.campaign_units SET status = 'done' "
@@ -174,6 +181,16 @@ def persist_verdict(
             conn=conn,
         )
     return verdict_id, True
+
+
+def stored_unit(dsn: str, campaign_id: str, unit_id: str) -> dict[str, Any] | None:
+    """The unit as the campaign planned it, or None when the plan does not have it."""
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT unit FROM argos.campaign_units WHERE campaign_id = %s AND unit_id = %s",
+            (campaign_id, unit_id),
+        ).fetchone()
+    return dict(row[0]) if row is not None else None
 
 
 def request_approval(dsn: str, campaign_id: str, gate: str, payload: Mapping[str, Any]) -> bool:

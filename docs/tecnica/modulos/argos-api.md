@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.16.0-alpha
+version: 0.17.0-alpha
 commit: c75ab0c
 date: 2026-09-23
 status: current
@@ -95,6 +95,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 - **Errores de la base sin detalle:** un `psycopg.Error` responde 503 problem+json («the store is not available») y solo su tipo queda en el log; el mensaje del driver nombra host, SQL o restricción.
 - **Mapa de rutas solo en desarrollo:** `/api/v1/docs` y `/api/v1/openapi.json` se sirven con `ARGOS_ENVIRONMENT=development`; el contrato versionado se sigue generando de `openapi()`.
 - **Sujeto sintético ligado a su campaña:** la autorización pasa el `campaign_id` de la ruta y el dominio rechaza un sujeto de otra campaña.
+- **Señal a campañas sin workflow propio** (F09-23): `TemporalCampaigns.signal` ignora que no exista `campaign-<id>`, porque una campaña de subsanación consulta sus compuertas por su cuenta.
 
 ## 7. Operación
 
@@ -145,3 +146,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.14.0-alpha | 2026-09-22 | `POST /assistant/ask` devuelve `refused` y `fragments` | F08-15 |
 | 0.15.0-alpha | 2026-09-22 | Proceso `argos_api.main` con todo cableado (realm, Temporal, evidencia, gateway y Vault), consola servida como estáticos del mismo origen, veredictos de campaña, sujeto sintético y reejecución de subsanación; retirada de `challenge-api` | F08-17 |
 | 0.16.0-alpha | 2026-09-23 | Endurecimiento de la auditoría del 2026-09-18 trasladado desde la API de campañas retirada: entradas acotadas, 503 sin detalle ante errores de la base, `/docs` y contrato servido solo en desarrollo, y autorización del sujeto sintético ligada a su campaña | F09-17 |
+| 0.17.0-alpha | 2026-09-23 | La señal de aprobación no falla con campañas de subsanación | F09-23 |

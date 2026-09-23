@@ -10,6 +10,7 @@ the database lives here. Three decisions carry the phase:
 """
 
 import asyncio
+import json
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
@@ -20,6 +21,7 @@ from temporalio.exceptions import ApplicationError
 
 from argos_challenges.client import client_parameters
 from argos_challenges.compiler import compile_campaign
+from argos_challenges.dsl import EVIDENCE_INPUT_KEYS
 from argos_challenges.evaluator import evaluate
 from argos_challenges.findings import REMEDIATION_ACTOR, announce, open_or_recur, transition
 from argos_challenges.library.catalog import load_library
@@ -36,6 +38,7 @@ from argos_challenges.store import (
     request_approval,
     save_units,
     set_status,
+    stored_unit,
 )
 from argos_challenges.synthetic import campaign_subject
 from argos_common.config import get_config
@@ -132,6 +135,10 @@ async def record_in_journal(action: str, payload: dict[str, Any]) -> int:
     journal = PostgresJournal(get_config().DATABASE_URL)
     actor = f"system:worker:{activity.info().task_queue}"
     return await asyncio.to_thread(journal.append, actor, action, payload)
+
+
+def _canonical(unit: Mapping[str, Any]) -> str:
+    return json.dumps(unit, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
 
 
 class ChallengeActivities:
@@ -248,6 +255,14 @@ class ChallengeActivities:
         The unit is the one stored with the verdict, so the remediation is measured with the same
         challenge version that measured the problem, even if the library has moved on (ARG-049).
         """
+        requested_by = str(scope.get("requested_by") or "")
+        if not requested_by.startswith("user:"):
+            # The gates keep who asked apart from who approves: nobody anonymous asks (SEC-010).
+            raise ApplicationError(
+                "a remediation run needs the person who asks for it",
+                type="RequesterMissing",
+                non_retryable=True,
+            )
         # One statement, three uses: a campaign, one finding, or everything awaiting verification.
         filters = {"campaign": scope.get("campaign_id"), "finding": scope.get("finding_id")}
         with psycopg.connect(self._dsn) as conn:
@@ -263,7 +278,7 @@ class ChallengeActivities:
             self._dsn,
             f"Subsanación {scope.get('campaign_id', 'general')}",
             dict(scope),
-            str(scope.get("requested_by", "user:remediation")),
+            requested_by,
         )
         pin_campaign(
             self._dsn,
@@ -397,18 +412,51 @@ class ChallengeActivities:
 
     # ---------- evaluation ----------
 
+    def _planned(self, unit: Mapping[str, Any]) -> dict[str, Any]:
+        """The unit exactly as the campaign planned it, in a campaign that may be evaluated now.
+
+        Whoever reaches Temporal can start a workflow with units of their own; only the evaluator
+        writes verdicts, and it only writes them for the plan (security review F09-02, SEC-007).
+        """
+        campaign_id = str(unit["campaign_id"])
+        planned = stored_unit(self._dsn, campaign_id, str(unit["unit_id"]))
+        if planned is None or _canonical(planned) != _canonical(unit):
+            raise ApplicationError(
+                "the unit is not the one in the campaign plan",
+                type="UnitNotPlanned",
+                non_retryable=True,
+            )
+        if campaign_record(self._dsn, campaign_id)["status"] != "running":
+            raise ApplicationError(
+                "the campaign is not running", type="CampaignNotRunning", non_retryable=True
+            )
+        gates = ["start", "sampling"] if planned.get("needs_approval") else ["start"]
+        closed = [g for g in gates if not gate_is_open(self._dsn, campaign_id, g)]
+        if closed:
+            raise ApplicationError(
+                f"the gate(s) {', '.join(closed)} are not approved",
+                type="GateNotOpen",
+                non_retryable=True,
+            )
+        return planned
+
     def _decide(self, unit: Mapping[str, Any], probe_result: Mapping[str, Any]) -> dict[str, Any]:
+        unit = self._planned(unit)
         criterion = unit.get("criterion", {})
         decision: dict[str, Any] | None = None
+        opa_input: dict[str, Any] | None = None
         if "opa" in criterion and probe_result.get("ok"):
             package = str(criterion["opa"]["package"])
-            input_doc = dict(criterion["opa"].get("input_map", {}))
-            input_doc.setdefault("result", probe_result.get("data", {}))
+            # The evidence is always the probe's: what a challenge declares never overrides it.
+            declared = dict(criterion["opa"].get("input_map", {}))
+            opa_input = {k: v for k, v in declared.items() if k not in EVIDENCE_INPUT_KEYS}
+            opa_input["result"] = probe_result.get("data", {})
             try:
-                decision = opa_evaluate(package, input_doc, self._opa_url, token=self._opa_token)
-            except OpaError:
-                decision = None
-        verdict = evaluate(unit, probe_result, decision)
+                decision = opa_evaluate(package, opa_input, self._opa_url, token=self._opa_token)
+            except OpaError as exc:
+                # An outage is not an answer: retry, never freeze it as `inconclusive` (SEC-037).
+                raise ApplicationError(str(exc), type="OpaUnavailable") from exc
+        verdict = evaluate(unit, probe_result, decision, opa_input=opa_input)
         verdict_id, created = persist_verdict(
             self._dsn,
             str(unit["campaign_id"]),

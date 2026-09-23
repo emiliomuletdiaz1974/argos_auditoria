@@ -78,6 +78,7 @@ ONTOLOGY_VERSION = "1.0.0"
 IN_FORCE = date(2024, 8, 1)
 MANAGER = "user:campaign-manager"
 DPO = "user:dpo"
+SECOND_DPO = "user:dpo-2"
 SEED = "demo-campaign"
 STAR_CHALLENGE = "dsr-erasure-effective"
 DEV_VAULT_TOKEN = "root"  # noqa: S105 - development Vault started with -dev-root-token-id=root
@@ -207,6 +208,17 @@ async def _campaign(dsn: str, campaign_id: str) -> dict[str, Any]:
         # A person approves, and the approval is recorded with their name before the signal.
         grant_approval(dsn, campaign_id, "start", DPO)
         await handle.signal(CampaignWorkflow.approve, "start")
+        # Sampling decides what is not looked at: two different people approve it.
+        for _ in range(120):
+            status = (await handle.query(CampaignWorkflow.progress)).get("status")
+            if status == "awaiting:sampling":
+                grant_approval(dsn, campaign_id, "sampling", DPO, needed=2)
+                grant_approval(dsn, campaign_id, "sampling", SECOND_DPO, needed=2)
+                await handle.signal(CampaignWorkflow.approve, "sampling")
+                break
+            if status in ("running", "sealed"):
+                break
+            await asyncio.sleep(1)
         return dict(await handle.result())
 
 

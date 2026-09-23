@@ -1,5 +1,6 @@
 """ARG-049 · the remediation is verified with the same challenge that found the problem."""
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -11,7 +12,13 @@ from temporalio.worker import Worker
 from argos_challenges.activities import ChallengeActivities
 from argos_challenges.evaluator import evaluate
 from argos_challenges.findings import open_or_recur, transition
-from argos_challenges.store import create_campaign, persist_verdict, pin_campaign, save_units
+from argos_challenges.store import (
+    create_campaign,
+    grant_approval,
+    persist_verdict,
+    pin_campaign,
+    save_units,
+)
 from argos_challenges.workflows import RemediationRun
 from argos_common.config import get_config
 
@@ -83,29 +90,54 @@ def pending(migrated_db: str) -> tuple[str, dict[str, str]]:
     return campaign_id, findings
 
 
-async def _remediate(dsn: str, campaign_id: str) -> dict[str, Any]:
+async def _approve_remediation(dsn: str, origin: str) -> None:
+    """The DPO approves every gate the remediation campaign of `origin` asks for."""
+    while True:
+        with psycopg.connect(dsn) as conn:
+            rows = conn.execute(
+                "SELECT r.campaign_id::text, r.gate FROM argos.approval_requests r "
+                "JOIN argos.campaigns c ON c.id = r.campaign_id "
+                "WHERE c.scope->>'campaign_id' = %s AND NOT EXISTS ("
+                " SELECT 1 FROM argos.approvals a WHERE a.campaign_id = r.campaign_id"
+                " AND a.gate = r.gate)",
+                (origin,),
+            ).fetchall()
+        for campaign_id, gate in rows:
+            grant_approval(dsn, campaign_id, gate, DPO, 1)
+        await asyncio.sleep(0.5)
+
+
+async def _remediate(dsn: str, campaign_id: str, *, approve: bool = True) -> dict[str, Any]:
     client = await Client.connect(get_config().TEMPORAL_ADDRESS, namespace="default")
     activities = ChallengeActivities(dsn, secret_store())
     queue = f"argos-remediation-test-{uuid.uuid4().hex[:8]}"
-    async with Worker(
-        client,
-        task_queue=queue,
-        workflows=[RemediationRun],
-        activities=[
-            activities.start_remediation,
-            activities.probe,
-            activities.evaluate_unit,
-            activities.transition_finding,
-        ],
-    ):
-        return dict(
-            await client.execute_workflow(
-                RemediationRun.run,
-                {"campaign_id": campaign_id, "requested_by": MANAGER},
-                id=f"remediation-{campaign_id}",
-                task_queue=queue,
+    approver = asyncio.create_task(_approve_remediation(dsn, campaign_id)) if approve else None
+    try:
+        async with Worker(
+            client,
+            task_queue=queue,
+            workflows=[RemediationRun],
+            activities=[
+                activities.start_remediation,
+                activities.request_approval,
+                activities.check_gate,
+                activities.set_campaign_status,
+                activities.probe,
+                activities.evaluate_unit,
+                activities.transition_finding,
+            ],
+        ):
+            return dict(
+                await client.execute_workflow(
+                    RemediationRun.run,
+                    {"campaign_id": campaign_id, "requested_by": MANAGER},
+                    id=f"remediation-{campaign_id}",
+                    task_queue=queue,
+                )
             )
-        )
+    finally:
+        if approver is not None:
+            approver.cancel()
 
 
 def _status(dsn: str, finding_id: str) -> str:
@@ -170,3 +202,29 @@ async def test_without_pending_findings_there_is_nothing_to_verify(migrated_db: 
         "reopened": 0,
         "unchanged": 0,
     }
+
+
+@pytest.mark.asyncio
+async def test_without_the_approval_of_a_dpo_nothing_is_probed(
+    migrated_db: str, pending: tuple[str, dict[str, str]]
+) -> None:
+    """SEC-010: a campaign manager alone cannot re-run probes against the client."""
+    campaign_id, findings = pending
+    with pytest.raises(TimeoutError):
+        await asyncio.wait_for(_remediate(migrated_db, campaign_id, approve=False), timeout=15)
+    with psycopg.connect(migrated_db) as conn:
+        verdicts = conn.execute(
+            "SELECT count(*) FROM argos.verdicts v JOIN argos.campaigns c ON c.id = v.campaign_id "
+            "WHERE c.scope->>'campaign_id' = %s",
+            (campaign_id,),
+        ).fetchone()
+    assert verdicts is not None and int(verdicts[0]) == 0
+    assert _status(migrated_db, findings["sec-fixed"]) == "pending_verification"
+
+
+def test_a_remediation_needs_the_person_who_asks_for_it(migrated_db: str) -> None:
+    from temporalio.exceptions import ApplicationError
+
+    activities = ChallengeActivities(migrated_db, secret_store())
+    with pytest.raises(ApplicationError, match="person"):
+        activities._start_remediation({"campaign_id": str(uuid.uuid4())})

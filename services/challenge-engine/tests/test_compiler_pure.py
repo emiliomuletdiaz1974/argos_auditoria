@@ -261,3 +261,32 @@ def test_a_reference_the_context_cannot_resolve_makes_the_unit_unverifiable() ->
     assert compiled.units == []
     assert [row["challenge_id"] for row in compiled.unverifiable] == [spec.id]
     assert "$subject dni is not available" in compiled.unverifiable[0]["reason"]
+
+
+def _variant(**changes: Any) -> Any:
+    from dataclasses import replace
+
+    return replace(CHALLENGE, **changes)
+
+
+def test_sampling_always_takes_the_double_control() -> None:
+    """SEC-009: sampling decides what is not looked at, whatever the challenge declares."""
+    sampled = _variant(sampling={"confidence": 0.95, "margin": 0.05}, approval_required=False)
+    [unit] = _compile(challenges={CHALLENGE.id: sampled}).units
+    assert unit["needs_approval"] is True
+    [plain] = _compile().units
+    assert plain["needs_approval"] is False
+
+
+def test_the_opa_input_references_are_resolved_like_the_probe() -> None:
+    """SEC-012: `{"$client": …}` reaches OPA as the client's value, not as a literal object."""
+    declared = _variant(
+        criterion={
+            "opa": {
+                "package": "argos.retention",
+                "input_map": {"treatment": {"$client": "treatment_id"}, "category": "x"},
+            }
+        }
+    )
+    [unit] = _compile(challenges={CHALLENGE.id: declared}).units
+    assert unit["criterion"]["opa"]["input_map"] == {"treatment": "T-HIS", "category": "x"}

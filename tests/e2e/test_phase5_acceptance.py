@@ -13,6 +13,7 @@ The ground truth is never adjusted to the output: it is loaded from the fixture 
 """
 
 import asyncio
+import contextlib
 import uuid
 from collections import defaultdict
 from collections.abc import Iterator
@@ -174,7 +175,22 @@ async def _run(dsn: str, campaign_id: str) -> dict[str, Any]:
         # A person approves, and the approval is recorded with their name before the signal.
         grant_approval(dsn, campaign_id, "start", DPO)
         await handle.signal(CampaignWorkflow.approve, "start")
+        await _approve_sampling_if_asked(dsn, campaign_id, handle)
         return dict(await handle.result())
+
+
+async def _approve_sampling_if_asked(dsn: str, campaign_id: str, handle: Any) -> None:
+    """Sampling always takes two different people (SEC-009): both approve when it is asked."""
+    for _ in range(120):
+        status = (await handle.query(CampaignWorkflow.progress)).get("status")
+        if status == "awaiting:sampling":
+            grant_approval(dsn, campaign_id, "sampling", DPO, needed=2)
+            grant_approval(dsn, campaign_id, "sampling", SECOND_DPO, needed=2)
+            await handle.signal(CampaignWorkflow.approve, "sampling")
+            return
+        if status in ("running", "sealed"):
+            return
+        await asyncio.sleep(1)
 
 
 async def _wait_for(handle: Any, state: str, tries: int = 120) -> None:
@@ -343,29 +359,54 @@ def test_the_seal_verifies_and_breaks_when_a_verdict_is_touched(
     assert not verify_seal(phase5_db, campaign["id"])
 
 
+async def _approve_remediation(dsn: str, origin: str) -> None:
+    """The DPOs approve the gates the remediation campaign asks for: two people for sampling."""
+    while True:
+        with psycopg.connect(dsn) as conn:
+            rows = conn.execute(
+                "SELECT r.campaign_id::text, r.gate FROM argos.approval_requests r "
+                "JOIN argos.campaigns c ON c.id = r.campaign_id "
+                "WHERE c.scope->>'campaign_id' = %s",
+                (origin,),
+            ).fetchall()
+        for remediation_id, gate in rows:
+            approvers = (DPO, SECOND_DPO) if gate == "sampling" else (DPO,)
+            for approver in approvers:
+                with contextlib.suppress(CampaignStateError):
+                    grant_approval(dsn, remediation_id, gate, approver, needed=len(approvers))
+        await asyncio.sleep(0.5)
+
+
 async def _remediate(dsn: str, campaign_id: str) -> dict[str, Any]:
     client = await Client.connect(get_config().TEMPORAL_ADDRESS, namespace="default")
     activities = ChallengeActivities(dsn, secret_store())
     queue = f"argos-phase5-remediation-{uuid.uuid4().hex[:8]}"
-    async with Worker(
-        client,
-        task_queue=queue,
-        workflows=[RemediationRun],
-        activities=[
-            activities.start_remediation,
-            activities.probe,
-            activities.evaluate_unit,
-            activities.transition_finding,
-        ],
-    ):
-        return dict(
-            await client.execute_workflow(
-                RemediationRun.run,
-                {"campaign_id": campaign_id, "requested_by": MANAGER},
-                id=f"remediation-{campaign_id}-{uuid.uuid4().hex[:6]}",
-                task_queue=queue,
+    approver = asyncio.create_task(_approve_remediation(dsn, campaign_id))
+    try:
+        async with Worker(
+            client,
+            task_queue=queue,
+            workflows=[RemediationRun],
+            activities=[
+                activities.start_remediation,
+                activities.request_approval,
+                activities.check_gate,
+                activities.set_campaign_status,
+                activities.probe,
+                activities.evaluate_unit,
+                activities.transition_finding,
+            ],
+        ):
+            return dict(
+                await client.execute_workflow(
+                    RemediationRun.run,
+                    {"campaign_id": campaign_id, "requested_by": MANAGER},
+                    id=f"remediation-{campaign_id}-{uuid.uuid4().hex[:6]}",
+                    task_queue=queue,
+                )
             )
-        )
+    finally:
+        approver.cancel()
 
 
 def _finding(dsn: str, campaign_id: str, challenge_id: str, system_id: str) -> str:
