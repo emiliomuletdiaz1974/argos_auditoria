@@ -1,5 +1,6 @@
-# Mide el plazo de respuesta con lo que el cliente confirmó sobre el sujeto sintético. Si el
-# derecho no se ejerció contra ese sistema no hay respuesta que medir: "inconclusive".
+# Mide el plazo de respuesta con las fechas que el cliente declara al confirmar el ejercicio del
+# derecho sobre el sujeto sintético de la campaña (solicitud y respuesta). Si el derecho no se
+# ejerció contra ese sistema no hay respuesta que medir: "inconclusive".
 id: dsr-access-request-term
 version: "1.0"
 title: Plazo de respuesta a la solicitud de acceso del interesado
@@ -19,8 +20,8 @@ criterion:
 evidence:
   capture: [counts]
   minimisation: >-
-    Solo los días transcurridos entre la inyección del sujeto sintético y la confirmación del
-    cliente; ninguna solicitud real y ningún dato de personas reales.
+    Solo los días entre la solicitud y la respuesta que declara el cliente para el sujeto
+    sintético de la campaña; ninguna solicitud real y ningún dato de personas reales.
 severity: high
 preconditions: [synthetic_subject_injected]
 estimated_cost:

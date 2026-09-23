@@ -155,7 +155,13 @@ def _now() -> datetime:
 def register_subjects(
     dsn: str, campaign_id: str | None, subjects: Iterable[SyntheticSubject]
 ) -> int:
-    """Record the generated subjects; the clear values never reach the database."""
+    """Record the generated subjects of a campaign; the clear values never reach the database.
+
+    A subject always belongs to a campaign: one without it escaped the reversion check before
+    the seal (security review F09-02, SEC-015).
+    """
+    if not campaign_id:
+        raise SyntheticError("a synthetic subject is registered for a campaign")
     rows = [
         (
             subject.id,
@@ -244,14 +250,12 @@ def _confirm(
     args: tuple[Any, ...],
     done: str,
     needs_injection: bool = True,
-    repeated: Any = None,
 ) -> None:
     """Record one confirmation of the client, in order and without repeating itself.
 
-    `done` is the column that says this step is already confirmed; with `repeated`, the step is a
-    repetition only when that column already holds that value (a subject can exercise several
-    rights, but not the same one twice). Exercising or reverting needs the injection confirmed
-    first, and the trigger of the table still refuses rewriting who confirmed.
+    `done` is the column that says this step is already confirmed. Reverting needs the injection
+    confirmed first, and the trigger of the table refuses rewriting any confirmation or its date.
+    Exercising a right has its own table (`confirm_exercise`).
     """
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:
@@ -267,7 +271,7 @@ def _confirm(
             raise SyntheticError(f"{actor} authorised this injection and does not confirm it")
         if needs_injection and row[0] is None:
             raise SyntheticError("the subject is not injected yet: confirm the injection first")
-        if row[1] is not None and (repeated is None or row[1] == repeated):
+        if row[1] is not None:
             raise SyntheticError(f"{action} is already confirmed for this injection")
         # `sets` is a literal written in this module, never user input; the values are parameters.
         statement = f"UPDATE argos.synthetic_injections SET {sets} WHERE id = %s"  # noqa: S608
@@ -290,21 +294,73 @@ def confirm_injection(dsn: str, injection_id: str, confirmed_by: str) -> None:
     )
 
 
-def confirm_exercise(dsn: str, injection_id: str, right: str, confirmed_by: str) -> None:
-    """The client says it exercised a right of the subject through its own channel."""
+def confirm_exercise(
+    dsn: str,
+    injection_id: str,
+    right: str,
+    confirmed_by: str,
+    *,
+    requested_at: datetime,
+    answered_at: datetime,
+) -> None:
+    """The client says a right of the subject was exercised through its own channel, and when.
+
+    The term of a right is the client's process: from the request it received to the answer it
+    gave, dates the client declares. It is never the time between two clicks of the console, and
+    once confirmed it is final (security review F09-02, SEC-014). Another right of the same subject
+    is another row; the same right twice is refused.
+    """
     _person(confirmed_by, "confirming the exercise of a right")
     if right not in RIGHTS:
         raise SyntheticError(f"unknown right: {right!r}")
-    _confirm(
-        dsn,
-        injection_id,
-        confirmed_by,
-        "synthetic.exercised",
-        "exercised_right = %s, exercised_confirmed_by = %s, exercised_at = %s",
-        (right, confirmed_by, _now()),
-        done="exercised_right",
-        repeated=right,
-    )
+    for name, value in (("requested_at", requested_at), ("answered_at", answered_at)):
+        if value.tzinfo is None:
+            raise SyntheticError(f"{name} needs its time zone")
+    now = _now()
+    if requested_at > now or answered_at > now:
+        raise SyntheticError("the dates of an exercised right cannot be in the future")
+    if answered_at < requested_at:
+        raise SyntheticError("the answer cannot come before the request")
+    journal = PostgresJournal(dsn)
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT injected_confirmed_by, authorized_by FROM argos.synthetic_injections "
+            "WHERE id = %s FOR UPDATE",
+            (injection_id,),
+        ).fetchone()
+        if row is None:
+            raise SyntheticError(f"unknown synthetic injection: {injection_id}")
+        if row[1] == confirmed_by:
+            # The DPO who authorised and the client who confirms are two people (SEC-008).
+            raise SyntheticError(
+                f"{confirmed_by} authorised this injection and does not confirm it"
+            )
+        if row[0] is None:
+            raise SyntheticError("the subject is not injected yet: confirm the injection first")
+        repeated = conn.execute(
+            "SELECT 1 FROM argos.synthetic_exercises "
+            "WHERE injection_id = %s AND exercised_right = %s",
+            (injection_id, right),
+        ).fetchone()
+        if repeated is not None:
+            raise SyntheticError("synthetic.exercised is already confirmed for this injection")
+        conn.execute(
+            "INSERT INTO argos.synthetic_exercises "
+            "(id, injection_id, exercised_right, requested_at, answered_at, confirmed_by) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            (str(uuid7()), injection_id, right, requested_at, answered_at, confirmed_by),
+        )
+        journal.append(
+            confirmed_by,
+            "synthetic.exercised",
+            {
+                "injection": injection_id,
+                "right": right,
+                "requested_at": requested_at.isoformat(),
+                "answered_at": answered_at.isoformat(),
+            },
+            conn=conn,
+        )
 
 
 def confirm_revert(dsn: str, injection_id: str, reverted_by: str) -> None:
@@ -319,6 +375,24 @@ def confirm_revert(dsn: str, injection_id: str, reverted_by: str) -> None:
         (reverted_by, _now()),
         done="reverted_by",
     )
+
+
+def injections(dsn: str, campaign_id: str) -> list[dict[str, Any]]:
+    """Every injection the client confirmed for the subjects of a campaign, reverted or not."""
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(
+            "SELECT i.id::text, i.subject_id::text, i.system_id::text, i.point, "
+            "i.reverted_by IS NOT NULL "
+            "FROM argos.synthetic_injections i "
+            "JOIN argos.synthetic_subjects s ON s.id = i.subject_id "
+            "WHERE s.campaign_id = %s AND i.injected_confirmed_by IS NOT NULL "
+            "ORDER BY i.system_id, i.point",
+            (campaign_id,),
+        ).fetchall()
+    return [
+        {"id": r[0], "subject_id": r[1], "system_id": r[2], "point": r[3], "reverted": bool(r[4])}
+        for r in rows
+    ]
 
 
 def pending_reversions(dsn: str, campaign_id: str | None = None) -> list[dict[str, Any]]:
@@ -340,22 +414,20 @@ def pending_reversions(dsn: str, campaign_id: str | None = None) -> list[dict[st
     ]
 
 
-def campaign_subject(dsn: str, campaign_id: str | None = None) -> SyntheticSubject | None:
+def campaign_subject(dsn: str, campaign_id: str) -> SyntheticSubject | None:
     """The subject a campaign probes with, regenerated from its recorded seed.
 
     ARGOS never keeps the clear values (the database has only their hashes), but it keeps the
     seed and the index it generated them from, so it can reproduce them in memory when it needs
     to look for the subject in a client system. A campaign without a registered subject has no
-    subject: the challenges that need one stay unverifiable.
+    subject: the challenges that need one stay unverifiable. A subject of another campaign, or
+    of none, is never borrowed (SEC-014).
     """
-    query = "SELECT seed, subject_index FROM argos.synthetic_subjects"
-    args: tuple[Any, ...] = ()
-    if campaign_id is not None:
-        query += " WHERE campaign_id = %s OR campaign_id IS NULL"
-        args = (campaign_id,)
     with psycopg.connect(dsn) as conn:
         row = conn.execute(
-            query + " ORDER BY created_at DESC, subject_index LIMIT 1", args
+            "SELECT seed, subject_index FROM argos.synthetic_subjects WHERE campaign_id = %s "
+            "ORDER BY created_at DESC, subject_index LIMIT 1",
+            (campaign_id,),
         ).fetchone()
     if row is None:
         return None

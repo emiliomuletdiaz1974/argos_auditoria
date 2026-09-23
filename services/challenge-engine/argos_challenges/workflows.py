@@ -63,6 +63,9 @@ GATE_POLL = timedelta(seconds=5)
 PAUSE_MAX_SECONDS = 300.0
 PAUSE_MAX = timedelta(seconds=PAUSE_MAX_SECONDS)
 PROBE_TIMEOUT = timedelta(minutes=30)
+# Once every injection is confirmed as reverted, the markers of the subject are looked for in the
+# client's systems; if they are still there, the next look waits this long, not a gate poll.
+REVERSION_RECHECK = timedelta(minutes=5)
 START_GATE = "start"
 SAMPLING_GATE = "sampling"
 PROBE_RETRY = RetryPolicy(
@@ -71,6 +74,32 @@ PROBE_RETRY = RetryPolicy(
     initial_interval=timedelta(seconds=1),
     non_retryable_error_types=["ReadOnlyViolation", "UnknownQuery"],
 )
+
+
+async def await_reversions(campaign_id: str, progress: dict[str, Any] | None = None) -> None:
+    """Wait until the synthetic subject is verified as gone from every system it was injected in.
+
+    The client confirms each reversion; the campaign then looks for the subject read-only and is
+    sealed only when nothing is left (security review F09-02, SEC-015). A campaign without
+    injections goes straight through.
+    """
+    deadline = workflow.now() + GATE_TIMEOUT
+    while True:
+        check = await workflow.execute_activity(
+            "check_reversions",
+            campaign_id,
+            start_to_close_timeout=PROBE_TIMEOUT,
+            retry_policy=RETRY_POLICY,
+        )
+        if not any(check.values()):
+            return
+        if progress is not None:
+            progress["status"] = "awaiting:revert"
+        if workflow.now() >= deadline:
+            raise ApplicationError(
+                "the synthetic subject was not verified as reverted in time", non_retryable=True
+            )
+        await workflow.sleep(GATE_POLL if check["pending"] else REVERSION_RECHECK)
 
 
 async def await_gate(
@@ -218,6 +247,7 @@ class CampaignWorkflow:
         for system_id, system_units in sorted(by_system.items()):
             await self._run_system(campaign_id, system_id, system_units)
 
+        await await_reversions(campaign_id, self._progress)
         sealed = await workflow.execute_activity(
             "seal_campaign",
             campaign_id,
@@ -237,7 +267,8 @@ class RemediationRun:
 
     It goes through the gates of any campaign: a DPO approves the start, and two people the
     sampling when a unit samples. Otherwise a campaign manager alone could re-run probes against
-    the client until one closes the finding (security review F09-02, SEC-010).
+    the client until one closes the finding (security review F09-02, SEC-010). And it is sealed
+    like any campaign, so what closed a finding is evidence too (SEC-036).
     """
 
     def __init__(self) -> None:
@@ -294,5 +325,13 @@ class RemediationRun:
                 {"finding_id": entry["finding_id"], "to": destination},
                 start_to_close_timeout=_TIMEOUT,
                 retry_policy=RETRY_POLICY,
+            )
+        if campaign_id is not None and started["units"]:
+            await await_reversions(campaign_id)
+            await workflow.execute_activity(
+                "seal_campaign",
+                campaign_id,
+                start_to_close_timeout=CAMPAIGN_TIMEOUT,
+                retry_policy=RetryPolicy(maximum_attempts=5),
             )
         return {"campaign_id": started["campaign_id"], **summary}

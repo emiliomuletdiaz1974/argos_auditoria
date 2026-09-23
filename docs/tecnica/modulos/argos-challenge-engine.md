@@ -4,8 +4,8 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.4.0-alpha
-commit: 324fcd2
+version: 0.5.0-alpha
+commit: 3bf7634
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -183,7 +183,9 @@ El cierre de un hallazgo no lo declara el cliente: lo confirma **el mismo reto q
 | Lecturas | `store.list_campaigns`, `store.list_verdicts`, `store.campaign_gates`, `store.campaign_plan`, `store.running_campaigns`; `DOUBLE_CONTROL_GATES = {"sampling"}` | Lo que sirve la API única |
 | Puente | `bridge.on_circuit_open(running, signal)`, `bridge.SUBJECT`/`DURABLE`/`SIGNAL` | El cortacircuitos del conector pausa la campaña |
 | Rutas | `POST /campaigns`, `POST /campaigns/{id}/launch`, `GET /campaigns/{id}`, `/verdicts`, `/findings`, `/gates`, `POST /campaigns/{id}/gates/{gate}/approve`, `POST /campaigns/{id}/synthetic/authorize`, `POST /synthetic/{id}/confirm-injection\|confirm-exercise\|confirm-revert`, `POST /findings/{id}/transition` | Puntos de control humanos |
-| Workflows | `RemediationRun` (actividades `start_remediation` y `transition_finding`); ruta `POST /remediation` | Verificación de subsanaciones |
+| Workflows | `RemediationRun` (actividades `start_remediation`, `transition_finding`, `check_reversions` y `seal_campaign`); ruta `POST /remediation` | Verificación de subsanaciones, sellada como cualquier campaña |
+| Función de workflow | `await_reversions(campaign_id, progress)`; constante `REVERSION_RECHECK` (5 min); estado `awaiting:revert` | Espera a que el sujeto sintético esté comprobado como revertido antes de sellar |
+| Actividad | `check_reversions(campaign_id)` → `{pending, remaining, unverifiable}`; tablas `REVERSION_MARKERS` y `REVERSION_CONNECTORS` | Busca, en solo lectura, los marcadores del sujeto donde se inyectó |
 | Workflows | `CampaignWorkflow` (señales `approve`, `circuit_open`, `circuit_closed`; consulta `progress`) y `SystemRun` | Orquestación de la campaña |
 | Funciones | `seal_payload`, `compute_seal`, `seal_campaign`, `verify_seal`, `announce_seal`; `SealError`; evento `challenge.campaign_sealed.v1`; asiento `campaign.seal` | Sello de campaña |
 | Funciones | `client_parameters()`, `client_data()`; `library_fingerprint()` | Parámetros del cliente y huella de la biblioteca |
@@ -197,8 +199,8 @@ El cierre de un hallazgo no lo declara el cliente: lo confirma **el mismo reto q
 | Asientos | `campaign.create`, `campaign.pin`, `approval.request`, `approval.grant`, `verdict.emit` | Trazabilidad de la campaña |
 | Funciones | `evaluate(unit, probe_result, opa_decision=None)`; tipo `Verdict` (`canonical()`, `hash`); constantes `RESULTS`, `OPERATORS` | Evaluador determinista (única fuente de veredictos) |
 | Funciones | `sample_size`, `wilson_upper`, `required_sample_size`, `plan_sampling`; tipo `SamplingPlan`; constantes `Z`, `POPULATION_THRESHOLD` | Muestreo estadístico declarado |
-| Tablas | `argos.synthetic_subjects`, `argos.synthetic_injections` (migración `0011`) | Inventario auditado de sujetos sintéticos |
-| Funciones | `generate_subjects(seed, count)`, `is_synthetic(value)`, `client_package(subject, injections)`, `register_subjects`, `authorize_injection`, `confirm_injection`, `confirm_exercise`, `confirm_revert`, `pending_reversions`; tipos `SyntheticSubject`, `SyntheticError` | Sujeto sintético |
+| Tablas | `argos.synthetic_subjects`, `argos.synthetic_injections` (migración `0011`), `argos.synthetic_exercises` (migración `0032`) | Inventario auditado de sujetos sintéticos y derechos ejercidos |
+| Funciones | `generate_subjects(seed, count)`, `is_synthetic(value)`, `client_package(subject, injections)`, `register_subjects`, `authorize_injection`, `confirm_injection`, `confirm_exercise(..., *, requested_at, answered_at)`, `confirm_revert`, `injections(dsn, campaign_id)`, `pending_reversions`; tipos `SyntheticSubject`, `SyntheticError` | Sujeto sintético |
 | Asientos | `synthetic.generate`, `synthetic.authorize`, `synthetic.injected`, `synthetic.exercised`, `synthetic.revert` | Trazabilidad del sujeto sintético |
 | Herramienta de desarrollo | `tools/demo_client_actions.py inject\|erase\|revert` | Hace de cliente en la demostración (fuera del producto) |
 
@@ -224,6 +226,12 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
   - **Sello v2 (`argos/seal/2`):** cubre también el plan y las aprobaciones, solo se sella una campaña en curso y es válido solo si es el único anclaje. Los disparadores de `0031_campaign_integrity.sql` impiden cambiar el sello o añadir veredictos a una campaña sellada.
   - **Subsanación:** `RemediationRun` exige quién la pide y pasa por las compuertas de su campaña de subsanación, que consulta cada `GATE_POLL`.
 - **Separación de deberes por persona** (F09-24; SEC-008 y SEC-042): `grant_approval` rechaza que apruebe quien creó la campaña (en una subsanación, quien la pidió), y las confirmaciones del sujeto sintético rechazan a quien autorizó el punto. Aceptar un riesgo exige una fecha futura a 365 días como mucho (`RISK_ACCEPTANCE_MAX_DAYS`).
+- **Sujeto sintético medido de verdad** (F09-27; SEC-014 y SEC-015):
+  - El plazo de un derecho se mide con las fechas que declara el cliente (`requested_at`, `answered_at`): no futuras y en orden. Van en `argos.synthetic_exercises`, una fila por derecho, que no se puede cambiar ni borrar. El disparador de `synthetic_injections` protege ahora también cada fecha y el derecho.
+  - `access_request_days` solo cuenta los ejercicios del sujeto de la propia campaña, y un sujeto siempre pertenece a una campaña.
+  - La precondición `synthetic_subject_injected` la comprueba el compilador: donde el cliente no confirmó la inyección, la unidad es no verificable.
+  - Antes de sellar, `check_reversions` busca los marcadores del sujeto con una sonda `count` de solo lectura en las columnas del punto de inyección clasificadas como identificador oficial, contacto o dato financiero. `_seal` se niega (`ReversionNotVerified`) si queda algo, si falta alguna confirmación o si un punto no se puede sondear.
+- **Reproducibilidad** (F09-27, SEC-036): las formas SHACL se evalúan sobre el grafo exportado y congelado con la instantánea de la campaña (`argos.inventory_snapshot_shapes_data`), no sobre el grafo vivo. La subsanación toma una instantánea nueva, apunta a ella las referencias de sus unidades y se sella.
 - **Contenido firmado en ejecución** (F09-25, SEC-011): `_prepare` comprueba, antes de fijar versiones o compilar, que la biblioteca del disco (`verify_on_disk`) y las políticas que OPA tiene cargadas (`verify_running_policies`) son las del bundle firmado en vigor. Si no, la campaña se para sin fijar nada. Tests y demo publican la biblioteca con `publish_library` y la clave `argos-content` de Vault de desarrollo.
 
 ## 7. Operación
@@ -315,7 +323,9 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 - **La columna de referencia de la retención va escrita en cada variante** (`created_at`, `issued_at`): el nombre de una columna no puede viajar como parámetro de una sentencia.
 - **`acc-special-category-profiles` deja fuera las cuentas de superusuario**: son cuentas técnicas de administración y se revisan aparte.
 - El contenedor de la API valida los tokens emitidos por Keycloak en su dirección interna (`http://keycloak:8080/realms/argos`); desde el anfitrión, Keycloak responde en `127.0.0.1:8180` y los emisores no coinciden. Para ejercer la API autenticada desde el anfitrión se usa el proceso local, como hacen los tests de F05-15.
-- **Una fila de inyección guarda solo el último derecho ejercido** (`exercised_right`): el diario conserva cada ejercicio, pero la tabla no. Una tabla de ejercicios por inyección lo resolvería con una migración.
+- **La reversión solo se sondea en conectores relacionales** (`rdbms.postgresql`, `rdbms.generic`) y en columnas clasificadas como identificador oficial, contacto o dato financiero. Una inyección en otro tipo de sistema, o en un punto sin esas columnas, impide el sello hasta que se amplíe la sonda.
+- **Tras la reversión, una subsanación de `dsr-erasure-effective` siempre cierra:** el sujeto ya no está en ningún sitio. Verificar de verdad la supresión corregida pide inyectar un sujeto nuevo en la campaña de subsanación.
+- **La instantánea y el grafo congelado para SHACL se toman uno detrás del otro**, no en una sola transacción de AGE: un cambio del grafo entre ambos quedaría en uno y no en el otro.
 
 ## 10. Historial
 
@@ -358,3 +368,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.2.0-alpha | 2026-09-23 | Veredictos solo del plan en campañas en curso, doble control derivado del muestreo, evidencia de OPA no declarable, sello v2 con plan y aprobaciones y disparadores, subsanación con compuertas y fallos de OPA reintentables | F09-23 |
 | 0.3.0-alpha | 2026-09-23 | Nadie aprueba ni confirma lo que pidió; riesgo aceptado con fecha futura y tope | F09-24 |
 | 0.4.0-alpha | 2026-09-23 | La campaña solo arranca si el disco y OPA tienen el contenido firmado en vigor | F09-25 |
+| 0.5.0-alpha | 2026-09-23 | Plazo de los derechos con las fechas del cliente, sujeto siempre de su campaña, precondición en el compilador, reversión comprobada antes del sello, SHACL sobre la instantánea y subsanación reproducible y sellada | F09-27 |

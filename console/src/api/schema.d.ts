@@ -705,6 +705,18 @@ export interface components {
         /** Exercise */
         Exercise: {
             /**
+             * Answered At
+             * Format: date-time
+             * @description when the client answered it
+             */
+            answered_at: string;
+            /**
+             * Requested At
+             * Format: date-time
+             * @description when the client received the request
+             */
+            requested_at: string;
+            /**
              * Right
              * @description the right exercised
              * @default erasure
@@ -3602,7 +3614,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
                 "application/json": components["schemas"]["Exercise"];
             };

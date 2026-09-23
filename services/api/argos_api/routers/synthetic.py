@@ -10,7 +10,7 @@ from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
@@ -27,14 +27,15 @@ router = APIRouter(prefix="/synthetic", tags=["synthetic"], route_class=CoreRout
 
 class Exercise(BaseModel):
     right: str = Field(default="erasure", min_length=1, description="the right exercised")
+    # The term of a right is the client's process, measured with the client's dates, never with
+    # the time of this request (security review F09-02, SEC-014).
+    requested_at: AwareDatetime = Field(description="when the client received the request")
+    answered_at: AwareDatetime = Field(description="when the client answered it")
 
 
-DEFAULT_EXERCISE = Exercise()
-
-
-def _confirmed(step: Any, *args: Any) -> None:
+def _confirmed(step: Any, *args: Any, **kwargs: Any) -> None:
     try:
-        step(*args)
+        step(*args, **kwargs)
     except SyntheticError as refused:
         raise HTTPException(status.HTTP_409_CONFLICT, str(refused)) from None
 
@@ -57,10 +58,16 @@ def injected(request: Request, injection_id: UUID) -> dict[str, str]:
 def exercised(
     request: Request,
     injection_id: UUID,
-    body: Annotated[Exercise, Body()] = DEFAULT_EXERCISE,
+    body: Annotated[Exercise, Body()],
 ) -> dict[str, str]:
     _confirmed(
-        confirm_exercise, database(request), str(injection_id), body.right, caller(request).actor
+        confirm_exercise,
+        database(request),
+        str(injection_id),
+        body.right,
+        caller(request).actor,
+        requested_at=body.requested_at,
+        answered_at=body.answered_at,
     )
     return {"injection_id": str(injection_id), "state": "exercised"}
 

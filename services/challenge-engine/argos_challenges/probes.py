@@ -36,12 +36,16 @@ INVENTORY_QUERIES: Mapping[str, str] = {
         "WHERE snapshot_id = %(snapshot_id)s AND label = 'AISystem' "
         "AND system_id = %(system_id)s AND coalesce(status, '') <> 'confirmed'"
     ),
+    # The term the client declares, from the request to the answer, for this campaign's subject
+    # only; the slowest answer when there are several (security review F09-02, SEC-014).
     "access_request_days": (
-        "SELECT EXTRACT(DAY FROM i.exercised_at - i.injected_at)::int AS days "
-        "FROM argos.synthetic_injections i "
-        "WHERE i.system_id = %(system_id)s AND i.exercised_right = 'access' "
-        "AND i.exercised_at IS NOT NULL AND i.injected_at IS NOT NULL "
-        "ORDER BY i.exercised_at DESC LIMIT 1"
+        "SELECT EXTRACT(DAY FROM e.answered_at - e.requested_at)::int AS days "
+        "FROM argos.synthetic_exercises e "
+        "JOIN argos.synthetic_injections i ON i.id = e.injection_id "
+        "JOIN argos.synthetic_subjects s ON s.id = i.subject_id "
+        "WHERE i.system_id = %(system_id)s AND s.campaign_id = %(campaign_id)s "
+        "AND e.exercised_right = 'access' "
+        "ORDER BY e.answered_at - e.requested_at DESC LIMIT 1"
     ),
     "prohibited_ai_systems": (
         "SELECT count(*) AS count FROM argos.inventory_snapshot_nodes "

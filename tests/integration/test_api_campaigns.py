@@ -402,7 +402,14 @@ def test_the_synthetic_subject_is_authorised_by_the_dpo_and_confirmed_by_the_cli
     )
     for step, sent in (
         ("confirm-injection", {}),
-        ("confirm-exercise", {"right": "erasure"}),
+        (
+            "confirm-exercise",
+            {
+                "right": "erasure",
+                "requested_at": "2026-01-10T09:00:00+00:00",
+                "answered_at": "2026-01-20T09:00:00+00:00",
+            },
+        ),
         ("confirm-revert", {}),
     ):
         done = api.post(f"{confirmations}/{step}", json=sent, headers=_as("campaign_manager"))

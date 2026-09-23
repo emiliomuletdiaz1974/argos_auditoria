@@ -39,6 +39,7 @@ async def create_worker(
             campaign.wait_window,
             campaign.evaluate_unit,
             campaign.seal,
+            campaign.check_reversions,
             campaign.start_remediation,
             campaign.transition_finding,
         ]

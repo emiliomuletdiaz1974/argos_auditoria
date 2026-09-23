@@ -61,6 +61,9 @@ def unit_id(campaign_id: str, challenge_id: str, version: str, node_key: str) ->
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
+SUBJECT_INJECTED = "synthetic_subject_injected"
+
+
 def connector_id(system: Mapping[str, Any]) -> str:
     """The identifier of the connector of a system, as challenges name it in `by_connector`."""
     base = CONNECTOR_IDS.get(str(system.get("connector")))
@@ -178,6 +181,9 @@ def compile_campaign(
 ) -> CompiledCampaign:
     """Work units for the campaign, sorted by system and unit, and what cannot be verified."""
     resolved_context = dict(context or {})
+    # Where the client confirmed it injected this campaign's subject: a challenge on the subject
+    # runs only there, and elsewhere it is honestly unverifiable (security review F09-02, SEC-014).
+    injected = frozenset(str(s) for s in resolved_context.get("injected_systems", ()))
     units: list[dict[str, Any]] = []
     unverifiable: list[dict[str, Any]] = []
     for row in plan:
@@ -211,6 +217,17 @@ def compile_campaign(
             connector = (
                 INTERNAL_CONNECTOR if spec.probe_kind in INTERNAL_PROBES else connector_id(system)
             )
+            if SUBJECT_INJECTED in spec.preconditions and str(system["id"]) not in injected:
+                unverifiable.append(
+                    {
+                        "challenge_id": challenge_id,
+                        "connector": connector,
+                        "node_key": node_key,
+                        "reason": "the synthetic subject is not injected in this system",
+                        "system_id": str(system["id"]),
+                    }
+                )
+                continue
             variant = _variant(spec, connector)
             if variant is None:
                 unverifiable.append(

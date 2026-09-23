@@ -222,7 +222,11 @@ def test_a_sample_probe_marks_the_unit_as_needing_approval() -> None:
             "node_keys": ["k-col-1"],
         }
     ]
-    [unit] = _compile(plan=plan, challenges={sampling_challenge.id: sampling_challenge}).units
+    [unit] = _compile(
+        plan=plan,
+        challenges={sampling_challenge.id: sampling_challenge},
+        context={**CONTEXT, "injected_systems": [POSTGRES]},
+    ).units
     assert unit["needs_approval"] is True
     assert unit["preconditions"] == ["synthetic_subject_injected"]
 
@@ -290,3 +294,32 @@ def test_the_opa_input_references_are_resolved_like_the_probe() -> None:
     )
     [unit] = _compile(challenges={CHALLENGE.id: declared}).units
     assert unit["criterion"]["opa"]["input_map"] == {"treatment": "T-HIS", "category": "x"}
+
+
+def test_a_subject_precondition_is_checked_against_the_confirmed_injections() -> None:
+    """SEC-014: a challenge on the synthetic subject runs only where the client injected it."""
+    spec = parse_challenge(
+        {
+            "id": "dsr-erasure-effective",
+            "version": "1.0",
+            "title": "La supresión ejercida por el interesado es efectiva",
+            "objective": {"obligation": "OBL-RGPD-17-1"},
+            "selector": {"asset_class": "AC-stored-personal-data"},
+            "probe": {"kind": "count", "by_connector": {"rdbms.postgresql": {"params": {}}}},
+            "criterion": {"threshold": {"field": "count", "operator": "==", "value": 0}},
+            "evidence": {
+                "capture": ["counts"],
+                "minimisation": "Solo el recuento de apariciones del sujeto sintético.",
+            },
+            "severity": "high",
+            "preconditions": ["synthetic_subject_injected"],
+        }
+    )
+    plan = [{"challenge_id": spec.id, "obligation": "OBL-RGPD-17-1", "node_keys": ["k-col-1"]}]
+    elsewhere = _compile(
+        plan=plan, challenges={spec.id: spec}, context={"injected_systems": [FILES]}
+    )
+    assert elsewhere.units == []
+    assert "not injected" in elsewhere.unverifiable[0]["reason"]
+    here = _compile(plan=plan, challenges={spec.id: spec}, context={"injected_systems": [POSTGRES]})
+    assert [unit["challenge_id"] for unit in here.units] == [spec.id]

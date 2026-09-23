@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.18.0-alpha
-commit: 03c53c6
+version: 0.19.0-alpha
+commit: 3bf7634
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -96,6 +96,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 - **Mapa de rutas solo en desarrollo:** `/api/v1/docs` y `/api/v1/openapi.json` se sirven con `ARGOS_ENVIRONMENT=development`; el contrato versionado se sigue generando de `openapi()`.
 - **Sujeto sintético ligado a su campaña:** la autorización pasa el `campaign_id` de la ruta y el dominio rechaza un sujeto de otra campaña.
 - **Señal a campañas sin workflow propio** (F09-23): `TemporalCampaigns.signal` ignora que no exista `campaign-<id>`, porque una campaña de subsanación consulta sus compuertas por su cuenta.
+- **Fechas del cliente en el ejercicio de un derecho** (F09-27, SEC-014): `POST /synthetic/{id}/confirm-exercise` exige `requested_at` y `answered_at` con zona horaria. El plazo se mide entre ambas, nunca con la hora de la petición; unas fechas futuras o desordenadas responden 409.
 - **Roles incompatibles** (F09-24, SEC-008): `permissions.yaml` declara `_incompatible_roles` (`campaign_manager` con `dpo_reviewer`), y el guardián de permisos rechaza con 403 en toda ruta un token que los traiga juntos. `risk_expiry` fuera de rango responde 422.
 
 ## 7. Operación
@@ -149,3 +150,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.16.0-alpha | 2026-09-23 | Endurecimiento de la auditoría del 2026-09-18 trasladado desde la API de campañas retirada: entradas acotadas, 503 sin detalle ante errores de la base, `/docs` y contrato servido solo en desarrollo, y autorización del sujeto sintético ligada a su campaña | F09-17 |
 | 0.17.0-alpha | 2026-09-23 | La señal de aprobación no falla con campañas de subsanación | F09-23 |
 | 0.18.0-alpha | 2026-09-23 | `_incompatible_roles` en la matriz y tope de la aceptación de riesgo | F09-24 |
+| 0.19.0-alpha | 2026-09-23 | `confirm-exercise` recibe las fechas de solicitud y respuesta del cliente | F09-27 |

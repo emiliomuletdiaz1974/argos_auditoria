@@ -4,8 +4,8 @@ kind: module
 title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
-version: 0.2.0-alpha
-commit: 324fcd2
+version: 0.3.0-alpha
+commit: 3bf7634
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -382,6 +382,7 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | Funciones | `gate_syntax`, `gate_consistency`, `gate_coverage`, `gate_traceability`, `gate_signature`, `run_gates(library_dir)` y `GateResult(name, ok, errors)` | Las cinco puertas |
 | Fichero | `library/ontology/shapes/inventory-coherence.ttl` | Formas SHACL de coherencia del inventario |
 | Funciones | `export_graph(store)`, `load_shapes(shapes_dir)`, `validate_graph(data, shapes)`, `run_shapes(store, shapes=None)` | Exportación del grafo y validación SHACL |
+| Funciones | `canonical_ntriples(data)`, `store_snapshot_data(dsn, snapshot_id, data)`, `snapshot_data(dsn, snapshot_id)`; tabla `argos.inventory_snapshot_shapes_data` (migración `0032`) | Grafo de SHACL congelado con la instantánea (N-Triples ordenados y su SHA-256) |
 | Funciones | `parse_policy(jsonld)`, `to_challenges(policy)`, `duration_days(iso)`; tipos `Policy`, `Rule`, `Constraint` y `PolicyError` | Lectura del perfil ODRL y traducción a retos |
 | Ficheros | `library/policies/retention.rego`, `library/policies/access.rego` y sus `*_test.rego` | Paquetes `argos.retention` y `argos.access` |
 | Función | `evaluate(package, input_doc, base_url="http://127.0.0.1:8181", *, client=None)` y `OpaError` | Veredicto de un paquete Rego |
@@ -406,6 +407,7 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 - La ontología no contiene datos personales ni del cliente: solo normas, obligaciones y su relación con clases abstractas de activo.
 - **Vocabulario cerrado:** el núcleo no puede declarar términos fuera de la lista (lo comprueba un test).
 - **Idioma** (ADR-0005): identificadores y valores en inglés; etiquetas en castellano.
+- **SHACL reproducible** (F09-27, SEC-036): lo que validan las formas se congela con la instantánea de la campaña, en N-Triples ordenados con su SHA-256, y se comprueba el hash al leerlo. La exportación incluye `g:system_id` de cada sistema de IA confirmado, para acotar los hallazgos por sistema sin volver al grafo vivo.
 - **Contenido firmado de punta a punta** (F09-25; SEC-011, SEC-019, SEC-020): bundle leído en flujo con tope total, huella obligatoria, anti-retroceso y comprobación en ejecución del disco y de OPA frente al manifiesto firmado.
 - **OPA:** su autorización deja a un cliente conocido leer `GET /v1/policies` (las reglas no llevan secretos). Cargar o sustituir políticas sigue prohibido.
 - **Decisiones aplicables:** ADR-0006 y nota de desviación ARG-031-033.
@@ -516,3 +518,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-18 | Cliente de OPA con token y OPA con autenticación y autorización propias | Auditoría de seguridad (M7) |
 | 0.1.0-alpha | 2026-09-21 | `editorial.compiler.read_obligation`: la plantilla de una obligación (norma, artículo, título y resumen) para enseñarla junto al hallazgo | F08-06 |
 | 0.2.0-alpha | 2026-09-23 | Bundle en flujo con manifiesto primero y tope total, huella obligatoria y anti-retroceso en `load_bundle`, `publish_library` y comprobación en ejecución del disco y de OPA | F09-25 |
+| 0.3.0-alpha | 2026-09-23 | Grafo de SHACL congelado con la instantánea | F09-27 |

@@ -18,7 +18,7 @@ import os
 import uuid
 from collections import defaultdict
 from collections.abc import Iterator
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -47,7 +47,9 @@ from argos_challenges.synthetic import (
     authorize_injection,
     confirm_exercise,
     confirm_injection,
+    confirm_revert,
     generate_subjects,
+    pending_reversions,
     register_subjects,
 )
 from argos_challenges.workflows import CampaignWorkflow, RemediationRun, SystemRun
@@ -70,6 +72,7 @@ ONTOLOGY_VERSION = "1.0.0"
 IN_FORCE = date(2024, 8, 1)
 MANAGER = "user:campaign-manager"
 DPO = "user:dpo"
+CLIENT = "user:client-dba"
 SECOND_DPO = "user:dpo-2"
 SEED = "demo-campaign"
 
@@ -121,7 +124,6 @@ def demo(phase5_db: str) -> dict[str, str]:
             os.environ.get("ARGOS_TEST_VAULT", "http://127.0.0.1:8200"), "root", key="argos-content"
         ),
     )
-    _inject_the_subject(phase5_db, systems)
     return systems
 
 
@@ -139,27 +141,71 @@ def _demo_client() -> Any:
     return module
 
 
-def _inject_the_subject(dsn: str, systems: dict[str, str]) -> None:
-    """ARGOS authorises and records; the client script injects and exercises (ADR-0008)."""
+def _inject_the_subject(
+    dsn: str, systems: dict[str, str], campaign_id: str, seed: str = SEED
+) -> Any:
+    """ARGOS registers and authorises; the client script injects and exercises (ADR-0008).
+
+    Every campaign has its own subject: one of another campaign never counts (SEC-014).
+    """
     client = _demo_client()
-    subject = generate_subjects(SEED, 1)[0]
-    register_subjects(dsn, None, [subject])
+    subject = generate_subjects(seed, 1)[0]
+    register_subjects(dsn, campaign_id, [subject])
     client.inject(subject)
+    now = datetime.now(UTC)
     for name, point in (
         ("dev-source-postgres", "clinic.patients"),
         ("dev-source-mariadb", "billing.patient_mirror"),
     ):
         injection = authorize_injection(
-            dsn, subject.id, systems[name], point, "INSERT", "DELETE por id", DPO
+            dsn,
+            subject.id,
+            systems[name],
+            point,
+            "INSERT",
+            "DELETE por id",
+            DPO,
+            campaign_id=campaign_id,
         )
-        confirm_injection(dsn, injection, "user:client-dba")
+        confirm_injection(dsn, injection, CLIENT)
         if name == "dev-source-postgres":
             client.exercise_erasure(subject)
-            confirm_exercise(dsn, injection, "erasure", "user:client-dba")
-            confirm_exercise(dsn, injection, "access", "user:client-dba")
+            confirm_exercise(
+                dsn,
+                injection,
+                "erasure",
+                CLIENT,
+                requested_at=now - timedelta(days=2),
+                answered_at=now - timedelta(days=1),
+            )
+            # The client declares the access request answered in 12 days (term 30).
+            confirm_exercise(
+                dsn,
+                injection,
+                "access",
+                CLIENT,
+                requested_at=now - timedelta(days=13),
+                answered_at=now - timedelta(days=1),
+            )
+    return subject
 
 
-async def _run(dsn: str, campaign_id: str) -> dict[str, Any]:
+async def _revert_when_asked(dsn: str, campaign_id: str, handle: Any, subject: Any) -> None:
+    """The client undoes its injections when the campaign asks for it, and confirms each one;
+    the campaign then looks for the subject itself before sealing (SEC-015)."""
+    for _ in range(1800):
+        status = (await handle.query(CampaignWorkflow.progress)).get("status")
+        if status == "awaiting:revert":
+            _demo_client().revert(subject)
+            for pending in pending_reversions(dsn, campaign_id):
+                confirm_revert(dsn, pending["id"], CLIENT)
+            return
+        if status == "sealed":
+            return
+        await asyncio.sleep(1)
+
+
+async def _run(dsn: str, campaign_id: str, subject: Any) -> dict[str, Any]:
     client = await Client.connect(get_config().TEMPORAL_ADDRESS, namespace="default")
     activities = ChallengeActivities(dsn, secret_store())
     queue = f"argos-phase5-{uuid.uuid4().hex[:8]}"
@@ -176,6 +222,7 @@ async def _run(dsn: str, campaign_id: str) -> dict[str, Any]:
             activities.wait_window,
             activities.evaluate_unit,
             activities.seal,
+            activities.check_reversions,
         ],
     ):
         handle = await client.start_workflow(
@@ -186,6 +233,7 @@ async def _run(dsn: str, campaign_id: str) -> dict[str, Any]:
         grant_approval(dsn, campaign_id, "start", DPO)
         await handle.signal(CampaignWorkflow.approve, "start")
         await _approve_sampling_if_asked(dsn, campaign_id, handle)
+        await _revert_when_asked(dsn, campaign_id, handle, subject)
         return dict(await handle.result())
 
 
@@ -235,7 +283,8 @@ def _verdicts(dsn: str, campaign_id: str, systems: dict[str, str]) -> set[Expect
 @pytest.fixture(scope="module")
 def campaign(phase5_db: str, demo: dict[str, str]) -> dict[str, Any]:
     campaign_id = create_campaign(phase5_db, "Campaña de la prueba de fase", {}, MANAGER)
-    summary = asyncio.run(_run(phase5_db, campaign_id))
+    subject = _inject_the_subject(phase5_db, demo, campaign_id)
+    summary = asyncio.run(_run(phase5_db, campaign_id, subject))
     return {"id": campaign_id, "summary": summary}
 
 
@@ -336,7 +385,9 @@ def test_the_same_snapshot_gives_the_same_verdict_hashes(
 ) -> None:
     """Criterion 4: determinism, unit by unit, over a second campaign on the same snapshot."""
     again = create_campaign(phase5_db, "Reejecución sobre la misma instantánea", {}, MANAGER)
-    asyncio.run(_run(phase5_db, again))
+    # Its own subject, injected and exercised the same way: a verdict does not carry the values.
+    subject = _inject_the_subject(phase5_db, demo, again, seed=f"{SEED}-again")
+    asyncio.run(_run(phase5_db, again, subject))
     with psycopg.connect(phase5_db) as conn:
         rows = conn.execute(
             "SELECT campaign_id::text, challenge_id, node_key, "
@@ -405,6 +456,8 @@ async def _remediate(dsn: str, campaign_id: str) -> dict[str, Any]:
                 activities.probe,
                 activities.evaluate_unit,
                 activities.transition_finding,
+                activities.check_reversions,
+                activities.seal,
             ],
         ):
             return dict(

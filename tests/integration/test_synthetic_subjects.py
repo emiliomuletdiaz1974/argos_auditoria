@@ -1,6 +1,7 @@
 """ADR-0008 · the audited inventory of synthetic subjects and the client's own actions."""
 
 import importlib.util
+from datetime import UTC, datetime, timedelta
 from types import ModuleType
 
 import psycopg
@@ -30,6 +31,11 @@ CLIENT = "user:client-dba"
 SYSTEM = "00000000-0000-4000-8000-000000000001"
 CLINIC_DSN = "postgresql://owner@127.0.0.1:55433/clinic"
 BILLING = {"host": "127.0.0.1", "port": 53306, "user": "root", "password": ""}
+# The client declares when the request arrived and when it was answered (SEC-014).
+DATES = {
+    "requested_at": datetime.now(UTC) - timedelta(days=3),
+    "answered_at": datetime.now(UTC) - timedelta(days=1),
+}
 
 
 def _script() -> ModuleType:
@@ -42,9 +48,13 @@ def _script() -> ModuleType:
     return module
 
 
+def _campaign(dsn: str) -> str:
+    return create_campaign(dsn, "Campaña del sujeto sintético", {}, "user:manager")
+
+
 def _authorised(dsn: str) -> tuple[str, str]:
     subject = generate_subjects(SEED, 1)[0]
-    register_subjects(dsn, None, [subject])
+    register_subjects(dsn, _campaign(dsn), [subject])
     injection = authorize_injection(
         dsn,
         subject.id,
@@ -59,7 +69,7 @@ def _authorised(dsn: str) -> tuple[str, str]:
 
 def test_the_inventory_keeps_hashes_and_never_the_clear_values(migrated_db: str) -> None:
     subject = generate_subjects(SEED, 2)[0]
-    assert register_subjects(migrated_db, None, generate_subjects(SEED, 2)) == 2
+    assert register_subjects(migrated_db, _campaign(migrated_db), generate_subjects(SEED, 2)) == 2
     with psycopg.connect(migrated_db) as conn:
         row = conn.execute(
             "SELECT value_hashes::text, markers::text FROM argos.synthetic_subjects WHERE id = %s",
@@ -74,7 +84,7 @@ def test_the_inventory_keeps_hashes_and_never_the_clear_values(migrated_db: str)
 
 def test_only_a_person_authorises_and_only_with_a_revert_procedure(migrated_db: str) -> None:
     subject = generate_subjects(SEED, 1)[0]
-    register_subjects(migrated_db, None, [subject])
+    register_subjects(migrated_db, _campaign(migrated_db), [subject])
     with pytest.raises(SyntheticError, match="person"):
         authorize_injection(
             migrated_db, subject.id, SYSTEM, "clinic.patients", "SQL", "DELETE ...", "system:robot"
@@ -88,7 +98,7 @@ def test_only_a_person_authorises_and_only_with_a_revert_procedure(migrated_db: 
 def test_the_confirmations_are_written_once_and_land_in_the_journal(migrated_db: str) -> None:
     _, injection = _authorised(migrated_db)
     confirm_injection(migrated_db, injection, CLIENT)
-    confirm_exercise(migrated_db, injection, "erasure", CLIENT)
+    confirm_exercise(migrated_db, injection, "erasure", CLIENT, **DATES)
     assert pending_reversions(migrated_db) and pending_reversions(migrated_db)[0]["id"] == injection
     confirm_revert(migrated_db, injection, CLIENT)
     assert pending_reversions(migrated_db) == []
@@ -111,7 +121,7 @@ def test_the_confirmations_are_written_once_and_land_in_the_journal(migrated_db:
 def test_an_unknown_right_or_injection_is_rejected(migrated_db: str) -> None:
     _, injection = _authorised(migrated_db)
     with pytest.raises(SyntheticError, match="right"):
-        confirm_exercise(migrated_db, injection, "portability", CLIENT)
+        confirm_exercise(migrated_db, injection, "portability", CLIENT, **DATES)
     with pytest.raises(SyntheticError, match="unknown synthetic injection"):
         confirm_injection(migrated_db, "00000000-0000-4000-8000-0000000000ff", CLIENT)
 
@@ -122,13 +132,13 @@ def test_the_client_confirms_in_order_and_each_step_once(migrated_db: str) -> No
     with pytest.raises(SyntheticError, match="not injected"):
         confirm_revert(migrated_db, injection, CLIENT)
     with pytest.raises(SyntheticError, match="not injected"):
-        confirm_exercise(migrated_db, injection, "erasure", CLIENT)
+        confirm_exercise(migrated_db, injection, "erasure", CLIENT, **DATES)
     confirm_injection(migrated_db, injection, CLIENT)
-    confirm_exercise(migrated_db, injection, "erasure", CLIENT)
+    confirm_exercise(migrated_db, injection, "erasure", CLIENT, **DATES)
     # Another right of the same subject is a new exercise; the same right again is not.
-    confirm_exercise(migrated_db, injection, "access", CLIENT)
+    confirm_exercise(migrated_db, injection, "access", CLIENT, **DATES)
     with pytest.raises(SyntheticError, match="already confirmed"):
-        confirm_exercise(migrated_db, injection, "access", CLIENT)
+        confirm_exercise(migrated_db, injection, "access", CLIENT, **DATES)
     confirm_revert(migrated_db, injection, CLIENT)
     with pytest.raises(SyntheticError, match="already confirmed"):
         confirm_revert(migrated_db, injection, CLIENT)
@@ -147,7 +157,7 @@ def test_an_injection_is_authorised_only_for_a_subject_of_its_campaign(migrated_
 
 def test_a_subject_row_cannot_be_changed_or_deleted(migrated_db: str) -> None:
     subject = generate_subjects(SEED, 1)[0]
-    register_subjects(migrated_db, None, [subject])
+    register_subjects(migrated_db, _campaign(migrated_db), [subject])
     with psycopg.connect(migrated_db) as conn, pytest.raises(psycopg.errors.RaiseException):
         conn.execute("DELETE FROM argos.synthetic_subjects WHERE id = %s", (subject.id,))
 

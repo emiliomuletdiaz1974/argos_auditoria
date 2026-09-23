@@ -125,6 +125,8 @@ async def _remediate(dsn: str, campaign_id: str, *, approve: bool = True) -> dic
                 activities.probe,
                 activities.evaluate_unit,
                 activities.transition_finding,
+                activities.check_reversions,
+                activities.seal,
             ],
         ):
             return dict(

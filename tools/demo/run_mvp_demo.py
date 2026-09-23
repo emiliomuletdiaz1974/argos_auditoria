@@ -25,7 +25,7 @@ import importlib.util
 import json
 import sys
 import uuid
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -54,7 +54,9 @@ from argos_challenges.synthetic import (  # noqa: E402
     authorize_injection,
     confirm_exercise,
     confirm_injection,
+    confirm_revert,
     generate_subjects,
+    pending_reversions,
     register_subjects,
 )
 from argos_challenges.workflows import CampaignWorkflow, SystemRun  # noqa: E402
@@ -79,6 +81,7 @@ ONTOLOGY_VERSION = "1.0.0"
 IN_FORCE = date(2024, 8, 1)
 MANAGER = "user:campaign-manager"
 DPO = "user:dpo"
+CLIENT = "user:client-dba"
 SECOND_DPO = "user:dpo-2"
 SEED = "demo-campaign"
 STAR_CHALLENGE = "dsr-erasure-effective"
@@ -168,27 +171,66 @@ def _write_attempt(dsn: str) -> str:
     return "rejected"
 
 
-def _inject_subject(dsn: str, systems: dict[str, str]) -> None:
-    """ARGOS authorises and records; the client script injects and exercises (ADR-0008)."""
+def _inject_subject(dsn: str, systems: dict[str, str], campaign_id: str, seed: str = SEED) -> Any:
+    """ARGOS registers and authorises; the client script injects and exercises (ADR-0008)."""
     client = _demo_client()
-    subject = generate_subjects(SEED, 1)[0]
-    register_subjects(dsn, None, [subject])
+    subject = generate_subjects(seed, 1)[0]
+    register_subjects(dsn, campaign_id, [subject])
     client.inject(subject)
+    now = datetime.now(UTC)
     for name, point in (
         ("dev-source-postgres", "clinic.patients"),
         ("dev-source-mariadb", "billing.patient_mirror"),
     ):
         injection = authorize_injection(
-            dsn, subject.id, systems[name], point, "INSERT", "DELETE por id", DPO
+            dsn,
+            subject.id,
+            systems[name],
+            point,
+            "INSERT",
+            "DELETE por id",
+            DPO,
+            campaign_id=campaign_id,
         )
-        confirm_injection(dsn, injection, "user:client-dba")
+        confirm_injection(dsn, injection, CLIENT)
         if name == "dev-source-postgres":
             client.exercise_erasure(subject)
-            confirm_exercise(dsn, injection, "erasure", "user:client-dba")
-            confirm_exercise(dsn, injection, "access", "user:client-dba")
+            confirm_exercise(
+                dsn,
+                injection,
+                "erasure",
+                CLIENT,
+                requested_at=now - timedelta(days=2),
+                answered_at=now - timedelta(days=1),
+            )
+            # The client declares the access request answered in 12 days (term 30).
+            confirm_exercise(
+                dsn,
+                injection,
+                "access",
+                CLIENT,
+                requested_at=now - timedelta(days=13),
+                answered_at=now - timedelta(days=1),
+            )
+    return subject
 
 
-async def _campaign(dsn: str, campaign_id: str) -> dict[str, Any]:
+async def _revert_when_asked(dsn: str, campaign_id: str, handle: Any, subject: Any) -> None:
+    """The client undoes its injections when the campaign asks for it, and confirms each one;
+    the campaign then looks for the subject itself before sealing (SEC-015)."""
+    for _ in range(1800):
+        status = (await handle.query(CampaignWorkflow.progress)).get("status")
+        if status == "awaiting:revert":
+            _demo_client().revert(subject)
+            for pending in pending_reversions(dsn, campaign_id):
+                confirm_revert(dsn, pending["id"], CLIENT)
+            return
+        if status == "sealed":
+            return
+        await asyncio.sleep(1)
+
+
+async def _campaign(dsn: str, campaign_id: str, subject: Any) -> dict[str, Any]:
     client = await Client.connect(get_config().TEMPORAL_ADDRESS, namespace="default")
     activities = ChallengeActivities(dsn, secret_store())
     queue = f"argos-demo-{uuid.uuid4().hex[:8]}"
@@ -205,6 +247,7 @@ async def _campaign(dsn: str, campaign_id: str) -> dict[str, Any]:
             activities.wait_window,
             activities.evaluate_unit,
             activities.seal,
+            activities.check_reversions,
         ],
     ):
         handle = await client.start_workflow(
@@ -228,6 +271,7 @@ async def _campaign(dsn: str, campaign_id: str) -> dict[str, Any]:
             if status in ("running", "sealed"):
                 break
             await asyncio.sleep(1)
+        await _revert_when_asked(dsn, campaign_id, handle, subject)
         return dict(await handle.result())
 
 
@@ -273,9 +317,9 @@ def run_demo(out: Path, keep_database: bool = True) -> dict[str, Any]:
         summary["write_attempt"] = _write_attempt(dsn)
         _say("Solo lectura", "El arnés intenta escribir en la fuente clínica: rechazado.")
 
-        _inject_subject(dsn, systems)
         campaign_id = create_campaign(dsn, "Demostración del MVP", {}, MANAGER)
-        campaign = asyncio.run(_campaign(dsn, campaign_id))
+        planted = _inject_subject(dsn, systems, campaign_id)
+        campaign = asyncio.run(_campaign(dsn, campaign_id, planted))
         with psycopg.connect(dsn) as conn:
             # A challenge runs one unit per asset: what the audience sees is the worst result per
             # challenge and system, as the campaign ground truth states it.

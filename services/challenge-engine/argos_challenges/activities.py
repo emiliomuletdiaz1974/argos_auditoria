@@ -16,11 +16,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 import psycopg
+from rdflib import Graph, Literal
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from argos_challenges.client import client_parameters
-from argos_challenges.compiler import compile_campaign
+from argos_challenges.compiler import compile_campaign, connector_id
 from argos_challenges.dsl import EVIDENCE_INPUT_KEYS
 from argos_challenges.evaluator import evaluate
 from argos_challenges.findings import REMEDIATION_ACTOR, announce, open_or_recur, transition
@@ -40,7 +41,7 @@ from argos_challenges.store import (
     set_status,
     stored_unit,
 )
-from argos_challenges.synthetic import campaign_subject
+from argos_challenges.synthetic import campaign_subject, injections
 from argos_common.config import get_config
 from argos_common.errors import ReadOnlyViolationError
 from argos_common.journal_pg import PostgresJournal
@@ -48,23 +49,38 @@ from argos_common.secret_stores import SecretStore
 from argos_connector.budget import CircuitListener
 from argos_connector.errors import BudgetExceededError, CircuitOpenError
 from argos_connector.events import bus_circuit_listener
+from argos_connector.probes import ProbeSpec
 from argos_inventory.discovery.probes import run_probe
 from argos_inventory.graph.model import system_key
 from argos_inventory.graph.store import GraphStore
-from argos_inventory.versioning.snapshots import take_snapshot
+from argos_inventory.versioning.snapshots import SnapshotRef, snapshot_nodes, take_snapshot
 from argos_ontology.bundle import verify_on_disk, verify_running_policies
 from argos_ontology.library_hash import library_fingerprint
 from argos_ontology.opa import OpaError, loaded_policies
 from argos_ontology.opa import evaluate as opa_evaluate
 from argos_ontology.resolver import resolve as resolve_applicability
-from argos_ontology.shacl import run_shapes
+from argos_ontology.shacl import (
+    G,
+    N,
+    export_graph,
+    load_shapes,
+    snapshot_data,
+    store_snapshot_data,
+    validate_graph,
+)
 from argos_ontology.store import OntologyStore, version_in_force
 from argos_ontology.traceability import load_challenge_catalog
 from argos_ontology.vocabulary import LIBRARY_DIR
 
 INTERNAL_PROBES = frozenset({"shacl", "inventory_query"})
-_DECLARED_TREATMENTS = "MATCH (s:System)-[:DECLARED_IN]->(t:Treatment) RETURN s.key, t.key"
-_AI_SYSTEMS = "MATCH (a:AISystem) RETURN a.key, a.system_id"
+# Where the marker of a synthetic subject can be looked for after a reversion: the categories of
+# the columns of the injection point, and the connectors whose `count` probe filters by value.
+REVERSION_MARKERS: Mapping[str, str] = {
+    "official_identifier": "national_id",
+    "contact_data": "email",
+    "financial_data": "iban",
+}
+REVERSION_CONNECTORS = frozenset({"rdbms.postgresql", "rdbms.generic"})
 _PENDING_UNITS = (
     "SELECT f.id::text, u.unit FROM argos.findings f "
     "JOIN argos.verdicts v ON v.id = f.last_verdict "
@@ -114,22 +130,28 @@ async def smoke_probe(system: str) -> dict[str, Any]:
     }
 
 
-def _system_scope(store: GraphStore, system_id: str) -> frozenset[str]:
+def _system_scope(data: Graph, system_id: str) -> frozenset[str]:
     """The nodes a coherence finding may talk about for one system: the system itself, the
     treatments it declares and the AI systems it holds. A campaign answers per system, so a gap
-    in another one is not its verdict."""
+    in another one is not its verdict. Read from the data frozen with the snapshot."""
     key = system_key(system_id)
+    prefix = str(N)
     treatments = {
-        str(row["treatment"])
-        for row in store.query(_DECLARED_TREATMENTS, columns=("system", "treatment"))
-        if str(row["system"]) == key
+        str(treatment).removeprefix(prefix) for treatment in data.objects(N[key], G.declared_in)
     }
     ai_systems = {
-        str(row["key"])
-        for row in store.query(_AI_SYSTEMS, columns=("key", "system_id"))
-        if str(row["system_id"]) == system_id
+        str(node).removeprefix(prefix) for node in data.subjects(G.system_id, Literal(system_id))
     }
     return frozenset({key, *treatments, *ai_systems})
+
+
+def _with_snapshot(value: Any, old: str, new: str) -> Any:
+    """`value` with every reference to the snapshot `old` pointing to `new` instead."""
+    if isinstance(value, Mapping):
+        return {k: _with_snapshot(v, old, new) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_with_snapshot(item, old, new) for item in value]
+    return new if value == old else value
 
 
 @activity.defn
@@ -167,9 +189,20 @@ class ChallengeActivities:
 
     # ---------- preparation ----------
 
-    def _prepare(self, campaign_id: str) -> dict[str, Any]:
+    def _snapshot(self, campaign_id: str) -> SnapshotRef:
+        """A dated photo of the inventory for a campaign, with what the shapes will validate.
+
+        The coherence challenges answer from the data frozen here, never from the live graph: the
+        same campaign always says the same (security review F09-02, SEC-036). Both are taken one
+        after the other from the live graph, not in one transaction of AGE.
+        """
         store = GraphStore(self._dsn)
         snapshot = take_snapshot(store, self._dsn, f"campaign-{campaign_id}")
+        store_snapshot_data(self._dsn, snapshot.id, export_graph(store))
+        return snapshot
+
+    def _prepare(self, campaign_id: str) -> dict[str, Any]:
+        snapshot = self._snapshot(campaign_id)
         ontology_version = version_in_force(self._dsn)
         # What decides the verdicts is the signed bundle in force, on this disk and in OPA; a
         # changed challenge, policy or shape stops the campaign before it compiles (SEC-011).
@@ -198,6 +231,9 @@ class ChallengeActivities:
         systems = _registered_systems(self._dsn)
         library = load_library()
         subject = campaign_subject(self._dsn, campaign_id)
+        injected = [
+            row["system_id"] for row in injections(self._dsn, campaign_id) if not row["reverted"]
+        ]
         reserved = frozenset(load_challenge_catalog()) - frozenset(library)
         compiled = compile_campaign(
             campaign_id,
@@ -209,6 +245,7 @@ class ChallengeActivities:
                 "campaign": {"snapshot_id": snapshot.id},
                 "client": client_parameters(),
                 "subject": subject.markers if subject is not None else {},
+                "injected_systems": injected,
             },
             reserved=reserved,
         )
@@ -248,9 +285,83 @@ class ChallengeActivities:
             set_status, self._dsn, str(payload["campaign_id"]), str(payload["status"])
         )
 
+    def _reversions(self, campaign_id: str) -> dict[str, list[Any]]:
+        """Whether the synthetic subject of a campaign is really gone from where it was injected.
+
+        A confirmation of the client is not enough: for every reverted injection a read-only
+        `count` looks for the markers of the subject in the columns of the injection point that
+        can hold them (security review F09-02, SEC-015). An injection that cannot be looked at is
+        reported as such, never taken as clean. Nothing is looked for until every injection is
+        confirmed as reverted.
+        """
+        confirmed = injections(self._dsn, campaign_id)
+        pending = [row["id"] for row in confirmed if not row["reverted"]]
+        remaining: list[dict[str, str]] = []
+        unverifiable: list[dict[str, str]] = []
+        if pending or not confirmed:
+            return {"pending": pending, "remaining": remaining, "unverifiable": unverifiable}
+        subject = campaign_subject(self._dsn, campaign_id)
+        snapshot_id = campaign_record(self._dsn, campaign_id).get("snapshot_id")
+        nodes = snapshot_nodes(self._dsn, str(snapshot_id)) if snapshot_id else []
+        systems = _registered_systems(self._dsn)
+        for row in confirmed:
+            system = systems.get(row["system_id"])
+            connector = connector_id(system) if system is not None else None
+            columns = [
+                (str(node["qualified_name"]), REVERSION_MARKERS[str(category["category"])])
+                for node in nodes
+                if node["label"] == "Column"
+                and str(node["system_id"]) == row["system_id"]
+                and str(node["qualified_name"]).startswith(f"{row['point']}.")
+                for category in node["categories"]
+                if str(category.get("category")) in REVERSION_MARKERS
+            ]
+            where = {"injection": row["id"], "system_id": row["system_id"], "point": row["point"]}
+            if subject is None or connector not in REVERSION_CONNECTORS or not columns:
+                unverifiable.append({**where, "reason": "no column of the point can be probed"})
+                continue
+            for qualified_name, marker in sorted(set(columns)):
+                spec = ProbeSpec(
+                    kind="count",
+                    target=row["point"],
+                    statement=None,
+                    params={
+                        "filters": [
+                            {
+                                "column": qualified_name.rsplit(".", 1)[1],
+                                "operator": "==",
+                                "value": subject.markers[marker],
+                                "cast": "text",
+                            }
+                        ]
+                    },
+                )
+                result = run_probe(self._dsn, self._secrets, row["system_id"], spec)
+                count = result.data.get("count")
+                if not result.ok or count is None:
+                    unverifiable.append({**where, "reason": f"{qualified_name} did not answer"})
+                elif int(count) > 0:
+                    remaining.append({**where, "column": qualified_name})
+        return {"pending": pending, "remaining": remaining, "unverifiable": unverifiable}
+
+    @activity.defn(name="check_reversions")
+    async def check_reversions(self, campaign_id: str) -> dict[str, list[Any]]:
+        return await asyncio.to_thread(self._reversions, campaign_id)
+
+    def _seal(self, campaign_id: str) -> dict[str, Any]:
+        check = self._reversions(campaign_id)
+        if any(check.values()):
+            raise ApplicationError(
+                "the synthetic subject is not verified as reverted: the campaign is not sealed",
+                check,
+                type="ReversionNotVerified",
+                non_retryable=True,
+            )
+        return seal_campaign(self._dsn, campaign_id)
+
     @activity.defn(name="seal_campaign")
     async def seal(self, campaign_id: str) -> dict[str, Any]:
-        sealed = await asyncio.to_thread(seal_campaign, self._dsn, campaign_id)
+        sealed = await asyncio.to_thread(self._seal, campaign_id)
         if self._bus is not None:
             await announce_seal(self._bus, sealed)
         return sealed
@@ -288,19 +399,30 @@ class ChallengeActivities:
             dict(scope),
             requested_by,
         )
+        # What the client fixed is measured on the inventory as it is now: a new snapshot, and
+        # every unit points to it instead of the one that found the problem (SEC-036).
+        snapshot = self._snapshot(campaign_id)
         pin_campaign(
             self._dsn,
             campaign_id,
-            snapshot_id=(origin or {}).get("snapshot_id"),
-            snapshot_hash=(origin or {}).get("snapshot_hash"),
+            snapshot_id=snapshot.id,
+            snapshot_hash=snapshot.content_hash,
             ontology_version=(origin or {}).get("ontology_version") or "0.0.0",
             library_version=(origin or {}).get("library_version") or "0.0.0",
             library_sha256=(origin or {}).get("library_sha256") or "0" * 64,
             applicability_run=None,
         )
         units: list[dict[str, Any]] = []
+        measured_on: dict[str, Any] = {}
         for finding_id, unit in rows:
             work = dict(unit)
+            original = str(work["campaign_id"])
+            if original not in measured_on:
+                measured_on[original] = campaign_record(self._dsn, original).get("snapshot_id")
+            if measured_on[original]:
+                work["probe"] = _with_snapshot(
+                    work["probe"], str(measured_on[original]), snapshot.id
+                )
             work["campaign_id"] = campaign_id
             work["remediation"] = True
             units.append({"finding_id": str(finding_id), "unit": work})
@@ -328,10 +450,17 @@ class ChallengeActivities:
         kind = str(probe["kind"])
         params = dict(probe.get("params", {}))
         if kind == "shacl":
-            store = GraphStore(self._dsn)
-            findings = run_shapes(store)
+            snapshot_id = campaign_record(self._dsn, str(unit["campaign_id"])).get("snapshot_id")
+            if not snapshot_id:
+                raise ApplicationError(
+                    "the campaign has no snapshot to validate",
+                    type="NoSnapshot",
+                    non_retryable=True,
+                )
+            data = snapshot_data(self._dsn, str(snapshot_id))
+            findings = validate_graph(data, load_shapes())
             shape, severity = params.get("shape"), params.get("severity")
-            scope = _system_scope(store, str(unit["system_id"]))
+            scope = _system_scope(data, str(unit["system_id"]))
             rows = [
                 {"node": finding.node, "shape": finding.shape, "severity": finding.severity}
                 for finding in findings
@@ -349,6 +478,7 @@ class ChallengeActivities:
         arguments = {
             "snapshot_id": params.get("snapshot_id"),
             "system_id": unit["system_id"],
+            "campaign_id": unit["campaign_id"],
         }
         with psycopg.connect(self._dsn) as conn:
             row = conn.execute(statement, arguments).fetchone()

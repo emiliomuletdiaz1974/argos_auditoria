@@ -73,6 +73,7 @@ async def _run_campaign(
             activities.wait_window,
             activities.evaluate_unit,
             activities.seal,
+            activities.check_reversions,
         ],
     ):
         handle = await client.start_workflow(
@@ -173,6 +174,7 @@ async def test_a_bare_signal_does_not_open_a_gate(migrated_db: str, prepared: st
             activities.wait_window,
             activities.evaluate_unit,
             activities.seal,
+            activities.check_reversions,
         ],
     ):
         handle = await client.start_workflow(

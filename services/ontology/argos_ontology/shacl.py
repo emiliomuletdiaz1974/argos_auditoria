@@ -7,13 +7,16 @@ is exported to an ephemeral RDF graph with a fixed mapping and validated in memo
 (deviation note ARG-034-040).
 """
 
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
 
+import psycopg
 from pyshacl import validate
 from rdflib import RDF, Graph, Literal, Namespace, URIRef
 from rdflib.term import Node
 
+from argos_common.errors import IntegrityError
 from argos_inventory.graph.model import system_key
 from argos_inventory.graph.store import GraphStore
 from argos_ontology.vocabulary import LIBRARY_DIR
@@ -32,7 +35,7 @@ _HEALTH_SYSTEMS = (
 )
 _CONFIRMED_AI = (
     "MATCH (a:AISystem {status: 'confirmed'}) "
-    "RETURN a.key, a.risk_class, a.documentation_ref, a.oversight_owner"
+    "RETURN a.key, a.risk_class, a.documentation_ref, a.oversight_owner, a.system_id"
 )
 # Properties of a confirmed AI system that the AI Act shapes require, exported as they are.
 _AI_PROPERTIES = ("risk_class", "documentation_ref", "oversight_owner")
@@ -66,10 +69,13 @@ def export_graph(store: GraphStore) -> Graph:
             data.add((N[str(row["system"])], G.declared_in, N[str(row["treatment"])]))
         for row in store.query(_HEALTH_SYSTEMS, columns=("system_id",), conn=conn):
             data.add((N[system_key(str(row["system_id"]))], RDF.type, G.HealthDataSystem))
-        columns = ("key", *_AI_PROPERTIES)
+        columns = ("key", *_AI_PROPERTIES, "system_id")
         for row in store.query(_CONFIRMED_AI, columns=columns, conn=conn):
             node = N[str(row["key"])]
             data.add((node, RDF.type, G.ConfirmedAISystem))
+            holder = _literal(row["system_id"])
+            if holder is not None:  # which system a finding on it belongs to (not validated)
+                data.add((node, G.system_id, holder))
             for prop in _AI_PROPERTIES:
                 value = _literal(row[prop])
                 if value is not None:
@@ -117,3 +123,49 @@ def validate_graph(data: Graph, shapes: Graph) -> list[ShapeFinding]:
 
 def run_shapes(store: GraphStore, shapes: Graph | None = None) -> list[ShapeFinding]:
     return validate_graph(export_graph(store), shapes if shapes is not None else load_shapes())
+
+
+# ---------- frozen with the snapshot (security review F09-02, SEC-036) ----------
+
+
+def canonical_ntriples(data: Graph) -> str:
+    """One triple per line, sorted: the same graph always gives the same text and hash."""
+    lines = {line for line in data.serialize(format="nt").splitlines() if line.strip()}
+    return "".join(f"{line}\n" for line in sorted(lines))
+
+
+def store_snapshot_data(dsn: str, snapshot_id: str, data: Graph) -> str:
+    """Freeze what the shapes validate next to the snapshot; returns its SHA-256.
+
+    A campaign answers its coherence challenges from this copy, never from the live graph, so the
+    same campaign always says the same (security review F09-02, SEC-036).
+    """
+    text = canonical_ntriples(data)
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "INSERT INTO argos.inventory_snapshot_shapes_data (snapshot_id, ntriples, sha256) "
+            "VALUES (%s, %s, %s)",
+            (snapshot_id, text, digest),
+        )
+    return digest
+
+
+def snapshot_data(dsn: str, snapshot_id: str) -> Graph:
+    """The graph frozen with a snapshot, after checking it is the one that was stored."""
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT ntriples, sha256 FROM argos.inventory_snapshot_shapes_data "
+            "WHERE snapshot_id = %s",
+            (snapshot_id,),
+        ).fetchone()
+    if row is None:
+        raise LookupError(f"the snapshot {snapshot_id} has no data frozen for the shapes")
+    text, digest = str(row[0]), str(row[1])
+    if hashlib.sha256(text.encode("utf-8")).hexdigest() != digest:
+        raise IntegrityError(
+            f"the shapes data of the snapshot {snapshot_id} does not match its hash"
+        )
+    data = Graph()
+    data.parse(data=text, format="nt")
+    return data

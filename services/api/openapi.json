@@ -32,6 +32,18 @@
       },
       "Exercise": {
         "properties": {
+          "answered_at": {
+            "description": "when the client answered it",
+            "format": "date-time",
+            "title": "Answered At",
+            "type": "string"
+          },
+          "requested_at": {
+            "description": "when the client received the request",
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
           "right": {
             "default": "erasure",
             "description": "the right exercised",
@@ -40,6 +52,10 @@
             "type": "string"
           }
         },
+        "required": [
+          "requested_at",
+          "answered_at"
+        ],
         "title": "Exercise",
         "type": "object"
       },
@@ -4052,13 +4068,11 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Exercise",
-                "default": {
-                  "right": "erasure"
-                }
+                "$ref": "#/components/schemas/Exercise"
               }
             }
-          }
+          },
+          "required": true
         },
         "responses": {
           "200": {
