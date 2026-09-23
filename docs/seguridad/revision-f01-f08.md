@@ -130,6 +130,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | SEC-032, SEC-033, SEC-034, SEC-035, SEC-049 | Corregido | F09-28 | `6dcc267` | 2026-09-23 |
 | SEC-025, SEC-043, SEC-047, SEC-048, SEC-050, SEC-052 | Corregido | F09-29 | `14474f7` | 2026-09-23 |
 | SEC-031, SEC-041, SEC-045, SEC-046 | Corregido | F09-30 | `9b6d580` | 2026-09-23 |
+| SEC-022, SEC-024, SEC-027, SEC-028, SEC-054, SEC-055 | Corregido (SEC-027: TLS verificado solo con ODBC 18, pendiente la decisión sobre su licencia) | F09-31 | `e3f540f` | 2026-09-23 |
 
 ## 7. Historial
 
@@ -146,3 +147,4 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | 1.8 | 2026-09-23 | Corregidos SEC-032, 033, 034, 035 y 049 (F09-28) |
 | 1.9 | 2026-09-23 | Corregidos SEC-025, 043, 047, 048, 050 y 052 (F09-29) |
 | 1.10 | 2026-09-23 | Corregidos SEC-031, 041, 045 y 046 (F09-30) |
+| 1.11 | 2026-09-23 | Corregidos SEC-022, 024, 027, 028, 054 y 055 (F09-31) |
