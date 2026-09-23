@@ -5,7 +5,7 @@ title: Conector REST declarativo (argos-connector-rest)
 module: argos-connector-rest
 phases: ["02"]
 version: 0.2.0-alpha
-commit: 18bcd4a
+commit: 4ed4faf
 date: 2026-09-23
 status: current
 confidentiality: client

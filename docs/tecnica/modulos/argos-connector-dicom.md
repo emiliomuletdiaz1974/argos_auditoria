@@ -5,7 +5,7 @@ title: Conector DICOM (argos-connector-dicom)
 module: argos-connector-dicom
 phases: ["02"]
 version: 0.2.0-alpha
-commit: d018a74
+commit: 4ed4faf
 date: 2026-09-23
 status: current
 confidentiality: client
