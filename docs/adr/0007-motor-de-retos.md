@@ -1,6 +1,6 @@
 # ADR-0007 · Motor de retos y campañas: DSL, veredictos, campañas y sello (Fase 05)
 
-**Estado:** Aceptado · 2026-09-17 · Aaron Escobar (con un cambio sobre la propuesta: capa de traducción en castellano para el DSL, como en ADR-0006)
+**Estado:** Aceptado · 2026-09-17 · Aaron Escobar (con un cambio sobre la propuesta: capa de traducción en castellano para el DSL, como en ADR-0006) · **Sustituido en parte por ADR-0012** (2026-09-20): la API de campañas de `argos_challenges.api` se retiró en F08-17 y sus rutas viven en la API única `argos_api`; el resto sigue vigente.
 
 ## Contexto
 La Fase 05 (ARG-041…050) construye el motor que comprueba: el DSL de retos, el compilador, los workflows de campaña, las actividades de sonda, el muestreo, el evaluador determinista, los puntos de control humanos, los hallazgos, la reejecución de subsanación y la biblioteca empaquetada. El Plan Director (§8.2, Fase 05) añade dos bloques que el documento de fase no desarrolla: el **sujeto sintético** (ADR-0008) y el **sello de campaña**.
