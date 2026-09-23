@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.7 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.8 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -91,7 +91,7 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-25 | E: desplegar un pod sin postura o una imagen sin firma | k3s | A2, A5 | Admisión con Kyverno (postura y `verifyImages`), perfiles AppArmor | ARG-084, ARG-087 | F09-92 | pendiente de hardware | — |
 | M-26 | E/I: una credencial de base de datos robada sirve para todo | PostgreSQL | A2, A3 | Un rol por servicio con mínimo privilegio y credenciales dinámicas de Vault (24 h) | ARG-085 | F09-04, F09-05 | en desarrollo | — |
 | M-27 | T: aplicar una actualización manipulada o antigua | Actualizador | A5, A3 | Firma del manifiesto y digests verificados antes de tocar nada, anti-retroceso, aplicación transaccional con plan inverso | ARG-086, ARG-010 | F09-10 | en desarrollo | — |
-| M-28 | T: cargar contenido normativo manipulado | Ontología | A5 | Bundle determinista firmado y verificado antes de cargar, con clave propia (huecos de la revisión F09-02, ver `docs/seguridad/revision-f01-f08.md`) | ARG-040 | F04-04, F09-25 | en desarrollo | `services/ontology/argos_ontology/bundle.py` |
+| M-28 | T: cargar contenido normativo manipulado | Ontología | A5 | Bundle determinista firmado con clave propia, leído en flujo con tope y verificado antes de cargar con la huella fijada y sin retroceso; cada campaña comprueba que el disco del worker y las políticas cargadas en OPA son las firmadas en vigor | ARG-040 | F04-04, F09-25 | implementada | `services/ontology/argos_ontology/bundle.py`, `tests/integration/test_opa_signed_policies.py`, `tests/integration/test_challenge_activities.py` |
 | M-29 | T: dependencia o imagen vulnerable o manipulada | CI y release | A5 | Lockfiles, SBOM CycloneDX dentro del manifiesto firmado y puerta de vulnerabilidades con excepciones que caducan | ARG-087 | F09-09 | en desarrollo | — |
 | M-30 | E: acceso remoto del soporte | Canal de soporte | A6 | No existe canal remoto; paquete de diagnóstico sin datos de negocio que el operador revisa antes de enviarlo, cifrado para el soporte | ARG-088 | F09-11 | en desarrollo | — |
 | M-31 | D: pérdida de datos por borrado, cifrado malicioso o avería | Almacenes | A3 | Backup cifrado de extremo a extremo con prueba de restauración fechada que verifica la cadena del diario | ARG-089 | F09-12 | en desarrollo | — |
@@ -134,3 +134,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.5 | 2026-09-23 | M-03 vuelve a «implementada» y M-02 cubre la exploración y las peticiones adicionales tras F09-22 |
 | 1.6 | 2026-09-23 | M-06 vuelve a «implementada» tras F09-23 |
 | 1.7 | 2026-09-23 | M-13 vuelve a «implementada» tras F09-24 |
+| 1.8 | 2026-09-23 | M-28 vuelve a «implementada» tras F09-25 |
