@@ -27,6 +27,7 @@ from argos_evidence.signing import sign_campaign_root
 from argos_evidence.tsa import http_transport, process_queue
 from argos_evidence.worm import WormStore, ensure_buckets
 
+from .campaign_helpers import running
 from .sources import register_catalog_system
 
 pytestmark = pytest.mark.integration
@@ -89,6 +90,7 @@ def _campaign(dsn: str, store: WormStore) -> str:
                 "d" * 64,
             ),
         )
+    running(dsn, campaign_id)
     seal_campaign(dsn, campaign_id)
     record_root(dsn, campaign_id, tree_for(verdicts), f"campaigns/{campaign_id}/tree.json")
     signer = VaultTransitSigner(VAULT, "root", key="argos-evidence")

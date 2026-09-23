@@ -29,6 +29,8 @@ from argos_evidence.tsa import (
 )
 from argos_evidence.worm import WormStore, ensure_buckets
 
+from .campaign_helpers import running
+
 pytestmark = pytest.mark.integration
 
 TSA = os.environ.get("ARGOS_TEST_TSA", "http://127.0.0.1:3180")
@@ -58,6 +60,7 @@ def _until() -> dt.datetime:
 def _signed(dsn: str, store: WormStore) -> str:
     """A sealed campaign whose root is signed: the signature enqueues its own stamp."""
     campaign_id = create_campaign(dsn, "Campaña sellada en el tiempo", {}, "user:campaign-manager")
+    running(dsn, campaign_id)
     seal_campaign(dsn, campaign_id)
     leaves = [hashlib.sha256(uuid.uuid4().bytes).digest() for _ in range(3)]
     record_root(dsn, campaign_id, build_tree(leaves), f"campaigns/{campaign_id}/tree.json")

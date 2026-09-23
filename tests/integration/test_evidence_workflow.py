@@ -26,6 +26,8 @@ from argos_evidence.workflow import EvidenceWorkflow
 from argos_evidence.worm import EVIDENCE_BUCKET, WormStore, ensure_buckets
 from argos_verifier.checks import Trust, verify_bundle
 
+from .campaign_helpers import running
+
 pytestmark = pytest.mark.integration
 
 TSA = os.environ.get("ARGOS_TEST_TSA", "http://127.0.0.1:3180")
@@ -97,6 +99,7 @@ def _sealed_campaign(dsn: str) -> str:
         }
         verdict = evaluate(unit, {"ok": True, "data": {"rows": [{"ssl": value}]}})
         persist_verdict(dsn, campaign_id, unit, verdict, probe_journal_seq=1)
+    running(dsn, campaign_id)
     seal_campaign(dsn, campaign_id)
     return campaign_id
 

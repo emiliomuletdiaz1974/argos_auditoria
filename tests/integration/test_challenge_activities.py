@@ -10,6 +10,7 @@ from argos_challenges.activities import ChallengeActivities
 from argos_challenges.store import create_campaign, pin_campaign
 from argos_common.journal_pg import PostgresJournal
 
+from .campaign_helpers import running
 from .inventory_helpers import secret_store
 from .sources import register_catalog_system
 
@@ -79,6 +80,7 @@ def test_the_evaluation_persists_one_verdict_however_many_times_it_runs(
 ) -> None:
     campaign_id, system_id, activities = campaign
     unit = _unit(campaign_id, system_id)
+    running(activities._dsn, campaign_id, [unit])  # only a planned unit of a running campaign
     probe_result = asyncio.run(activities.probe(unit))
     first = asyncio.run(activities.evaluate_unit({"unit": unit, "probe_result": probe_result}))
     second = asyncio.run(activities.evaluate_unit({"unit": unit, "probe_result": probe_result}))

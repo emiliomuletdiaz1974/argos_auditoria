@@ -20,6 +20,8 @@ from argos_evidence.roots import record_root
 from argos_evidence.signing import SigningError, sign_campaign_root, signature_key
 from argos_evidence.worm import WormStore, ensure_buckets
 
+from .campaign_helpers import running
+
 pytestmark = pytest.mark.integration
 
 VAULT = os.environ.get("ARGOS_TEST_VAULT", "http://127.0.0.1:8200")
@@ -49,6 +51,7 @@ def _until() -> dt.datetime:
 def _campaign(dsn: str, sealed: bool = True, with_root: bool = True) -> str:
     campaign_id = create_campaign(dsn, "Campaña firmada", {}, "user:campaign-manager")
     if sealed:
+        running(dsn, campaign_id)
         seal_campaign(dsn, campaign_id)
     if with_root:
         leaves = [hashlib.sha256(uuid.uuid4().bytes).digest() for _ in range(3)]

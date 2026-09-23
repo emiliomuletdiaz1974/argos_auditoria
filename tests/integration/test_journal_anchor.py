@@ -31,6 +31,8 @@ from argos_evidence.roots import record_root
 from argos_evidence.signing import sign_campaign_root
 from argos_evidence.worm import WormStore, ensure_buckets
 
+from .campaign_helpers import running
+
 pytestmark = pytest.mark.integration
 
 VAULT = os.environ.get("ARGOS_TEST_VAULT", "http://127.0.0.1:8200")
@@ -54,6 +56,7 @@ def _until() -> dt.datetime:
 
 def _sealed_campaign(dsn: str) -> str:
     campaign_id = create_campaign(dsn, "Campaña anclada", {}, "user:campaign-manager")
+    running(dsn, campaign_id)
     seal_campaign(dsn, campaign_id)
     leaves = [hashlib.sha256(uuid.uuid4().bytes).digest() for _ in range(2)]
     record_root(dsn, campaign_id, build_tree(leaves), f"campaigns/{campaign_id}/tree.json")

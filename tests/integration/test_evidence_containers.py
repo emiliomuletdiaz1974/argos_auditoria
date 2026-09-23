@@ -23,6 +23,7 @@ from argos_events import Bus
 from argos_evidence.credential.multibase import public_key_from_multibase
 from argos_evidence.credential.verify import verify_credential
 
+from .campaign_helpers import running
 from .conftest import ADMIN_DSN
 
 pytestmark = pytest.mark.integration
@@ -48,6 +49,7 @@ def _sealed_in_development() -> dict[str, Any]:
     }
     verdict = evaluate(unit, {"ok": True, "data": {"rows": [{"ssl": "on"}]}})
     persist_verdict(ADMIN_DSN, campaign_id, unit, verdict, probe_journal_seq=1)
+    running(ADMIN_DSN, campaign_id)
     return seal_campaign(ADMIN_DSN, campaign_id)
 
 
