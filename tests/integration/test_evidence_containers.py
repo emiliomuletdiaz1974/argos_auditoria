@@ -28,7 +28,7 @@ from .conftest import ADMIN_DSN
 pytestmark = pytest.mark.integration
 
 API = "http://127.0.0.1:8008"
-NATS = os.environ.get("ARGOS_TEST_NATS", "nats://127.0.0.1:4222")
+NATS = os.environ.get("ARGOS_TEST_NATS", "nats://argos-dev:dev-only-nats-host@127.0.0.1:4222")
 VAULT = os.environ.get("ARGOS_TEST_VAULT", "http://127.0.0.1:8200")
 
 

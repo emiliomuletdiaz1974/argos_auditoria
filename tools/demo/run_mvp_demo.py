@@ -189,6 +189,7 @@ async def _campaign(dsn: str, campaign_id: str) -> dict[str, Any]:
         activities=[
             activities.prepare_campaign,
             activities.request_approval,
+            activities.check_gate,
             activities.set_campaign_status,
             activities.probe,
             activities.wait_window,
