@@ -4,7 +4,7 @@ kind: module
 title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
-version: 0.4.0-alpha
+version: 0.5.0-alpha
 commit: 7524569
 date: 2026-09-23
 status: current
@@ -79,6 +79,7 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Rol de base propio** (F09-04, ARG-085): el inventario tiene el rol `svc_inventory`, el único que, con la API, escribe en el grafo; no lee la evidencia ni las credenciales. Las sesiones del grafo ya no ejecutan `LOAD 'age'`, que exige superusuario: AGE se carga al arrancar el servidor (`shared_preload_libraries`).
 - **Nombres del cliente que no rompen nada** (F09-31, SEC-024): la clave natural escapa el separador (`\x1f`) en lugar de rechazar el nombre, así que la tabla no desaparece del inventario. Una tabla que su conector no puede muestrear se registra y cuenta como fallo, y la clasificación sigue con el resto.
 - **Informe sin inyección** (F09-31, SEC-055): todo texto del cliente en el informe de inventario va en un *code span* de Markdown, donde ni Markdown ni HTML se interpretan (`<img src=…>` se ve, no se ejecuta).
 - **Procedencia:** cada hecho del grafo es trazable hasta la sonda, el conector y el asiento del diario de consultas que lo produjo.
@@ -135,3 +136,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.2.0-alpha | 2026-09-23 | `open_connector`/`run_probe` con presupuesto compartido y `on_circuit_open` | F09-22 |
 | 0.3.0-alpha | 2026-09-23 | Lotes de clasificación por tabla, revisión obligatoria de una rebaja cuando el contexto dice categoría especial y cobertura filtrada en SQL | F09-29 |
 | 0.4.0-alpha | 2026-09-23 | Clave natural con separador escapado, clasificación que sigue tras una tabla fallida e informe con los nombres como código | F09-31 |
+| 0.5.0-alpha | 2026-09-23 | Rol `svc_inventory`; las sesiones del grafo sin `LOAD 'age'` | F09-04 (ARG-085) |

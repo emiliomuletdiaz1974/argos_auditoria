@@ -13,7 +13,9 @@ from typing import Any
 import psycopg
 
 GRAPH = "inventory"
-_SETUP = "LOAD 'age'; SET search_path = ag_catalog, \"$user\", public;"
+# AGE is preloaded by the server (shared_preload_libraries): a LOAD per session is not needed and
+# only a superuser may run it, so the service roles of F09-04 could not.
+_SETUP = 'SET search_path = ag_catalog, "$user", public;'
 _IDENTIFIER = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
 _AGTYPE_SUFFIXES = ("::vertex", "::edge", "::path")
 

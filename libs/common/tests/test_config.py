@@ -154,3 +154,37 @@ def test_production_requires_json_logs(monkeypatch: pytest.MonkeyPatch) -> None:
     _production(monkeypatch, ARGOS_LOG_FORMAT_JSON="false")
     with pytest.raises(ConfigurationError):
         load_config()
+
+
+def test_the_database_password_comes_from_its_secret_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    secret = tmp_path / "db-api"
+    secret.write_text("p@ss:w/rd%\n", encoding="utf-8")
+    monkeypatch.setenv("ARGOS_DATABASE_URL", "postgresql://login_api@postgres:5432/argos")
+    monkeypatch.setenv("ARGOS_DATABASE_PASSWORD_FILE", str(secret))
+    cfg = load_config()
+    assert cfg.DATABASE_URL == "postgresql://login_api:p%40ss%3Aw%2Frd%25@postgres:5432/argos"
+    assert "p%40ss" not in repr(cfg), "the connection string carries the password now"
+
+
+def test_a_missing_database_password_file_refuses_to_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ARGOS_DATABASE_URL", "postgresql://login_api@postgres:5432/argos")
+    monkeypatch.setenv("ARGOS_DATABASE_PASSWORD_FILE", str(tmp_path / "absent"))
+    with pytest.raises(ConfigurationError):
+        load_config()
+
+
+def test_a_password_in_the_url_and_in_a_file_is_ambiguous(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    secret = tmp_path / "db-api"
+    secret.write_text("from-file", encoding="utf-8")
+    monkeypatch.setenv("ARGOS_DATABASE_URL", "postgresql://login_api:inline@postgres:5432/argos")
+    monkeypatch.setenv("ARGOS_DATABASE_PASSWORD_FILE", str(secret))
+    with pytest.raises(ConfigurationError) as refused:
+        load_config()
+    assert "from-file" not in str(refused.value.details)
+    assert "inline" not in str(refused.value.details)

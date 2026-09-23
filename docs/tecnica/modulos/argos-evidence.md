@@ -4,7 +4,7 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.15.0-alpha
+version: 0.16.0-alpha
 commit: 9e38a6c
 date: 2026-09-23
 status: current
@@ -105,11 +105,12 @@ Reglas del árbol:
 
 ## 5. Configuración
 
-Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. Lo propio va en `ARGOS_EVIDENCE_*` (`EvidenceSettings`): `ISSUER_DID`, `STATUS_BASE_URL`, `CREDENTIAL_BASE_URL`, `VERIFIER_URL`, `RETENTION_DAYS` (10 años por defecto; 1 día en desarrollo), `S3_ENDPOINT`/`S3_ACCESS_KEY`/`S3_SECRET_KEY` (secreto), `SIGNING_KEY` (clave de Transit), `TSA_URL`, `TSA_ROOTS_FILE` (en desarrollo, `TSA_ROOTS_URL` toma la raíz de la TSA de pruebas), `STAMP_ATTEMPTS` y `STAMP_WAIT_SECONDS`. La firma usa cualquier `Signer` de `argos_common.release`: en desarrollo, `VaultTransitSigner` con la clave `argos-evidence` del motor Transit (Ed25519, no exportable; la crea `deploy/dev/vault/setup.sh`); en el appliance, `TpmSigner` (F07-15). El cliente WORM recibe un cliente S3 ya construido; la configuración del servicio (punto de acceso, credenciales y retención por defecto, 10 años en producción y 1 día en desarrollo) llega con F07-13. En desarrollo las credenciales del almacén son triviales a propósito y solo escuchan en `127.0.0.1`.
+Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-evidence`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión. Lo propio va en `ARGOS_EVIDENCE_*` (`EvidenceSettings`): `ISSUER_DID`, `STATUS_BASE_URL`, `CREDENTIAL_BASE_URL`, `VERIFIER_URL`, `RETENTION_DAYS` (10 años por defecto; 1 día en desarrollo), `S3_ENDPOINT`/`S3_ACCESS_KEY`/`S3_SECRET_KEY` (secreto), `SIGNING_KEY` (clave de Transit), `TSA_URL`, `TSA_ROOTS_FILE` (en desarrollo, `TSA_ROOTS_URL` toma la raíz de la TSA de pruebas), `STAMP_ATTEMPTS` y `STAMP_WAIT_SECONDS`. La firma usa cualquier `Signer` de `argos_common.release`: en desarrollo, `VaultTransitSigner` con la clave `argos-evidence` del motor Transit (Ed25519, no exportable; la crea `deploy/dev/vault/setup.sh`); en el appliance, `TpmSigner` (F07-15). El cliente WORM recibe un cliente S3 ya construido; la configuración del servicio (punto de acceso, credenciales y retención por defecto, 10 años en producción y 1 día en desarrollo) llega con F07-13. En desarrollo las credenciales del almacén son triviales a propósito y solo escuchan en `127.0.0.1`.
 
 ## 6. Seguridad y tratamiento de datos
 
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp propio `platform/k8s/security/seccomp/evidence.json` (deniega por defecto y no permite nada que abra el host; `ioctl` queda por el TPM del appliance). La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
+- **Base de datos con mínimo privilegio** (F09-04, ARG-085): el servicio se conecta como `login_evidence`, miembro del rol `svc_evidence` (migración `0033`), y nunca como superusuario. El rol tiene solo las tablas y operaciones que usa su código; el diario se escribe únicamente con `argos.journal_append()`. Lo comprueban `tests/integration/test_service_roles.py` (la matriz `tests/fixtures/db_access_matrix.yaml` y el usuario de cada contenedor en marcha).
 - **Minimización (P-16):** el artefacto solo lleva lo que la sonda dejó pasar en el veredicto. Si aun así contuviera un DNI, NIE, NUSS o IBAN validado, no se escribe (`ArtifactNotMinimisedError`) y el error señala la ruta JSON.
 - El árbol y la raíz solo manejan **hashes** de artefactos, nunca su contenido.
 - `argos.evidence_index` y `argos.campaign_signatures` son de escritura única, como `argos.campaign_roots`.
@@ -177,3 +178,4 @@ Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. Lo
 | 0.13.0-alpha | 2026-09-22 | `reads.campaign_journal_entry` (el asiento del diario que cita un veredicto de la campaña, y ninguno más) y `credential.issue.WITHHELD` (lo que se queda en el expediente), que la vista previa de la credencial devuelve como `withheld` | F08-14 |
 | 0.14.0-alpha | 2026-09-23 | Lista de estado con `validUntil` y firmada solo cuando cambia, 404 para listas inexistentes, `did:web` estricto, límites de base58 y de descompresión, `trust_anchors()` | F09-20 |
 | 0.15.0-alpha | 2026-09-23 | Contenedores con la postura restringida de ARG-084 y perfil seccomp propio | F09-03 |
+| 0.16.0-alpha | 2026-09-23 | Usuario de base `login_evidence` en `svc_evidence` para el worker y la API; contraseña en fichero de secreto | F09-04 (ARG-085) |

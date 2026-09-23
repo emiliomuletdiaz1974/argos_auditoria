@@ -58,20 +58,24 @@ def test_from_inside_the_gateway_the_api_answers_only_with_a_token() -> None:
 
 def test_the_database_is_reached_as_the_restricted_role() -> None:
     probe = _inside(
-        "import os, psycopg\n"
-        "with psycopg.connect(os.environ['ARGOS_DATABASE_URL']) as conn:\n"
+        "import psycopg\n"
+        "from argos_common.config import get_config\n"
+        "with psycopg.connect(get_config().DATABASE_URL) as conn:\n"
         "    print(conn.execute('SELECT current_user').fetchone()[0])\n"
+        "    member = \"SELECT pg_has_role('svc_ai_gateway', 'MEMBER')\"\n"
+        "    print(conn.execute(member).fetchone()[0])\n"
     )
     assert probe.returncode == 0, probe.stderr
-    assert probe.stdout.strip() == "argos_ai"
+    assert probe.stdout.split() == ["login_ai_gateway", "True"]
 
 
 def test_from_inside_the_gateway_a_verdict_cannot_be_written() -> None:
     """The permission half of the barrier, as the container sees it."""
     probe = _inside(
-        "import os, psycopg\n"
+        "import psycopg\n"
+        "from argos_common.config import get_config\n"
         "try:\n"
-        "    with psycopg.connect(os.environ['ARGOS_DATABASE_URL']) as conn:\n"
+        "    with psycopg.connect(get_config().DATABASE_URL) as conn:\n"
         "        conn.execute(\"UPDATE argos.verdicts SET result = 'compliant'\")\n"
         "    print('WROTE')\n"
         "except psycopg.errors.InsufficientPrivilege:\n"

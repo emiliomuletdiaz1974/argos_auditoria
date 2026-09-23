@@ -25,7 +25,13 @@ WRITES = (
 READS = (
     "SELECT count(*) FROM argos.verdicts",
     "SELECT count(*) FROM argos.findings",
+)
+# Since F09-04 the role reads only what the gateway's code reads (security review F09-02, SEC-051):
+# the report writer counts verdicts; no code of the gateway reads the campaigns or the subject.
+NOT_READ = (
     "SELECT count(*) FROM argos.campaigns",
+    "SELECT count(*) FROM argos.synthetic_subjects",
+    "SELECT count(*) FROM argos.api_idempotency",
 )
 
 
@@ -55,6 +61,14 @@ def test_the_ai_role_may_read_what_it_has_to_narrate(migrated_db: str, statement
     """ARG-057 writes the report from the verdicts: reading them is its job."""
     with _as_ai(migrated_db) as conn:
         assert conn.execute(statement).fetchone() is not None
+
+
+@pytest.mark.parametrize("statement", NOT_READ)
+def test_the_ai_role_does_not_read_what_its_code_never_reads(
+    migrated_db: str, statement: str
+) -> None:
+    with _as_ai(migrated_db) as conn, pytest.raises(psycopg.errors.InsufficientPrivilege):
+        conn.execute(statement)
 
 
 def test_the_ai_role_owns_its_own_tables(migrated_db: str) -> None:

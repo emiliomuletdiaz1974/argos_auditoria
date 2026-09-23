@@ -1,0 +1,65 @@
+# F09-04 · who may do what in the database: service × object × operation → allowed or not.
+#
+# Written by hand from the access inventory of each service (argos/.scratch/accesos-bd/, walked
+# from the entry point of every container) and from the invariants of the product, not copied
+# from the GRANTs: the test compares what the database says with what this file expects.
+#
+# Each case is [role, object, privilege, allowed]. Objects are tables of `argos`, or functions
+# with "()" at the end.
+cases:
+  # --- nobody rewrites the journal; everybody writes it only through its function ------------
+  - [svc_api, audit_journal, UPDATE, false]
+  - [svc_api, audit_journal, DELETE, false]
+  - [svc_api, audit_journal, INSERT, false]
+  - [svc_challenge, audit_journal, UPDATE, false]
+  - [svc_evidence, audit_journal, DELETE, false]
+  - [svc_ai_gateway, audit_journal, INSERT, false]
+  - [svc_api, "journal_append()", EXECUTE, true]
+  - [svc_challenge, "journal_append()", EXECUTE, true]
+  - [svc_evidence, "journal_append()", EXECUTE, true]
+  - [svc_ai_gateway, "journal_append()", EXECUTE, true]
+  - [svc_webhook, "journal_append()", EXECUTE, true]
+  # --- only the evaluator, in the campaign worker, writes a verdict (F05-04) ------------------
+  - [svc_challenge, verdicts, INSERT, true]
+  - [svc_api, verdicts, INSERT, false]
+  - [svc_evidence, verdicts, INSERT, false]
+  - [svc_ai_gateway, verdicts, INSERT, false]
+  - [svc_api, verdicts, SELECT, true]
+  - [svc_evidence, verdicts, SELECT, true]
+  # --- the AI gateway reads what its tools need, and nothing of the subject or the API --------
+  - [svc_ai_gateway, findings, SELECT, true]
+  - [svc_ai_gateway, findings, UPDATE, false]
+  - [svc_ai_gateway, ai_usage, INSERT, true]
+  - [svc_ai_gateway, rag_chunks, SELECT, true]
+  - [svc_ai_gateway, synthetic_subjects, SELECT, false]
+  - [svc_ai_gateway, api_idempotency, SELECT, false]
+  - [svc_ai_gateway, audit_journal, SELECT, false]
+  - [svc_ai_gateway, evidence_index, SELECT, false]
+  - [svc_ai_gateway, connector_queries, INSERT, false]
+  # --- the inventory is not the evidence's, and the evidence is not the inventory's ----------
+  - [svc_inventory, evidence_index, SELECT, false]
+  - [svc_inventory, credentials, SELECT, false]
+  - [svc_evidence, systems, UPDATE, false]
+  - [svc_evidence, evidence_index, INSERT, true]
+  - [svc_evidence, tsa_queue, UPDATE, true]
+  - [svc_evidence, campaigns, UPDATE, false]
+  # --- the webhook worker only knows its own tables -----------------------------------------
+  - [svc_webhook, webhook_deliveries, UPDATE, true]
+  - [svc_webhook, findings, SELECT, false]
+  - [svc_webhook, campaigns, SELECT, false]
+  # --- the campaign worker runs campaigns; it does not touch the evidence or the API ----------
+  - [svc_challenge, campaigns, UPDATE, true]
+  - [svc_challenge, findings, UPDATE, true]
+  - [svc_challenge, evidence_index, SELECT, false]
+  - [svc_challenge, api_idempotency, SELECT, false]
+  - [svc_challenge, webhooks, SELECT, false]
+  # --- the API serves; its idempotency store is its own ---------------------------------------
+  - [svc_api, api_idempotency, INSERT, true]
+  - [svc_api, findings, UPDATE, true]
+  - [svc_api, approvals, INSERT, true]
+  # --- the example service knows nothing but its health -------------------------------------
+  - [svc_example, systems, SELECT, false]
+  - [svc_example, "journal_append()", EXECUTE, true]
+  # --- PUBLIC gets nothing -----------------------------------------------------------------
+  - [PUBLIC, audit_journal, SELECT, false]
+  - [PUBLIC, findings, SELECT, false]

@@ -2,8 +2,9 @@
 
 from enum import StrEnum
 from functools import lru_cache
-from pathlib import PurePosixPath, PureWindowsPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Self
+from urllib.parse import quote, urlsplit, urlunsplit
 
 from pydantic import Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -43,7 +44,10 @@ class ArgosConfig(BaseSettings):
     VERSION: str = "0.1.0-alpha"
     ENVIRONMENT: Environment = Environment.DEVELOPMENT
     APPLIANCE_SIZE: ApplianceSize = ApplianceSize.S
-    DATABASE_URL: str = Field(min_length=1)
+    # Hidden from repr: with DATABASE_PASSWORD_FILE the connection string carries the password.
+    DATABASE_URL: str = Field(min_length=1, repr=False)
+    # The service's database password, mounted as a secret file (F09-04); never in the URL itself.
+    DATABASE_PASSWORD_FILE: str | None = None
     NATS_URL: str = "nats://127.0.0.1:4222"
     # Each service connects with its own NATS user: the server decides what it may publish.
     NATS_USER: str | None = None
@@ -64,6 +68,28 @@ class ArgosConfig(BaseSettings):
     OPA_TOKEN: SecretStr | None = None  # bearer token OPA accepts for evaluating argos.* packages
     VAULT_ADDR: str = "http://127.0.0.1:8200"
     VAULT_TOKEN: SecretStr | None = None  # services that open connectors: svc-connector-sdk policy
+
+    @model_validator(mode="after")
+    def _database_password(self) -> Self:
+        if self.DATABASE_PASSWORD_FILE is None:
+            return self
+        try:
+            password = Path(self.DATABASE_PASSWORD_FILE).read_text(encoding="utf-8").strip()
+        except OSError:
+            raise ValueError("DATABASE_PASSWORD_FILE cannot be read") from None
+        if not password:
+            raise ValueError("DATABASE_PASSWORD_FILE is empty")
+        parts = urlsplit(self.DATABASE_URL)
+        user, _, host = parts.netloc.rpartition("@")
+        if not user:
+            raise ValueError("DATABASE_URL must name its user when the password is in a file")
+        if ":" in user:
+            raise ValueError(
+                "DATABASE_URL must not carry a password when DATABASE_PASSWORD_FILE is set"
+            )
+        netloc = f"{user}:{quote(password, safe='')}@{host}"
+        self.DATABASE_URL = urlunsplit(parts._replace(netloc=netloc))
+        return self
 
     @model_validator(mode="after")
     def _production_rules(self) -> Self:

@@ -13,6 +13,7 @@ deploy/dev/sources/files/
 deploy/dev/sources/s3/
 deploy/dev/sources/certs/
 deploy/dev/sources/ldap/
+deploy/dev/secrets/
 .repo-map.xml
 .repo-map.stamp
 

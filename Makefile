@@ -4,6 +4,9 @@
 COMPOSE := docker compose -f deploy/dev/compose.yaml --profile sources
 COMPOSE_HEAVY := docker compose -f deploy/dev/compose.yaml --profile sources --profile heavy
 VERSION := $(strip $(file < VERSION))
+# F09-04: the development database asks every network connection for a password. Host processes
+# (migrations, tools, tests) connect as the superuser with this development-only one.
+export PGPASSWORD := dev-only-postgres
 
 .PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
 
@@ -35,9 +38,13 @@ help:
 
 dev:
 	uv run python tools/prepare_dev_sources.py
-	$(COMPOSE) up -d --build --wait
+	uv run python tools/dev_db_users.py generate
+	$(COMPOSE) up -d --build --wait postgres vault
 	$(COMPOSE) exec -T -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN=root vault sh -s < deploy/dev/vault/setup.sh
+	$(COMPOSE) exec -T postgres psql -q -U argos -d argos -c "ALTER ROLE argos PASSWORD '$(PGPASSWORD)'"
 	uv run --env-file .env.example python tools/migrate.py
+	uv run --env-file .env.example python tools/dev_db_users.py apply
+	$(COMPOSE) up -d --build --wait
 	uv run --env-file .env.example python tools/register_dev_sources.py
 	uv run python tools/seed_dev_clinical.py
 	uv run python tools/verifier_trust.py

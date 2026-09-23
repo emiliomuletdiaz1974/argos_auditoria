@@ -4,7 +4,7 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.3.0-alpha
+version: 0.4.0-alpha
 commit: fdc1311
 date: 2026-09-23
 status: current
@@ -58,7 +58,7 @@ Dependencias externas: PostgreSQL 16 (esquema `argos`), HashiCorp Vault (kv-v2 y
 ## 5. Configuración
 
 Variables con prefijo `ARGOS_`:
-- `DATABASE_URL` (obligatoria), `NATS_URL`, `NATS_USER`, `NATS_PASSWORD` (secreto), `TEMPORAL_ADDRESS`;
+- `DATABASE_URL` (obligatoria) y `DATABASE_PASSWORD_FILE` (F09-04: fichero con la contraseña, que se añade a la cadena de conexión; es un error que la cadena ya traiga otra), `NATS_URL`, `NATS_USER`, `NATS_PASSWORD` (secreto), `TEMPORAL_ADDRESS`;
 - `OPA_URL` y `OPA_TOKEN` (secreto);
 - `OIDC_ISSUER` y `OIDC_AUDIENCE`;
 - `WORM_STORAGE_PATH`, `LOG_LEVEL`, `LOG_FORMAT_JSON`, `LLM_LOCAL_ENDPOINT`, `LLM_MODEL` y `EMBEDDING_MODEL` (nombre del modelo de embeddings servido, por defecto `argos-embed`);
@@ -80,6 +80,7 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 
 ## 6. Seguridad y tratamiento de datos
 
+- **La cadena de conexión no se imprime** (F09-04): `DATABASE_URL` no sale en el `repr` de la configuración, porque con `DATABASE_PASSWORD_FILE` lleva la contraseña. Un fichero ilegible o vacío impide arrancar sin mostrar su contenido.
 - **Diario encadenado v1** (ADR-0002):
   - cada asiento guarda la marca de tiempo y la carga en forma canónica;
   - su hash es SHA-256 sobre la versión `ARGOS-JOURNAL-v1`, el número de secuencia, los campos con prefijo de longitud y el hash anterior;
@@ -127,3 +128,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.1.0-alpha | 2026-09-21 | `VaultSecretStore.write`: guarda un secreto que llega de fuera (el de un webhook), con el mismo error si la ruta no es escribible | F08-09 |
 | 0.2.0-alpha | 2026-09-23 | `EMBEDDING_MODEL`: el nombre del modelo de embeddings que usa el asistente del gateway | F09-29 |
 | 0.3.0-alpha | 2026-09-23 | `WEBHOOK_ALLOWED_TARGETS`: la excepción de destinos privados de los webhooks | F09-30 |
+| 0.4.0-alpha | 2026-09-23 | `DATABASE_PASSWORD_FILE`: la contraseña de la base en un fichero de secreto; `DATABASE_URL` fuera del `repr` | F09-04 (ARG-085) |

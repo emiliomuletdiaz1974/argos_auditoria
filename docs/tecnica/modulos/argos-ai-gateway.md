@@ -4,7 +4,7 @@ kind: module
 title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
-version: 0.4.0-alpha
+version: 0.5.0-alpha
 commit: 9e38a6c
 date: 2026-09-23
 status: draft
@@ -44,7 +44,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 Tres cierres, no una promesa escrita:
 
 1. **Importaciones:** `tests/architecture/ai_boundary.py` sigue el grafo de importaciones real del espacio de trabajo y rechaza que cualquier módulo de este paquete alcance `argos_challenges.evaluator`, `.store` o `.findings`, aunque el cable esté atado tres módulos más allá.
-2. **Permisos:** el rol `argos_ai` de PostgreSQL (migración `0015`) lee el esquema y escribe solo `argos.ai_usage`. Leer veredictos y hallazgos sí: redactar el informe desde ellos es el oficio de ARG-057.
+2. **Permisos:** el gateway se conecta como `login_ai_gateway`, miembro de `svc_ai_gateway` (migración `0033`, F09-04). Lee solo lo que usan sus herramientas y escribe sus propias tablas (`ai_usage`, `ai_quotas`, `rag_chunks`…). Leer veredictos y hallazgos sí: redactar el informe desde ellos es el oficio de ARG-057. Desde la revisión de seguridad (SEC-051) no lee el diario completo, ni los sujetos sintéticos, ni la tabla de idempotencia de la API, ni campañas. El rol `argos_ai` de la migración `0015` se conserva, sin su `SELECT` sobre todas las tablas, y hereda `svc_ai_gateway`.
 3. **Red:** el contenedor no comparte red con la API de campañas. Se comprueba **desde dentro del contenedor** (`tests/integration/test_ai_containers.py`): para el gateway, `challenge-api` no existe. La base la alcanza por su propia red (`ai-data`) y con la sesión en el rol `argos_ai`, así que desde dentro escribir un veredicto también se deniega.
 
 ### El gateway (ARG-052)
@@ -192,7 +192,7 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - Ningún dato personal validado llega al modelo: se sustituye antes por un marcador.
 - Ningún prompt se escribe en un log ni en una tabla; lo que se registra es su hash (ARG-052, `argos.ai_usage`).
-- El rol `argos_ai` puede **añadir** asientos al diario encadenado (migración `0020`, permiso de ejecución sobre `journal_append`, que es `SECURITY DEFINER`) y nada más sobre él. Hasta F06-13 no lo tenía: los tests del gateway conectaban como propietario y no lo veían. Ejecutar el gateway como lo hace el contenedor lo destapó.
+- El rol del gateway puede **añadir** asientos al diario encadenado (migración `0020`, permiso de ejecución sobre `journal_append`, que es `SECURITY DEFINER`) y nada más sobre él. Hasta F06-13 no lo tenía: los tests del gateway conectaban como propietario y no lo veían. Ejecutar el gateway como lo hace el contenedor lo destapó.
 - El paquete no puede escribir veredictos ni hallazgos, por código y por permisos.
 - **Asistente acotado** (F09-29; SEC-043, SEC-047, SEC-048 y SEC-050):
   - **Cuota por persona:** la API pasa quién pregunta (`person`, obligatorio en `/v1/assistant/ask`) y el gateway le reserva como mucho el 20 % de la cuota diaria del servicio (`PERSON_SHARE`). Una persona no deja sin asistente a las demás.
@@ -211,13 +211,13 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 - **El contenedor:** `services/ai-gateway/Dockerfile`, usuario sin privilegios, sin secretos y **sin pesos** (el modelo lo sirve su propio contenedor). `make dev` levanta `ai-gateway` en `127.0.0.1:8005` con healthcheck; `make build` construye `argos-ai-gateway:<versión>` con `org.argos.component=ARG-052` y el CI genera su SBOM.
 - **Las redes:** `ai` (gateway y modelo) y `ai-data` (gateway y PostgreSQL). PostgreSQL está en las dos redes, la de siempre y `ai-data`; la API de campañas, solo en la de siempre.
 - **El modelo:** el servicio `llm` (llama.cpp sobre CPU, API compatible OpenAI, ADR-0009) va en su propio perfil, `llm`, porque necesita los pesos de F06-05. Sin ellos, `make dev` funciona igual y `/v1/chat_json` responde 502.
-- **La sesión de base de datos** corre como `argos_ai` (`options=-c role=argos_ai` en la cadena de conexión).
+- **La sesión de base de datos** corre como `login_ai_gateway`, miembro de `svc_ai_gateway`. La contraseña llega en `ARGOS_DATABASE_PASSWORD_FILE` y no desde Vault, porque el gateway no alcanza Vault por diseño de su red.
 
 ## 8. Verificación
 
 `services/ai-gateway/tests/test_ai_api_pure.py`: salud, respuesta con su hash y sin su prompt, 429 por cuota, 422 por guardarraíl, 502 por esquema y prioridad desconocida rechazada.
 
-`tests/integration/test_ai_containers.py`: salud del contenedor, la API de campañas inexistente desde dentro, la base alcanzada como `argos_ai`, la escritura de un veredicto denegada desde dentro y una imagen sin root, sin secretos y sin pesos. `tests/integration/test_ai_gateway.py` comprueba además que el gateway funciona entero bajo el rol restringido.
+`tests/integration/test_ai_containers.py`: salud del contenedor, la API de campañas inexistente desde dentro, la base alcanzada como `login_ai_gateway` y miembro de `svc_ai_gateway`, la escritura de un veredicto denegada desde dentro y una imagen sin root, sin secretos y sin pesos. `tests/integration/test_ai_gateway.py` comprueba además que el gateway funciona entero bajo el rol restringido.
 
 `services/ai-gateway/tests/test_eval_metrics_pure.py`: la nota calculada a mano, el doble peso de las trampas, un conjunto que pasa lo fácil y falla las trampas que no aprueba, un conjunto vacío que es error y no un 100 %, y un umbral sin su conjunto que cierra la puerta.
 
@@ -299,3 +299,4 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.2.0-alpha | 2026-09-23 | Guardarraíles normalizados (identificadores con separadores, afirmaciones como patrones, escrituras como sentencia), cifras con decimales, rangos y números en letra, y el asistente sin cifras, citas ni veredictos sin respaldo | F09-28 |
 | 0.3.0-alpha | 2026-09-23 | Asistente con cuota por persona, herramientas con tiempo máximo y concurrencia acotada, solo norma como norma, errores de herramienta devueltos al modelo y conectado en el contenedor; clasificador que solo registra su lote | F09-29 |
 | 0.4.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 | F09-03 |
+| 0.5.0-alpha | 2026-09-23 | Usuario de base `login_ai_gateway` en `svc_ai_gateway`, sin lectura del diario completo ni de campañas (SEC-051) | F09-04 (ARG-085) |

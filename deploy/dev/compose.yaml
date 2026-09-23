@@ -37,12 +37,15 @@ services:
   postgres:
     build: ./postgres
     image: argos-dev/postgres:16-age-vector
+    # F09-04: nobody connects over the network without a password (postgres/pg_hba.conf). The
+    # services connect as their own login users, members of the roles of migration 0033.
+    command: ["postgres", "-c", "shared_preload_libraries=age", "-c", "hba_file=/etc/postgresql/pg_hba.conf"]
     environment:
       POSTGRES_USER: argos
       POSTGRES_DB: argos
-      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_PASSWORD: dev-only-postgres   # the superuser, for migrations and tests from the host
     ports: ["127.0.0.1:55432:5432"]
-    volumes: ["pg-data:/var/lib/postgresql/data"]
+    volumes: ["pg-data:/var/lib/postgresql/data", "./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro"]
     # The AI gateway reaches the database through its own network, with the restricted role
     # `argos_ai`; it never shares a network with the campaign API (F06-01, F06-13).
     networks: [default, ai-data]
@@ -138,8 +141,10 @@ services:
       context: ../..
       dockerfile: services/example/Dockerfile
     environment:
-      ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos
+      ARGOS_DATABASE_URL: postgresql://login_example@postgres:5432/argos
+      ARGOS_DATABASE_PASSWORD_FILE: /run/secrets/db-example
       ARGOS_LOG_LEVEL: INFO
+    secrets: [db-example]
     depends_on:
       postgres:
         condition: service_healthy
@@ -156,9 +161,11 @@ services:
       context: ../..
       dockerfile: services/challenge-engine/Dockerfile
     image: argos-challenge-engine:dev
+    secrets: [db-challenge]
     command: ["/app/.venv/bin/python", "-m", "argos_challenges.worker"]
     environment: &challenge_engine_env
-      ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos
+      ARGOS_DATABASE_URL: postgresql://login_challenge@postgres:5432/argos
+      ARGOS_DATABASE_PASSWORD_FILE: /run/secrets/db-challenge
       ARGOS_TEMPORAL_ADDRESS: temporal:7233
       ARGOS_NATS_URL: nats://nats:4222
       ARGOS_NATS_USER: challenge
@@ -190,9 +197,11 @@ services:
       context: ../..
       dockerfile: services/api/Dockerfile
     image: argos-api:dev
+    secrets: [db-api]
     command: ["/app/.venv/bin/python", "-m", "argos_api.main"]
     environment: &api_env
-      ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos
+      ARGOS_DATABASE_URL: postgresql://login_api@postgres:5432/argos
+      ARGOS_DATABASE_PASSWORD_FILE: /run/secrets/db-api
       ARGOS_TEMPORAL_ADDRESS: temporal:7233
       ARGOS_VAULT_ADDR: http://vault:8200
       ARGOS_VAULT_TOKEN: root   # development Vault started with -dev-root-token-id=root
@@ -241,9 +250,12 @@ services:
     <<: *argos-posture
     build: *api_build
     image: argos-api:dev
+    secrets: [db-webhook]
     command: ["/app/.venv/bin/python", "-m", "argos_api.webhooks.worker"]
     environment:
       <<: *api_env
+      ARGOS_DATABASE_URL: postgresql://login_webhook@postgres:5432/argos
+      ARGOS_DATABASE_PASSWORD_FILE: /run/secrets/db-webhook
       # Only the worker listens on the bus; the API itself neither publishes nor subscribes.
       ARGOS_NATS_URL: nats://nats:4222
       ARGOS_NATS_USER: webhook
@@ -290,9 +302,11 @@ services:
       context: ../..
       dockerfile: services/evidence/Dockerfile
     image: argos-evidence:dev
+    secrets: [db-evidence]
     command: ["/app/.venv/bin/python", "-m", "argos_evidence.worker"]
     environment: &evidence_env
-      ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos
+      ARGOS_DATABASE_URL: postgresql://login_evidence@postgres:5432/argos
+      ARGOS_DATABASE_PASSWORD_FILE: /run/secrets/db-evidence
       ARGOS_TEMPORAL_ADDRESS: temporal:7233
       ARGOS_NATS_URL: nats://nats:4222
       ARGOS_NATS_USER: evidence
@@ -330,6 +344,7 @@ services:
     security_opt: ["no-new-privileges:true", "seccomp=../../platform/k8s/security/seccomp/evidence.json"]
     build: *evidence_build
     image: argos-evidence:dev
+    secrets: [db-evidence]
     command: ["/app/.venv/bin/python", "-m", "argos_evidence.api"]
     environment:
       <<: *evidence_env
@@ -389,10 +404,12 @@ services:
       context: ../..
       dockerfile: services/ai-gateway/Dockerfile
     image: argos-ai-gateway:dev
+    secrets: [db-ai_gateway]
     environment:
-      # The session runs as `argos_ai`: it may read, write its own tables and append to the
-      # journal, and it has no privilege to touch a verdict or a finding.
-      ARGOS_DATABASE_URL: postgresql://argos@postgres:5432/argos?options=-c%20role%3Dargos_ai
+      # Its own login user, a member of svc_ai_gateway: it reads what its tools use, writes its own
+      # tables and appends to the journal; it cannot touch a verdict or a finding (F06-01, F09-04).
+      ARGOS_DATABASE_URL: postgresql://login_ai_gateway@postgres:5432/argos
+      ARGOS_DATABASE_PASSWORD_FILE: /run/secrets/db-ai_gateway
       ARGOS_LLM_LOCAL_ENDPOINT: http://llm:8080/v1
       ARGOS_LLM_MODEL: argos-llm
       ARGOS_API_BIND: 0.0.0.0   # published below on 127.0.0.1 only
@@ -538,6 +555,22 @@ services:
       test: ["CMD", "healthcheck.sh"]
       interval: 10s
       retries: 60
+
+
+# F09-04 · the database password of each service, written by tools/dev_db_users.py (gitignored).
+secrets:
+  db-api:
+    file: ./secrets/db-api
+  db-webhook:
+    file: ./secrets/db-webhook
+  db-challenge:
+    file: ./secrets/db-challenge
+  db-evidence:
+    file: ./secrets/db-evidence
+  db-ai_gateway:
+    file: ./secrets/db-ai_gateway
+  db-example:
+    file: ./secrets/db-example
 
 networks:
   default:
