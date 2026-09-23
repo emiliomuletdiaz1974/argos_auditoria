@@ -4,7 +4,7 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.8.0-alpha
+version: 0.9.0-alpha
 commit: 8dcef99
 date: 2026-09-23
 status: current
@@ -206,7 +206,7 @@ El cierre de un hallazgo no lo declara el cliente: lo confirma **el mismo reto q
 
 ## 5. Configuración
 
-`ARGOS_TEMPORAL_ADDRESS`, `ARGOS_DATABASE_URL`, `ARGOS_NATS_URL`, `ARGOS_VAULT_ADDR`, `ARGOS_VAULT_TOKEN`, `ARGOS_OPA_URL` (por defecto `http://127.0.0.1:8181`), `ARGOS_OPA_TOKEN` (el worker se identifica ante OPA; en desarrollo, `dev-only-opa-challenge`), `ARGOS_NATS_USER` y `ARGOS_NATS_PASSWORD` (usuario `challenge`), `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, desde `argos-common`. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-challenge`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión.
+`ARGOS_TEMPORAL_ADDRESS`, `ARGOS_DATABASE_URL`, `ARGOS_NATS_URL`, `ARGOS_VAULT_ADDR`, `ARGOS_VAULT_TOKEN`, `ARGOS_OPA_URL` (por defecto `http://127.0.0.1:8181`), `ARGOS_OPA_TOKEN` (el worker se identifica ante OPA; en desarrollo, `dev-only-opa-challenge`), `ARGOS_NATS_USER` y `ARGOS_NATS_PASSWORD` (usuario `challenge`), `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, desde `argos-common`. Desde F09-05, `ARGOS_DATABASE_URL` no lleva usuario (`postgresql://postgres:5432/argos?service=argos`), y `ARGOS_DATABASE_VAULT_ROLE` (`svc-challenge`) con `ARGOS_VAULT_APPROLE_DIR` dicen de dónde sale la credencial. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-challenge`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión.
 
 `ARGOS_API_BIND` es propia del proceso de la API: la dirección a la que se ata uvicorn. Por defecto `127.0.0.1`; el contenedor la pone a `0.0.0.0` porque el puerto publicado ya limita el acceso al bucle local del anfitrión.
 
@@ -216,6 +216,7 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
 
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - **Base de datos con mínimo privilegio** (F09-04, ARG-085): el servicio se conecta como `login_challenge`, miembro del rol `svc_challenge` (migración `0033`), y nunca como superusuario. El rol tiene solo las tablas y operaciones que usa su código; el diario se escribe únicamente con `argos.journal_append()`. Lo comprueban `tests/integration/test_service_roles.py` (la matriz `tests/fixtures/db_access_matrix.yaml` y el usuario de cada contenedor en marcha).
+- **Credencial de base de datos efímera** (F09-05, ARG-085): el servicio entra con un usuario que Vault crea para él, miembro de ``svc_challenge``, válido 24 h y borrado al vencer. Lo renueva en caliente `argos_common.dynamic_db`. El AppRole con el que lo pide llega por volumen y no aparece en `docker inspect`.
 - **Compuertas sin carrera** (F09-31): el workflow pasa a `awaiting:<compuerta>` cuando `request_approval` ya guardó la solicitud, no antes. Quien aprueba al ver ese estado (la consola, un test) siempre encuentra la solicitud.
 - **Lint de `check_config`** (F09-31, SEC-022): `intrinsic_errors` comprueba con `check_config_sources` que la sentencia declarada de cada conector SQL (`CHECK_DIALECTS`) solo lee catálogo y configuración. Se aplica en el CI y al cargar la biblioteca.
 - Cada actividad que produce un resultado relevante lo anota en el diario de auditoría encadenado.
@@ -376,3 +377,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.6.0-alpha | 2026-09-23 | El lint rechaza un `check_config` que lea tablas del cliente, y la campaña anuncia `awaiting:<compuerta>` solo cuando la solicitud ya está guardada | F09-31 |
 | 0.7.0-alpha | 2026-09-23 | Contenedor del worker con la postura restringida de ARG-084 | F09-03 |
 | 0.8.0-alpha | 2026-09-23 | Usuario de base `login_challenge` en `svc_challenge`, el único rol que escribe veredictos; contraseña en fichero de secreto | F09-04 (ARG-085) |
+| 0.9.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-challenge`), renovado en caliente | F09-05 (ARG-085) |

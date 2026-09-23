@@ -11,6 +11,7 @@ from temporalio.client import Client
 from temporalio.worker import Worker
 
 from argos_common.config import ArgosConfig, get_config
+from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
 from argos_events import Bus, bus_from_config
@@ -82,6 +83,7 @@ async def listen_for_open_circuits(client: Client, bus: Bus, dsn: str) -> None:
 async def main() -> None:
     cfg = get_config()
     configure_logging("argos-campaign-worker", cfg.LOG_LEVEL)
+    start_from_config(cfg)  # F09-05: the dynamic credential, before any connection
     client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")
     bus = bus_from_config("argos-campaign-worker", cfg)
     await bus.connect()

@@ -4,7 +4,7 @@ kind: module
 title: Servicio de ejemplo (argos-example)
 module: argos-example
 phases: ["01"]
-version: 0.3.0-alpha
+version: 0.4.0-alpha
 commit: 8dcef99
 date: 2026-09-23
 status: current
@@ -42,12 +42,13 @@ Aplicación FastAPI con ciclo de vida que abre el diario y monta las rutas de sa
 
 ## 5. Configuración
 
-`ARGOS_DATABASE_URL`; en desarrollo escucha en `127.0.0.1:8001`. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-example`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión.
+`ARGOS_DATABASE_URL`; en desarrollo escucha en `127.0.0.1:8001`. Desde F09-05, `ARGOS_DATABASE_URL` no lleva usuario (`postgresql://postgres:5432/argos?service=argos`), y `ARGOS_DATABASE_VAULT_ROLE` (`svc-example`) con `ARGOS_VAULT_APPROLE_DIR` dicen de dónde sale la credencial. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-example`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión.
 
 ## 6. Seguridad y tratamiento de datos
 
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - **Base de datos con mínimo privilegio** (F09-04, ARG-085): el servicio se conecta como `login_example`, miembro del rol `svc_example` (migración `0033`), y nunca como superusuario. El rol tiene solo las tablas y operaciones que usa su código; el diario se escribe únicamente con `argos.journal_append()`. Lo comprueban `tests/integration/test_service_roles.py` (la matriz `tests/fixtures/db_access_matrix.yaml` y el usuario de cada contenedor en marcha).
+- **Credencial de base de datos efímera** (F09-05, ARG-085): el servicio entra con un usuario que Vault crea para él, miembro de ``svc_example``, válido 24 h y borrado al vencer. Lo renueva en caliente `argos_common.dynamic_db`. El AppRole con el que lo pide llega por volumen y no aparece en `docker inspect`.
 Solo escribe asientos sintéticos de demostración en el diario.
 
 ## 7. Operación
@@ -70,3 +71,4 @@ Ninguna: es un servicio de referencia.
 | 0.1.0-alpha | 2026-09-14 | Servicio de ejemplo con salud, diario y verificación | Fase 01 |
 | 0.2.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 | F09-03 |
 | 0.3.0-alpha | 2026-09-23 | Usuario de base `login_example` en `svc_example`: solo escribe el diario por su función | F09-04 (ARG-085) |
+| 0.4.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-example`), renovado en caliente | F09-05 (ARG-085) |

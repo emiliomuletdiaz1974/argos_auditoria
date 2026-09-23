@@ -4,7 +4,7 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.5.0-alpha
+version: 0.6.0-alpha
 commit: f920e7f
 date: 2026-09-23
 status: current
@@ -33,6 +33,7 @@ Base compartida por todos los servicios de ARGOS: configuración validada al arr
 | `health` | Rutas uniformes `/health/live` y `/health` para servicios HTTP |
 | `ids` | Identificadores UUID v7 ordenables en el tiempo |
 | `journal` | Diario encadenado v1: canonicalización, hash y verificación independientes de la base de datos |
+| `dynamic_db` | Credenciales dinámicas de base de datos (F09-05, ARG-085): `DynamicCredentials` pide a Vault un usuario efímero, lo escribe en el fichero de servicio de libpq y lo renueva antes de que venza; `start_from_config(cfg)` al arrancar cada servicio, o `python -m argos_common.dynamic_db` como proceso aparte |
 | `journal_pg` | Cliente PostgreSQL del diario: añadir, leer y verificar. `argos_common.PostgresJournal` se carga al primer uso, no con el paquete: importar las partes puras (hash y forma canónica del diario, errores) no arrastra el cliente de PostgreSQL, y así las usa el comprobador público (ARG-069) |
 | `migrations` | Migrador de SQL numerado con suma de control y un asiento por migración |
 | `secret_stores` | Interfaz única de secretos: Vault, fichero cifrado (solo desarrollo) y TPM (pendiente) |
@@ -58,6 +59,7 @@ Dependencias externas: PostgreSQL 16 (esquema `argos`), HashiCorp Vault (kv-v2 y
 ## 5. Configuración
 
 Variables con prefijo `ARGOS_`:
+- `DATABASE_VAULT_ROLE`, `DATABASE_SERVICE_FILE` (por defecto `/tmp/argos-db/pg_service.conf`) y `VAULT_APPROLE_DIR` (F09-05): el rol del motor `db/` de Vault, dónde deja la credencial y dónde están `role_id` y `secret_id`;
 - `DATABASE_URL` (obligatoria) y `DATABASE_PASSWORD_FILE` (F09-04: fichero con la contraseña, que se añade a la cadena de conexión; es un error que la cadena ya traiga otra), `NATS_URL`, `NATS_USER`, `NATS_PASSWORD` (secreto), `TEMPORAL_ADDRESS`;
 - `OPA_URL` y `OPA_TOKEN` (secreto);
 - `OIDC_ISSUER` y `OIDC_AUDIENCE`;
@@ -132,3 +134,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.3.0-alpha | 2026-09-23 | `WEBHOOK_ALLOWED_TARGETS`: la excepción de destinos privados de los webhooks | F09-30 |
 | 0.4.0-alpha | 2026-09-23 | `DATABASE_PASSWORD_FILE`: la contraseña de la base en un fichero de secreto; `DATABASE_URL` fuera del `repr` | F09-04 (ARG-085) |
 | 0.5.0-alpha | 2026-09-23 | `journal_append` exige la forma canónica y los actores y acciones de cada rol (`argos.journal_grants`) | F09-26 (ARG-005, ARG-071) |
+| 0.6.0-alpha | 2026-09-23 | `dynamic_db`: credenciales dinámicas de Vault renovadas en caliente; `DATABASE_VAULT_ROLE`, `DATABASE_SERVICE_FILE`, `VAULT_APPROLE_DIR` | F09-05 (ARG-085) |

@@ -107,15 +107,16 @@ def test_a_member_of_a_service_role_works_and_is_refused_what_is_not_its(
             conn.execute("SELECT 1 FROM argos.synthetic_subjects LIMIT 1")
 
 
-# Every container of ARGOS that reaches the database, and the login user it must arrive as.
+# Every container of ARGOS that reaches the database, and the role its user must be a member of.
+# Since F09-05 the user is ephemeral: Vault creates it with an expiry and drops it when it expires.
 CONTAINERS = {
-    "example": "login_example",
-    "challenge-worker": "login_challenge",
-    "api": "login_api",
-    "webhook-worker": "login_webhook",
-    "evidence-worker": "login_evidence",
-    "evidence-api": "login_evidence",
-    "ai-gateway": "login_ai_gateway",
+    "example": "svc_example",
+    "challenge-worker": "svc_challenge",
+    "api": "svc_api",
+    "webhook-worker": "svc_webhook",
+    "evidence-worker": "svc_evidence",
+    "evidence-api": "svc_evidence",
+    "ai-gateway": "svc_ai_gateway",
 }
 COMPOSE = [
     "docker",
@@ -124,26 +125,30 @@ COMPOSE = [
     str(Path(__file__).resolve().parents[2] / "deploy/dev/compose.yaml"),
 ]
 WHO = (
-    "import psycopg\n"
+    "import sys, psycopg\n"
     "from argos_common.config import get_config\n"
+    "QUERY = (\n"
+    "    \"SELECT rolsuper, rolvaliduntil IS NOT NULL, pg_has_role(current_user, %s, 'MEMBER')\"\n"
+    '    " FROM pg_roles WHERE rolname = current_user"\n'
+    ")\n"
     "with psycopg.connect(get_config().DATABASE_URL) as conn:\n"
-    "    print(*conn.execute('SELECT current_user, rolsuper FROM pg_roles"
-    " WHERE rolname = current_user').fetchone())\n"
+    "    print(*conn.execute(QUERY, (sys.argv[1],)).fetchone())\n"
 )
 
 
-@pytest.mark.parametrize(("container", "user"), sorted(CONTAINERS.items()))
-def test_each_container_connects_as_its_own_user_and_never_as_the_superuser(
-    container: str, user: str
+@pytest.mark.parametrize(("container", "role"), sorted(CONTAINERS.items()))
+def test_each_container_connects_as_an_ephemeral_member_of_its_role(
+    container: str, role: str
 ) -> None:
     probe = subprocess.run(  # noqa: S603 - fixed command against the development environment
-        [*COMPOSE, "exec", "-T", container, "/app/.venv/bin/python", "-c", WHO],
+        [*COMPOSE, "exec", "-T", container, "/app/.venv/bin/python", "-c", WHO, role],
         capture_output=True,
         text=True,
         timeout=60,
     )
     assert probe.returncode == 0, probe.stderr
-    assert probe.stdout.split() == [user, "False"]
+    superuser, expires, member = probe.stdout.split()
+    assert (superuser, expires, member) == ("False", "True", "True")
 
 
 def test_nobody_connects_over_the_network_without_a_password(migrated_db: str) -> None:

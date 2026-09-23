@@ -38,12 +38,11 @@ help:
 
 dev:
 	uv run python tools/prepare_dev_sources.py
-	uv run python tools/dev_db_users.py generate
 	$(COMPOSE) up -d --build --wait postgres vault
 	$(COMPOSE) exec -T -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN=root vault sh -s < deploy/dev/vault/setup.sh
 	$(COMPOSE) exec -T postgres psql -q -U argos -d argos -c "ALTER ROLE argos PASSWORD '$(PGPASSWORD)'"
 	uv run --env-file .env.example python tools/migrate.py
-	uv run --env-file .env.example python tools/dev_db_users.py apply
+	uv run --env-file .env.example python tools/dev_db_users.py
 	$(COMPOSE) up -d --build --wait
 	uv run --env-file .env.example python tools/register_dev_sources.py
 	uv run python tools/seed_dev_clinical.py

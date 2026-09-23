@@ -4,7 +4,7 @@ kind: module
 title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
-version: 0.5.0-alpha
+version: 0.6.0-alpha
 commit: 8dcef99
 date: 2026-09-23
 status: draft
@@ -211,13 +211,13 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 - **El contenedor:** `services/ai-gateway/Dockerfile`, usuario sin privilegios, sin secretos y **sin pesos** (el modelo lo sirve su propio contenedor). `make dev` levanta `ai-gateway` en `127.0.0.1:8005` con healthcheck; `make build` construye `argos-ai-gateway:<versión>` con `org.argos.component=ARG-052` y el CI genera su SBOM.
 - **Las redes:** `ai` (gateway y modelo) y `ai-data` (gateway y PostgreSQL). PostgreSQL está en las dos redes, la de siempre y `ai-data`; la API de campañas, solo en la de siempre.
 - **El modelo:** el servicio `llm` (llama.cpp sobre CPU, API compatible OpenAI, ADR-0009) va en su propio perfil, `llm`, porque necesita los pesos de F06-05. Sin ellos, `make dev` funciona igual y `/v1/chat_json` responde 502.
-- **La sesión de base de datos** corre como `login_ai_gateway`, miembro de `svc_ai_gateway`. La contraseña llega en `ARGOS_DATABASE_PASSWORD_FILE` y no desde Vault, porque el gateway no alcanza Vault por diseño de su red.
+- **La sesión de base de datos** corre con un usuario efímero de Vault, miembro de `svc_ai_gateway`, válido 24 h y borrado al vencer (F09-05). Como el gateway no alcanza Vault por diseño de su red, lo renueva el contenedor acompañante `ai-db-credentials` con el mismo código (`python -m argos_common.dynamic_db`) y lo deja en un volumen `tmpfs` que el gateway monta de solo lectura (`PGSERVICEFILE`).
 
 ## 8. Verificación
 
 `services/ai-gateway/tests/test_ai_api_pure.py`: salud, respuesta con su hash y sin su prompt, 429 por cuota, 422 por guardarraíl, 502 por esquema y prioridad desconocida rechazada.
 
-`tests/integration/test_ai_containers.py`: salud del contenedor, la API de campañas inexistente desde dentro, la base alcanzada como `login_ai_gateway` y miembro de `svc_ai_gateway`, la escritura de un veredicto denegada desde dentro y una imagen sin root, sin secretos y sin pesos. `tests/integration/test_ai_gateway.py` comprueba además que el gateway funciona entero bajo el rol restringido.
+`tests/integration/test_ai_containers.py`: salud del contenedor, la API de campañas inexistente desde dentro, la base alcanzada con un usuario efímero de Vault miembro de `svc_ai_gateway`, la escritura de un veredicto denegada desde dentro y una imagen sin root, sin secretos y sin pesos. `tests/integration/test_ai_gateway.py` comprueba además que el gateway funciona entero bajo el rol restringido.
 
 `services/ai-gateway/tests/test_eval_metrics_pure.py`: la nota calculada a mano, el doble peso de las trampas, un conjunto que pasa lo fácil y falla las trampas que no aprueba, un conjunto vacío que es error y no un 100 %, y un umbral sin su conjunto que cierra la puerta.
 
@@ -300,3 +300,4 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.3.0-alpha | 2026-09-23 | Asistente con cuota por persona, herramientas con tiempo máximo y concurrencia acotada, solo norma como norma, errores de herramienta devueltos al modelo y conectado en el contenedor; clasificador que solo registra su lote | F09-29 |
 | 0.4.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 | F09-03 |
 | 0.5.0-alpha | 2026-09-23 | Usuario de base `login_ai_gateway` en `svc_ai_gateway`, sin lectura del diario completo ni de campañas (SEC-051) | F09-04 (ARG-085) |
+| 0.6.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-ai-gateway`) que renueva el contenedor acompañante `ai-db-credentials` | F09-05 (ARG-085) |

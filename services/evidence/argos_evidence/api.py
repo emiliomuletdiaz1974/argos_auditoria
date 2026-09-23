@@ -62,12 +62,14 @@ def main() -> None:  # pragma: no cover - process entry point
     import uvicorn
 
     from argos_common.config import get_config
+    from argos_common.dynamic_db import start_from_config
     from argos_common.logs import configure_logging
     from argos_evidence.service import build_activities
     from argos_evidence.settings import EvidenceSettings
 
     config = get_config()
     configure_logging("argos-evidence-api", config.LOG_LEVEL)
+    start_from_config(config)  # F09-05: the dynamic credential, before any connection
     app = create_app(build_activities(config, EvidenceSettings()), config.DATABASE_URL)
     uvicorn.run(
         app, host=os.environ.get("ARGOS_API_BIND", DEV_HOST), port=DEV_PORT, log_config=None

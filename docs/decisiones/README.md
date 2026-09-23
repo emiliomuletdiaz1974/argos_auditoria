@@ -65,4 +65,4 @@ Leyenda del **Quién**: **U** = decisión nuestra en una tarea DECISIÓN o por i
 | DP-14 | 2026-09-23 | U | Fase 09: registro de seguridad en tabla encadenada, TOTP para dos roles e integrar la rama de auditoría | [→](03-plan-y-proceso.md#dp-14) |
 | DP-15 | varias | U | Las tareas que esperan hardware, accesos o contratos son MANUAL y no bloquean el cierre de su fase | [→](03-plan-y-proceso.md#dp-15) |
 
-Las decisiones técnicas tomadas dentro de las tareas (unas 90) están agrupadas por fase en [03 · Plan y proceso](03-plan-y-proceso.md#decisiones-técnicas-dentro-de-las-tareas). Las 26 notas de desviación, en [02 · Desviaciones](02-desviaciones.md).
+Las decisiones técnicas tomadas dentro de las tareas (unas 90) están agrupadas por fase en [03 · Plan y proceso](03-plan-y-proceso.md#decisiones-técnicas-dentro-de-las-tareas). Las 27 notas de desviación, en [02 · Desviaciones](02-desviaciones.md).

@@ -4,7 +4,7 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.17.0-alpha
+version: 0.18.0-alpha
 commit: f920e7f
 date: 2026-09-23
 status: current
@@ -105,12 +105,13 @@ Reglas del árbol:
 
 ## 5. Configuración
 
-Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-evidence`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión. Lo propio va en `ARGOS_EVIDENCE_*` (`EvidenceSettings`): `ISSUER_DID`, `STATUS_BASE_URL`, `CREDENTIAL_BASE_URL`, `VERIFIER_URL`, `RETENTION_DAYS` (10 años por defecto; 1 día en desarrollo), `S3_ENDPOINT`/`S3_ACCESS_KEY`/`S3_SECRET_KEY` (secreto), `SIGNING_KEY` (clave de Transit), `TSA_URL`, `TSA_ROOTS_FILE` (en desarrollo, `TSA_ROOTS_URL` toma la raíz de la TSA de pruebas), `STAMP_ATTEMPTS` y `STAMP_WAIT_SECONDS`. La firma usa cualquier `Signer` de `argos_common.release`: en desarrollo, `VaultTransitSigner` con la clave `argos-evidence` del motor Transit (Ed25519, no exportable; la crea `deploy/dev/vault/setup.sh`); en el appliance, `TpmSigner` (F07-15). El cliente WORM recibe un cliente S3 ya construido; la configuración del servicio (punto de acceso, credenciales y retención por defecto, 10 años en producción y 1 día en desarrollo) llega con F07-13. En desarrollo las credenciales del almacén son triviales a propósito y solo escuchan en `127.0.0.1`.
+Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. Desde F09-05, `ARGOS_DATABASE_URL` no lleva usuario (`postgresql://postgres:5432/argos?service=argos`), y `ARGOS_DATABASE_VAULT_ROLE` (`svc-evidence`) con `ARGOS_VAULT_APPROLE_DIR` dicen de dónde sale la credencial. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-evidence`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión. Lo propio va en `ARGOS_EVIDENCE_*` (`EvidenceSettings`): `ISSUER_DID`, `STATUS_BASE_URL`, `CREDENTIAL_BASE_URL`, `VERIFIER_URL`, `RETENTION_DAYS` (10 años por defecto; 1 día en desarrollo), `S3_ENDPOINT`/`S3_ACCESS_KEY`/`S3_SECRET_KEY` (secreto), `SIGNING_KEY` (clave de Transit), `TSA_URL`, `TSA_ROOTS_FILE` (en desarrollo, `TSA_ROOTS_URL` toma la raíz de la TSA de pruebas), `STAMP_ATTEMPTS` y `STAMP_WAIT_SECONDS`. La firma usa cualquier `Signer` de `argos_common.release`: en desarrollo, `VaultTransitSigner` con la clave `argos-evidence` del motor Transit (Ed25519, no exportable; la crea `deploy/dev/vault/setup.sh`); en el appliance, `TpmSigner` (F07-15). El cliente WORM recibe un cliente S3 ya construido; la configuración del servicio (punto de acceso, credenciales y retención por defecto, 10 años en producción y 1 día en desarrollo) llega con F07-13. En desarrollo las credenciales del almacén son triviales a propósito y solo escuchan en `127.0.0.1`.
 
 ## 6. Seguridad y tratamiento de datos
 
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp propio `platform/k8s/security/seccomp/evidence.json` (deniega por defecto y no permite nada que abra el host; `ioctl` queda por el TPM del appliance). La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - **Base de datos con mínimo privilegio** (F09-04, ARG-085): el servicio se conecta como `login_evidence`, miembro del rol `svc_evidence` (migración `0033`), y nunca como superusuario. El rol tiene solo las tablas y operaciones que usa su código; el diario se escribe únicamente con `argos.journal_append()`. Lo comprueban `tests/integration/test_service_roles.py` (la matriz `tests/fixtures/db_access_matrix.yaml` y el usuario de cada contenedor en marcha).
+- **Credencial de base de datos efímera** (F09-05, ARG-085): el servicio entra con un usuario que Vault crea para él, miembro de ``svc_evidence``, válido 24 h y borrado al vencer. Lo renueva en caliente `argos_common.dynamic_db`. El AppRole con el que lo pide llega por volumen y no aparece en `docker inspect`.
 - **Minimización (P-16):** el artefacto solo lleva lo que la sonda dejó pasar en el veredicto. Si aun así contuviera un DNI, NIE, NUSS o IBAN validado, no se escribe (`ArtifactNotMinimisedError`) y el error señala la ruta JSON.
 - El árbol y la raíz solo manejan **hashes** de artefactos, nunca su contenido.
 - `argos.evidence_index` y `argos.campaign_signatures` son de escritura única, como `argos.campaign_roots`.
@@ -180,3 +181,4 @@ Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. La
 | 0.15.0-alpha | 2026-09-23 | Contenedores con la postura restringida de ARG-084 y perfil seccomp propio | F09-03 |
 | 0.16.0-alpha | 2026-09-23 | Usuario de base `login_evidence` en `svc_evidence` para el worker y la API; contraseña en fichero de secreto | F09-04 (ARG-085) |
 | 0.17.0-alpha | 2026-09-23 | `issued_by`: la credencial emitida desde la API asienta a la persona que la emite (SEC-030) | F09-26 (ARG-005, ARG-071) |
+| 0.18.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-evidence`), renovado en caliente | F09-05 (ARG-085) |

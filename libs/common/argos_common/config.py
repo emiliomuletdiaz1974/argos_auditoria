@@ -48,6 +48,12 @@ class ArgosConfig(BaseSettings):
     DATABASE_URL: str = Field(min_length=1, repr=False)
     # The service's database password, mounted as a secret file (F09-04); never in the URL itself.
     DATABASE_PASSWORD_FILE: str | None = None
+    # F09-05 (ARG-085): the role of Vault's `db/` engine that issues this service's ephemeral
+    # user. Set, the credential lives in DATABASE_SERVICE_FILE and DATABASE_URL names no user
+    # (`...?service=argos`). The AppRole to log in with is two files in VAULT_APPROLE_DIR.
+    DATABASE_VAULT_ROLE: str | None = None
+    DATABASE_SERVICE_FILE: str = "/tmp/argos-db/pg_service.conf"  # noqa: S108 - tmpfs of the container
+    VAULT_APPROLE_DIR: str | None = None
     NATS_URL: str = "nats://127.0.0.1:4222"
     # Each service connects with its own NATS user: the server decides what it may publish.
     NATS_USER: str | None = None

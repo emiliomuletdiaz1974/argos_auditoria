@@ -78,6 +78,7 @@ Cada ficha resume en una línea lo que pedía el documento, lo que hicimos en su
 | Nota | Documento pedía | Hicimos | Por qué | Qué comprobamos | Estado |
 |---|---|---|---|---|---|
 | ARG-081-090 | k3s, cert-manager, Kyverno, TPM; `/healthz`; cosign; `shell=True`; restauración con `postgres:16` | Paquetes en inglés; puerto `Orchestrator` (Compose hoy, Kubernetes con un doble); nunca `shell=True`; diario con `journal_pg`; restauración con la imagen del entorno | No hay k3s ni hardware; `shell=True` con nombres que llegan de un soporte es inyección de órdenes; `postgres:16` a secas no restauraría AGE | Conexiones con `trust`, contenedores sin restricciones y sin 2FA (revisado en F09-R) | Aprobada (F09-00) |
+| ARG-085 | `DynamicPool` sobre `psycopg_pool` que se reconstruye al rotar; login por Kubernetes auth | La credencial dinámica en un fichero de servicio de libpq (`pg_service.conf`) que se sustituye entero; conexiones con `?service=argos`; AppRole por volumen en desarrollo; un contenedor acompañante para el gateway de IA | Ningún servicio usa pool: 141 `psycopg.connect(dsn)` en 48 módulos con la cadena fijada al arrancar; el gateway no alcanza Vault por diseño; no hay k3s | Contamos las llamadas; un test con TTL de 60 s rota, sigue conectando y ve desaparecer el usuario vencido; la revocación real (`REASSIGN OWNED` + `DROP ROLE`) se probó con tres roles | **Propuesta**, pendiente de aprobación |
 
 ## Pendiente común a todas las notas
 

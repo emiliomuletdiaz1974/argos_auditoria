@@ -24,6 +24,7 @@ from argos_api.keycloak import Keycloak
 from argos_api.webhooks.worker import allowed_targets
 from argos_auth import JwtValidator
 from argos_common.config import ArgosConfig, Environment, get_config
+from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging
 from argos_common.secret_stores import VaultSecretStore
 
@@ -118,6 +119,7 @@ def build_app(cfg: ArgosConfig) -> Any:
 def main() -> None:  # pragma: no cover - process entry point
     cfg = get_config()
     configure_logging(SERVICE_NAME, cfg.LOG_LEVEL)
+    start_from_config(cfg)  # F09-05: the dynamic credential, before any connection
     # Inside a container the loopback address would hide the API from the published port; the
     # compose service sets ARGOS_API_BIND and docker keeps the port on 127.0.0.1.
     uvicorn.run(

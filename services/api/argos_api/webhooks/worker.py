@@ -17,6 +17,7 @@ from argos_api.webhooks.dispatch import WebhookActivities
 from argos_api.webhooks.subscriber import DURABLE, SUBJECTS, on_event
 from argos_api.webhooks.workflow import TASK_QUEUE, WebhookDelivery
 from argos_common.config import ArgosConfig, get_config
+from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
 from argos_events import Bus, bus_from_config
@@ -67,6 +68,7 @@ async def listen(client: Client, bus: Bus, dsn: str) -> None:
 async def main() -> None:  # pragma: no cover - process entry point
     cfg = get_config()
     configure_logging(SERVICE, cfg.LOG_LEVEL)
+    start_from_config(cfg)  # F09-05: the dynamic credential, before any connection
     client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")
     bus = bus_from_config(SERVICE, cfg)
     await bus.connect()

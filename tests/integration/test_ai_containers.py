@@ -66,7 +66,9 @@ def test_the_database_is_reached_as_the_restricted_role() -> None:
         "    print(conn.execute(member).fetchone()[0])\n"
     )
     assert probe.returncode == 0, probe.stderr
-    assert probe.stdout.split() == ["login_ai_gateway", "True"]
+    user, member = probe.stdout.split()
+    assert user.startswith("v-"), "an ephemeral user issued by Vault (F09-05)"
+    assert member == "True"
 
 
 def test_from_inside_the_gateway_a_verdict_cannot_be_written() -> None:

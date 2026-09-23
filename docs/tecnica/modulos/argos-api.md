@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.24.0-alpha
+version: 0.25.0-alpha
 commit: f920e7f
 date: 2026-09-23
 status: current
@@ -81,13 +81,14 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 
 ## 5. Configuración
 
-El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORAL_ADDRESS`, `ARGOS_VAULT_ADDR`/`ARGOS_VAULT_TOKEN`, `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, la configuración de evidencia (`ARGOS_EVIDENCE_*`), `ARGOS_AI_GATEWAY_URL` (el asistente; sin ella, la ruta responde 503) y `ARGOS_CONSOLE_DIR` (los estáticos de la consola, `/app/console` en la imagen). `ARGOS_API_BIND` existe solo para el contenedor: docker publica el puerto en `127.0.0.1`. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-api`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión.
+El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORAL_ADDRESS`, `ARGOS_VAULT_ADDR`/`ARGOS_VAULT_TOKEN`, `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, la configuración de evidencia (`ARGOS_EVIDENCE_*`), `ARGOS_AI_GATEWAY_URL` (el asistente; sin ella, la ruta responde 503) y `ARGOS_CONSOLE_DIR` (los estáticos de la consola, `/app/console` en la imagen). `ARGOS_API_BIND` existe solo para el contenedor: docker publica el puerto en `127.0.0.1`. Desde F09-05, `ARGOS_DATABASE_URL` no lleva usuario (`postgresql://postgres:5432/argos?service=argos`), y `ARGOS_DATABASE_VAULT_ROLE` (`svc-api` y `svc-webhook`) con `ARGOS_VAULT_APPROLE_DIR` dicen de dónde sale la credencial. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-api`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión.
 
 ## 6. Seguridad y tratamiento de datos
 
 - **Ninguna acción humana sin asiento** (F09-26, SEC-029, SEC-030, SEC-040, SEC-044): el asiento `api.mutation` se escribe antes de guardar la respuesta idempotente; lanzar una campaña deja `campaign.launch` y emitir una credencial deja `credential.issued`, los dos con la persona y los identificadores; una respuesta guardada nunca se entrega sin pasar antes el guardián de permisos, y validar el token no bloquea el bucle de eventos.
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - **Base de datos con mínimo privilegio** (F09-04, ARG-085): la API se conecta como `login_api`, miembro del rol `svc_api`, y el worker de webhooks como `login_webhook`, miembro de `svc_webhook` (migración `0033`), y nunca como superusuario. El rol tiene solo las tablas y operaciones que usa su código; el diario se escribe únicamente con `argos.journal_append()`. Lo comprueban `tests/integration/test_service_roles.py` (la matriz `tests/fixtures/db_access_matrix.yaml` y el usuario de cada contenedor en marcha).
+- **Credencial de base de datos efímera** (F09-05, ARG-085): el servicio entra con un usuario que Vault crea para él, miembro de ``svc_api` (el worker de webhooks, de `svc_webhook`)`, válido 24 h y borrado al vencer. Lo renueva en caliente `argos_common.dynamic_db`. El AppRole con el que lo pide llega por volumen y no aparece en `docker inspect`.
 - Ninguna ruta autenticada se resuelve sin un token válido con rol del realm y sin el permiso que la ruta declara.
 - **Integraciones:** `webhooks.read` pasa a ser solo de `platform_admin` (F08-09); el auditor ya no ve la configuración de las integraciones.
 - **Emisión de credenciales:** pasa de `campaign_manager` a `dpo_reviewer` (F08-07): es el DPO quien firma lo que se afirma ante terceros, después de leer la vista previa.
@@ -165,3 +166,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.22.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 (API y worker de webhooks) | F09-03 |
 | 0.23.0-alpha | 2026-09-23 | Usuario de base `login_api` en `svc_api` (y `login_webhook` en `svc_webhook`); contraseña en fichero de secreto | F09-04 (ARG-085) |
 | 0.24.0-alpha | 2026-09-23 | Idempotencia tras el guardián, con reserva, clave acotada y huella por ruta real; asientos `campaign.launch` y `credential.issued` con la persona | F09-26 (ARG-005, ARG-071) |
+| 0.25.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-api`, `svc-webhook`), renovado en caliente | F09-05 (ARG-085) |

@@ -10,6 +10,7 @@ import psycopg
 from fastapi import FastAPI, Query
 
 from argos_common.config import get_config
+from argos_common.dynamic_db import start_from_config
 from argos_common.health import mount_health
 from argos_common.journal_pg import PostgresJournal
 from argos_common.logs import configure_logging, get_logger
@@ -21,6 +22,7 @@ SERVICE_NAME = "argos-example"
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     cfg = get_config()  # with an invalid configuration the service never finishes starting
     configure_logging(SERVICE_NAME, cfg.LOG_LEVEL)
+    start_from_config(cfg)  # F09-05: the dynamic credential, before any connection
     log = get_logger(__name__, "ARG-001")
     log.info("service started")
     yield

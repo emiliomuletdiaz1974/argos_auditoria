@@ -20,6 +20,7 @@ from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.worker import Worker
 
 from argos_common.config import get_config
+from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging, get_logger
 from argos_events import bus_from_config
 from argos_evidence.service import build_activities
@@ -72,6 +73,7 @@ async def main() -> None:  # pragma: no cover - process entry point
     config = get_config()
     settings = EvidenceSettings()
     configure_logging("argos-evidence-worker", config.LOG_LEVEL)
+    start_from_config(config)  # F09-05: the dynamic credential, before any connection
     activities = build_activities(config, settings)
     client = await Client.connect(config.TEMPORAL_ADDRESS, namespace="default")
     worker = Worker(
