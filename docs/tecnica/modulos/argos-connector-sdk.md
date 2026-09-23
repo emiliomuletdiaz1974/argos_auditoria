@@ -4,9 +4,9 @@ kind: module
 title: SDK de conectores de solo lectura (argos-connector-sdk)
 module: argos-connector-sdk
 phases: ["02", "03"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: d64abd2
-date: 2026-09-18
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -74,6 +74,12 @@ Otras piezas:
 - **Minimización:** las muestras solo salen como hashes con clave y como tasas agregadas de validación, nunca como valores.
 - **Carga:** fuera de ventana o con el cortacircuitos abierto la sonda no se ejecuta, y el evento permite reprogramar la campaña.
 - **Decisiones aplicables:** notas de desviación ARG-011, ARG-012 y ARG-013.
+- **Validación alineada con el motor** (SEC-005, SEC-006 y SEC-021, F09-21):
+  - se rechazan los comentarios que un motor ejecuta (`/*!`, `/*M!`, `/*+`, `--` sin espacio);
+  - se rechazan las pistas de tabla y de consulta;
+  - la lista de denegadas se compara con cada segmento del nombre cualificado;
+  - una función que sqlglot no modela pasa solo si está en `ALLOWED_ANONYMOUS` y es de un esquema de catálogo.
+  - Las evasiones forman parte de `SQL_WRITE_ATTEMPTS`, que recorren el test puro en los cinco dialectos y la integración contra las fuentes reales.
 
 ## 7. Operación
 
@@ -98,3 +104,4 @@ El presupuesto de carga vive en la memoria de cada proceso; con varias réplicas
 | 0.1.0-alpha | 2026-09-15 | Validadores de DNI, NIE, NUSS, IBAN y NHC | Fase 03 (ARG-024) |
 | 0.1.0-alpha | 2026-09-18 | La validación de solo lectura rechaza funciones con efectos por familia y paquete, y sentencias de escritura pasadas como texto | Auditoría de seguridad (A1) |
 | 0.1.0-alpha | 2026-09-18 | `require_tls`: transporte cifrado obligatorio salvo declaración explícita en el sistema | Auditoría de seguridad (M10) |
+| 0.2.0-alpha | 2026-09-23 | Sin comentarios ejecutables ni pistas, lista de denegadas por segmento y funciones no modeladas solo desde `ALLOWED_ANONYMOUS` | F09-21 |

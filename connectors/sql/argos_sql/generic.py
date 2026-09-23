@@ -113,6 +113,18 @@ def _jsonable(value: Any) -> Any:
     return str(value)
 
 
+def driver_options(url: Any, timeout_ms: int) -> dict[str, Any]:
+    """What the driver itself needs to stop waiting (SEC-006, review F09-02).
+
+    PostgreSQL, MySQL and Oracle get their deadline in the session; pymssql has none by default
+    and takes it only when connecting, in whole seconds.
+    """
+    if url.get_backend_name() == "mssql" and url.get_driver_name() == "pymssql":
+        seconds = max(1, round(timeout_ms / 1000))
+        return {"connect_args": {"timeout": seconds, "login_timeout": seconds}}
+    return {}
+
+
 class SqlConnector(Connector):
     kind = "rdbms"
     CONFIG_CHECKS: ClassVar[Mapping[str, ConfigCheck]] = {}
@@ -147,6 +159,7 @@ class SqlConnector(Connector):
         options: dict[str, Any] = {"pool_pre_ping": True}
         if url.get_backend_name() != "sqlite":
             options.update(pool_size=1, max_overflow=1, pool_recycle=1800)
+        options.update(driver_options(url, self.statement_timeout_ms))
         if "isolation_level" in self.config:
             options["isolation_level"] = self.config["isolation_level"]
         engine = create_engine(url, **options)

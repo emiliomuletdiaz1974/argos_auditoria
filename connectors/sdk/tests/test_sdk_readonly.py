@@ -83,3 +83,90 @@ def test_unsafe_http_methods_are_rejected(method: str) -> None:
 @pytest.mark.parametrize("method", ["GET", "head", "Options"])
 def test_safe_http_methods_are_normalised(method: str) -> None:
     assert assert_safe_http_method(method) == method.upper()
+
+
+# ---------- evasions found by the security review (F09-02: SEC-005, SEC-006, SEC-021) ----------
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "SELECT 1 /*!, SLEEP(100) */",  # MySQL runs the body of a versioned comment
+        "SELECT 1 /*!50000 , GET_LOCK('x', 10) */",
+        "SELECT 1 /*M!, SLEEP(100) */",  # and MariaDB its own
+        "SELECT * FROM t --1 FOR UPDATE",  # "--" without a space is not a comment in MySQL
+        "SELECT 1 --1 INTO OUTFILE '/tmp/x'",
+        "SELECT /*+ ORDERED */ a FROM t",  # an optimiser hint is an instruction, not a note
+    ],
+)
+@pytest.mark.parametrize("dialect", ["mysql", "oracle", "postgres", "tsql"])
+def test_comments_that_an_engine_executes_are_rejected(statement: str, dialect: str) -> None:
+    with pytest.raises(ReadOnlyViolationError, match="comment"):
+        validate_read_only_sql(statement, dialect)
+
+
+def test_ordinary_comments_stay_harmless() -> None:
+    validate_read_only_sql("SELECT a FROM t -- the table\n", "mysql")
+    validate_read_only_sql("SELECT a /* column */ FROM t", "postgres")
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "SELECT * FROM t WITH (TABLOCKX, HOLDLOCK)",
+        "SELECT * FROM t WITH (XLOCK)",
+        "SELECT * FROM t WITH (UPDLOCK)",
+        "SELECT * FROM t WITH (NOLOCK)",
+        "SELECT * FROM t OPTION (MAXDOP 1)",
+    ],
+)
+def test_table_and_query_hints_are_rejected_in_sql_server(statement: str) -> None:
+    with pytest.raises(ReadOnlyViolationError, match="hint"):
+        validate_read_only_sql(statement, "tsql")
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "SELECT pg_catalog.pg_terminate_backend(123)",
+        "SELECT pg_catalog.pg_cancel_backend(1)",
+        "SELECT pg_catalog.pg_reload_conf()",
+        "SELECT pg_catalog.set_config('role', 'admin', false)",
+        "SELECT pg_catalog.nextval('s')",
+        "SELECT pg_catalog.pg_notify('c', 'x')",
+        "SELECT pg_sleep_for('5 minutes')",
+        "SELECT pg_sleep_until('2030-01-01')",
+    ],
+)
+def test_denied_functions_cannot_hide_behind_their_schema(statement: str) -> None:
+    with pytest.raises(ReadOnlyViolationError):
+        validate_read_only_sql(statement, "postgres")
+
+
+@pytest.mark.parametrize(
+    ("statement", "dialect"),
+    [
+        ("SELECT pkg.f() FROM dual", "oracle"),
+        ("SELECT app.audit_touch(id) FROM t", "postgres"),
+        ("SELECT dbo.fn_mark(1)", "tsql"),
+        ("SELECT my_function(a) FROM t", "postgres"),
+    ],
+)
+def test_user_defined_functions_are_not_allowed(statement: str, dialect: str) -> None:
+    """In Oracle a function with PRAGMA AUTONOMOUS_TRANSACTION commits inside a read-only one."""
+    with pytest.raises(ReadOnlyViolationError, match="allow list"):
+        validate_read_only_sql(statement, dialect)
+
+
+@pytest.mark.parametrize(
+    ("statement", "dialect"),
+    [
+        ("SELECT has_table_privilege('u', c.oid, 'SELECT') FROM pg_catalog.pg_class c", "postgres"),
+        ("SELECT pg_catalog.format_type(a.atttypid, a.atttypmod) FROM pg_attribute a", "postgres"),
+        ("SELECT current_database(), version()", "postgres"),
+        ("SELECT SERVERPROPERTY('ProductVersion')", "tsql"),
+        ("SELECT SYS_CONTEXT('USERENV', 'DB_NAME') FROM dual", "oracle"),
+    ],
+)
+def test_catalog_functions_on_the_allow_list_still_pass(statement: str, dialect: str) -> None:
+    validate_read_only_sql(statement, dialect)

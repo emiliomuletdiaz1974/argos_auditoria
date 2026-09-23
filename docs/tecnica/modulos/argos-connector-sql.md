@@ -4,9 +4,9 @@ kind: module
 title: Conectores de bases de datos (argos-connector-sql)
 module: argos-connector-sql
 phases: ["02", "03"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: b432f8a
-date: 2026-09-18
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -69,6 +69,7 @@ Sondas `scan_schema`, `count`, `sample` (con `validators`) y `check_config`, a t
 Ninguno necesita DDL ni DML. Además:
 - toda sentencia pasa por la validación de solo lectura y el diario previo del SDK;
 - los validadores desconocidos se rechazan antes de anotar la consulta.
+- **Tiempo máximo también en SQL Server** (SEC-006, F09-21): `driver_options` pasa `statement_timeout_ms` a `pymssql` al conectar (`timeout` y `login_timeout`, en segundos). Antes esperaba sin límite.
 
 ## 7. Operación
 
@@ -94,3 +95,4 @@ La integración real con Oracle y SQL Server está escrita pero **no se ha ejecu
 | 0.1.0-alpha | 2026-09-15 | Validación de identificadores en origen en las muestras | Fase 03 (ARG-024) |
 | 0.1.0-alpha | 2026-09-17 | Filtros declarados en la sonda `count`, con la columna validada y el valor enlazado | Fase 05 (F05-99) |
 | 0.1.0-alpha | 2026-09-18 | TLS verificado obligatorio por dialecto salvo `allow_insecure` declarado | Auditoría de seguridad (M10) |
+| 0.2.0-alpha | 2026-09-23 | `driver_options`: tiempo máximo de sentencia en `pymssql` | F09-21 |

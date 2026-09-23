@@ -36,3 +36,17 @@ def test_same_check_names_for_the_challenge_library() -> None:
 @pytest.mark.parametrize("cls", [OracleConnector, MssqlConnector])
 def test_no_write_surface(cls: type) -> None:
     assert_no_write_surface(cls)
+
+
+def test_sql_server_statements_have_a_deadline() -> None:
+    """SEC-006: pymssql waits forever by default; the connector's timeout reaches the driver."""
+    from sqlalchemy.engine import make_url
+
+    from argos_sql.generic import driver_options
+
+    pymssql = driver_options(make_url("mssql+pymssql://u@h/db"), 30_000)
+    assert pymssql == {"connect_args": {"timeout": 30, "login_timeout": 30}}
+    assert driver_options(make_url("mssql+pymssql://u@h/db"), 500) == {
+        "connect_args": {"timeout": 1, "login_timeout": 1}
+    }
+    assert driver_options(make_url("postgresql+psycopg://u@h/db"), 30_000) == {}

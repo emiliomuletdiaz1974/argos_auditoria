@@ -54,6 +54,14 @@ SQL_WRITE_ATTEMPTS: tuple[str, ...] = (
     "SELECT query_to_xml('DELETE FROM t RETURNING 1', true, true, '')",
     "SELECT xp_dirtree('c:/')",
     "SELECT release_lock('x')",
+    # evasions found by the security review (F09-02): what sqlglot reads as a comment or a
+    # harmless name, the engine runs
+    "SELECT 1 /*!, SLEEP(100) */",
+    "SELECT 1 /*M!, SLEEP(100) */",
+    "SELECT * FROM t --1 FOR UPDATE",
+    "SELECT pg_catalog.pg_terminate_backend(123)",
+    "SELECT pg_sleep_for('5 minutes')",
+    "SELECT app.audit_touch(1)",
 )
 HTTP_WRITE_METHODS: tuple[str, ...] = ("POST", "PUT", "PATCH", "DELETE", "CONNECT", "TRACE")
 _WRITE_NAME = re.compile(
