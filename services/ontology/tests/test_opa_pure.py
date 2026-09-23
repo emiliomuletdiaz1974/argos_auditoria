@@ -14,6 +14,28 @@ def _client(handler: httpx.MockTransport) -> httpx.Client:
     return httpx.Client(transport=handler)
 
 
+def test_the_token_travels_as_a_bearer_and_only_when_there_is_one() -> None:
+    # OPA decides verdicts: with authentication on, an anonymous call is refused.
+    headers: list[str | None] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        headers.append(request.headers.get("authorization"))
+        return httpx.Response(200, json={"result": {"compliant": True}})
+
+    with _client(httpx.MockTransport(handler)) as client:
+        evaluate("argos.retention", {}, BASE, client=client, token="dev-only-token")
+        evaluate("argos.retention", {}, BASE, client=client)
+    assert headers == ["Bearer dev-only-token", None]
+
+
+def test_a_refused_token_is_reported_as_such() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"code": "unauthorized"})
+
+    with _client(httpx.MockTransport(handler)) as client, pytest.raises(OpaError, match="401"):
+        evaluate("argos.retention", {}, BASE, client=client, token="wrong")
+
+
 def test_posts_the_input_to_the_verdict_of_the_package_and_returns_it() -> None:
     seen: list[httpx.Request] = []
 

@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 
-from argos_common.errors import ReadOnlyViolationError
+from argos_common.errors import ConfigurationError, ReadOnlyViolationError
 from argos_connector.probes import ProbeSpec
 from argos_connector.testing import (
     SQL_WRITE_ATTEMPTS,
@@ -19,7 +19,7 @@ from argos_connector.testing import (
     assert_sql_writes_rejected,
     make_context,
 )
-from argos_sql.generic import ConfigCheck, SqlConnector
+from argos_sql.generic import ConfigCheck, SqlConnector, transport_encrypted
 
 SYSTEM_ID = "0190f000-0000-7000-8000-000000000001"
 
@@ -222,3 +222,32 @@ def test_an_unknown_cast_is_refused(db: Path) -> None:
     )
     with pytest.raises(ValueError, match="unknown filter cast"):
         connector.execute(spec)
+
+
+@pytest.mark.parametrize(
+    ("url", "encrypted"),
+    [
+        ("postgresql+psycopg://ro@db/clinic", False),
+        ("postgresql+psycopg://ro@db/clinic?sslmode=require", False),
+        ("postgresql+psycopg://ro@db/clinic?sslmode=verify-full", True),
+        ("postgresql+psycopg://ro@db/clinic?sslmode=verify-ca", True),
+        ("mysql+pymysql://ro@db/billing", False),
+        ("mysql+pymysql://ro@db/billing?ssl_ca=/etc/ca.pem", True),
+        ("mssql+pymssql://ro@db/erp", False),
+        ("mssql+pyodbc://ro@db/erp?Encrypt=yes", True),
+        ("oracle+oracledb://ro@db:1521/?service_name=X", False),
+        ("oracle+oracledb://ro@db:2484/?service_name=X&protocol=tcps", True),
+        ("sqlite:///local.db", True),
+    ],
+)
+def test_the_transport_counts_as_encrypted_only_when_it_is_verified(
+    url: str, encrypted: bool
+) -> None:
+    # sslmode=require encrypts but does not check who answers: samples would go to anyone.
+    assert transport_encrypted(url) is encrypted
+
+
+def test_a_clear_database_connection_is_refused_before_connecting() -> None:
+    context = make_context({"url": "postgresql+psycopg://ro@127.0.0.1:9/none"})
+    with pytest.raises(ConfigurationError, match="allow_insecure"):
+        SqlConnector(SYSTEM_ID, {}, context).open()

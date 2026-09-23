@@ -22,6 +22,7 @@ from argos_inventory.graph.store import GraphStore
 
 ACCEPT = 0.85
 REVIEW = 0.50
+NEEDS_REVIEW = frozenset({"no_personal_data"})
 BATCH_SIZE = 20
 MAX_SIBLINGS = 8
 SYSTEM_PROMPT = (
@@ -160,7 +161,9 @@ def triage(proposals: Sequence[Proposal], batch_keys: frozenset[str]) -> Triage:
             invalid.append(proposal)
             continue
         seen.add(proposal.key)
-        if proposal.confidence >= ACCEPT:
+        # Saying a column holds no personal data takes it out of every campaign's selectors, and
+        # the column names that lead to it come from the client's system: a person confirms it.
+        if proposal.confidence >= ACCEPT and proposal.category not in NEEDS_REVIEW:
             accepted.append(proposal)
         elif proposal.confidence >= REVIEW:
             review.append(proposal)

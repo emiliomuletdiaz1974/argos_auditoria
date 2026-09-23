@@ -1,5 +1,6 @@
 """ARG-043 · a campaign from end to end against Temporal: gates, pause, verdicts and seal."""
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -10,7 +11,7 @@ from temporalio.worker import Worker
 
 from argos_challenges.activities import ChallengeActivities
 from argos_challenges.seal import verify_seal
-from argos_challenges.store import campaign_record, create_campaign
+from argos_challenges.store import campaign_record, create_campaign, grant_approval
 from argos_challenges.workflows import CampaignWorkflow, SystemRun
 from argos_common.config import get_config
 from argos_inventory.ai_discovery.detect import discover_ai
@@ -24,6 +25,8 @@ from .inventory_helpers import probe_runner, scan_and_ingest, secret_store
 pytestmark = pytest.mark.integration
 
 MANAGER = "user:campaign-manager"
+DPO = "user:dpo"
+SECOND_DPO = "user:second-dpo"
 SYSTEMS = ("dev-source-postgres", "dev-source-mariadb")
 ONTOLOGY_VERSION = "1.0.0"
 
@@ -61,6 +64,7 @@ async def _run_campaign(
         activities=[
             activities.prepare_campaign,
             activities.request_approval,
+            activities.check_gate,
             activities.set_campaign_status,
             activities.probe,
             activities.wait_window,
@@ -75,10 +79,22 @@ async def _run_campaign(
             task_queue=queue,
         )
         await _wait_for_gate(handle, "awaiting:start")
+        grant_approval(dsn, campaign_id, "start", DPO)
         await handle.signal(CampaignWorkflow.approve, "start")
-        if approve_sampling:
+        if approve_sampling and await _next_status(handle, "awaiting:start") == "awaiting:sampling":
+            grant_approval(dsn, campaign_id, "sampling", DPO, needed=2)
+            grant_approval(dsn, campaign_id, "sampling", SECOND_DPO, needed=2)
             await handle.signal(CampaignWorkflow.approve, "sampling")
         return dict(await handle.result())
+
+
+async def _next_status(handle: Any, current: str, tries: int = 60) -> str:
+    for _ in range(tries):
+        status = str((await handle.query(CampaignWorkflow.progress)).get("status"))
+        if status != current:
+            return status
+        await asyncio.sleep(1)
+    raise AssertionError(f"the campaign never left {current}")
 
 
 async def _wait_for_gate(handle: Any, state: str, tries: int = 60) -> None:
@@ -106,6 +122,20 @@ async def test_a_campaign_waits_for_its_gate_runs_and_seals(
 
 
 @pytest.mark.asyncio
+async def test_the_seal_is_verified_without_reading_the_whole_journal(
+    migrated_db: str, prepared: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Every GET of a campaign verifies its seal: walking the journal would grow with it forever.
+    await _run_campaign(migrated_db, prepared)
+
+    def whole_journal(*_: Any, **__: Any) -> Any:
+        raise AssertionError("the seal check read the whole journal")
+
+    monkeypatch.setattr("argos_common.journal_pg.PostgresJournal.read", whole_journal)
+    assert verify_seal(migrated_db, prepared)
+
+
+@pytest.mark.asyncio
 async def test_touching_a_verdict_breaks_the_seal(migrated_db: str, prepared: str) -> None:
     await _run_campaign(migrated_db, prepared)
     assert verify_seal(migrated_db, prepared)
@@ -119,3 +149,36 @@ async def test_touching_a_verdict_breaks_the_seal(migrated_db: str, prepared: st
         )
         conn.execute("ALTER TABLE argos.verdicts ENABLE TRIGGER verdicts_write_once")
     assert not verify_seal(migrated_db, prepared)
+
+
+@pytest.mark.asyncio
+async def test_a_bare_signal_does_not_open_a_gate(migrated_db: str, prepared: str) -> None:
+    # Whoever reaches Temporal can send the signal; only the approvals recorded by people open it.
+    client = await Client.connect(get_config().TEMPORAL_ADDRESS, namespace="default")
+    activities = ChallengeActivities(migrated_db, secret_store())
+    queue = f"argos-campaigns-test-{uuid.uuid4().hex[:8]}"
+    async with Worker(
+        client,
+        task_queue=queue,
+        workflows=[CampaignWorkflow, SystemRun],
+        activities=[
+            activities.prepare_campaign,
+            activities.request_approval,
+            activities.check_gate,
+            activities.set_campaign_status,
+            activities.probe,
+            activities.wait_window,
+            activities.evaluate_unit,
+            activities.seal,
+        ],
+    ):
+        handle = await client.start_workflow(
+            CampaignWorkflow.run, prepared, id=f"campaign-{prepared}", task_queue=queue
+        )
+        await _wait_for_gate(handle, "awaiting:start")
+        await handle.signal(CampaignWorkflow.approve, "start")
+        await asyncio.sleep(5)
+        progress = await handle.query(CampaignWorkflow.progress)
+        assert progress["status"] == "awaiting:start"
+        assert campaign_record(migrated_db, prepared)["status"] != "running"
+        await handle.cancel()

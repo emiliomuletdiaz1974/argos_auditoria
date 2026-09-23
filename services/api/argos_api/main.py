@@ -21,7 +21,7 @@ from argos_api.app import create_app
 from argos_api.assistant import AssistantClient
 from argos_api.keycloak import Keycloak
 from argos_auth import JwtValidator
-from argos_common.config import ArgosConfig, get_config
+from argos_common.config import ArgosConfig, Environment, get_config
 from argos_common.logs import configure_logging
 from argos_common.secret_stores import VaultSecretStore
 
@@ -102,6 +102,7 @@ def build_app(cfg: ArgosConfig) -> Any:
         assistant=AssistantClient(gateway) if gateway else None,
         webhook_secrets=VaultSecretStore(cfg.VAULT_ADDR, token),
         console=CONSOLE,
+        publish_docs=cfg.ENVIRONMENT is Environment.DEVELOPMENT,
     )
 
 

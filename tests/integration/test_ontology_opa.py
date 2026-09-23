@@ -10,6 +10,7 @@ from argos_ontology.opa import OpaError, evaluate
 pytestmark = pytest.mark.integration
 
 OPA = os.environ.get("ARGOS_TEST_OPA", "http://127.0.0.1:8181")
+OPA_TOKEN = os.environ.get("ARGOS_TEST_OPA_TOKEN", "dev-only-opa-host")
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -31,6 +32,7 @@ def test_retention_verdict_uses_the_client_schedule() -> None:
             "documented_exceptions": 1,
         },
         OPA,
+        token=OPA_TOKEN,
     )
     assert verdict == {
         "compliant": False,
@@ -52,6 +54,7 @@ def test_access_verdict_lists_the_unauthorized_identities() -> None:
             ],
         },
         OPA,
+        token=OPA_TOKEN,
     )
     assert verdict == {
         "compliant": False,
@@ -63,4 +66,4 @@ def test_access_verdict_lists_the_unauthorized_identities() -> None:
 
 def test_test_files_are_not_served() -> None:
     with pytest.raises(OpaError, match="verdict"):
-        evaluate("argos.retention_test", {}, OPA)
+        evaluate("argos.retention_test", {}, OPA, token=OPA_TOKEN)

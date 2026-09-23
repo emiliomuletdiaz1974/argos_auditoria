@@ -1,5 +1,6 @@
 """ARG-029 · inventory API authentication, depth limit and argument checks without a database."""
 
+import asyncio
 import time
 from types import SimpleNamespace
 from typing import Any
@@ -14,7 +15,7 @@ from strawberry.extensions import QueryDepthLimiter
 
 from argos_auth import ROLES, JwtValidator
 from argos_inventory.api.app import create_app
-from argos_inventory.api.schema import MAX_QUERY_DEPTH, build_schema
+from argos_inventory.api.schema import MAX_ALIASES, MAX_QUERY_DEPTH, MAX_TOKENS, build_schema
 from argos_inventory.graph.store import GraphStore
 
 ISSUER = "http://127.0.0.1:8180/realms/argos"
@@ -137,6 +138,32 @@ def test_operation_depth_is_limited() -> None:
     refused = schema.execute_sync("{ level { next { next { next { next { name } } } } } }")
     assert refused.errors is not None
     assert "exceeds maximum operation depth" in refused.errors[0].message
+
+
+def test_one_request_cannot_fan_out_through_aliases() -> None:
+    # Each alias of `node` is its own graph lookup of up to MAX_PAGE_SIZE neighbours.
+    many = " ".join(f'a{i}: node(key: "k{i}") {{ props }}' for i in range(MAX_ALIASES + 1))
+    refused = build_schema().execute_sync(f"{{ {many} }}", context_value={})
+    assert refused.errors is not None
+    assert "aliases" in refused.errors[0].message
+    few = " ".join(f'a{i}: node(key: "k{i}") {{ props }}' for i in range(MAX_ALIASES))
+    allowed = asyncio.run(build_schema().execute(f"{{ {few} }}", context_value={}))
+    assert "aliases" not in str(allowed.errors)
+
+
+def test_an_oversized_query_is_refused_before_it_runs() -> None:
+    fields = " ".join(["__typename"] * MAX_TOKENS)
+    refused = build_schema().execute_sync(f"{{ {fields} }}")
+    assert refused.errors is not None
+    assert "tokens" in refused.errors[0].message
+
+
+def test_unexpected_errors_do_not_reach_the_client() -> None:
+    # No store in the context: the resolver fails in a way that would describe the internals.
+    query = '{ node(key: "k") { props } }'
+    result = asyncio.run(build_schema().execute(query, context_value={}))
+    assert result.errors is not None
+    assert result.errors[0].message == "Unexpected error."
 
 
 @pytest.mark.parametrize(

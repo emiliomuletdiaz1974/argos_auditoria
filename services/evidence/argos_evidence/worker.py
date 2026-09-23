@@ -21,7 +21,7 @@ from temporalio.worker import Worker
 
 from argos_common.config import get_config
 from argos_common.logs import configure_logging, get_logger
-from argos_events import Bus
+from argos_events import bus_from_config
 from argos_evidence.service import build_activities
 from argos_evidence.settings import EvidenceSettings
 from argos_evidence.workflow import TASK_QUEUE, EvidenceWorkflow
@@ -77,7 +77,7 @@ async def main() -> None:  # pragma: no cover - process entry point
     worker = Worker(
         client, task_queue=TASK_QUEUE, workflows=[EvidenceWorkflow], activities=activities.all()
     )
-    bus = Bus("argos-evidence-worker", config.NATS_URL)
+    bus = bus_from_config("argos-evidence-worker", config)
     await bus.connect()
     await bus.subscribe(SEALED_SUBJECT, DURABLE, on_seal(client, settings, config.DATABASE_URL))
     _log.info(f"evidence worker ready on queue {TASK_QUEUE}")

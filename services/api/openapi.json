@@ -47,6 +47,7 @@
         "properties": {
           "note": {
             "default": "",
+            "maxLength": 2000,
             "title": "Note",
             "type": "string"
           }
@@ -58,17 +59,20 @@
         "description": "One injection point of the synthetic subject, as the DPO authorises it (ADR-0008).",
         "properties": {
           "method": {
+            "maxLength": 2000,
             "minLength": 1,
             "title": "Method",
             "type": "string"
           },
           "point": {
+            "maxLength": 2000,
             "minLength": 1,
             "title": "Point",
             "type": "string"
           },
           "revert_procedure": {
             "description": "how the client undoes it",
+            "maxLength": 2000,
             "minLength": 1,
             "title": "Revert Procedure",
             "type": "string"
@@ -329,6 +333,7 @@
         "properties": {
           "note": {
             "default": "",
+            "maxLength": 2000,
             "title": "Note",
             "type": "string"
           },
@@ -347,6 +352,7 @@
           },
           "to": {
             "description": "target state of the finding",
+            "maxLength": 32,
             "title": "To",
             "type": "string"
           }
@@ -1214,6 +1220,7 @@
             "name": "gate",
             "required": true,
             "schema": {
+              "pattern": "^[a-z_]{1,32}$",
               "title": "Gate",
               "type": "string"
             }

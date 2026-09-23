@@ -200,14 +200,26 @@ def authorize_injection(
     method: str,
     revert_procedure: str,
     reviewer: str,
+    campaign_id: str | None = None,
 ) -> str:
-    """A DPO authorises one injection point. Nothing is injected by ARGOS."""
+    """A DPO authorises one injection point. Nothing is injected by ARGOS.
+
+    With a campaign, the subject has to be one of its own: an authorisation read under one
+    campaign must not plant the subject of another.
+    """
     _person(reviewer, "authorising an injection")
     if not revert_procedure.strip():
         raise SyntheticError("an injection is authorised only with its revert procedure")
     injection_id = str(uuid7())
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:
+        if campaign_id is not None:
+            owner = conn.execute(
+                "SELECT campaign_id::text FROM argos.synthetic_subjects WHERE id = %s",
+                (subject_id,),
+            ).fetchone()
+            if owner is None or owner[0] != campaign_id:
+                raise SyntheticError("the subject does not belong to this campaign")
         conn.execute(
             "INSERT INTO argos.synthetic_injections "
             "(id, subject_id, system_id, point, method, revert_procedure, authorized_by) "
@@ -224,15 +236,39 @@ def authorize_injection(
 
 
 def _confirm(
-    dsn: str, injection_id: str, actor: str, action: str, sets: str, args: tuple[Any, ...]
+    dsn: str,
+    injection_id: str,
+    actor: str,
+    action: str,
+    sets: str,
+    args: tuple[Any, ...],
+    done: str,
+    needs_injection: bool = True,
+    repeated: Any = None,
 ) -> None:
+    """Record one confirmation of the client, in order and without repeating itself.
+
+    `done` is the column that says this step is already confirmed; with `repeated`, the step is a
+    repetition only when that column already holds that value (a subject can exercise several
+    rights, but not the same one twice). Exercising or reverting needs the injection confirmed
+    first, and the trigger of the table still refuses rewriting who confirmed.
+    """
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            f"SELECT injected_confirmed_by, {done} "  # noqa: S608 - literal of this module
+            "FROM argos.synthetic_injections WHERE id = %s FOR UPDATE",
+            (injection_id,),
+        ).fetchone()
+        if row is None:
+            raise SyntheticError(f"unknown synthetic injection: {injection_id}")
+        if needs_injection and row[0] is None:
+            raise SyntheticError("the subject is not injected yet: confirm the injection first")
+        if row[1] is not None and (repeated is None or row[1] == repeated):
+            raise SyntheticError(f"{action} is already confirmed for this injection")
         # `sets` is a literal written in this module, never user input; the values are parameters.
         statement = f"UPDATE argos.synthetic_injections SET {sets} WHERE id = %s"  # noqa: S608
-        updated = conn.execute(statement, (*args, injection_id)).rowcount
-        if not updated:
-            raise SyntheticError(f"unknown synthetic injection: {injection_id}")
+        conn.execute(statement, (*args, injection_id))
         journal.append(actor, action, {"injection": injection_id}, conn=conn)
 
 
@@ -246,6 +282,8 @@ def confirm_injection(dsn: str, injection_id: str, confirmed_by: str) -> None:
         "synthetic.injected",
         "injected_confirmed_by = %s, injected_at = %s",
         (confirmed_by, _now()),
+        done="injected_confirmed_by",
+        needs_injection=False,
     )
 
 
@@ -261,6 +299,8 @@ def confirm_exercise(dsn: str, injection_id: str, right: str, confirmed_by: str)
         "synthetic.exercised",
         "exercised_right = %s, exercised_confirmed_by = %s, exercised_at = %s",
         (right, confirmed_by, _now()),
+        done="exercised_right",
+        repeated=right,
     )
 
 
@@ -274,6 +314,7 @@ def confirm_revert(dsn: str, injection_id: str, reverted_by: str) -> None:
         "synthetic.revert",
         "reverted_by = %s, reverted_at = %s",
         (reverted_by, _now()),
+        done="reverted_by",
     )
 
 

@@ -5,8 +5,8 @@ title: Bus de eventos (argos-events)
 module: argos-events
 phases: ["01"]
 version: 0.1.0-alpha
-commit: 1aadd28
-date: 2026-09-17
+commit: c438d27
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -41,7 +41,8 @@ Dependencias: `argos-common` (identificadores, diario y registro) y `nats-py`.
 
 | Tipo | Nombre | Descripción |
 |---|---|---|
-| Clase | `Bus(service, url, journal=None, retry_delay=30.0, max_deliveries=5)` | Cliente del bus de un servicio |
+| Clase | `Bus(service, url, journal=None, retry_delay=30.0, max_deliveries=5, *, user=None, password=None)` | Cliente del bus de un servicio, con la identidad NATS del servicio |
+| Función | `bus_from_config(service, cfg, journal=None)` | El bus de un servicio con `NATS_USER` y `NATS_PASSWORD` de su configuración |
 | Método | `connect()`, `close()` | Abre la conexión y asegura los streams; cierre ordenado con drenaje |
 | Método | `publish(subject, event_type, data, audit=False)` | Valida sujeto y tipo, publica y devuelve la secuencia confirmada |
 | Método | `subscribe(subject, durable, handler)` | Consumidor duradero con confirmación manual |
@@ -50,7 +51,7 @@ Dependencias: `argos-common` (identificadores, diario y registro) y `nats-py`.
 
 ## 5. Configuración
 
-- `ARGOS_NATS_URL` (desde `argos-common`).
+- `ARGOS_NATS_URL`, `ARGOS_NATS_USER` y `ARGOS_NATS_PASSWORD` (desde `argos-common`); en producción usuario y contraseña son obligatorios.
 - Por servicio: `retry_delay` (espera antes de reintentar) y `max_deliveries` (entregas máximas por mensaje).
 
 ## 6. Seguridad y tratamiento de datos
@@ -59,6 +60,9 @@ Dependencias: `argos-common` (identificadores, diario y registro) y `nats-py`.
 - **Publicación auditada** (`audit=True`): el asiento `event.publish` se escribe en el diario **antes** de publicar, así queda constancia aunque la publicación falle después.
 - Un mensaje malformado se descarta definitivamente y se registra sin su contenido.
 - Si el manejador falla, el mensaje se reintenta tras `retry_delay`, hasta `max_deliveries` entregas.
+- **Un usuario NATS por servicio** (`deploy/dev/nats/nats.conf`), sin acceso anónimo. Cada usuario publica solo en sus sujetos: `inventory` en `argos.discovery.>` y `argos.campaign.>`, `challenge` en `argos.challenge.>` y `argos.campaign.>`, `evidence` en `argos.evidence.>`. Solo el inventario puede publicar eventos de descubrimiento, que son los que reescriben el grafo que seleccionan las campañas. Los permisos de JetStream dejan consultar, crear y actualizar los streams y los consumidores, pero no borrar ni purgar un stream.
+- `argos-dev` es el usuario de los procesos y tests del anfitrión en desarrollo, con todos los sujetos `argos.>`; no existe fuera de desarrollo.
+- La contraseña no aparece en la representación del bus ni en su URL.
 - Decisiones aplicables: ADR-0005 (nombres en inglés).
 
 ## 7. Operación
@@ -80,3 +84,4 @@ Dependencias: `argos-common` (identificadores, diario y registro) y `nats-py`.
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-14 | Librería de eventos con CloudEvents, reintentos acotados y auditoría opcional | Fase 01 (ARG-006) |
+| 0.1.0-alpha | 2026-09-18 | Identidad NATS por servicio y permisos por familia de sujetos | Auditoría de seguridad (M6) |

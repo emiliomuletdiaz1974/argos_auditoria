@@ -202,7 +202,13 @@ Reglas de decisión:
 - **Conservación:** cumple si hay plazo aplicable y el registro más antiguo no lo supera. También cumple si todos los registros fuera de plazo tienen excepción documentada. Sin plazo aplicable, no cumple.
 - **Accesos:** cumple si ninguna identidad queda fuera de los perfiles autorizados. Una categoría sin perfiles autorizados no autoriza a nadie.
 
-El cliente Python `evaluate(package, input_doc, base_url)` llama a `POST /v1/data/<paquete>/verdict`. Valida antes el nombre del paquete (`ValueError`) y lanza `OpaError` si OPA no responde, contesta con error o el paquete no tiene `verdict` de tipo objeto.
+El cliente Python `evaluate(package, input_doc, base_url, token=None)` llama a `POST /v1/data/<paquete>/verdict`, con el token como `Bearer` si lo hay. Valida antes el nombre del paquete (`ValueError`) y lanza `OpaError` si OPA no responde, contesta con error o el paquete no tiene `verdict` de tipo objeto.
+
+**OPA autenticado:** OPA decide veredictos, así que arranca con `--authentication=token --authorization=basic` y su propia política (`deploy/dev/opa-auth/authz.rego`):
+- sin token solo responde `/health`;
+- con un token conocido solo se pueden evaluar paquetes `argos.*` (`POST /v1/data/argos/...`);
+- nadie carga, sustituye ni lee políticas por la API, ni lee datos fuera de `argos.*`: las políticas vienen del montaje de solo lectura de la biblioteca;
+- los tokens se comparan por su SHA-256 (`clients.json`), así que los datos de OPA no revelan ninguno. Una petición denegada responde 401.
 
 ### Resolutor de aplicabilidad (ARG-039)
 
@@ -358,8 +364,8 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | Clase | `OntologyStore(dsn, version=None, at=None)` con `sparql(query, bindings)` | SPARQL sobre una versión |
 | Asiento | `ontology.load` | Carga de una versión en el diario |
 | Funciones | `build_bundle(library_dir, version, in_force_from)`, `sign_bundle(manifest, signer)`, `verify_bundle(bundle, signature, public_key)`, `bundle_graph(verified)`, `load_bundle(dsn, bundle, signature, public_key)` | Construcción, firma, verificación y carga |
-| Herramienta | `tools/ontology_publish.py build --version X.Y.Z --in-force-from AAAA-MM-DD [--output DIR]` | Escribe `argos-ontology-X.Y.Z.tar.gz`, su firma `.sig` y la clave pública `content.pub` |
-| Herramienta | `tools/ontology_publish.py verify <bundle> [--public-key FICHERO]` | Verifica un bundle sin cargarlo |
+| Herramienta | `tools/ontology_publish.py build --version X.Y.Z --in-force-from AAAA-MM-DD [--output DIR]` | Escribe `argos-ontology-X.Y.Z.tar.gz`, su firma `.sig` y la clave pública `content.pub`, e imprime la huella de la clave para guardarla aparte |
+| Herramienta | `tools/ontology_publish.py verify <bundle> [--public-key FICHERO \| --fingerprint HUELLA]` | Verifica un bundle sin cargarlo. La `content.pub` que acompaña al bundle solo se acepta si coincide con `--fingerprint`: quien sustituye el bundle puede sustituir también la clave de al lado |
 | Clave | Vault Transit `argos-content` (Ed25519) | Firma de contenidos normativos |
 | Fichero | `library/ontology/asset-classes/base.ttl` | Clases de activo base con sus selectores |
 | Funciones | `load_asset_classes(path)`, `asset_classes(graph)`, `compiled_selector(asset_class)`, `asset_class_errors(graph)` | Lectura, compilación y validación de clases de activo |
@@ -398,7 +404,7 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 ## 7. Operación
 
 - **Publicar una versión:** `uv run --env-file .env.example python tools/ontology_publish.py build --version X.Y.Z --in-force-from AAAA-MM-DD`, con un token de Vault con permiso de firma sobre `argos-content`.
-- **Verificar un bundle recibido:** `tools/ontology_publish.py verify <bundle>`.
+- **Verificar un bundle recibido:** `tools/ontology_publish.py verify <bundle> --fingerprint <huella registrada al publicarlo>`.
 - **Cargar un bundle en el appliance:** `load_bundle`, que verifica antes de guardar.
 - **Proceso editorial:** seguir `docs/ontologia/proceso-editorial.md` (SLA de 30 días) y publicar con cada versión las matrices de trazabilidad y de solapamiento (`make ontology-overlap`).
 - **Probar las políticas Rego:** `make policy-test` (ejecuta `opa test` en el contenedor; paso del job `verify` del CI).
@@ -496,4 +502,6 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-17 | `OBL-RGPD-32-1` (cifrado en reposo) también sobre todas las categorías especiales | Fase 04 (ARG-031) |
 | 0.1.0-alpha | 2026-09-17 | Cierre técnico de la Fase 04: prueba de extremo a extremo superada; contenido pendiente de validación jurídica | Fase 04 (`fase-04-tecnica`) |
 | 0.1.0-alpha | 2026-09-17 | Formas de documentación técnica y supervisión humana del AI Act, con sus propiedades exportadas al grafo RDF | Fase 05 (F05-18) |
+| 0.1.0-alpha | 2026-09-18 | La verificación no confía en la clave que viaja con el bundle sin su huella fijada | Auditoría de seguridad (B3) |
+| 0.1.0-alpha | 2026-09-18 | Cliente de OPA con token y OPA con autenticación y autorización propias | Auditoría de seguridad (M7) |
 | 0.1.0-alpha | 2026-09-21 | `editorial.compiler.read_obligation`: la plantilla de una obligación (norma, artículo, título y resumen) para enseñarla junto al hallazgo | F08-06 |

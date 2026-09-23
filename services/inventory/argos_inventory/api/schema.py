@@ -9,7 +9,13 @@ import uuid
 from typing import Any
 
 import strawberry
-from strawberry.extensions import QueryDepthLimiter
+from graphql import GraphQLError
+from strawberry.extensions import (
+    MaskErrors,
+    MaxAliasesLimiter,
+    MaxTokensLimiter,
+    QueryDepthLimiter,
+)
 from strawberry.scalars import JSON
 from strawberry.types import Info
 
@@ -19,6 +25,9 @@ from argos_inventory.graph.reads import node_detail
 from argos_inventory.graph.store import GraphStore
 
 MAX_QUERY_DEPTH = 4
+# Depth alone does not bound a request: breadth through aliases multiplies the graph lookups.
+MAX_ALIASES = 10
+MAX_TOKENS = 1_000
 DEFAULT_PAGE_SIZE = 100
 
 _SYSTEMS_OF_KIND = "MATCH (s:System {kind: $kind}) RETURN s.id"
@@ -227,5 +236,20 @@ def depth_limiter() -> QueryDepthLimiter:
     return QueryDepthLimiter(max_depth=MAX_QUERY_DEPTH)
 
 
+def _masked(error: GraphQLError) -> bool:
+    """Validation and argument errors say what to fix; an exception from a resolver would describe
+    the internals (the database, AGE, the store) and stays behind a generic message."""
+    original = error.original_error
+    return original is not None and not isinstance(original, ValueError)
+
+
 def build_schema() -> strawberry.Schema:
-    return strawberry.Schema(query=Query, extensions=[depth_limiter])
+    return strawberry.Schema(
+        query=Query,
+        extensions=[
+            depth_limiter,
+            lambda: MaxAliasesLimiter(max_alias_count=MAX_ALIASES),
+            lambda: MaxTokensLimiter(max_token_count=MAX_TOKENS),
+            lambda: MaskErrors(should_mask_error=_masked),
+        ],
+    )

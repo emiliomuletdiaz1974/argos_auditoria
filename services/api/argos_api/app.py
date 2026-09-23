@@ -5,10 +5,12 @@ the same contract and the same authorisation. The contract is generated from thi
 versioned in `services/api/openapi.json`; `tools/api_contract.py --check` fails if they diverge.
 """
 
+import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
+import psycopg
 from fastapi import APIRouter, Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
@@ -38,6 +40,8 @@ from argos_api.webhooks.store import SecretWriter
 from argos_auth import JwtValidator
 from argos_common import PostgresJournal
 from argos_evidence.activities import EvidenceActivities
+
+_log = logging.getLogger(__name__)
 
 DEV_HOST = "127.0.0.1"
 DEV_PORT = 8009
@@ -88,15 +92,21 @@ def create_app(
     webhook_secrets: SecretWriter | None = None,
     code_exchanger: CodeExchanger | None = None,
     console: Path | None = None,
+    publish_docs: bool = False,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
-    still answer, and the tests that do not touch the database do not need one."""
+    still answer, and the tests that do not touch the database do not need one.
+
+    The route map is served only when asked for (development): outside it, `/docs` and the served
+    contract would describe routes and roles to anyone on the network, token or not. The versioned
+    contract is still generated from `openapi()`, which does not depend on it being served.
+    """
     app = FastAPI(
         title="ARGOS API",
         version=API_VERSION,
         description=DESCRIPTION,
-        openapi_url=f"{API_PREFIX}/openapi.json",
-        docs_url=f"{API_PREFIX}/docs",
+        openapi_url=f"{API_PREFIX}/openapi.json" if publish_docs else None,
+        docs_url=f"{API_PREFIX}/docs" if publish_docs else None,
         redoc_url=None,
     )
     app.state.validator = validator
@@ -125,6 +135,18 @@ def create_app(
             status.HTTP_422_UNPROCESSABLE_CONTENT,
             "invalid request",
             "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()),
+        )
+
+    @app.exception_handler(psycopg.Error)
+    def _store_unavailable(request: Request, exc: psycopg.Error) -> ProblemResponse:
+        # The driver's message names the host, the SQL or the constraint: it stays in the log, as
+        # its type only, and the caller learns that the store did not answer.
+        _log.warning("store error", extra={"error": type(exc).__name__})
+        return problem_response(
+            request,
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            _title(status.HTTP_503_SERVICE_UNAVAILABLE),
+            "the store is not available",
         )
 
     @app.get("/health", tags=["health"], summary="Liveness of the API")

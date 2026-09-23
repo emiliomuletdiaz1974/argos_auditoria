@@ -14,7 +14,7 @@ from argos_connector.events import CIRCUIT_OPEN_SUBJECT, bus_circuit_listener
 from argos_events import Bus
 
 pytestmark = pytest.mark.integration
-NATS_URL = os.environ.get("ARGOS_TEST_NATS", "nats://127.0.0.1:4222")
+NATS_URL = os.environ.get("ARGOS_TEST_NATS", "nats://argos-dev:dev-only-nats-host@127.0.0.1:4222")
 
 
 async def test_open_circuit_publishes_an_audited_event(migrated_db: str) -> None:

@@ -9,11 +9,14 @@ prompt, and an interactive queue that batch work cannot starve.
 import asyncio
 import hashlib
 import json
+from datetime import date
 from pathlib import Path
 from typing import Any
 
+import httpx
 import pytest
 from argos_ai.backends.fake import FakeBackend
+from argos_ai.backends.openai_compatible import OpenAiCompatibleBackend
 from argos_ai.gateway import Gateway, GatewayError, QuotaExceededError
 from argos_ai.guardrails import OutputRejectedError
 
@@ -177,3 +180,71 @@ def test_the_deterministic_backend_refuses_an_input_it_does_not_know(tmp_path: P
     path.write_text("{}", encoding="utf-8")
     with pytest.raises(GatewayError, match="no recorded answer"):
         _ask(_gateway(FakeBackend(path)))
+
+
+def test_a_failed_answer_still_spends_its_tokens() -> None:
+    """Otherwise an impossible schema is free inference: two calls, a 502 and nothing counted."""
+    backend = FakeBackend.of(['{"categoria": "dni"}', '{"tampoco": true}'])
+    gateway = _gateway(backend)
+    with pytest.raises(GatewayError, match="schema"):
+        _ask(gateway)
+    assert gateway.spent("classify") > 0
+    assert len(gateway.usage_rows) == 1  # type: ignore[attr-defined]
+
+
+def test_a_rejected_answer_still_spends_its_tokens() -> None:
+    schema = {"type": "object", "properties": {"answer": {"type": "string"}}}
+    gateway = _gateway(FakeBackend.of(['{"answer": "El sistema clinic es conforme."}']))
+    with pytest.raises(OutputRejectedError):
+        _ask(gateway, schema=schema)
+    assert gateway.spent("classify") > 0
+
+
+def test_concurrent_requests_cannot_overspend_the_quota() -> None:
+    """The quota is reserved before the call, so parallel requests do not all pass the check."""
+    backend = FakeBackend.of(['{"category": "personal_data"}'] * 3, delay=0.05)
+    gateway = _gateway(backend, quotas={"classify": 5_000}, reservation=4_000)
+
+    async def run() -> list[Any]:
+        calls = [gateway.chat_json("classify", SYSTEM, USER, SCHEMA) for _ in range(3)]
+        return await asyncio.gather(*calls, return_exceptions=True)
+
+    results = asyncio.run(run())
+    assert sum(isinstance(r, QuotaExceededError) for r in results) == 2
+    assert backend.calls == 1
+
+
+def test_the_daily_quota_starts_again_the_next_day() -> None:
+    day = [date(2026, 9, 18)]
+    reloaded: list[int] = []
+
+    def reload() -> dict[str, int]:
+        reloaded.append(1)
+        return {"classify": 1_000_000}
+
+    gateway = _gateway(
+        FakeBackend.of(['{"category": "personal_data"}']),
+        quotas={"classify": 10},
+        spent={"classify": 10},
+        today=lambda: day[0],
+        reload_quotas=reload,
+    )
+    with pytest.raises(QuotaExceededError):
+        _ask(gateway)
+    day[0] = date(2026, 9, 19)
+    assert _ask(gateway).data == {"category": "personal_data"}
+    assert reloaded == [1]
+
+
+def test_the_real_backend_caps_the_answer_length() -> None:
+    sent: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        body = {"choices": [{"message": {"content": "{}"}}], "usage": {}}
+        return httpx.Response(200, json=body)
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    backend = OpenAiCompatibleBackend("http://llm", "m", client=client, max_tokens=256)
+    asyncio.run(backend.complete(SYSTEM, USER))
+    assert sent[0]["max_tokens"] == 256

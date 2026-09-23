@@ -6,10 +6,11 @@ reviewer reads the literal plan and approves the gates, two different people for
 """
 
 import asyncio
-from typing import Any
+import json
+from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field, field_validator
 
 from argos_api.authz import require_perm
@@ -33,14 +34,26 @@ from argos_challenges.synthetic import SyntheticError, authorize_injection
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"], route_class=CoreRoute)
 
+# Free text and the scope land in JSONB and in the journal: a request cannot be megabytes of them.
+MAX_TEXT = 2_000
+MAX_SCOPE_BYTES = 16_384
+GateName = Annotated[str, Path(pattern=r"^[a-z_]{1,32}$")]
+
 
 class NewCampaign(BaseModel):
     name: str = Field(min_length=3, max_length=120)
     scope: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("scope")
+    @classmethod
+    def _bounded(cls, scope: dict[str, Any]) -> dict[str, Any]:
+        if len(json.dumps(scope, ensure_ascii=False).encode("utf-8")) > MAX_SCOPE_BYTES:
+            raise ValueError(f"the scope is larger than {MAX_SCOPE_BYTES} bytes")
+        return scope
+
 
 class GateApproval(BaseModel):
-    note: str = ""
+    note: str = Field(default="", max_length=MAX_TEXT)
 
 
 def _runner(request: Request) -> CampaignRunner:
@@ -152,7 +165,7 @@ def gates(request: Request, campaign_id: UUID) -> dict[str, Any]:
     dependencies=[Depends(require_perm("campaigns.approve"))],
 )
 async def approve(
-    request: Request, campaign_id: UUID, gate: str, body: GateApproval
+    request: Request, campaign_id: UUID, gate: GateName, body: GateApproval
 ) -> dict[str, Any]:
     needed = approvals_needed(gate)
     try:
@@ -177,9 +190,11 @@ class Injection(BaseModel):
 
     subject_id: UUID = Field(description="a subject already generated and recorded")
     system_id: UUID
-    point: str = Field(min_length=1)
-    method: str = Field(min_length=1)
-    revert_procedure: str = Field(min_length=1, description="how the client undoes it")
+    point: str = Field(min_length=1, max_length=MAX_TEXT)
+    method: str = Field(min_length=1, max_length=MAX_TEXT)
+    revert_procedure: str = Field(
+        min_length=1, max_length=MAX_TEXT, description="how the client undoes it"
+    )
 
     @field_validator("revert_procedure")
     @classmethod
@@ -219,6 +234,7 @@ def authorize(request: Request, campaign_id: UUID, body: Injection) -> dict[str,
             body.method,
             body.revert_procedure,
             caller(request).actor,
+            campaign_id=str(campaign_id),
         )
     except SyntheticError as refused:
         raise HTTPException(status.HTTP_409_CONFLICT, str(refused)) from None

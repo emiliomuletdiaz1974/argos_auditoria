@@ -8,6 +8,7 @@ import psycopg
 import pytest
 from argos_ai.backends.fake import FakeBackend
 from argos_ai.gateway import QuotaExceededError
+from argos_ai.guardrails import OutputRejectedError
 from argos_ai.quotas import daily_quotas, postgres_gateway, spent_today
 
 from argos_common.journal_pg import PostgresJournal
@@ -91,3 +92,14 @@ def test_the_gateway_works_under_the_restricted_role(migrated_db: str) -> None:
         assert conn.execute("SELECT current_user").fetchone() == ("argos_ai",)
         rows = conn.execute("SELECT prompt_sha256 FROM argos.ai_usage").fetchall()
     assert rows == [(answer.prompt_sha256,)]
+
+
+def test_an_invented_verdict_id_does_not_let_a_claim_through(migrated_db: str) -> None:
+    """The model can write any id: only a verdict that exists in the store counts as quoted."""
+    schema: dict[str, Any] = {"type": "object", "properties": {"answer": {"type": "string"}}}
+    invented = "01920000-0000-7000-8000-00000000dead"
+    claim = json.dumps({"answer": "El sistema clinic es conforme.", "verdict_id": invented})
+    restricted = f"{migrated_db}?options=-c%20role%3Dargos_ai"
+    gateway = postgres_gateway(restricted, FakeBackend.of([claim]))
+    with pytest.raises(OutputRejectedError, match="veredicto_no_citado"):
+        asyncio.run(gateway.chat_json("reports", SYSTEM, USER, schema))

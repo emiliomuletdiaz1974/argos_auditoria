@@ -49,6 +49,26 @@ def test_side_effect_functions_are_rejected() -> None:
         validate_read_only_sql("SELECT dbms_lock.sleep(5) FROM dual", "oracle")
 
 
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "SELECT pg_is_in_recovery()",
+        "SELECT pg_last_xact_replay_timestamp()",
+        "SELECT pg_total_relation_size('clinic.patients')",
+        "SELECT lower(name), coalesce(a, 0), count(*) FROM t GROUP BY 1, 2",
+        "SELECT a FROM t WHERE note LIKE 'delete%'",
+        "SELECT coalesce(status, 'deleted') FROM t",
+    ],
+)
+def test_catalog_and_ordinary_functions_are_allowed(statement: str) -> None:
+    validate_read_only_sql(statement, "postgres")
+
+
+def test_package_qualified_functions_are_checked_by_full_name() -> None:
+    with pytest.raises(ReadOnlyViolationError, match="utl_http.request"):
+        validate_read_only_sql("SELECT UTL_HTTP.REQUEST('http://x') FROM dual", "oracle")
+
+
 def test_unparseable_statement_is_rejected() -> None:
     with pytest.raises(ReadOnlyViolationError):
         validate_read_only_sql("SELECT FROM WHERE )(", "postgres")

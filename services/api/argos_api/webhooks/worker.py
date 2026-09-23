@@ -19,7 +19,7 @@ from argos_api.webhooks.workflow import TASK_QUEUE, WebhookDelivery
 from argos_common.config import ArgosConfig, get_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
-from argos_events import Bus
+from argos_events import Bus, bus_from_config
 
 SERVICE = "argos-webhook-worker"
 
@@ -59,7 +59,7 @@ async def main() -> None:  # pragma: no cover - process entry point
     cfg = get_config()
     configure_logging(SERVICE, cfg.LOG_LEVEL)
     client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")
-    bus = Bus(SERVICE, cfg.NATS_URL)
+    bus = bus_from_config(SERVICE, cfg)
     await bus.connect()
     await listen(client, bus, cfg.DATABASE_URL)
     worker = await create_worker(client, cfg)

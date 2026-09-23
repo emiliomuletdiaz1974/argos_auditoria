@@ -7,7 +7,7 @@ import asyncio
 
 from argos_common.config import ArgosConfig, get_config
 from argos_common.logs import configure_logging, get_logger
-from argos_events import Bus
+from argos_events import bus_from_config
 from argos_inventory.graph.store import GraphStore
 
 from .handlers import Ingestor
@@ -16,7 +16,7 @@ DURABLE = "inventory-ingest"
 
 
 async def run(cfg: ArgosConfig) -> None:
-    bus = Bus("inventory-ingest", cfg.NATS_URL)
+    bus = bus_from_config("inventory-ingest", cfg)
     await bus.connect()
     ingestor = Ingestor(GraphStore(cfg.DATABASE_URL), cfg.DATABASE_URL, bus)
     await bus.subscribe("argos.discovery.>", durable=DURABLE, handler=ingestor.handle)

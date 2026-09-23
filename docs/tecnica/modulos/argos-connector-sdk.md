@@ -5,8 +5,8 @@ title: SDK de conectores de solo lectura (argos-connector-sdk)
 module: argos-connector-sdk
 phases: ["02", "03"]
 version: 0.1.0-alpha
-commit: d018a74
-date: 2026-09-17
+commit: d64abd2
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -55,6 +55,7 @@ Otras piezas:
 | Clase | `LoadBudget(system_id, config, ...)` | Ventanas por día y zona horaria, tasa por minuto con ráfaga, filas máximas por sonda y cortacircuitos por latencia |
 | Función | `bus_circuit_listener(bus, loop)` | Publica `campaign.circuit_open.v1` al abrirse un cortacircuitos |
 | Funciones | `validate_read_only_sql`, `assert_safe_http_method` | Validación de solo lectura |
+| Función | `require_tls(encrypted, config, target)` | Rechaza al abrir un transporte sin cifrar salvo que el sistema declare `allow_insecure: true` |
 | Funciones | `is_valid_dni`, `is_valid_nie`, `is_valid_nuss`, `is_valid_iban_es`, `mrn_validator`, `acceptance_rates` | Validadores con dígito de control (Fase 03) |
 | Tabla | `argos.connector_queries` (migración `0002_connectors.sql`) | Estados `emitted`, `completed`, `failed`, `rejected`; un trigger impide borrar filas y modificar las cerradas |
 | Arnés | `argos_connector.testing` | `assert_no_write_surface`, `assert_sql_writes_rejected`, `assert_http_writes_rejected` para los tests de cualquier conector |
@@ -68,6 +69,7 @@ Otras piezas:
 ## 6. Seguridad y tratamiento de datos
 
 - **Solo lectura en dos capas:** validación en ARGOS y cuenta de solo lectura en el sistema del cliente (ver los permisos en cada documento de conector).
+- **Funciones con efectos:** la validación rechaza, además de las sentencias de escritura, las funciones que ejecutan sentencias en otra sesión o en otro servidor (`dblink`, `OPENQUERY`, `OPENROWSET`, `query_to_xml`), salen a la red o al sistema de ficheros (`UTL_*`, `xp_*`, `pg_read*`, `pg_stat_file`, `lo_*`) o toman bloqueos (`pg_advisory*`, `get_lock`). El nombre se comprueba con su paquete (`utl_http.request`), y cualquier argumento de texto que sea una sentencia de escritura también se rechaza.
 - **Transparencia:** cada consulta queda en `argos.connector_queries` y en el diario encadenado antes de ejecutarse; las rechazadas también quedan anotadas.
 - **Minimización:** las muestras solo salen como hashes con clave y como tasas agregadas de validación, nunca como valores.
 - **Carga:** fuera de ventana o con el cortacircuitos abierto la sonda no se ejecuta, y el evento permite reprogramar la campaña.
@@ -94,3 +96,5 @@ El presupuesto de carga vive en la memoria de cada proceso; con varias réplicas
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Contrato de solo lectura, arnés de escritura, diario previo y presupuesto de carga | Fase 02 (ARG-011…013) |
 | 0.1.0-alpha | 2026-09-15 | Validadores de DNI, NIE, NUSS, IBAN y NHC | Fase 03 (ARG-024) |
+| 0.1.0-alpha | 2026-09-18 | La validación de solo lectura rechaza funciones con efectos por familia y paquete, y sentencias de escritura pasadas como texto | Auditoría de seguridad (A1) |
+| 0.1.0-alpha | 2026-09-18 | `require_tls`: transporte cifrado obligatorio salvo declaración explícita en el sistema | Auditoría de seguridad (M10) |

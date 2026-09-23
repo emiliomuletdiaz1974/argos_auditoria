@@ -72,6 +72,31 @@ def test_a_claim_of_conformity_that_cites_its_verdict_is_allowed() -> None:
     )
 
 
+KNOWN = "01920000-0000-7000-8000-0000000000aa"
+
+
+@pytest.mark.parametrize(
+    "citation",
+    [
+        {"verdict_id": "01920000-0000-7000-8000-00000000dead"},
+        {"verdict_id": "x"},
+        {"verdict_ids": [KNOWN, "01920000-0000-7000-8000-00000000dead"]},
+    ],
+)
+def test_a_citation_of_a_verdict_that_does_not_exist_is_no_citation(
+    citation: dict[str, object],
+) -> None:
+    # Any truthy verdict_id used to switch the check off; the model can invent one.
+    answer = {"answer": "El sistema clinic es conforme con el artículo 32.", **citation}
+    with pytest.raises(OutputRejectedError, match="veredicto_no_citado"):
+        check_output(answer, verdict_exists=lambda verdict_id: verdict_id == KNOWN)
+
+
+def test_a_citation_of_verdicts_that_exist_is_allowed() -> None:
+    answer = {"answer": "El sistema clinic no es conforme.", "verdict_ids": [KNOWN]}
+    assert check_output(answer, verdict_exists=lambda verdict_id: verdict_id == KNOWN)
+
+
 @pytest.mark.parametrize(
     "answer",
     [

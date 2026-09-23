@@ -21,6 +21,8 @@ UAC_DISABLED = 0x2
 UAC_DONT_EXPIRE_PASSWORD = 0x10000
 GROUP_CLASSES = frozenset({"group", "groupofnames", "groupofuniquenames"})
 MAX_GROUP_NODES = 10_000
+# Each member read is a BASE search against the directory, all under the probe's one permit.
+DEFAULT_MAX_GROUP_READS = 1_000
 _FILETIME_EPOCH = datetime(1601, 1, 1, tzinfo=UTC)
 _USER_FLAGS = ["userAccountControl", "servicePrincipalName"]
 _USER_AGES = ["userAccountControl", "lastLogonTimestamp", "pwdLastSet"]
@@ -97,6 +99,10 @@ class LdapConnector(Connector):
             use_ssl=True,
             tls=tls,
             get_info=NONE,
+            # Referrals are never followed: ldap3 would repeat the simple bind against any host
+            # the directory names, in clear text when the referral is ldap://.
+            allowed_referral_hosts=[],
+            connect_timeout=int(self.config.get("connect_timeout_s", 10)),
         )
         return Connection(
             server,
@@ -104,6 +110,8 @@ class LdapConnector(Connector):
             password=credentials["password"],
             read_only=True,
             auto_bind=True,
+            auto_referrals=False,
+            receive_timeout=int(self.config.get("receive_timeout_s", 30)),
             raise_exceptions=True,
         )
 
@@ -213,6 +221,7 @@ class LdapConnector(Connector):
         group_dn = str(spec.params["group_dn"])
         groups, users = {group_dn.lower()}, set[str]()
         pending, visited_nodes = deque([group_dn]), 0
+        max_reads = int(self.config.get("max_group_reads", DEFAULT_MAX_GROUP_READS))
         while pending:
             node = self._read_node(pending.popleft())
             if node is None:
@@ -222,7 +231,7 @@ class LdapConnector(Connector):
                 if key in groups or key in users:
                     continue
                 visited_nodes += 1
-                if visited_nodes > MAX_GROUP_NODES:
+                if visited_nodes > min(MAX_GROUP_NODES, max_reads):
                     raise RuntimeError("group expansion exceeded the node cap")
                 child = self._read_node(member)
                 if child is not None and child[1] & GROUP_CLASSES:

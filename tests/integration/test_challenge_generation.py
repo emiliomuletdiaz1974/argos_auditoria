@@ -10,6 +10,7 @@ from argos_ai.generate.challenge_gen import propose_challenge
 from argos_ai.quotas import postgres_gateway
 
 from argos_challenges.dsl import LintContext
+from argos_common.journal_pg import PostgresJournal
 from argos_ontology.vocabulary import LIBRARY_DIR
 
 pytestmark = pytest.mark.integration
@@ -33,7 +34,8 @@ def test_a_generated_proposal_spends_the_quota_of_the_challenge_service(migrated
 
 
 def test_a_proposal_that_writes_is_stopped_before_it_is_logged_as_good(migrated_db: str) -> None:
-    """The guardrail refuses it at the gateway: no usage row is written for a rejected answer."""
+    """The guardrail refuses it at the gateway: the inference is charged, but never logged as a
+    completion."""
     writes = VALID.replace("SELECT setting FROM pg_settings WHERE name = 'ssl'", "DROP TABLE x")
     gateway = postgres_gateway(migrated_db, FakeBackend.of([json.dumps({"yaml": writes})]))
     proposal = asyncio.run(
@@ -43,4 +45,6 @@ def test_a_proposal_that_writes_is_stopped_before_it_is_logged_as_good(migrated_
     )
     assert not proposal.valid
     with psycopg.connect(migrated_db) as conn:
-        assert conn.execute("SELECT count(*) FROM argos.ai_usage").fetchone() == (0,)
+        assert conn.execute("SELECT count(*) FROM argos.ai_usage").fetchone() == (1,)
+    entries = PostgresJournal(migrated_db).read(1, 100)
+    assert not [e for e in entries if e.action == "ai.completion"]

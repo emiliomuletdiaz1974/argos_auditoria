@@ -51,6 +51,10 @@ Tres cierres, no una promesa escrita:
 
 - **Dos prioridades con semáforo:** `interactive` (asistente y consola) reserva plazas para que el trabajo por lotes —clasificación nocturna, dictámenes— no la deje sin turno.
 - **Cuota diaria por servicio, en tabla** (`argos.ai_quotas`, migración `0016`), consultada **antes** de llamar al modelo: gastar primero y quejarse después dejaría la cuota de adorno. Un servicio sin fila no puede gastar: el valor por defecto es cero, no infinito. Lo gastado hoy sale de `argos.ai_usage`, así que un reinicio no regala presupuesto.
+  - **Reserva antes de llamar:** cada petición reserva 8192 tokens contra la cuota mientras está en curso, así que las peticiones en paralelo cuentan con el coste de las demás y no pasan todas el control a la vez.
+  - **Lo consumido se cobra siempre:** una respuesta que no encaja tras la reparación (502) o que los guardarraíles rechazan (422) cuesta la misma inferencia, y se anota en `argos.ai_usage` igual que una buena.
+  - **Por día natural (UTC):** al cambiar de día el contador vuelve a cero y las cuotas se releen de la tabla, sin reiniciar el servicio.
+  - El backend real limita cada respuesta a 2048 tokens (`max_tokens`).
 - **JSON forzado con un ciclo de reparación:** el esquema viaja al backend para que guíe la decodificación, pero la respuesta **se valida siempre aquí**; si no encaja, vuelve con su error como realimentación. Un ciclo, no un reintento infinito.
 - **Registro:** una fila en `argos.ai_usage` y un asiento `ai.completion` en el diario encadenado, los dos con el **hash del prompt y nunca el prompt**.
 
@@ -93,7 +97,7 @@ Un modelo dice 0,9 y acierta 0,7. Sin corregirlo, los umbrales de ARG-025 —ace
 El SLA de 30 días de norma a reto y los 300 retos de GA no salen de escribir YAML a mano. **El flujo humano manda:** el jurista pega la obligación, el modelo propone y un ingeniero revisa.
 
 - **El jurista solo ve propuestas que ya compilan.** El prompt lleva el esquema del DSL, el catálogo de sondas y dos retos completos de la biblioteca como ejemplo, leídos del propio repositorio para que no se desfasen. La propuesta pasa por **el mismo `lint_challenge` de la CI**, en memoria; si falla, un ciclo de reparación con sus errores, y si sigue fallando se devuelve como no válida.
-- **Una sonda que escribe no se repara: se rechaza.** Repararla le enseñaría al modelo a colar una escritura por el lint. Toda sentencia declarada tiene que ser `SELECT`, `SHOW` o `WITH` y no contener verbos de escritura; y los guardarraíles de ARG-060 la vuelven a rechazar en el gateway si llegara hasta allí, antes de anotarla como uso válido.
+- **Una sonda que escribe no se repara: se rechaza.** Repararla le enseñaría al modelo a colar una escritura por el lint. Toda sentencia declarada tiene que ser `SELECT`, `SHOW` o `WITH`, no contener verbos de escritura y **pasar la validación de solo lectura de los conectores** (`validate_read_only_sql`) en al menos un dialecto, que rechaza `SELECT … INTO` y las funciones con efectos como `dblink` o `pg_terminate_backend`. El conector la vuelve a validar en su dialecto real antes de ejecutarla, y los guardarraíles de ARG-060 la rechazan en el gateway si llegara hasta allí, antes de anotarla como completado.
 - **La propuesta entra en Git como rama de revisión, nunca directamente en la biblioteca.** `tools/new_challenge.py` prepara la rama `feature/reto-<id>` en un *worktree* temporal: la copia de trabajo del jurista, su índice y su rama actual quedan exactamente como estaban. Una rama que ya existe no se sobrescribe —la propuesta anterior no se entierra sin revisar—, una propuesta no válida no llega a Git y nada se publica: subir la rama es decisión de una persona.
 
 ### Dictámenes con cifras verificadas (ARG-057)
@@ -141,7 +145,7 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 
 - **`scrub_input(text) -> (clean, substitutions)`.** Sustituye por marcadores estables (`[DNI-1]`, `[IBAN-1]`) lo que **valida** como identificador español, reutilizando `argos_connector.validators`. La diferencia con una expresión regular ciega es el producto: un código de producto con la forma de un DNI pero sin su letra de control se queda intacto. El mismo valor recibe el mismo marcador dentro de un texto, para no destrozar el sentido de la frase.
 - **`check_output(answer) -> bool`.** Recorre todas las cadenas del JSON, por hondas que estén, y rechaza dos cosas con motivo tipificado:
-  - `veredicto_no_citado`: una afirmación de conformidad sobre un activo sin el `verdict_id` del que sale;
+  - `veredicto_no_citado`: una afirmación de conformidad sobre un activo sin el `verdict_id` del que sale. En el gateway que corre sobre PostgreSQL, solo cuenta como cita un `verdict_id` que existe en `argos.verdicts`: el modelo puede escribir cualquier id, y uno inventado no abre la puerta a la afirmación;
   - `escritura_sobre_objetivo`: un verbo de escritura sobre un sistema.
 - **Las tablas de patrones son contenido**, en `library/prompts/guardrails.yaml`, y el equipo las amplía sin una release. **La decisión de rechazar no es contenido:** no tiene interruptor.
 
@@ -250,6 +254,7 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 - El reajuste nocturno de la calibración es una función (`refit`) pero aún no tiene planificador: se engancha a Temporal con la operación.
 - La telemetría de sustituciones se anota en el asiento de cada completado; falta publicarla como métrica (ARG-059).
 - El presupuesto se cuenta por tokens del backend; con el backend determinista esos números son un proxy por longitud, no tokens reales.
+- La reserva y el contador viven en la memoria del proceso: con varias réplicas del gateway, cada una lleva su cuenta. Compartirla exige reservar en la base de datos (Fase 10).
 - La lista de identificadores es la española de ARG-024; otro país necesita sus validadores, no otra expresión regular.
 
 ## 10. Historial
@@ -266,5 +271,8 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.1.0-alpha | 2026-09-17 | Asistente de consola con cuatro herramientas cerradas, presupuesto fijo y fuentes comprobadas | Fase 06 (ARG-058) |
 | 0.1.0-alpha | 2026-09-17 | Arnés de evaluación con conjuntos dorados y puerta de calidad; embebedor de pruebas con señal y búsqueda léxica por cualquiera de las palabras | Fase 06 (ARG-059) |
 | 0.1.0-alpha | 2026-09-17 | Servicio y contenedor del gateway en su propia red, con la sesión en el rol restringido y el diario abierto solo para añadir | Fase 06 (F06-13) |
+| 0.1.0-alpha | 2026-09-18 | Cuota reservada antes de llamar, cobrada también en los fallos, renovada cada día y respuestas limitadas a 2048 tokens | Auditoría de seguridad (M3) |
+| 0.1.0-alpha | 2026-09-18 | Las sondas de los retos generados pasan la validación de solo lectura de los conectores | Auditoría de seguridad (B2) |
+| 0.1.0-alpha | 2026-09-18 | El guardarraíl de salida solo acepta como cita veredictos que existen | Auditoría de seguridad (B1) |
 | 0.1.0-alpha | 2026-09-21 | `POST /v1/assistant/ask`: el agente del asistente corre dentro del gateway con sus cuatro herramientas y solo viaja su resultado; `ModelUnavailableError` y `503` en ambos endpoints cuando el modelo local no contesta (hasta F06-05, siempre) | F08-08 |
 | 0.1.0-alpha | 2026-09-22 | El agente admite el paso `refuse` (rehúso explícito, `refused: true`) y la respuesta lleva `fragments`, los fragmentos que devolvió `search_regulation` en la conversación, sin repetir; el prompt pide citar con `[n]`, el número de la fuente | F08-15 |

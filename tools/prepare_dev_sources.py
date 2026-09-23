@@ -71,8 +71,20 @@ def tree_manifest(root: Path) -> dict[str, str]:
     return manifest
 
 
+def _strict_chain_present(directory: Path) -> bool:
+    """Python 3.13 verifies strictly: a CA without key identifiers breaks every LDAPS handshake."""
+    try:
+        ca = x509.load_pem_x509_certificate((directory / "ca.crt").read_bytes())
+        server = x509.load_pem_x509_certificate((directory / "server.crt").read_bytes())
+        ca.extensions.get_extension_for_class(x509.SubjectKeyIdentifier)
+        server.extensions.get_extension_for_class(x509.AuthorityKeyIdentifier)
+    except (OSError, ValueError, x509.ExtensionNotFound):
+        return False
+    return True
+
+
 def build_certificates(directory: Path) -> None:
-    if (directory / "server.crt").exists():
+    if _strict_chain_present(directory):
         return
     directory.mkdir(parents=True, exist_ok=True)
     now = datetime.now(UTC)
@@ -87,6 +99,21 @@ def build_certificates(directory: Path) -> None:
         .not_valid_before(now - timedelta(days=1))
         .not_valid_after(now + timedelta(days=825))
         .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=False,
+                content_commitment=False,
+                key_encipherment=False,
+                data_encipherment=False,
+                key_agreement=False,
+                key_cert_sign=True,
+                crl_sign=True,
+                encipher_only=False,
+                decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), False)
         .sign(ca_key, hashes.SHA256())
     )
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -108,6 +135,11 @@ def build_certificates(directory: Path) -> None:
             ),
             critical=False,
         )
+        .add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), False
+        )
+        .add_extension(x509.SubjectKeyIdentifier.from_public_key(key.public_key()), False)
+        .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), False)
         .sign(ca_key, hashes.SHA256())
     )
     (directory / "ca.crt").write_bytes(ca_cert.public_bytes(serialization.Encoding.PEM))

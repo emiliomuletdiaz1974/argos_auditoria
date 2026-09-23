@@ -7,9 +7,20 @@ from argos_challenges.findings import (
     SEVERITIES,
     STATUSES,
     TRANSITIONS,
+    FindingError,
+    check_request,
     escalate,
     fingerprint,
 )
+
+
+@pytest.mark.parametrize("actor", ["user:dpo", "user:manager", "system:findings", "system:x"])
+def test_only_the_remediation_run_closes_a_finding(actor: str) -> None:
+    # A person can move a finding to verification, but only the re-run's verdict closes it.
+    with pytest.raises(FindingError, match="remediation|re-run"):
+        check_request("closed_compliant", actor)
+    check_request("closed_compliant", "system:remediation")
+    check_request("pending_verification", actor)
 
 
 def test_the_fingerprint_is_the_challenge_and_the_node() -> None:

@@ -42,6 +42,18 @@ SQL_WRITE_ATTEMPTS: tuple[str, ...] = (
     "LOCK TABLE t",
     "VACUUM t",
     "SELECT pg_sleep(100)",
+    "SELECT * FROM dblink('dbname=x', 'DELETE FROM t RETURNING 1') AS r(a INT)",
+    "SELECT * FROM OPENQUERY(srv, 'UPDATE t SET a = 1')",
+    "SELECT * FROM OPENDATASOURCE('SQLNCLI', 'Data Source=x').db.dbo.t",
+    "SELECT UTL_HTTP.REQUEST('http://collector.example/x') FROM dual",
+    "SELECT sys.utl_inaddr.get_host_address('x') FROM dual",
+    "SELECT pg_advisory_lock(1)",
+    "SELECT pg_try_advisory_lock(1)",
+    "SELECT pg_stat_file('postgresql.conf')",
+    "SELECT lo_get(1)",
+    "SELECT query_to_xml('DELETE FROM t RETURNING 1', true, true, '')",
+    "SELECT xp_dirtree('c:/')",
+    "SELECT release_lock('x')",
 )
 HTTP_WRITE_METHODS: tuple[str, ...] = ("POST", "PUT", "PATCH", "DELETE", "CONNECT", "TRACE")
 _WRITE_NAME = re.compile(

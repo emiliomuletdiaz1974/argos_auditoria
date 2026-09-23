@@ -15,7 +15,7 @@ release. The decision to reject is not content: it has no switch.
 """
 
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -78,10 +78,25 @@ def _texts(value: Any) -> list[str]:
     return []
 
 
-def check_output(answer: Mapping[str, Any]) -> bool:
+def _cited(answer: Mapping[str, Any], verdict_exists: Callable[[str], bool] | None) -> bool:
+    """Whether the answer quotes verdicts. With a lookup, only verdicts that exist count: a
+    model can write any id, and an invented one must not open the door to a claim."""
+    ids = [answer.get("verdict_id")] if answer.get("verdict_id") else []
+    listed = answer.get("verdict_ids") or []
+    ids += listed if isinstance(listed, list) else [listed]
+    if not ids:
+        return False
+    if verdict_exists is None:
+        return True
+    return all(isinstance(i, str) and verdict_exists(i) for i in ids)
+
+
+def check_output(
+    answer: Mapping[str, Any], verdict_exists: Callable[[str], bool] | None = None
+) -> bool:
     """True if the answer may leave the gateway; otherwise `OutputRejectedError` with its reason."""
     patterns = load_patterns()
-    cited = bool(answer.get("verdict_id")) or bool(answer.get("verdict_ids"))
+    cited = _cited(answer, verdict_exists)
     for text in _texts(answer):
         lowered = " ".join(text.lower().split())
         if not cited and any(word in lowered for word in patterns["verdict_words"]):

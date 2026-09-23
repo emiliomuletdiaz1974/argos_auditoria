@@ -32,7 +32,7 @@ Construye y mantiene el **inventario vivo** de los sistemas del cliente en un gr
 | Ingesta (ARG-022) | `ingest` | Consumidor duradero del stream `DISCOVERY` que escribe el grafo de forma idempotente y en lotes |
 | Versionado (ARG-023) | `versioning` | Deltas entre exploraciones (aparecido, desaparecido, crecimiento anómalo) e **instantáneas inmutables** verificables |
 | Clasificación determinista (ARG-024) | `classify` | Diccionario de nombres por palabras completas, contexto de tabla para inferencias clínicas y validación de identificadores en origen (DNI, NIE, NUSS, IBAN, NHC) |
-| Clasificación asistida (ARG-025) | `classify.assisted` | Interfaz de modelo y **cola de revisión** del DPD con decisión auditada. Desde la Fase 06 el modelo es `argos_ai.classify.SemanticClassifier` (ARG-055), que entrega la confianza ya calibrada; la interfaz no cambió |
+| Clasificación asistida (ARG-025) | `classify.assisted` | Interfaz de modelo y **cola de revisión** del DPD con decisión auditada. Desde la Fase 06 el modelo es `argos_ai.classify.SemanticClassifier` (ARG-055), que entrega la confianza ya calibrada; la interfaz no cambió. Una propuesta `no_personal_data` va siempre a la cola, por alta que sea su confianza: sacaría la columna de los selectores de todas las campañas, y los nombres de columna que llevan a ella vienen del sistema del cliente |
 | Catálogo (ARG-026) | `catalog` | Vistas de catálogo, cobertura y frescura; importación del registro de tratamientos; informe legible del inventario |
 | Flujos (ARG-027) | `flows` | Detección de flujos entre sistemas por catálogo del motor (enlaces de base de datos) y por coincidencia estructural |
 | IA (ARG-028) | `ai_discovery` | Descubrimiento de candidatos a sistema de IA (columnas de puntuación, ficheros de modelo); confirmación humana con clase de riesgo |
@@ -69,7 +69,8 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 - Variables comunes de `argos-common`: base de datos, NATS, Temporal, OIDC y Vault para los servicios que abren conectores.
 - **Parámetros de la API:**
   - página máxima de 500 elementos;
-  - profundidad máxima de consulta 4;
+  - profundidad máxima de consulta 4, como mucho 10 alias y 1000 tokens por petición: la profundidad sola no acota una consulta, porque cada alias de `node` es otra búsqueda en el grafo;
+  - los errores de validación y de argumentos llegan al cliente, pero una excepción de un resolver responde «Unexpected error.» y no describe la base de datos ni AGE;
   - campos del selector limitados a una lista cerrada (`ALLOWED_SELECTOR_FIELDS`): `label`, `category`, `min_confidence`, `missing`, `name_like`, `system_kind` y, desde la Fase 04, `unclassified` (columnas con o sin clasificación; no se combina con `category`) y `status` (prefijo del estado, por ejemplo sistemas de IA `pending` o `confirmed`).
 - **Parámetros del planificador:**
   - cadencia estructural de 24 h;
@@ -122,5 +123,7 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.1.0-alpha | 2026-09-17 | Las instantáneas proyectan el `status` de los nodos, que necesita la resolución de campañas | Fase 05 (ARG-042) |
 | 0.1.0-alpha | 2026-09-17 | Diccionario de categorías especiales no sanitarias y tabla sintética `clinic.staff_affiliations` en la fuente de desarrollo | Fase 04 (ARG-024) |
 | 0.1.0-alpha | 2026-09-17 | La interfaz de ARG-025 tiene servicio: el clasificador semántico calibrado de la Fase 06, sin cambios en la cola ni en los umbrales | Fase 06 (ARG-055) |
+| 0.1.0-alpha | 2026-09-18 | El modelo no puede aceptar solo una propuesta `no_personal_data`: siempre la revisa el DPD | Auditoría de seguridad (M8) |
+| 0.1.0-alpha | 2026-09-18 | La API GraphQL limita alias y tokens por petición y enmascara los errores internos | Auditoría de seguridad (M9, B7) |
 | 0.1.0-alpha | 2026-09-20 | Lectores para la API v1: `catalog.views.systems`, `pending_review_by_system`, `classify.assisted.pending_reviews` y `graph.reads.node_detail` (el Cypher del vecindario deja de vivir en el esquema GraphQL y se comparte) | Fase 08 (ARG-074) |
 | 0.1.0-alpha | 2026-09-21 | `decide_review(..., corrected_to=...)`: una corrección es un rechazo para la calibración y una clasificación humana con la categoría elegida; `versioning.deltas.node_deltas` para la línea temporal de un nodo | F08-11 |

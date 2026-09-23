@@ -21,7 +21,7 @@ from temporalio.exceptions import ApplicationError
 from argos_challenges.client import client_parameters
 from argos_challenges.compiler import compile_campaign
 from argos_challenges.evaluator import evaluate
-from argos_challenges.findings import announce, open_or_recur, transition
+from argos_challenges.findings import REMEDIATION_ACTOR, announce, open_or_recur, transition
 from argos_challenges.library.catalog import load_library
 from argos_challenges.probes import INVENTORY_QUERIES, minimise, probe_spec
 from argos_challenges.seal import announce_seal, seal_campaign
@@ -30,6 +30,7 @@ from argos_challenges.store import (
     announce_approval,
     campaign_record,
     create_campaign,
+    gate_is_open,
     persist_verdict,
     pin_campaign,
     request_approval,
@@ -140,10 +141,17 @@ class ChallengeActivities:
         secrets: SecretStore,
         opa_url: str | None = None,
         bus: Any | None = None,
+        opa_token: str | None = None,
     ) -> None:
         self._dsn = dsn
         self._secrets = secrets
-        self._opa_url = opa_url or get_config().OPA_URL
+        if opa_url is None:
+            config = get_config()
+            opa_url = config.OPA_URL
+            if opa_token is None and config.OPA_TOKEN is not None:
+                opa_token = config.OPA_TOKEN.get_secret_value()
+        self._opa_url = opa_url
+        self._opa_token = opa_token
         self._bus = bus
 
     # ---------- preparation ----------
@@ -210,6 +218,12 @@ class ChallengeActivities:
         )
         if opened and self._bus is not None:
             await announce_approval(self._bus, campaign_id, gate)
+
+    @activity.defn(name="check_gate")
+    async def check_gate(self, payload: dict[str, Any]) -> bool:
+        return await asyncio.to_thread(
+            gate_is_open, self._dsn, str(payload["campaign_id"]), str(payload["gate"])
+        )
 
     @activity.defn(name="set_campaign_status")
     async def set_campaign_status(self, payload: dict[str, Any]) -> None:
@@ -279,7 +293,7 @@ class ChallengeActivities:
             self._dsn,
             str(payload["finding_id"]),
             str(payload["to"]),
-            str(payload.get("actor", "system:remediation")),
+            REMEDIATION_ACTOR,
         )
 
     # ---------- probes ----------
@@ -375,7 +389,7 @@ class ChallengeActivities:
             input_doc = dict(criterion["opa"].get("input_map", {}))
             input_doc.setdefault("result", probe_result.get("data", {}))
             try:
-                decision = opa_evaluate(package, input_doc, self._opa_url)
+                decision = opa_evaluate(package, input_doc, self._opa_url, token=self._opa_token)
             except OpaError:
                 decision = None
         verdict = evaluate(unit, probe_result, decision)

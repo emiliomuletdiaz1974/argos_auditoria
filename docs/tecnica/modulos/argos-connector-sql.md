@@ -5,8 +5,8 @@ title: Conectores de bases de datos (argos-connector-sql)
 module: argos-connector-sql
 phases: ["02", "03"]
 version: 0.1.0-alpha
-commit: df46b33
-date: 2026-09-17
+commit: b432f8a
+date: 2026-09-18
 status: current
 confidentiality: client
 ---
@@ -51,7 +51,8 @@ Sondas `scan_schema`, `count`, `sample` (con `validators`) y `check_config`, a t
 
 ## 5. Configuración
 
-- **Por sistema:** `statement_timeout_ms`, y opcionalmente `isolation_level` (SQL Server) y `mrn_pattern` (patrón del número de historia clínica).
+- **Por sistema:** `statement_timeout_ms`, y opcionalmente `isolation_level` (SQL Server), `mrn_pattern` (patrón del número de historia clínica) y `allow_insecure`.
+- **Transporte:** la URL tiene que pedir TLS **verificado**: `sslmode=verify-ca` o `verify-full` en PostgreSQL, `ssl_ca` en MySQL y MariaDB, `Encrypt=yes` en SQL Server y `protocol=tcps` en Oracle. `sslmode=require` no basta, porque cifra sin comprobar quién responde. Sin eso el conector no abre, salvo `allow_insecure: true` declarado en el sistema.
 - **Credenciales:** en Vault, `argos/connectors/<id>`.
 
 ## 6. Seguridad y tratamiento de datos
@@ -92,3 +93,4 @@ La integración real con Oracle y SQL Server está escrita pero **no se ha ejecu
 | 0.1.0-alpha | 2026-09-15 | Conectores SQL genérico, PostgreSQL, Oracle y SQL Server | Fase 02 (ARG-014…016) |
 | 0.1.0-alpha | 2026-09-15 | Validación de identificadores en origen en las muestras | Fase 03 (ARG-024) |
 | 0.1.0-alpha | 2026-09-17 | Filtros declarados en la sonda `count`, con la columna validada y el valor enlazado | Fase 05 (F05-99) |
+| 0.1.0-alpha | 2026-09-18 | TLS verificado obligatorio por dialecto salvo `allow_insecure` declarado | Auditoría de seguridad (M10) |

@@ -6,7 +6,7 @@ from typing import Any
 import httpx
 import pytest
 
-from argos_common.errors import ReadOnlyViolationError
+from argos_common.errors import ConfigurationError, ReadOnlyViolationError
 from argos_connector.probes import ProbeSpec
 from argos_connector.testing import (
     InMemoryJournal,
@@ -14,7 +14,7 @@ from argos_connector.testing import (
     assert_no_write_surface,
     make_context,
 )
-from argos_rest.connector import RestConnector
+from argos_rest.connector import DEFAULT_MAX_PAGES, RestConnector
 
 SYSTEM_ID = "0190f000-0000-7000-8000-000000000001"
 DESCRIPTOR: dict[str, Any] = {
@@ -62,6 +62,19 @@ class Api:
         if path == "/v1/redirecting":
             return httpx.Response(302, headers={"location": "https://evil.test/steal"})
         return httpx.Response(200, json={})
+
+
+def test_a_clear_http_api_is_refused_unless_declared() -> None:
+    # The bearer token would travel in clear text.
+    descriptor = {**DESCRIPTOR, "base_url": "http://api.hospital.test/v1"}
+    context = make_context({"token": TEST_TOKEN})
+    connector = RestConnector(SYSTEM_ID, {"descriptor": descriptor}, context)
+    with pytest.raises(ConfigurationError, match="allow_insecure"):
+        connector.open()
+    declared = {"descriptor": descriptor, "allow_insecure": True}
+    allowed = RestConnector(SYSTEM_ID, declared, make_context({"token": TEST_TOKEN}))
+    allowed.open()
+    allowed.close()
 
 
 class MockRest(RestConnector):
@@ -127,6 +140,16 @@ def test_count_is_capped() -> None:
     connector, _, _ = _connector()
     result = connector.execute(ProbeSpec("count", "/patients", params={"cap": 3}))
     assert result.data["capped"] is True
+
+
+def test_one_probe_cannot_page_the_api_without_end() -> None:
+    # A probe takes one permit from the load budget: its pages are bounded, not unlimited.
+    connector, api, _ = _connector()
+    connector.config["max_pages"] = 2
+    result = connector.execute(ProbeSpec("count", "/patients"))
+    assert result.data == {"count": 4, "capped": True, "pages": 2}
+    assert len(api.requests) == 2
+    assert DEFAULT_MAX_PAGES == 100
 
 
 def test_link_pagination_stays_on_the_base_origin() -> None:

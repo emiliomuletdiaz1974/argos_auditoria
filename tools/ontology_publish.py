@@ -16,7 +16,8 @@ from pathlib import Path
 
 from argos_challenges.library.catalog import archive_library
 from argos_common.config import get_config
-from argos_common.release import VaultTransitSigner
+from argos_common.errors import IntegrityError
+from argos_common.release import VaultTransitSigner, key_fingerprint, require_trusted_key
 from argos_ontology.bundle import (
     CONTENT_KEY,
     BundleRejectedError,
@@ -54,16 +55,22 @@ def _build(args: argparse.Namespace) -> int:
     signature_path(target).write_bytes(sign_bundle(manifest, signer))
     (args.output / PUBLIC_KEY_NAME).write_bytes(signer.public_key())
     print(f"published {target} ({len(manifest['files'])} files)")
+    fingerprint = key_fingerprint(signer.public_key())
+    print(f"key fingerprint {fingerprint}: record it apart from the bundle")
     return 0
 
 
 def _verify(args: argparse.Namespace) -> int:
     bundle = args.bundle.read_bytes()
     signature = signature_path(args.bundle).read_bytes()
-    public_key = (args.public_key or args.bundle.parent / PUBLIC_KEY_NAME).read_bytes()
     try:
+        if args.public_key is not None:
+            public_key = args.public_key.read_bytes()  # chosen by the operator
+        else:
+            public_key = (args.bundle.parent / PUBLIC_KEY_NAME).read_bytes()
+            require_trusted_key(public_key, args.fingerprint)
         verified = verify_bundle(bundle, signature, public_key)
-    except BundleRejectedError as exc:
+    except (BundleRejectedError, IntegrityError) as exc:
         print(f"rejected: {exc}", file=sys.stderr)
         return 1
     print(f"verified {verified.version}, in force from {verified.in_force_from.isoformat()}")
@@ -81,6 +88,9 @@ def main(argv: list[str] | None = None) -> int:
     verify = commands.add_parser("verify")
     verify.add_argument("bundle", type=Path)
     verify.add_argument("--public-key", type=Path)
+    verify.add_argument(
+        "--fingerprint", help="SHA-256 of the key beside the bundle, recorded when it was built"
+    )
     args = parser.parse_args(argv)
     return _build(args) if args.command == "build" else _verify(args)
 

@@ -7,6 +7,7 @@ import psycopg
 import pymysql
 import pytest
 
+from argos_challenges.store import create_campaign
 from argos_challenges.synthetic import (
     SyntheticError,
     authorize_injection,
@@ -91,7 +92,7 @@ def test_the_confirmations_are_written_once_and_land_in_the_journal(migrated_db:
     assert pending_reversions(migrated_db) and pending_reversions(migrated_db)[0]["id"] == injection
     confirm_revert(migrated_db, injection, CLIENT)
     assert pending_reversions(migrated_db) == []
-    with pytest.raises(psycopg.errors.RaiseException, match="written once"):
+    with pytest.raises(SyntheticError, match="already confirmed"):
         confirm_injection(migrated_db, injection, "user:another")
     actions = [
         entry.action
@@ -113,6 +114,35 @@ def test_an_unknown_right_or_injection_is_rejected(migrated_db: str) -> None:
         confirm_exercise(migrated_db, injection, "portability", CLIENT)
     with pytest.raises(SyntheticError, match="unknown synthetic injection"):
         confirm_injection(migrated_db, "00000000-0000-4000-8000-0000000000ff", CLIENT)
+
+
+def test_the_client_confirms_in_order_and_each_step_once(migrated_db: str) -> None:
+    # A reversion or an exercise before the injection would let a campaign seal on nothing.
+    _, injection = _authorised(migrated_db)
+    with pytest.raises(SyntheticError, match="not injected"):
+        confirm_revert(migrated_db, injection, CLIENT)
+    with pytest.raises(SyntheticError, match="not injected"):
+        confirm_exercise(migrated_db, injection, "erasure", CLIENT)
+    confirm_injection(migrated_db, injection, CLIENT)
+    confirm_exercise(migrated_db, injection, "erasure", CLIENT)
+    # Another right of the same subject is a new exercise; the same right again is not.
+    confirm_exercise(migrated_db, injection, "access", CLIENT)
+    with pytest.raises(SyntheticError, match="already confirmed"):
+        confirm_exercise(migrated_db, injection, "access", CLIENT)
+    confirm_revert(migrated_db, injection, CLIENT)
+    with pytest.raises(SyntheticError, match="already confirmed"):
+        confirm_revert(migrated_db, injection, CLIENT)
+
+
+def test_an_injection_is_authorised_only_for_a_subject_of_its_campaign(migrated_db: str) -> None:
+    campaign = create_campaign(migrated_db, "Campaña del sujeto", {}, "user:manager")
+    other = create_campaign(migrated_db, "Otra campaña", {}, "user:manager")
+    subject = generate_subjects(SEED, 1)[0]
+    register_subjects(migrated_db, other, [subject])
+    arguments = (subject.id, SYSTEM, "clinic.patients", "SQL", "DELETE ...", REVIEWER)
+    with pytest.raises(SyntheticError, match="does not belong"):
+        authorize_injection(migrated_db, *arguments, campaign_id=campaign)
+    assert authorize_injection(migrated_db, *arguments, campaign_id=other)
 
 
 def test_a_subject_row_cannot_be_changed_or_deleted(migrated_db: str) -> None:

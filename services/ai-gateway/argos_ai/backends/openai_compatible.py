@@ -11,15 +11,23 @@ import httpx
 from .base import Completion
 
 TIMEOUT_SECONDS = 120.0
+MAX_ANSWER_TOKENS = 2_048
 
 
 class OpenAiCompatibleBackend:
     """A chat completion against a local server. No key travels: the server is inside."""
 
-    def __init__(self, base_url: str, model: str, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        client: httpx.AsyncClient | None = None,
+        max_tokens: int = MAX_ANSWER_TOKENS,
+    ) -> None:
         self._url = f"{base_url.rstrip('/')}/chat/completions"
         self._model = model
         self._client = client
+        self._max_tokens = max_tokens
 
     async def complete(
         self, system: str, user: str, schema: dict[str, object] | None = None
@@ -31,6 +39,8 @@ class OpenAiCompatibleBackend:
                 {"role": "user", "content": user},
             ],
             "temperature": 0,
+            # Without a cap one answer can spend the whole daily quota before it is counted.
+            "max_tokens": self._max_tokens,
         }
         if schema is not None:
             # Guided decoding when the server supports it; the gateway validates in any case.

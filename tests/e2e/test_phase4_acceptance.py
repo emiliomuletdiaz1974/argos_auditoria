@@ -47,6 +47,7 @@ VAULT = os.environ.get("ARGOS_TEST_VAULT", "http://127.0.0.1:8200")
 VAULT_TOKEN = os.environ.get("ARGOS_TEST_VAULT_TOKEN", "root")
 CONTENT_KEY = os.environ.get("ARGOS_TEST_CONTENT_KEY", "argos-content")
 OPA = os.environ.get("ARGOS_TEST_OPA", "http://127.0.0.1:8181")
+OPA_TOKEN = os.environ.get("ARGOS_TEST_OPA_TOKEN", "dev-only-opa-host")
 VERSION = "1.0.0"
 IN_FORCE = date(2024, 8, 1)
 TRUTH = load_applicability_truth()
@@ -166,6 +167,7 @@ def test_signed_bundle_applicability_and_engines_on_the_demo_snapshot(
             "documented_exceptions": 0,
         },
         OPA,
+        token=OPA_TOKEN,
     )
     assert verdict == {
         "compliant": True,

@@ -49,6 +49,15 @@ def test_threshold_edges(confidence: float, bucket: str) -> None:
     assert [p.key for p in getattr(result, bucket)] == ["a"]
 
 
+@pytest.mark.parametrize("confidence", [ACCEPT, 0.99, 1.0])
+def test_the_model_never_takes_a_column_out_of_scope_on_its_own(confidence: float) -> None:
+    # Column names come from the client's system and reach the prompt: a name written as an
+    # instruction must not be enough to hide personal data from the campaigns.
+    result = triage([Proposal("a", "no_personal_data", confidence)], KEYS)
+    assert result.accepted == ()
+    assert [p.key for p in result.review] == ["a"]
+
+
 def test_prompt_hash_is_deterministic_and_depends_on_the_batch() -> None:
     first = [ColumnContext("k1", "campo07", "text", "legacy.records", ("obs_txt",))]
     second = [ColumnContext("k1", "campo08", "text", "legacy.records", ("obs_txt",))]

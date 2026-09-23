@@ -23,6 +23,7 @@ import hashlib
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
@@ -34,6 +35,8 @@ from argos_common.errors import ArgosError
 
 PRIORITIES = ("interactive", "batch")
 DEFAULT_SLOTS: Mapping[str, int] = {"interactive": 12, "batch": 8}
+# Tokens held against the quota while a request is in flight: a prompt plus two capped answers.
+DEFAULT_RESERVATION = 8_192
 REPAIR_INSTRUCTION = (
     "Tu respuesta anterior no encaja en el esquema. Corrígela y devuelve solo JSON válido.\n"
     "Respuesta anterior: {answer}\nError: {error}"
@@ -82,22 +85,49 @@ class Gateway:
         spent: Mapping[str, int] | None = None,
         slots: Mapping[str, int] | None = None,
         model: str = "argos-llm",
+        reservation: int = DEFAULT_RESERVATION,
+        today: Callable[[], date] | None = None,
+        reload_quotas: Callable[[], Mapping[str, int]] | None = None,
+        verdict_exists: Callable[[str], bool] | None = None,
     ) -> None:
         self._backend = backend
         self._journal = journal
         self._usage = usage
         self._quotas = dict(quotas)
         self._spent: dict[str, int] = dict(spent or {})
+        self._reserved: dict[str, int] = {}
         sizes = {**DEFAULT_SLOTS, **dict(slots or {})}
         self._slots = {name: asyncio.Semaphore(sizes[name]) for name in PRIORITIES}
         self._model = model
+        self._reservation = reservation
+        self._today = today or (lambda: datetime.now(UTC).date())
+        self._reload_quotas = reload_quotas
+        self._verdict_exists = verdict_exists
+        self._day = self._today()
 
-    def _check_quota(self, service: str) -> None:
+    def spent(self, service: str) -> int:
+        return self._spent.get(service, 0)
+
+    def _roll_day(self) -> None:
+        """A daily quota is per day: the counter starts again, and the table is read again."""
+        today = self._today()
+        if today == self._day:
+            return
+        self._day = today
+        self._spent.clear()
+        if self._reload_quotas is not None:
+            self._quotas = dict(self._reload_quotas())
+
+    def _reserve(self, service: str) -> None:
+        """Take the reservation before calling, so parallel requests see each other's cost."""
+        self._roll_day()
         budget = self._quotas.get(service)
         if budget is None:
             raise QuotaExceededError(f"the service {service!r} has no declared quota")
-        if self._spent.get(service, 0) >= budget:
+        committed = self._spent.get(service, 0) + self._reserved.get(service, 0)
+        if committed + self._reservation > budget:
             raise QuotaExceededError(f"the service {service!r} spent its daily quota")
+        self._reserved[service] = self._reserved.get(service, 0) + self._reservation
 
     async def chat_json(
         self,
@@ -109,26 +139,33 @@ class Gateway:
     ) -> Answer:
         if priority not in PRIORITIES:
             raise GatewayError(f"unknown priority: {priority!r}")
-        self._check_quota(service)
         clean_system, substituted_system = scrub_input(system)
         clean_user, substituted_user = scrub_input(user)
         substitutions = substituted_system + substituted_user
         digest = prompt_hash(clean_system, clean_user)
 
-        async with self._slots[priority]:
-            data, tokens_in, tokens_out, repaired = await self._complete(
-                clean_system, clean_user, schema
-            )
-        check_output(data)
-        self._spent[service] = self._spent.get(service, 0) + tokens_in + tokens_out
-        row = {
-            "service": service,
-            "model": self._model,
-            "prompt_sha256": digest,
-            "tokens_in": tokens_in,
-            "tokens_out": tokens_out,
-        }
-        self._usage(row)
+        self._reserve(service)
+        # What the model consumed is spent whatever happens next: a failed or rejected answer
+        # costs the same inference as a good one.
+        cost = [0, 0]
+        try:
+            async with self._slots[priority]:
+                data, repaired = await self._complete(clean_system, clean_user, schema, cost)
+            check_output(data, self._verdict_exists)
+        finally:
+            self._reserved[service] -= self._reservation
+            self._spent[service] = self._spent.get(service, 0) + cost[0] + cost[1]
+            if cost[0] or cost[1]:
+                self._usage(
+                    {
+                        "service": service,
+                        "model": self._model,
+                        "prompt_sha256": digest,
+                        "tokens_in": cost[0],
+                        "tokens_out": cost[1],
+                    }
+                )
+        tokens_in, tokens_out = cost
         self._journal(
             {
                 "action": "ai.completion",
@@ -141,21 +178,23 @@ class Gateway:
         return Answer(data, digest, tokens_in, tokens_out, repaired, substitutions)
 
     async def _complete(
-        self, system: str, user: str, schema: dict[str, Any]
-    ) -> tuple[dict[str, Any], int, int, bool]:
+        self, system: str, user: str, schema: dict[str, Any], cost: list[int]
+    ) -> tuple[dict[str, Any], bool]:
+        """The parsed answer and whether it needed the repair; `cost` adds up every call."""
         completion = await self._call(system, user, schema)
-        tokens_in, tokens_out = completion.tokens_in, completion.tokens_out
+        cost[0] += completion.tokens_in
+        cost[1] += completion.tokens_out
         parsed, error = _parse(completion.text, schema)
         if error is None:
-            return parsed, tokens_in, tokens_out, False
+            return parsed, False
         repair = REPAIR_INSTRUCTION.format(answer=completion.text, error=error)
         second = await self._call(system, f"{user}\n\n{repair}", schema)
-        tokens_in += second.tokens_in
-        tokens_out += second.tokens_out
+        cost[0] += second.tokens_in
+        cost[1] += second.tokens_out
         parsed, error = _parse(second.text, schema)
         if error is not None:
             raise GatewayError(f"the answer does not fit the schema after one repair: {error}")
-        return parsed, tokens_in, tokens_out, True
+        return parsed, True
 
     async def _call(self, system: str, user: str, schema: dict[str, Any]) -> Any:
         try:

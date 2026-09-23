@@ -37,8 +37,8 @@ ORDER = "order_key"
 
 
 class Transition(BaseModel):
-    to: str = Field(description="target state of the finding")
-    note: str = ""
+    to: str = Field(max_length=32, description="target state of the finding")
+    note: str = Field(default="", max_length=2_000)
     risk_expiry: date | None = Field(default=None, description="only when accepting the risk")
 
     @model_validator(mode="after")

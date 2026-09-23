@@ -13,7 +13,7 @@ from temporalio.worker import Worker
 from argos_common.config import ArgosConfig, get_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
-from argos_events import Bus
+from argos_events import Bus, bus_from_config
 
 from .activities import ChallengeActivities, record_in_journal, smoke_probe
 from .bridge import DURABLE, SIGNAL, SUBJECT, on_circuit_open
@@ -33,6 +33,7 @@ async def create_worker(
         activities += [
             campaign.prepare_campaign,
             campaign.request_approval,
+            campaign.check_gate,
             campaign.set_campaign_status,
             campaign.probe,
             campaign.wait_window,
@@ -61,7 +62,10 @@ def campaign_activities(
     config = cfg or get_config()
     token = config.VAULT_TOKEN.get_secret_value() if config.VAULT_TOKEN else ""
     secrets = VaultSecretStore(config.VAULT_ADDR, token)
-    return ChallengeActivities(config.DATABASE_URL, secrets, config.OPA_URL, bus)
+    opa_token = config.OPA_TOKEN.get_secret_value() if config.OPA_TOKEN else None
+    return ChallengeActivities(
+        config.DATABASE_URL, secrets, config.OPA_URL, bus, opa_token=opa_token
+    )
 
 
 async def listen_for_open_circuits(client: Client, bus: Bus, dsn: str) -> None:
@@ -78,7 +82,7 @@ async def main() -> None:
     cfg = get_config()
     configure_logging("argos-campaign-worker", cfg.LOG_LEVEL)
     client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")
-    bus = Bus("argos-campaign-worker", cfg.NATS_URL)
+    bus = bus_from_config("argos-campaign-worker", cfg)
     await bus.connect()
     await listen_for_open_circuits(client, bus, cfg.DATABASE_URL)
     worker = await create_worker(client, campaign=campaign_activities(cfg, bus))

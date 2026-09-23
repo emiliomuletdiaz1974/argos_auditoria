@@ -64,6 +64,7 @@ El reto estrella del producto, el borrado efectivo, necesita un interesado de pr
   2. `authorize_injection`, que exige una persona y un procedimiento de reversión (`synthetic.authorize`);
   3. `confirm_injection`, `confirm_exercise` y `confirm_revert`, que confirma el cliente (`synthetic.injected`, `synthetic.exercised`, `synthetic.revert`).
 - **Escritura única:** los triggers impiden cambiar una autorización o repetir una confirmación, y los sujetos son inmutables.
+- **Orden y campaña:** una autorización pedida para una campaña exige que el sujeto sea de esa campaña. El ejercicio de un derecho y la reversión exigen la inyección confirmada antes. La inyección y la reversión se confirman una sola vez, y un mismo derecho no se confirma dos veces; un derecho distinto del mismo sujeto sí.
 - **Sin confirmación no hay absolución:** un reto con `preconditions: [synthetic_subject_injected]` queda `inconclusive` mientras el cliente no confirme.
 - **Reversión:** `pending_reversions` lista lo inyectado y no revertido; una campaña no se sella con sujetos sin revertir.
 - **En la demostración:** `tools/demo_client_actions.py` hace de cliente con las credenciales de propietario de las fuentes simuladas: inyecta, suprime solo en la base clínica y deja el sujeto plantado en la réplica de facturación.
@@ -136,7 +137,7 @@ Una campaña es un proceso de días con personas dentro: sobrevive a reinicios, 
 - **`SystemRun`** recorre las unidades de su sistema en serie: espera de ventana, sonda y evaluación. El presupuesto de carga ya marca el ritmo.
 - **Señales y consulta:** `approve(gate)`, `circuit_open(system_id)`, `circuit_closed(system_id)` y `progress`. Un sistema pausado **espera**, no gira en vacío.
 - **Sin entrada/salida en el workflow:** todo pasa por actividades, así que Temporal puede reejecutar su historial.
-- **Sello (`argos_challenges.seal`):** un SHA-256 canónico sobre los veredictos, la instantánea, la versión de ontología y la de la biblioteca; se guarda en la campaña y se ancla en el diario (`campaign.seal`). `verify_seal` lo recalcula desde las tablas y comprueba el asiento; tocar un veredicto lo rompe.
+- **Sello (`argos_challenges.seal`):** un SHA-256 canónico sobre los veredictos, la instantánea, la versión de ontología y la de la biblioteca; se guarda en la campaña y se ancla en el diario (`campaign.seal`). `verify_seal` lo recalcula desde las tablas y comprueba el asiento; tocar un veredicto lo rompe. El asiento se busca por su acción (indexada), campaña y sello, sin recorrer el diario: cada lectura de una campaña verifica su sello, y el diario solo crece.
   - Una campaña **no se sella** con sujetos sintéticos inyectados y sin revertir.
   - La Fase 07 lo envolverá con Merkle y firma sin cambiar lo que se sella.
 - **Parámetros del cliente:** el calendario de conservación y sus columnas de referencia son del cliente; viven junto a los datos de OPA y el compilador resuelve `{$client: …}` desde ahí.
@@ -145,12 +146,12 @@ Una campaña es un proceso de días con personas dentro: sobrevive a reinicios, 
 
 El reparto del pliego es taxativo: **ARGOS ejecuta y evidencia, el cliente aprueba**. Esta API es donde ocurre.
 - **Roles del realm:** `campaign_manager` planifica y lanza; `dpo_reviewer` aprueba compuertas, autoriza la inyección de un sujeto sintético y mueve un hallazgo; cualquier rol puede leer. Sin token, 401; con token sin rol, 403.
-- **Compuertas:** `GET /campaigns/{id}/gates` muestra qué se aprueba y cuántas aprobaciones faltan; `POST …/approve` registra la del usuario, y al alcanzar las necesarias envía la señal al workflow. `sampling` exige **doble control**: dos personas distintas; la misma no cuenta dos veces.
+- **Compuertas:** `GET /campaigns/{id}/gates` muestra qué se aprueba y cuántas aprobaciones faltan; `POST …/approve` registra la del usuario, y al alcanzar las necesarias envía la señal al workflow. `sampling` exige **doble control**: dos personas distintas; la misma no cuenta dos veces. La señal solo avisa: antes de continuar, el workflow comprueba en `argos.approvals` (actividad `check_gate`) que las aprobaciones de personas están registradas, y si no lo están vuelve a esperar. Una señal enviada directamente a Temporal no abre ninguna compuerta.
 - **Sujeto sintético:** autorización del punto de inyección (DPO) y confirmaciones del cliente (inyección, ejercicio del derecho y reversión).
-- **Hallazgos:** `POST /findings/{id}/transition`, con la máquina de estados; una transición ilegal responde 409.
+- **Hallazgos:** `POST /findings/{id}/transition`, con la máquina de estados; una transición ilegal responde 409. Una persona puede llevar un hallazgo hasta `pending_verification`, pero `closed_compliant` solo lo alcanza el actor `system:remediation`: pedirlo por la API también responde 409.
 - **Lectura:** estado de la campaña con `seal_verified` recalculado, veredictos y hallazgos.
 - Cada acción entra en el diario con el usuario que la hizo.
-- Desde F08-17 estas rutas son las de la API única (`argos_api`, `127.0.0.1:8000`): este módulo ya no expone HTTP.
+- Desde F08-17 estas rutas son las de la API única (`argos_api`, `127.0.0.1:8000`): este módulo ya no expone HTTP. Las protecciones de la auditoría del 2026-09-18 sobre la API de campañas (identificadores UUID, textos de 2000 caracteres como máximo, `scope` de 16 KiB, errores de PostgreSQL como 503 sin detalle y `/docs` solo en desarrollo) se trasladaron allí en F09-17.
 
 ### Reejecución de subsanación (ARG-049)
 
@@ -203,7 +204,7 @@ El cierre de un hallazgo no lo declara el cliente: lo confirma **el mismo reto q
 
 ## 5. Configuración
 
-`ARGOS_TEMPORAL_ADDRESS`, `ARGOS_DATABASE_URL`, `ARGOS_NATS_URL`, `ARGOS_VAULT_ADDR`, `ARGOS_VAULT_TOKEN`, `ARGOS_OPA_URL` (por defecto `http://127.0.0.1:8181`), `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, desde `argos-common`.
+`ARGOS_TEMPORAL_ADDRESS`, `ARGOS_DATABASE_URL`, `ARGOS_NATS_URL`, `ARGOS_VAULT_ADDR`, `ARGOS_VAULT_TOKEN`, `ARGOS_OPA_URL` (por defecto `http://127.0.0.1:8181`), `ARGOS_OPA_TOKEN` (el worker se identifica ante OPA; en desarrollo, `dev-only-opa-challenge`), `ARGOS_NATS_USER` y `ARGOS_NATS_PASSWORD` (usuario `challenge`), `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, desde `argos-common`.
 
 `ARGOS_API_BIND` es propia del proceso de la API: la dirección a la que se ata uvicorn. Por defecto `127.0.0.1`; el contenedor la pone a `0.0.0.0` porque el puerto publicado ya limita el acceso al bucle local del anfitrión.
 
@@ -305,6 +306,7 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 - **La columna de referencia de la retención va escrita en cada variante** (`created_at`, `issued_at`): el nombre de una columna no puede viajar como parámetro de una sentencia.
 - **`acc-special-category-profiles` deja fuera las cuentas de superusuario**: son cuentas técnicas de administración y se revisan aparte.
 - El contenedor de la API valida los tokens emitidos por Keycloak en su dirección interna (`http://keycloak:8080/realms/argos`); desde el anfitrión, Keycloak responde en `127.0.0.1:8180` y los emisores no coinciden. Para ejercer la API autenticada desde el anfitrión se usa el proceso local, como hacen los tests de F05-15.
+- **Una fila de inyección guarda solo el último derecho ejercido** (`exercised_right`): el diario conserva cada ejercicio, pero la tabla no. Una tabla de ejercicios por inyección lo resolvería con una migración.
 
 ## 10. Historial
 
@@ -330,6 +332,12 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.1.0-alpha | 2026-09-17 | Contenedores del worker y de la API en el entorno de desarrollo, con SBOM en el CI | Fase 05 (F05-17) |
 | 0.1.0-alpha | 2026-09-17 | Biblioteca de 17 retos de RGPD y AI Act, criterios delegados que leen la sonda y filtro por severidad en SHACL | Fase 05 (ARG-050) |
 | 0.1.0-alpha | 2026-09-17 | Prueba de la fase: campaña completa, reejecución determinista, sello y subsanación | Fase 05 (`fase-05`) |
+| 0.1.0-alpha | 2026-09-18 | Solo la reejecución de subsanación cierra un hallazgo como conforme | Auditoría de seguridad (M5) |
+| 0.1.0-alpha | 2026-09-18 | Las compuertas del workflow comprueban las aprobaciones registradas, no solo la señal | Auditoría de seguridad (M4) |
+| 0.1.0-alpha | 2026-09-18 | API de campañas: ids UUID validados, cuerpos acotados, errores de base sin detalle y descripción solo en desarrollo | Auditoría de seguridad (B5, B6, B8) |
+| 0.1.0-alpha | 2026-09-18 | Sujeto sintético: autorización ligada a su campaña y confirmaciones en orden y sin repetición | Auditoría de seguridad (B4) |
+| 0.1.0-alpha | 2026-09-18 | La verificación del sello consulta su asiento en vez de recorrer el diario | Auditoría de seguridad (B9) |
+| 0.1.0-alpha | 2026-09-18 | Las actividades se identifican ante OPA con su token | Auditoría de seguridad (M7) |
 | 0.1.0-alpha | 2026-09-18 | El worker se conecta al bus y anuncia cada sello en `argos.campaign.sealed` (dependencia de `argos-events`) | F07-13 |
 | 0.1.0-alpha | 2026-09-21 | Lectores para la API v1 en `store`: `list_campaigns`, `campaign_gates`, `campaign_plan` (unidades literales y lo no verificable, antes de sondear) y `approvals_needed`; la API de la Fase 05 lee las compuertas con la misma función | F08-05 |
 | 0.1.0-alpha | 2026-09-21 | Hallazgos: una persona ya no lleva un hallazgo a `closed_compliant` ni a `reopened` (solo la reejecución, con actor `system:`); `person_transitions`, `list_findings` (peor primero, con filtros) y `finding_detail` (veredicto y asiento de la consulta); la subsanación admite un único hallazgo (`finding_id`) | F08-06 |

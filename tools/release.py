@@ -13,7 +13,14 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from argos_common.release import VaultTransitSigner, build_manifest, serialize, verify_signature
+from argos_common.release import (
+    VaultTransitSigner,
+    build_manifest,
+    key_fingerprint,
+    require_trusted_key,
+    serialize,
+    verify_signature,
+)
 
 DIST = Path("dist")
 MANIFEST = DIST / "release-manifest.json"
@@ -63,7 +70,8 @@ def main() -> int:
     build.add_argument("--version", required=True)
     build.add_argument("--sbom", type=Path, default=DIST / "sbom")
     sub.add_parser("sign")
-    sub.add_parser("verify")
+    verify = sub.add_parser("verify")
+    verify.add_argument("--fingerprint", help="or ARGOS_RELEASE_KEY_FINGERPRINT")
     args = parser.parse_args()
 
     if args.command == "build":
@@ -77,8 +85,13 @@ def main() -> int:
         SIGNATURE.write_bytes(signer.sign(MANIFEST.read_bytes()))
         PUBLIC_KEY.write_bytes(signer.public_key())
         print(f"signature in {SIGNATURE}, public key in {PUBLIC_KEY}")
+        print(f"key fingerprint {key_fingerprint(signer.public_key())}: record it apart from dist/")
     else:
-        verify_signature(MANIFEST.read_bytes(), SIGNATURE.read_bytes(), PUBLIC_KEY.read_bytes())
+        # The key sits beside the manifest in dist/: it is trusted only by a fingerprint kept apart.
+        public_key = PUBLIC_KEY.read_bytes()
+        fingerprint = args.fingerprint or os.environ.get("ARGOS_RELEASE_KEY_FINGERPRINT")
+        require_trusted_key(public_key, fingerprint)
+        verify_signature(MANIFEST.read_bytes(), SIGNATURE.read_bytes(), public_key)
         print("valid signature")
     return 0
 

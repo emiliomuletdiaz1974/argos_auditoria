@@ -13,7 +13,7 @@ from argos_common.journal_pg import PostgresJournal
 from argos_events import Bus, ensure_streams
 
 pytestmark = pytest.mark.integration
-NATS_URL = os.environ.get("ARGOS_TEST_NATS", "nats://127.0.0.1:4222")
+NATS_URL = os.environ.get("ARGOS_TEST_NATS", "nats://argos-dev:dev-only-nats-host@127.0.0.1:4222")
 
 
 @pytest.fixture
