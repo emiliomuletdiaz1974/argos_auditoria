@@ -1,8 +1,8 @@
 # ADR-0014 · Seguridad de plataforma sin appliance: qué se construye ya y qué espera al hardware
 
-- **Estado:** Propuesta
+- **Estado:** Aceptado
 - **Fecha:** 2026-09-23
-- **Decide:** el usuario (tarea F09-00)
+- **Decide:** el usuario (tarea F09-00) · **Aprobado:** 2026-09-23
 - **Contexto:** Fase 09 · Seguridad de plataforma (ARG-081…ARG-090) · Pliego P-02, P-06, P-22, P-23, P-25 · Plan Director §8.2 «Fase 09», §13 y §14 · Especificación Técnica §3.8
 
 ## Contexto
