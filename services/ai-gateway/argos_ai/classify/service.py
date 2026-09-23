@@ -21,6 +21,7 @@ import yaml
 from argos_ai.classify.calibration import Calibrator
 from argos_ai.gateway import Gateway
 from argos_inventory.classify.assisted import ColumnContext, Proposal
+from argos_inventory.graph.model import CATEGORIES
 
 PROMPT_FILE = Path(__file__).resolve().parents[4] / "library" / "prompts" / "classify.yaml"
 SERVICE = "inventory"
@@ -88,15 +89,21 @@ class SemanticClassifier:
         answer = await self._gateway.chat_json(SERVICE, self._system, user, SCHEMA)
         proposals: list[Proposal] = []
         recorded: list[dict[str, Any]] = []
+        # Only a column of this batch, once, with a category the product knows: anything else is
+        # noise, and recording it would feed the next calibration with it (SEC-052).
+        batch = {column.key for column in columns}
+        seen: set[str] = set()
         for item in answer.data["items"]:
-            category, declared = str(item["category"]), float(item["confidence"])
+            key, category = str(item["key"]), str(item["category"])
+            if key not in batch or key in seen or category not in CATEGORIES:
+                continue
+            seen.add(key)
+            declared = float(item["confidence"])
             calibrated = self._calibrator.calibrate(category, declared)
-            proposals.append(
-                Proposal(str(item["key"]), category, calibrated, str(item.get("reason", "")))
-            )
+            proposals.append(Proposal(key, category, calibrated, str(item.get("reason", ""))))
             recorded.append(
                 {
-                    "node_key": str(item["key"]),
+                    "node_key": key,
                     "category": category,
                     "declared": declared,
                     "calibrated": calibrated,

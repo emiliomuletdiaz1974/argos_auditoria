@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import psycopg
+from psycopg.conninfo import make_conninfo
 
 from argos_ai.rag.embeddings import Embedder
 from argos_ai.rag.pipeline import retrieve
@@ -36,6 +37,14 @@ FINDING_STATUSES = (
 SEVERITIES = ("critical", "high", "medium", "low")
 GRAPH_PAGE = 20
 FRAGMENTS = 6
+# What a question to the assistant may cost the database: a tool that takes longer is cut by
+# PostgreSQL, whatever it asked (security review F09-02, SEC-047).
+TOOL_STATEMENT_TIMEOUT = "5s"
+# The origins that may be cited as regulation: the client's own documents are not (SEC-048).
+REGULATION_ORIGINS = ("norm", "guide")
+# Selector fields the graph tool serves: `system_kind` needs the ids of the systems of that kind,
+# which the tool does not resolve, so it is not offered (SEC-050).
+GRAPH_FIELDS = sorted(ALLOWED_SELECTOR_FIELDS - {"system_kind"})
 
 TOOL_SCHEMAS: Mapping[str, dict[str, Any]] = {
     "search_regulation": {
@@ -66,7 +75,7 @@ TOOL_SCHEMAS: Mapping[str, dict[str, Any]] = {
         "properties": {
             "selector": {
                 "type": "object",
-                "propertyNames": {"enum": sorted(ALLOWED_SELECTOR_FIELDS)},
+                "propertyNames": {"enum": GRAPH_FIELDS},
             }
         },
     },
@@ -78,6 +87,11 @@ class Tool:
     name: str
     schema: dict[str, Any]
     run: Callable[[dict[str, Any]], dict[str, Any]]
+
+
+def timeboxed(dsn: str) -> str:
+    """The same database, with the statement timeout every tool connection carries."""
+    return make_conninfo(dsn, options=f"-c statement_timeout={TOOL_STATEMENT_TIMEOUT}")
 
 
 def _finding_status(dsn: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
@@ -101,10 +115,7 @@ def _finding_status(dsn: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _inventory_coverage(dsn: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    rows = coverage(dsn)
-    wanted = arguments.get("system_id")
-    if wanted is not None:
-        rows = [row for row in rows if str(row.get("system_id")) == wanted]
+    rows = coverage(dsn, arguments.get("system_id"))
     return {"systems": [{key: str(value) for key, value in row.items()} for row in rows]}
 
 
@@ -114,21 +125,27 @@ def _query_graph(dsn: str, arguments: Mapping[str, Any]) -> dict[str, Any]:
     rows = GraphStore(dsn).query(
         cypher, params, ("key", "label", "name", "qualified_name", "system_id")
     )
+    # The selector asks for one row more than a page to know whether there are more.
     nodes = [
-        {"name": str(row["name"]), "qualified_name": str(row["qualified_name"])} for row in rows
+        {"name": str(row["name"]), "qualified_name": str(row["qualified_name"])}
+        for row in rows[:GRAPH_PAGE]
     ]
-    return {"count": len(nodes), "truncated_at": GRAPH_PAGE, "nodes": nodes}
+    return {"count": len(nodes), "truncated": len(rows) > GRAPH_PAGE, "nodes": nodes}
 
 
 def _search_regulation(
     dsn: str, embedder: Embedder, arguments: Mapping[str, Any]
 ) -> dict[str, Any]:
-    hits = retrieve(dsn, str(arguments["question"]), embedder)[:FRAGMENTS]
+    hits = retrieve(dsn, str(arguments["question"]), embedder, REGULATION_ORIGINS)[:FRAGMENTS]
     return {"fragments": [{"reference": hit.reference, "text": hit.text[:400]} for hit in hits]}
 
 
 def default_toolbox(dsn: str, embedder: Embedder) -> dict[str, Tool]:
-    """The four tools bound to the appliance database. There is no fifth."""
+    """The four tools bound to the appliance database. There is no fifth.
+
+    Every connection they open carries the statement timeout (SEC-047).
+    """
+    dsn = timeboxed(dsn)
     runners: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
         "search_regulation": lambda arguments: _search_regulation(dsn, embedder, arguments),
         "finding_status": lambda arguments: _finding_status(dsn, arguments),

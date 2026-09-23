@@ -17,6 +17,12 @@ import psycopg
 from psycopg.rows import dict_row
 
 from argos_common.journal_pg import PostgresJournal
+from argos_inventory.classify.dictionary import (
+    NAME_DICTIONARY,
+    match_column_in_table,
+    match_column_name,
+    name_tokens,
+)
 from argos_inventory.graph.model import CATEGORIES
 from argos_inventory.graph.store import GraphStore
 
@@ -144,7 +150,56 @@ def prompt_hash(columns: Sequence[ColumnContext]) -> str:
     return hashlib.sha256((SYSTEM_PROMPT + payload).encode("utf-8")).hexdigest()[:16]
 
 
-def triage(proposals: Sequence[Proposal], batch_keys: frozenset[str]) -> Triage:
+SPECIAL = "special_category."
+
+
+def _special(category: str | None) -> bool:
+    return category is not None and category.startswith(SPECIAL)
+
+
+def _table_says_special(table: str) -> bool:
+    tokens = name_tokens(table.rsplit(".", 1)[-1])
+    return any(
+        tokens[i : i + len(sequence)] == sequence
+        for category, sequences in NAME_DICTIONARY.items()
+        if _special(category)
+        for sequence in sequences
+        for i in range(len(tokens) - len(sequence) + 1)
+    )
+
+
+def special_hints(columns: Sequence[ColumnContext]) -> frozenset[str]:
+    """The columns whose own context says special category: their name, their table or a sibling.
+
+    Those are the ones a hostile name in the same batch would try to downgrade, so a proposal that
+    is not a special category for them always goes to a person (security review F09-02, SEC-025).
+    """
+    return frozenset(
+        column.key
+        for column in columns
+        if _special(match_column_in_table(column.name, column.table))
+        or _table_says_special(column.table)
+        or any(_special(match_column_name(sibling)) for sibling in column.siblings)
+    )
+
+
+def table_batches(columns: Sequence[ColumnContext], size: int) -> list[list[ColumnContext]]:
+    """Batches of one table each: a name in another table never sits next to a column (SEC-025)."""
+    by_table: dict[str, list[ColumnContext]] = {}
+    for column in columns:
+        by_table.setdefault(column.table, []).append(column)
+    return [
+        group[start : start + size]
+        for _, group in sorted(by_table.items())
+        for start in range(0, len(group), size)
+    ]
+
+
+def triage(
+    proposals: Sequence[Proposal],
+    batch_keys: frozenset[str],
+    hinted: frozenset[str] = frozenset(),
+) -> Triage:
     accepted: list[Proposal] = []
     review: list[Proposal] = []
     ignored: list[Proposal] = []
@@ -163,7 +218,13 @@ def triage(proposals: Sequence[Proposal], batch_keys: frozenset[str]) -> Triage:
         seen.add(proposal.key)
         # Saying a column holds no personal data takes it out of every campaign's selectors, and
         # the column names that lead to it come from the client's system: a person confirms it.
-        if proposal.confidence >= ACCEPT and proposal.category not in NEEDS_REVIEW:
+        # And a column whose context says special category is not downgraded without a person.
+        downgraded = proposal.key in hinted and not _special(proposal.category)
+        if (
+            proposal.confidence >= ACCEPT
+            and proposal.category not in NEEDS_REVIEW
+            and not downgraded
+        ):
             accepted.append(proposal)
         elif proposal.confidence >= REVIEW:
             review.append(proposal)
@@ -202,10 +263,9 @@ def classify_grey_zone(
     at = moment.isoformat()
     columns = grey_zone_columns(store, system_id)
     accepted = queued = ignored = invalid = 0
-    for start in range(0, len(columns), batch_size):
-        batch = columns[start : start + batch_size]
+    for batch in table_batches(columns, batch_size):
         by_key = {c.key: c for c in batch}
-        result = triage(model.propose(batch), frozenset(by_key))
+        result = triage(model.propose(batch), frozenset(by_key), special_hints(batch))
         batch_hash = prompt_hash(batch)
         for proposal in result.accepted:
             params = {

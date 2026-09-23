@@ -4,8 +4,8 @@ kind: module
 title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
-version: 0.2.0-alpha
-commit: 4ed4faf
+version: 0.3.0-alpha
+commit: 2a18039
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -84,6 +84,8 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 - **Instantáneas inmutables:** una instantánea no cambia aunque el grafo vivo sí, y `verify_snapshot` comprueba su integridad. Es la base de campañas reproducibles.
 - **API de solo lectura:** requiere un token válido del realm con cualquiera de sus roles. El selector no admite texto libre en la consulta: los valores viajan como parámetros y las etiquetas salen del vocabulario cerrado.
 - **Minimización:** la validación de identificadores produce tasas de aceptación, no valores.
+- **Clasificación asistida sin rebajas solas** (F09-29, SEC-025): los lotes que ve el modelo son de una sola tabla (`table_batches`). Una columna cuyo contexto dice categoría especial (su nombre, su tabla o una columna hermana, según el diccionario, `special_hints`) no se acepta sola con una propuesta que no sea `special_category.*`: va a la cola de revisión. Un nombre hostil en el lote no puede sacar una columna de salud de las campañas.
+- **Cobertura filtrada en la base:** `catalog.views.coverage(dsn, system_id=None)` filtra en SQL.
 - **Decisiones aplicables:** notas de desviación ARG-021-023, ARG-024-025, ARG-026-028 y ARG-029-030.
 - **Un presupuesto por sistema** (SEC-004, F09-22): `open_connector` abre cada conector con el presupuesto compartido del sistema (`PostgresBudgetStore`) y acepta el aviso de circuito abierto. Las campañas lo publican en el bus, así que el puente del motor pausa por fin las campañas que preguntan a un sistema que sufre.
 
@@ -129,3 +131,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.1.0-alpha | 2026-09-20 | Lectores para la API v1: `catalog.views.systems`, `pending_review_by_system`, `classify.assisted.pending_reviews` y `graph.reads.node_detail` (el Cypher del vecindario deja de vivir en el esquema GraphQL y se comparte) | Fase 08 (ARG-074) |
 | 0.1.0-alpha | 2026-09-21 | `decide_review(..., corrected_to=...)`: una corrección es un rechazo para la calibración y una clasificación humana con la categoría elegida; `versioning.deltas.node_deltas` para la línea temporal de un nodo | F08-11 |
 | 0.2.0-alpha | 2026-09-23 | `open_connector`/`run_probe` con presupuesto compartido y `on_circuit_open` | F09-22 |
+| 0.3.0-alpha | 2026-09-23 | Lotes de clasificación por tabla, revisión obligatoria de una rebaja cuando el contexto dice categoría especial y cobertura filtrada en SQL | F09-29 |

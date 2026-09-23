@@ -21,6 +21,7 @@ prompt, by the gateway, never its content.
 
 import asyncio
 import json
+import threading
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -69,6 +70,10 @@ OUT_OF_BUDGET = (
 
 
 REGULATION_TOOL = "search_regulation"
+# Tool calls running at once across every question of this process: a burst of questions
+# queues here instead of piling queries on the database (SEC-047).
+TOOL_CONCURRENCY = 4
+_TOOL_SLOTS = threading.BoundedSemaphore(TOOL_CONCURRENCY)
 
 
 class AssistantError(ArgosError):
@@ -98,7 +103,13 @@ def _step_result(tools: Mapping[str, Tool], step: Mapping[str, Any]) -> tuple[st
         jsonschema.Draft202012Validator(tool.schema).validate(arguments)
     except jsonschema.ValidationError as exc:
         return name, {"error": f"argumentos no válidos para {name}: {exc.message}"}
-    return name, {"result": tool.run(arguments)}
+    with _TOOL_SLOTS:
+        try:
+            return name, {"result": tool.run(arguments)}
+        except ValueError as exc:
+            # A selector it cannot serve or a query cut by its timeout is an answer for the model,
+            # which can correct itself; it is not a failure of the question (SEC-050).
+            return name, {"error": f"la herramienta {name} no pudo responder: {exc}"}
 
 
 def _returned(value: Any, numbers: list[float], verdicts: set[str], key: str = "") -> None:
@@ -162,8 +173,16 @@ def _fragments(result: Mapping[str, Any], seen: list[dict[str, str]]) -> list[di
     return new
 
 
-async def ask(question: str, gateway: Gateway, tools: Mapping[str, Tool]) -> Answer:
-    """Answer one console question, within the budget and with checked sources."""
+async def ask(
+    question: str,
+    gateway: Gateway,
+    tools: Mapping[str, Tool],
+    person: str | None = None,
+) -> Answer:
+    """Answer one console question, within the budget and with checked sources.
+
+    `person` is who asks, so the quota is theirs and not everybody's (SEC-043).
+    """
     system = SYSTEM_PROMPT.format(tools=", ".join(sorted(tools)), budget=MAX_TOOL_CALLS)
     transcript: list[str] = [f"Pregunta: {question}"]
     used: list[str] = []  # every call, failed ones included: they spend budget too
@@ -181,6 +200,7 @@ async def ask(question: str, gateway: Gateway, tools: Mapping[str, Tool]) -> Ans
             STEP_SCHEMA,
             priority="interactive",
             allowed_verdicts=frozenset(verdicts),
+            person=person,
         )
         step = answer.data
         if step.get("action") == "answer":

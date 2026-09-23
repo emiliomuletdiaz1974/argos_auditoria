@@ -4,8 +4,8 @@ kind: module
 title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
-version: 0.2.0-alpha
-commit: 47f474c
+version: 0.3.0-alpha
+commit: 2a18039
 date: 2026-09-23
 status: draft
 confidentiality: client
@@ -185,7 +185,7 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 
 ## 5. Configuración
 
-`ARGOS_LLM_LOCAL_ENDPOINT` (desde la Fase 01) y `ARGOS_LLM_MODEL` (ADR-0009): dirección del servidor compatible OpenAI y nombre del modelo servido. Ningún módulo nombra un modelo. Los guardarraíles no necesitan configuración: sus tablas son contenido, y la cuota vive en `argos.ai_quotas`.
+`ARGOS_LLM_LOCAL_ENDPOINT` (desde la Fase 01), `ARGOS_LLM_MODEL` y `ARGOS_EMBEDDING_MODEL` (ADR-0009, por defecto `argos-embed`): dirección del servidor compatible OpenAI y nombres de los modelos servidos. Ningún módulo nombra un modelo. Los guardarraíles no necesitan configuración: sus tablas son contenido, y la cuota vive en `argos.ai_quotas`.
 
 ## 6. Seguridad y tratamiento de datos
 
@@ -193,6 +193,13 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 - Ningún prompt se escribe en un log ni en una tabla; lo que se registra es su hash (ARG-052, `argos.ai_usage`).
 - El rol `argos_ai` puede **añadir** asientos al diario encadenado (migración `0020`, permiso de ejecución sobre `journal_append`, que es `SECURITY DEFINER`) y nada más sobre él. Hasta F06-13 no lo tenía: los tests del gateway conectaban como propietario y no lo veían. Ejecutar el gateway como lo hace el contenedor lo destapó.
 - El paquete no puede escribir veredictos ni hallazgos, por código y por permisos.
+- **Asistente acotado** (F09-29; SEC-043, SEC-047, SEC-048 y SEC-050):
+  - **Cuota por persona:** la API pasa quién pregunta (`person`, obligatorio en `/v1/assistant/ask`) y el gateway le reserva como mucho el 20 % de la cuota diaria del servicio (`PERSON_SHARE`). Una persona no deja sin asistente a las demás.
+  - **Herramientas con límites:** cada conexión lleva `statement_timeout` de 5 s (`timeboxed`), la cobertura se filtra en SQL y como mucho corren 4 herramientas a la vez en el proceso (`TOOL_CONCURRENCY`).
+  - **Solo norma como norma:** `search_regulation` busca únicamente en los orígenes `norm` y `guide`, y la recuperación agrupa por `(origen, referencia)`: un documento del cliente que reutiliza la referencia de un artículo no pasa por ese artículo.
+  - **Errores como respuesta:** un `ValueError` de una herramienta vuelve al modelo como error de la consulta. El selector de `query_graph` ya no ofrece `system_kind`, y su página devuelve `truncated` en lugar de un `truncated_at` que no cuadraba con el `LIMIT`.
+  - **Conectado:** `python -m argos_ai.api.main` crea la aplicación con las cuatro herramientas reales. Sin modelo, `/v1/assistant/ask` responde 503 por falta de modelo, no por falta de herramientas.
+- **Clasificación semántica** (F09-29, SEC-052): solo se devuelven y se registran propuestas de columnas del lote, una por columna y con una categoría del vocabulario cerrado.
 - **Cifras y citas con respaldo** (F09-28; SEC-033 y SEC-035):
   - El verificador de cifras reconoce decimales con punto o coma, porcentajes, rangos (`15-20`) y números pegados a su unidad (`30días`), y rechaza siempre las cantidades escritas en letra. Deja fuera identificadores, fechas y marcas de cita `[n]`.
   - El asistente comprueba sus cifras contra lo que devolvieron sus herramientas (y la pregunta). Cada fuente normativa tiene que ser, literalmente, un fragmento recuperado.
@@ -266,6 +273,8 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 - La lista de identificadores es la española de ARG-024; otro país necesita sus validadores, no otra expresión regular.
 - **Una afirmación de conformidad en una oración de relativo se escapa** («el sistema, que cumple el artículo 32, …»): las formas de «cumplir» tras «que» no cuentan, porque así describen los retos su criterio («los tratamientos que incumplen la forma»).
 - **Las cantidades en letra se rechazan salvo «un», «una» y «uno»**, que son artículos mucho más a menudo que números.
+- **La cuota por persona vive en la memoria del proceso**, como las reservas: un reinicio pone a cero lo gastado por cada persona (la del servicio se recalcula desde `argos.ai_usage`). Guardarla exige una columna de persona en `ai_usage`.
+- **El servidor de desarrollo solo sirve el modelo de chat:** `ServedEmbedder` pide `argos-embed` al mismo servidor, que hoy no lo tiene. Cuando haya modelo (F06-05), `search_regulation` necesitará también el de embeddings.
 
 ## 10. Historial
 
@@ -287,3 +296,4 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.1.0-alpha | 2026-09-21 | `POST /v1/assistant/ask`: el agente del asistente corre dentro del gateway con sus cuatro herramientas y solo viaja su resultado; `ModelUnavailableError` y `503` en ambos endpoints cuando el modelo local no contesta (hasta F06-05, siempre) | F08-08 |
 | 0.1.0-alpha | 2026-09-22 | El agente admite el paso `refuse` (rehúso explícito, `refused: true`) y la respuesta lleva `fragments`, los fragmentos que devolvió `search_regulation` en la conversación, sin repetir; el prompt pide citar con `[n]`, el número de la fuente | F08-15 |
 | 0.2.0-alpha | 2026-09-23 | Guardarraíles normalizados (identificadores con separadores, afirmaciones como patrones, escrituras como sentencia), cifras con decimales, rangos y números en letra, y el asistente sin cifras, citas ni veredictos sin respaldo | F09-28 |
+| 0.3.0-alpha | 2026-09-23 | Asistente con cuota por persona, herramientas con tiempo máximo y concurrencia acotada, solo norma como norma, errores de herramienta devueltos al modelo y conectado en el contenedor; clasificador que solo registra su lote | F09-29 |

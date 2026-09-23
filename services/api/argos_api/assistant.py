@@ -33,12 +33,15 @@ class AssistantClient:
         self._transport = transport
         self._timeout = timeout
 
-    async def ask(self, question: str) -> dict[str, Any]:
+    async def ask(self, question: str, person: str) -> dict[str, Any]:
+        """The gateway's answer; `person` is who asks, so the quota is theirs (SEC-043)."""
         try:
             async with httpx.AsyncClient(
                 base_url=self._base_url, transport=self._transport, timeout=self._timeout
             ) as client:
-                response = await client.post(ASK_PATH, json={"question": question})
+                response = await client.post(
+                    ASK_PATH, json={"question": question, "person": person}
+                )
         except httpx.HTTPError as exc:
             raise AssistantUnavailableError(503, f"the AI gateway is not reachable: {exc}") from exc
         if response.status_code == httpx.codes.OK:

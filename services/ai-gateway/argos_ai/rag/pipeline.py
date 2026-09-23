@@ -100,11 +100,15 @@ def retrieve(
     """The hybrid retrieval, fused: what the two searches agree on comes first."""
     vector = search(dsn, question, embedder, origins=origins, k=RETRIEVE)
     lexical = search_lexical(dsn, question, origins=origins, k=RETRIEVE)
-    by_reference = {hit.reference: hit for hit in [*lexical, *vector]}
-    order = reciprocal_rank_fusion(
-        [[hit.reference for hit in vector], [hit.reference for hit in lexical]]
-    )
-    return [by_reference[reference] for reference in order]
+
+    # A fragment is its origin and its reference: a client document that reuses the reference of
+    # an article is not that article (security review F09-02, SEC-048).
+    def key(hit: Hit) -> str:
+        return f"{hit.origin}|{hit.reference}"
+
+    by_key = {key(hit): hit for hit in [*lexical, *vector]}
+    order = reciprocal_rank_fusion([[key(hit) for hit in vector], [key(hit) for hit in lexical]])
+    return [by_key[item] for item in order]
 
 
 async def answer(

@@ -114,7 +114,9 @@ def test_the_assistant_runs_inside_the_gateway_with_its_closed_tools() -> None:
         quotas={"assistant": 1_000_000},
     )
     client = TestClient(create_app(gateway, tools={"finding_status": counted}))
-    response = client.post("/v1/assistant/ask", json={"question": "¿cuántos abiertos?"})
+    response = client.post(
+        "/v1/assistant/ask", json={"question": "¿cuántos abiertos?", "person": "user:ana"}
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["answer"] == "Hay 2 abiertos."
@@ -126,12 +128,23 @@ def test_the_assistant_runs_inside_the_gateway_with_its_closed_tools() -> None:
 
 def test_the_assistant_without_the_model_is_a_503() -> None:
     client = TestClient(create_app(_gateway_without_model(), tools={}))
-    response = client.post("/v1/assistant/ask", json={"question": "¿cuántos abiertos?"})
+    response = client.post(
+        "/v1/assistant/ask", json={"question": "¿cuántos abiertos?", "person": "user:ana"}
+    )
     assert response.status_code == 503
 
 
 def test_a_gateway_without_tools_does_not_pretend_to_have_an_assistant() -> None:
     client = TestClient(create_app(_gateway_without_model()))
-    response = client.post("/v1/assistant/ask", json={"question": "¿cuántos abiertos?"})
+    response = client.post(
+        "/v1/assistant/ask", json={"question": "¿cuántos abiertos?", "person": "user:ana"}
+    )
     assert response.status_code == 503
     assert "assistant" in response.json()["detail"]
+
+
+def test_the_assistant_needs_to_know_who_asks() -> None:
+    """Without the person the quota would be everybody's again (SEC-043)."""
+    client = TestClient(create_app(_gateway_without_model(), tools={}))
+    response = client.post("/v1/assistant/ask", json={"question": "¿cuántos abiertos?"})
+    assert response.status_code == 422

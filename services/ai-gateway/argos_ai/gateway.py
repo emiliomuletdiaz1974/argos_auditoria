@@ -37,6 +37,9 @@ PRIORITIES = ("interactive", "batch")
 DEFAULT_SLOTS: Mapping[str, int] = {"interactive": 12, "batch": 8}
 # Tokens held against the quota while a request is in flight: a prompt plus two capped answers.
 DEFAULT_RESERVATION = 8_192
+# What one person may spend of a service's daily quota when the caller says who asks: five
+# people can use the assistant a full day before anyone else is left out (SEC-043).
+PERSON_SHARE = 0.2
 REPAIR_INSTRUCTION = (
     "Tu respuesta anterior no encaja en el esquema. Corrígela y devuelve solo JSON válido.\n"
     "Respuesta anterior: {answer}\nError: {error}"
@@ -89,6 +92,7 @@ class Gateway:
         today: Callable[[], date] | None = None,
         reload_quotas: Callable[[], Mapping[str, int]] | None = None,
         verdict_exists: Callable[[str], bool] | None = None,
+        person_share: float = PERSON_SHARE,
     ) -> None:
         self._backend = backend
         self._journal = journal
@@ -103,6 +107,10 @@ class Gateway:
         self._today = today or (lambda: datetime.now(UTC).date())
         self._reload_quotas = reload_quotas
         self._verdict_exists = verdict_exists
+        self._person_share = person_share
+        # Per person and service, in the memory of this process, like the reservations.
+        self._spent_by: dict[tuple[str, str], int] = {}
+        self._reserved_by: dict[tuple[str, str], int] = {}
         self._day = self._today()
 
     def spent(self, service: str) -> int:
@@ -115,11 +123,16 @@ class Gateway:
             return
         self._day = today
         self._spent.clear()
+        self._spent_by.clear()
         if self._reload_quotas is not None:
             self._quotas = dict(self._reload_quotas())
 
-    def _reserve(self, service: str) -> None:
-        """Take the reservation before calling, so parallel requests see each other's cost."""
+    def _reserve(self, service: str, person: str | None = None) -> None:
+        """Take the reservation before calling, so parallel requests see each other's cost.
+
+        With `person`, that person's share of the service's quota is checked too: one person
+        asking all day does not leave the rest without an assistant (SEC-043).
+        """
         self._roll_day()
         budget = self._quotas.get(service)
         if budget is None:
@@ -127,6 +140,14 @@ class Gateway:
         committed = self._spent.get(service, 0) + self._reserved.get(service, 0)
         if committed + self._reservation > budget:
             raise QuotaExceededError(f"the service {service!r} spent its daily quota")
+        if person is not None:
+            key = (service, person)
+            mine = self._spent_by.get(key, 0) + self._reserved_by.get(key, 0)
+            if mine + self._reservation > budget * self._person_share:
+                raise QuotaExceededError(
+                    f"{person} spent their share of the daily quota of {service!r}"
+                )
+            self._reserved_by[key] = self._reserved_by.get(key, 0) + self._reservation
         self._reserved[service] = self._reserved.get(service, 0) + self._reservation
 
     async def chat_json(
@@ -137,11 +158,13 @@ class Gateway:
         schema: dict[str, Any],
         priority: str = "batch",
         allowed_verdicts: Collection[str] | None = None,
+        person: str | None = None,
     ) -> Answer:
         """One JSON answer of the model, scrubbed on the way in and checked on the way out.
 
         `allowed_verdicts` narrows which verdicts the answer may quote: the assistant passes the ids
         its tools returned, so an existing verdict nobody consulted is not a source (SEC-034).
+        `person` is who asks, when the caller knows it: their share of the quota applies too.
         """
         if priority not in PRIORITIES:
             raise GatewayError(f"unknown priority: {priority!r}")
@@ -150,7 +173,7 @@ class Gateway:
         substitutions = substituted_system + substituted_user
         digest = prompt_hash(clean_system, clean_user)
 
-        self._reserve(service)
+        self._reserve(service, person)
         # What the model consumed is spent whatever happens next: a failed or rejected answer
         # costs the same inference as a good one.
         cost = [0, 0]
@@ -161,6 +184,10 @@ class Gateway:
         finally:
             self._reserved[service] -= self._reservation
             self._spent[service] = self._spent.get(service, 0) + cost[0] + cost[1]
+            if person is not None:
+                key = (service, person)
+                self._reserved_by[key] -= self._reservation
+                self._spent_by[key] = self._spent_by.get(key, 0) + cost[0] + cost[1]
             if cost[0] or cost[1]:
                 self._usage(
                     {

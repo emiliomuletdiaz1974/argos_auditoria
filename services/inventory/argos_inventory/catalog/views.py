@@ -39,8 +39,15 @@ def catalog_columns(dsn: str, system_id: str) -> list[dict[str, Any]]:
     return _rows(dsn, _CATALOG_COLUMNS, (system_id,))
 
 
-def coverage(dsn: str) -> list[dict[str, Any]]:
-    return _rows(dsn, "SELECT * FROM argos.catalog_coverage ORDER BY system_name")
+def coverage(dsn: str, system_id: str | None = None) -> list[dict[str, Any]]:
+    """The catalogue coverage of every system, or of one: filtered in SQL, not after reading."""
+    return _rows_named(
+        dsn,
+        "SELECT * FROM argos.catalog_coverage "
+        "WHERE (%(system_id)s::text IS NULL OR system_id::text = %(system_id)s) "
+        "ORDER BY system_name",
+        {"system_id": system_id},
+    )
 
 
 def freshness(dsn: str) -> list[dict[str, Any]]:

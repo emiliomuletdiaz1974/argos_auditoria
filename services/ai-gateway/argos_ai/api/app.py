@@ -37,6 +37,8 @@ class ChatJsonRequest(BaseModel):
 
 class Question(BaseModel):
     question: str = Field(min_length=3, max_length=2000)
+    # Who asks, as the API authenticated them: the assistant's quota is per person (SEC-043).
+    person: str = Field(pattern=r"^user:[^\s]{1,200}$")
 
 
 def _refusal(exc: GatewayError) -> HTTPException:
@@ -83,7 +85,7 @@ def create_app(gateway: Gateway, tools: Mapping[str, Tool] | None = None) -> Fas
         if tools is None:
             raise HTTPException(status_code=503, detail="this gateway has no assistant tools")
         try:
-            answer = await ask(request.question, gateway, tools)
+            answer = await ask(request.question, gateway, tools, person=request.person)
         except OutputRejectedError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         except AssistantError as exc:  # it quoted what it did not consult: not an answer

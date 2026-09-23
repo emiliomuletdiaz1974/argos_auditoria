@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from argos_api.assistant import AssistantClient, AssistantUnavailableError
 from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
+from argos_api.http import caller
 
 router = APIRouter(prefix="/assistant", tags=["assistant"], route_class=CoreRoute)
 NOTICE = (
@@ -35,7 +36,7 @@ async def ask(request: Request, body: Question) -> dict[str, Any]:
     if client is None:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "no assistant attached")
     try:
-        answer = await client.ask(body.question)
+        answer = await client.ask(body.question, caller(request).actor)
     except AssistantUnavailableError as down:
         raise HTTPException(down.status, down.reason) from None
     return {
