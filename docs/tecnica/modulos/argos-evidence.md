@@ -4,9 +4,9 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.13.0-alpha
+version: 0.14.0-alpha
 commit: 8bc16e2
-date: 2026-09-22
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -124,6 +124,9 @@ Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. Lo
 - La inmutabilidad de la evidencia es **técnica**: la da el almacén con bloqueo en modo conformidad, que rechaza borrar, acortar la retención o relajar el modo, también a su cuenta raíz. Lo demuestra la prueba de conformidad.
 - La garantía cubre el acceso por la API S3; el acceso de superusuario al sistema de ficheros del appliance lo cierran el cifrado y el endurecimiento del appliance (ADR-0010).
 - Decisiones aplicables: ADR-0010 (almacén WORM), ADR-0011 (credencial) y notas ARG-062, ARG-064-065 y ARG-067.
+- **Lista de estado con caducidad y sin firmar en cada petición** (SEC-018, SEC-056, F09-20): se emite con `validUntil` a 24 h (`STATUS_LIST_TTL`); `EvidenceActivities.status_list` la guarda firmada y solo la vuelve a firmar si cambian las revocaciones o ha pasado la mitad de su vida; `GET /status/{n}` da 404 para una lista sin credenciales.
+- **`did_web_url`** solo acepta un host (y puerto) y rutas sin `@`, `/`, `?` ni `#` una vez decodificados (SEC-038).
+- **Anclajes del emisor:** `EvidenceActivities.trust_anchors()` devuelve lo que un tercero necesita para confiar (huella de la clave y raíces de TSA); se entrega por un canal propio, nunca dentro del bundle.
 
 ## 7. Operación
 
@@ -171,3 +174,4 @@ Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. Lo
 | 0.11.0-alpha | 2026-09-18 | Cierre de campaña encadenado (`EvidenceWorkflow`), worker disparado por el sello, API pública y contenedores | F07-13 |
 | 0.12.0-alpha | 2026-09-21 | Lado de lectura para la API v1 (`argos_evidence.reads`): cadena (la misma función que embebe el expediente), artefactos paginados, artefacto con su prueba de inclusión, expediente vigente, vista previa exacta de la credencial y su estado; `EvidenceActivities` expone `store` y `dsn` | F08-07 |
 | 0.13.0-alpha | 2026-09-22 | `reads.campaign_journal_entry` (el asiento del diario que cita un veredicto de la campaña, y ninguno más) y `credential.issue.WITHHELD` (lo que se queda en el expediente), que la vista previa de la credencial devuelve como `withheld` | F08-14 |
+| 0.14.0-alpha | 2026-09-23 | Lista de estado con `validUntil` y firmada solo cuando cambia, 404 para listas inexistentes, `did:web` estricto, límites de base58 y de descompresión, `trust_anchors()` | F09-20 |

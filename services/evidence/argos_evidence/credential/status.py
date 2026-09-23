@@ -10,6 +10,7 @@ always give the same text.
 from __future__ import annotations
 
 import gzip
+import zlib
 from collections.abc import Iterable
 
 from argos_evidence.credential.multibase import base64url_multibase, multibase_decode
@@ -47,8 +48,15 @@ def encode_list(bits: bytes | bytearray) -> str:
     return base64url_multibase(gzip.compress(bytes(bits), mtime=0))
 
 
+MAX_LIST_BYTES = 16 * LIST_SIZE // 8  # up to 16 lists' worth; a list from a bundle is untrusted
+
+
 def decode_list(encoded: str) -> bytearray:
-    bits = bytearray(gzip.decompress(multibase_decode(encoded)))
+    """The bits of a published list, decompressed with a ceiling (a gzip bomb stops there)."""
+    inflater = zlib.decompressobj(wbits=16 + zlib.MAX_WBITS)
+    bits = bytearray(inflater.decompress(multibase_decode(encoded), MAX_LIST_BYTES + 1))
+    if len(bits) > MAX_LIST_BYTES or inflater.unconsumed_tail:
+        raise ValueError(f"a status list decompresses to more than {MAX_LIST_BYTES} bytes")
     if len(bits) * 8 < LIST_SIZE:
         raise ValueError("a status list is at least 131072 bits long")
     return bits

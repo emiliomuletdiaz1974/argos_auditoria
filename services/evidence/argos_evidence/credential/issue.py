@@ -36,6 +36,8 @@ from argos_evidence.worm import WormAlreadyStoredError, WormStore
 VC_CONTEXT = "https://www.w3.org/ns/credentials/v2"
 CREDENTIAL_TYPE = "ArgosCampaignCredential"
 ACTOR = "system:evidence"
+# How long a signed status list says "not revoked": after that a verifier needs a fresh one.
+STATUS_LIST_TTL = dt.timedelta(hours=24)
 SUBJECT_KEYS = frozenset(
     {
         "id",
@@ -143,9 +145,14 @@ def build_credential(
 
 
 def status_list_credential_document(
-    issuer: str, list_url: str, revoked: Iterable[int], valid_from: str
+    issuer: str,
+    list_url: str,
+    revoked: Iterable[int],
+    valid_from: str,
+    *,
+    valid_until: str | None = None,
 ) -> dict[str, Any]:
-    return {
+    document: dict[str, Any] = {
         "@context": [VC_CONTEXT],
         "id": list_url,
         "type": ["VerifiableCredential", "BitstringStatusListCredential"],
@@ -158,6 +165,9 @@ def status_list_credential_document(
             "encodedList": encode_list(bitstring_with(revoked)),
         },
     }
+    if valid_until is not None:
+        document["validUntil"] = valid_until
+    return document
 
 
 def credential_key(campaign_id: str, credential_id: str) -> str:
@@ -295,6 +305,26 @@ def revoke_credential(dsn: str, credential_id: str, reason: str, revoked_by: str
         )
 
 
+def revoked_indices(dsn: str, status_list: int) -> tuple[int, ...]:
+    """The revoked positions of one status list, in order."""
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(
+            "SELECT c.status_index FROM argos.credential_revocations r"
+            " JOIN argos.credentials c ON c.id = r.credential_id WHERE c.status_list = %s"
+            " ORDER BY c.status_index",
+            (status_list,),
+        ).fetchall()
+    return tuple(int(r[0]) for r in rows)
+
+
+def status_list_exists(dsn: str, status_list: int) -> bool:
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT 1 FROM argos.credentials WHERE status_list = %s LIMIT 1", (status_list,)
+        ).fetchone()
+    return row is not None
+
+
 def status_list_credential(
     dsn: str,
     signer: Signer,
@@ -304,17 +334,14 @@ def status_list_credential(
     now: dt.datetime | None = None,
 ) -> dict[str, Any]:
     """The signed status list, rebuilt from the recorded revocations."""
-    with psycopg.connect(dsn) as conn:
-        rows = conn.execute(
-            "SELECT c.status_index FROM argos.credential_revocations r"
-            " JOIN argos.credentials c ON c.id = r.credential_id WHERE c.status_list = %s",
-            (status_list,),
-        ).fetchall()
-    valid_from = _utc_seconds(now or dt.datetime.now(dt.UTC))
+    revoked = revoked_indices(dsn, status_list)
+    issued = now or dt.datetime.now(dt.UTC)
+    valid_from = _utc_seconds(issued)
     document = status_list_credential_document(
         issuer,
         f"{status_base_url.rstrip('/')}/{status_list}",
-        (int(r[0]) for r in rows),
+        revoked,
         valid_from,
+        valid_until=_utc_seconds(issued + STATUS_LIST_TTL),
     )
     return add_proof(document, signer, verification_method(issuer), valid_from)

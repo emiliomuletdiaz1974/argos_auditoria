@@ -1,6 +1,7 @@
 """ARG-068 · did:web, Bitstring Status List and a credential with nothing personal in it."""
 
 import copy
+import datetime as dt
 import gzip
 from typing import Any
 
@@ -42,6 +43,9 @@ class LocalSigner:
         return self._key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
 
 
+AT = dt.datetime(2026, 9, 18, 12, 0, tzinfo=dt.UTC)
+
+
 def _dossier(name: str = "Campaña de demostración") -> dict[str, Any]:
     return {
         "campaign": {
@@ -81,7 +85,9 @@ def _issued(signer: LocalSigner, index: int = 7) -> dict[str, Any]:
 
 
 def _status_list(signer: LocalSigner, revoked: set[int]) -> dict[str, Any]:
-    document = status_list_credential_document(DID, LIST_URL, revoked, "2026-09-18T10:06:00Z")
+    document = status_list_credential_document(
+        DID, LIST_URL, revoked, "2026-09-18T10:06:00Z", valid_until="2026-09-19T10:06:00Z"
+    )
     return add_proof(document, signer, verification_method(DID), "2026-09-18T10:06:00Z")
 
 
@@ -138,7 +144,7 @@ def test_an_issued_credential_verifies_against_its_did_and_status_list() -> None
     signer = LocalSigner()
     credential = _issued(signer)
     check = verify_credential(
-        credential, did_document(DID, signer.public_key()), _status_list(signer, set())
+        credential, did_document(DID, signer.public_key()), _status_list(signer, set()), at=AT
     )
     assert check.valid, check.reasons
 
@@ -148,7 +154,7 @@ def test_revoking_is_flipping_a_bit_in_the_list_not_touching_the_credential() ->
     credential = _issued(signer, index=7)
     before = copy.deepcopy(credential)
     check = verify_credential(
-        credential, did_document(DID, signer.public_key()), _status_list(signer, {7})
+        credential, did_document(DID, signer.public_key()), _status_list(signer, {7}), at=AT
     )
     assert not check.valid and "revoked" in check.reasons
     assert credential == before
@@ -156,7 +162,7 @@ def test_revoking_is_flipping_a_bit_in_the_list_not_touching_the_credential() ->
 
 def test_a_credential_without_its_status_list_is_not_declared_valid() -> None:
     signer = LocalSigner()
-    check = verify_credential(_issued(signer), did_document(DID, signer.public_key()), None)
+    check = verify_credential(_issued(signer), did_document(DID, signer.public_key()), None, at=AT)
     assert not check.valid and "status not checked" in check.reasons
 
 
@@ -164,10 +170,10 @@ def test_another_issuer_key_or_a_forged_status_list_is_rejected() -> None:
     signer, other = LocalSigner(), LocalSigner()
     credential = _issued(signer)
     wrong_did = verify_credential(
-        credential, did_document(DID, other.public_key()), _status_list(signer, set())
+        credential, did_document(DID, other.public_key()), _status_list(signer, set()), at=AT
     )
     assert not wrong_did.valid and "proof" in wrong_did.reasons
     forged = verify_credential(
-        credential, did_document(DID, signer.public_key()), _status_list(other, set())
+        credential, did_document(DID, signer.public_key()), _status_list(other, set()), at=AT
     )
     assert not forged.valid and "status list proof" in forged.reasons

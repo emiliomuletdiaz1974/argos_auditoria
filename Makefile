@@ -40,6 +40,7 @@ dev:
 	uv run --env-file .env.example python tools/migrate.py
 	uv run --env-file .env.example python tools/register_dev_sources.py
 	uv run python tools/seed_dev_clinical.py
+	uv run python tools/verifier_trust.py
 
 dev-heavy: dev
 	$(COMPOSE_HEAVY) up -d --wait

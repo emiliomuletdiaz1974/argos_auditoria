@@ -10,7 +10,7 @@ Treinta minutos ante el equipo y los socios (Plan Director, Anexo F, hito S27). 
 |---|---|---|
 | Entorno limpio, desde cero | `make demo-reset` | Todos los servicios sanos, las fuentes sembradas y la base migrada. Borra todos los volúmenes, incluidos el almacén WORM y la autoridad de sellado de pruebas |
 | Ensayo completo | `make demo` | Seis bloques en pantalla y los ficheros de `.scratch/demo/` |
-| Plan B preparado | `uv run python tools/verify_evidence.py docs/demo/respaldo/bundle.json` | `RESULT: verified` |
+| Plan B preparado | `uv run python tools/verify_evidence.py docs/demo/respaldo/bundle.json --trust docs/demo/respaldo/trust.json --at <validFrom de su lista de estado>` | `RESULT: verified` |
 
 ## Minuto a minuto
 
@@ -35,13 +35,13 @@ Mensajes que acompañan a cada bloque:
 
 ## Plan B
 
-Si la campaña en vivo tarda o falla, se enseña la **campaña precocinada** de `docs/demo/respaldo/`: el paquete de verificación completo (`bundle.json`) y el expediente en PDF (`expediente.pdf`), generados por este mismo guion. Se comprueba sin red con:
+Si la campaña en vivo tarda o falla, se enseña la **campaña precocinada** de `docs/demo/respaldo/`: el paquete de verificación completo (`bundle.json`), lo que un tercero confía (`trust.json`: la huella de la clave de emisión y la raíz de la autoridad de sellado de desarrollo) y el expediente en PDF (`expediente.pdf`), generados por este mismo guion. Se comprueba sin red, a la fecha de su lista de estado:
 
 ```
-uv run python tools/verify_evidence.py docs/demo/respaldo/bundle.json
+uv run python tools/verify_evidence.py docs/demo/respaldo/bundle.json --trust docs/demo/respaldo/trust.json --at 2026-09-23T06:15:00+00:00
 ```
 
-El paquete trae dentro el documento DID, la lista de estado y la raíz de la autoridad de sellado, así que verifica aunque el entorno esté parado. Para enseñar el byte corrupto con el plan B, basta con alterar un carácter de un artefacto del paquete y repetir la orden.
+El comprobador no se fía de la clave que viaja dentro del paquete: la confianza llega por otro canal (`trust.json`). Y una lista de estado solo dice «no revocada» hasta su caducidad (24 h), por eso el plan B, que es un paquete archivado, se comprueba a su fecha. Para enseñar el byte corrupto con el plan B, basta con alterar un carácter de un artefacto del paquete y repetir la orden.
 
 ## Qué queda fuera de esta versión
 

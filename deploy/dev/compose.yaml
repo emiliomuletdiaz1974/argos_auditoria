@@ -352,6 +352,9 @@ services:
     image: argos-verifier:dev
     environment:
       ARGOS_API_BIND: 0.0.0.0   # published below on 127.0.0.1 only
+      # What it trusts (issuer key, TSA root): written by `make dev`, never taken from a bundle.
+      ARGOS_VERIFIER_TRUST_FILE: /etc/argos-verifier/trust.json
+    volumes: ["./verifier:/etc/argos-verifier:ro"]
     networks: [verifier]
     ports: ["127.0.0.1:8007:8007"]
     healthcheck:

@@ -27,3 +27,4 @@ node_modules/
 console/test-results/
 console/playwright-report/
 console/dist/
+deploy/dev/verifier/trust.json

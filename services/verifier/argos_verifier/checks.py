@@ -2,33 +2,61 @@
 
 A bundle carries what was handed over (the dossier, the signed root envelope,
 the time stamp token, the credential and some artifacts with their inclusion
-proofs) and what is public (the issuer's DID document, the status list, the
-TSA roots). Nothing else is consulted. Every check has a name and says why it
-failed; a check that could not be made is "skipped" and says so, never
-"passed".
+proofs) and what is public (the issuer's DID document, the status list). Every
+check has a name and says why it failed; a check that could not be made is
+"skipped" and says so, never "passed".
+
+What the bundle cannot bring is its own trust: whoever forges evidence can also
+forge a DID document and a TSA. The keys of the issuers and the roots of the
+time stamping authorities the verifier believes come from its own
+configuration (`Trust`); without them nothing is verified.
 """
 
 from __future__ import annotations
 
 import base64
 import binascii
+import datetime as dt
 import hashlib
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from cryptography import x509
 
-from argos_evidence.core.envelope import verify_envelope
+from argos_evidence.core.envelope import key_id, verify_envelope
 from argos_evidence.core.integrity import file_digest, verify_artifact
 from argos_evidence.core.timestamp import TimestampRejectedError, verify_reply
 from argos_evidence.credential.multibase import public_key_from_multibase
+from argos_evidence.credential.proof import verify_proof as verify_credential_proof
 from argos_evidence.credential.verify import verify_credential
 from argos_evidence.merkle import verify_proof
 
 BUNDLE_SCHEMA = "argos/verification-bundle/1"
 PASSED, FAILED, SKIPPED = "passed", "failed", "skipped"
+
+
+@dataclass(frozen=True)
+class Trust:
+    """What this verifier believes, set by whoever runs it and never taken from a bundle."""
+
+    issuer_key_ids: frozenset[str] = frozenset()
+    tsa_roots_pem: tuple[str, ...] = ()
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any]) -> Trust:
+        ids: Iterable[Any] = data.get("issuer_key_ids") or []
+        roots: Iterable[Any] = data.get("tsa_roots_pem") or []
+        return cls(frozenset(str(i) for i in ids), tuple(str(r) for r in roots))
+
+    @classmethod
+    def from_file(cls, path: str | Path | None) -> Trust:
+        """The trust file of an installation; a missing file trusts nobody."""
+        if not path or not Path(path).is_file():
+            return cls()
+        return cls.from_mapping(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
 @dataclass(frozen=True)
@@ -80,7 +108,11 @@ def _issuer_key(did_document: Any) -> bytes:
     )
 
 
-def verify_bundle(bundle: Mapping[str, Any]) -> Report:
+def verify_bundle(
+    bundle: Mapping[str, Any], trust: Trust, *, at: dt.datetime | None = None
+) -> Report:
+    """Check a bundle against what `trust` believes, as of `at` (now by default)."""
+    at = at or dt.datetime.now(dt.UTC)
     report = Report()
     dossier_bytes = _bytes(bundle, "dossier")
     envelope = _bytes(bundle, "root_signature")
@@ -100,8 +132,13 @@ def verify_bundle(bundle: Mapping[str, Any]) -> Report:
 
     def issuer_key() -> tuple[str, str]:
         nonlocal key
-        key = _issuer_key(bundle["did_document"])
-        return PASSED, f"key of {bundle['did_document']['id']}"
+        if not trust.issuer_key_ids:
+            return FAILED, "the issuer is not anchored: this verifier trusts no issuer key yet"
+        stated = _issuer_key(bundle["did_document"])
+        if key_id(stated) not in trust.issuer_key_ids:
+            return FAILED, f"the issuer key {key_id(stated)} is not one this verifier trusts"
+        key = stated
+        return PASSED, f"key {key_id(stated)} of {bundle['did_document']['id']}, trusted"
 
     def root_signature() -> tuple[str, str]:
         if key is None or envelope is None:
@@ -133,9 +170,9 @@ def verify_bundle(bundle: Mapping[str, Any]) -> Report:
             return SKIPPED, "the root is signed; its time stamp is still queued"
         if envelope is None:
             return FAILED, "there is no signed root for the token to cover"
-        roots = [x509.load_pem_x509_certificate(p.encode()) for p in bundle.get("tsa_roots", [])]
-        if not roots:
-            return FAILED, "no TSA root was given to check the token against"
+        if not trust.tsa_roots_pem:
+            return FAILED, "no trusted TSA root is configured to check the token against"
+        roots = [x509.load_pem_x509_certificate(p.encode()) for p in trust.tsa_roots_pem]
         try:
             info = verify_reply(token, envelope, None, roots).tst_info
         except TimestampRejectedError as exc:
@@ -148,8 +185,10 @@ def verify_bundle(bundle: Mapping[str, Any]) -> Report:
     def credential() -> tuple[str, str]:
         if bundle.get("credential") is None:
             return SKIPPED, "no credential was given"
+        if key is None:
+            return FAILED, "the credential cannot be checked without a trusted issuer key"
         check = verify_credential(
-            bundle["credential"], bundle["did_document"], bundle.get("status_list")
+            bundle["credential"], bundle["did_document"], bundle.get("status_list"), at=at
         )
         if not check.valid:
             return FAILED, "the credential does not verify: " + ", ".join(check.reasons)
@@ -163,6 +202,21 @@ def verify_bundle(bundle: Mapping[str, Any]) -> Report:
             return FAILED, "the credential vouches for another dossier"
         return PASSED, "the credential vouches for this dossier"
 
+    def dossier_authenticated() -> tuple[str, str]:
+        # The dossier's own SHA-256 only says it is whole; who stands behind what it says is the
+        # credential, signed by the issuer over that SHA-256. Revoked or not, the signature holds.
+        document = bundle.get("credential")
+        if document is None:
+            return FAILED, "nothing signed vouches for the content of this dossier: no credential"
+        if key is None or document.get("issuer") != bundle["did_document"]["id"]:
+            return FAILED, "the credential is not from a trusted issuer"
+        if not verify_credential_proof(document, key):
+            return FAILED, "the signature over the dossier does not verify"
+        stated = document["credentialSubject"]["dossierSha256"]
+        if dossier_bytes is None or stated != file_digest(dossier_bytes):
+            return FAILED, "the signed statement is about another dossier"
+        return PASSED, "the content of the dossier is vouched for by the issuer's signature"
+
     for name, step in (
         ("dossier_hash", dossier_hash),
         ("issuer_key", issuer_key),
@@ -171,10 +225,15 @@ def verify_bundle(bundle: Mapping[str, Any]) -> Report:
         ("timestamp", timestamp),
         ("credential", credential),
         ("credential_matches_dossier", credential_matches_dossier),
+        ("dossier_authenticated", dossier_authenticated),
     ):
         _guarded(report, name, step)
 
     root = (chain.get("merkle") or {}).get("root")
+    try:
+        signed_leaves = int(json.loads(envelope or b"{}")["payload"]["leaf_count"])
+    except (KeyError, TypeError, ValueError):
+        signed_leaves = None
     for position, item in enumerate(bundle.get("artifacts") or []):
 
         def inclusion(item: Mapping[str, Any] = item) -> tuple[str, str]:
@@ -186,6 +245,11 @@ def verify_bundle(bundle: Mapping[str, Any]) -> Report:
             if item["proof"]["root"] != root:
                 return FAILED, "the proof leads to another root than the dossier's"
             index, size = int(item["proof"]["index"]), int(item["proof"]["size"])
+            if size != signed_leaves:
+                return (
+                    FAILED,
+                    f"the proof is for a tree of {size}, the signed root has {signed_leaves}",
+                )
             if not verify_proof(digest, index, size, path, bytes.fromhex(root)):
                 return FAILED, f"the artifact is not leaf {index} of the campaign tree"
             return PASSED, f"leaf {index} of {size}"

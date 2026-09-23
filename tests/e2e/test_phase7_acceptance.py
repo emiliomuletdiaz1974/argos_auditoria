@@ -28,7 +28,7 @@ from botocore.exceptions import ClientError
 
 from argos_evidence.credential.issue import revoke_credential
 from argos_evidence.worm import EVIDENCE_BUCKET
-from argos_verifier.checks import verify_bundle
+from argos_verifier.checks import Trust, verify_bundle
 
 pytestmark = pytest.mark.integration
 
@@ -54,8 +54,9 @@ def phase7(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str, Any]]
     summary = script.run_demo(out, keep_database=True)
     dsn = f"{ADMIN_DSN.rsplit('/', 1)[0]}/{summary['database']}"
     bundle = json.loads((out / "bundle.json").read_text(encoding="utf-8"))
+    trust = Trust.from_file(out / "trust.json")
     try:
-        yield {"summary": summary, "dsn": dsn, "bundle": bundle, "out": out}
+        yield {"summary": summary, "dsn": dsn, "bundle": bundle, "out": out, "trust": trust}
     finally:
         script._drop_database(dsn)
 
@@ -76,8 +77,8 @@ def _flip(encoded: str) -> str:
     return base64.b64encode(bytes(raw)).decode("ascii")
 
 
-def _failed(bundle: dict[str, Any]) -> list[str]:
-    return [c.name for c in verify_bundle(bundle).checks if c.status == "failed"]
+def _failed(bundle: dict[str, Any], trust: Trust) -> list[str]:
+    return [c.name for c in verify_bundle(bundle, trust).checks if c.status == "failed"]
 
 
 def test_the_phase5_campaign_ends_in_a_dossier_and_a_credential(phase7: dict[str, Any]) -> None:
@@ -95,7 +96,7 @@ def test_the_phase5_campaign_ends_in_a_dossier_and_a_credential(phase7: dict[str
 
 
 def test_the_root_verifies_and_every_check_passes(phase7: dict[str, Any]) -> None:
-    report = verify_bundle(phase7["bundle"])
+    report = verify_bundle(phase7["bundle"], phase7["trust"])
     assert report.ok
     assert {c.status for c in report.checks} == {"passed"}
     names = {c.name for c in report.checks}
@@ -113,7 +114,7 @@ def test_the_root_verifies_and_every_check_passes(phase7: dict[str, Any]) -> Non
 def test_a_corrupted_piece_is_named(phase7: dict[str, Any], piece: str, check: str) -> None:
     bundle = copy.deepcopy(phase7["bundle"])
     bundle[piece] = _flip(bundle[piece])
-    assert check in _failed(bundle)
+    assert check in _failed(bundle, phase7["trust"])
 
 
 def test_a_corrupted_artifact_is_named_by_its_position(phase7: dict[str, Any]) -> None:
@@ -121,7 +122,7 @@ def test_a_corrupted_artifact_is_named_by_its_position(phase7: dict[str, Any]) -
         bundle = copy.deepcopy(phase7["bundle"])
         item = bundle["artifacts"][position]
         item["artifact"] = _flip(item["artifact"])
-        assert _failed(bundle) == [f"artifact_inclusion[{position}]"]
+        assert _failed(bundle, phase7["trust"]) == [f"artifact_inclusion[{position}]"]
 
 
 def test_the_worm_store_refuses_to_delete_or_overwrite_a_dossier(phase7: dict[str, Any]) -> None:

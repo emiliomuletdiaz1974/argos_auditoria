@@ -71,7 +71,7 @@ from argos_inventory.graph.store import GraphStore  # noqa: E402
 from argos_ontology.store import store_version  # noqa: E402
 from argos_ontology.traceability import library_graph  # noqa: E402
 from argos_sql.postgres import PostgresConnector  # noqa: E402
-from argos_verifier.checks import verify_bundle  # noqa: E402
+from argos_verifier.checks import Trust, verify_bundle  # noqa: E402
 
 TREATMENTS = REPO / "deploy" / "dev" / "ropa" / "treatments.csv"
 ONTOLOGY_VERSION = "1.0.0"
@@ -316,11 +316,15 @@ def run_demo(out: Path, keep_database: bool = True) -> dict[str, Any]:
         _write(out, "dossier.pdf", activities.stored(pdf_key, pdf_version))
         _write(out, "credential.json", bundle["credential"])
         _write(out, "bundle.json", bundle)
+        # What the third party trusts reaches it by its own channel; in the demo, a file beside.
+        anchors = activities.trust_anchors()
+        _write(out, "trust.json", anchors)
+        trust = Trust.from_mapping(anchors)
         _say(
             "ARGOS prueba", f"Expediente {evidence['dossier']} con sello {evidence['time_stamp']}."
         )
 
-        report = verify_bundle(bundle)
+        report = verify_bundle(bundle, trust)
         summary["verification"] = report.as_dict()
         _write(out, "report.json", report.as_dict())
         _say("Comprobador público", "Paquete íntegro: " + ("verificado" if report.ok else "NO"))
@@ -329,7 +333,7 @@ def run_demo(out: Path, keep_database: bool = True) -> dict[str, Any]:
         raw = bytearray(base64.b64decode(tampered["artifacts"][0]["artifact"]))
         raw[len(raw) // 2] ^= 0x01
         tampered["artifacts"][0]["artifact"] = base64.b64encode(bytes(raw)).decode("ascii")
-        broken = verify_bundle(tampered)
+        broken = verify_bundle(tampered, trust)
         summary["tampered"] = {"ok": broken.ok, "failed": _failed(broken)}
         _write(out, "tampered-report.json", broken.as_dict())
         _say("Un byte corrupto", f"Comprobaciones que fallan: {', '.join(_failed(broken))}")

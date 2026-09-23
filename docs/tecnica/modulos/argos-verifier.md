@@ -4,9 +4,9 @@ kind: module
 title: Comprobador público de evidencias (argos-verifier)
 module: argos-verifier
 phases: ["07"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: d05f6b4
-date: 2026-09-18
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -62,6 +62,11 @@ Ninguna de la plataforma. `ARGOS_API_BIND` solo indica en qué dirección escuch
 - El cuerpo de la petición está limitado a 16 MiB y se rechaza antes de leerse si su longitud declarada lo supera.
 - La confianza parte de dos anclas explícitas: el documento DID del emisor y las raíces de la TSA. El comprobador no descarga nada por su cuenta; quien lo usa decide de dónde obtiene esas anclas.
 - Decisiones aplicables: ADR-0011 (credencial), nota ARG-064-065 (firma y TSA de desarrollo, que el informe señala como tales).
+- **La confianza no viaja en el bundle** (SEC-001, F09-20): `verify_bundle(bundle, trust, at=…)` recibe una `Trust` con las huellas de las claves de emisor (`key_id`, SHA-256 truncado de la clave pública) y las raíces de TSA en que se cree. El contenedor la lee en cada petición de `ARGOS_VERIFIER_TRUST_FILE` (en desarrollo, `deploy/dev/verifier/trust.json`, que escribe `tools/verifier_trust.py` en `make dev`); el CLI, de `--trust`. Sin anclaje, el emisor queda «no anclado» y nada verifica. Las `tsa_roots` del bundle se ignoran.
+- **El contenido del expediente tiene que estar firmado** (SEC-002): la comprobación `dossier_authenticated` exige la credencial del emisor de confianza sobre el SHA-256 del expediente (aunque esté revocada, la firma sigue diciendo quién lo afirmó); sin ella el informe no es `ok`.
+- **Bundles hostiles** (SEC-003): el cuerpo se lee por partes con tope de 16 MiB aunque llegue *chunked*; los valores base58 de más de 128 caracteres se rechazan antes de decodificar; la lista de estado se descomprime con techo.
+- **Revocación con frescura** (SEC-018): una lista de estado sin `validUntil` o caducada a la fecha `at` no prueba nada; `--at` permite comprobar un paquete archivado a su fecha.
+- **Tamaño del árbol** (SEC-039): cada prueba de inclusión tiene que ser del tamaño `leaf_count` de la raíz firmada.
 
 ## 7. Operación
 
@@ -84,3 +89,4 @@ Ninguna de la plataforma. `ARGOS_API_BIND` solo indica en qué dirección escuch
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-18 | Comprobador público: librería, API, línea de órdenes y contenedor | F07-11 |
+| 0.2.0-alpha | 2026-09-23 | Confianza por configuración (`Trust`, `ARGOS_VERIFIER_TRUST_FILE`, `--trust`), `dossier_authenticated`, lectura por partes con tope, límites de base58 y de la lista de estado, frescura de la revocación (`--at`) y tamaño del árbol contra la raíz firmada | F09-20 |

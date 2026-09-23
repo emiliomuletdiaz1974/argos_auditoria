@@ -5,6 +5,7 @@ Part of the pure verification core: no database, no store, no network.
 
 from __future__ import annotations
 
+import datetime as dt
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
@@ -51,8 +52,14 @@ def verify_credential(
     credential: Mapping[str, Any],
     did_document: Mapping[str, Any],
     status_list: Mapping[str, Any] | None,
+    *,
+    at: dt.datetime | None = None,
 ) -> CredentialCheck:
-    """Check the proof against the issuer's DID and the revocation bit in its status list."""
+    """Check the proof against the issuer's DID and the revocation bit in its status list.
+
+    A status list only says "not revoked" until it expires: one kept from before a revocation
+    stops counting at its `validUntil` (as of `at`, now by default).
+    """
     check = CredentialCheck()
     key = _issuer_key(credential, did_document, check)
     if key is not None and not verify_proof(credential, key):
@@ -67,6 +74,15 @@ def verify_credential(
     list_key = _issuer_key(status_list, did_document, list_check)
     if list_key is None or not verify_proof(status_list, list_key):
         check.reasons.append("status list proof")
+        return check
+    expiry = status_list.get("validUntil")
+    try:
+        until = dt.datetime.fromisoformat(str(expiry).replace("Z", "+00:00"))
+    except ValueError:
+        check.reasons.append("status list without expiry")
+        return check
+    if (at or dt.datetime.now(dt.UTC)) > until:
+        check.reasons.append("status list expired")
         return check
     subject = status_list.get("credentialSubject") or {}
     if status_list.get("id") != status.get("statusListCredential") or subject.get(

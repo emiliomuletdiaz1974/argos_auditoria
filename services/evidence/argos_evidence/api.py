@@ -37,7 +37,7 @@ def create_app(activities: EvidenceActivities, dsn: str) -> FastAPI:
 
     @app.get("/status/{number}")
     def status(number: int) -> dict[str, Any]:
-        if number < 0:
+        if number < 0 or not activities.status_list_exists(number):
             raise HTTPException(status_code=404)
         return activities.status_list(number)
 

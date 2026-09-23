@@ -19,12 +19,16 @@ from temporalio import activity
 from argos_common.release import Signer
 from argos_evidence.artifacts import write_artifact
 from argos_evidence.bundle import export_bundle
+from argos_evidence.core.envelope import key_id
 from argos_evidence.core.integrity import seal_document
 from argos_evidence.credential.did import did_document
 from argos_evidence.credential.issue import (
+    STATUS_LIST_TTL,
     issue_credential,
     revoke_credential,
+    revoked_indices,
     status_list_credential,
+    status_list_exists,
 )
 from argos_evidence.dossier import write_dossier
 from argos_evidence.journal import journal_report
@@ -57,6 +61,8 @@ class EvidenceActivities:
         self._settings = settings
         self._transport = transport
         self._roots_pem = list(tsa_roots_pem)
+        # number -> (revoked positions, signed list, until when it may be served)
+        self._status_lists: dict[int, tuple[tuple[int, ...], dict[str, Any], dt.datetime]] = {}
 
     def _until(self) -> dt.datetime:
         return dt.datetime.now(dt.UTC) + dt.timedelta(days=self._settings.RETENTION_DAYS)
@@ -170,13 +176,36 @@ class EvidenceActivities:
         return did_document(self._settings.ISSUER_DID, self._signer.public_key())
 
     def status_list(self, number: int) -> dict[str, Any]:
-        return status_list_credential(
+        """The signed list, signed again only when a revocation changed it or it grows old.
+
+        The endpoint is public: signing on every request would let anyone make the signer work.
+        A served list keeps at least half of its lifetime, so a verifier gets hours, not seconds.
+        """
+        revoked = revoked_indices(self._dsn, number)
+        now = dt.datetime.now(dt.UTC)
+        cached = self._status_lists.get(number)
+        if cached is not None and cached[0] == revoked and now < cached[2]:
+            return cached[1]
+        document = status_list_credential(
             self._dsn,
             self._signer,
             self._settings.ISSUER_DID,
             self._settings.STATUS_BASE_URL,
             number,
+            now=now,
         )
+        self._status_lists[number] = (revoked, document, now + STATUS_LIST_TTL / 2)
+        return document
+
+    def status_list_exists(self, number: int) -> bool:
+        return status_list_exists(self._dsn, number)
+
+    def trust_anchors(self) -> dict[str, list[str]]:
+        """What a verifier needs to trust this issuer, handed over through a channel it trusts."""
+        return {
+            "issuer_key_ids": [key_id(self._signer.public_key())],
+            "tsa_roots_pem": list(self._roots_pem),
+        }
 
     def bundle(self, dossier_sha256: str) -> dict[str, Any]:
         with psycopg.connect(self._dsn) as conn:

@@ -11,13 +11,14 @@ import pytest
 
 from argos_common.release import VaultTransitSigner
 from argos_evidence.bundle import export_bundle
+from argos_evidence.core.envelope import key_id
 from argos_evidence.core.integrity import file_digest
 from argos_evidence.credential.did import did_document, did_web
 from argos_evidence.credential.issue import issue_credential, status_list_credential
 from argos_evidence.dossier import write_dossier
 from argos_evidence.journal import report_key
 from argos_evidence.tsa import enqueue, http_transport, process_queue, stamp_of
-from argos_verifier.checks import verify_bundle
+from argos_verifier.checks import Trust, verify_bundle
 
 from .test_dossier import URL, _campaign, _roots, _store
 
@@ -31,6 +32,12 @@ STATUS = "https://evidence.argos.example/status"
 
 def _until() -> dt.datetime:
     return dt.datetime.now(dt.UTC) + dt.timedelta(minutes=10)
+
+
+def trust() -> Trust:
+    """What a third party trusts: the development evidence key and the development TSA root."""
+    signer = VaultTransitSigner(VAULT, "root", key="argos-evidence")
+    return Trust(frozenset({key_id(signer.public_key())}), (httpx.get(f"{TSA}/ca.pem").text,))
 
 
 def _exported(dsn: str) -> dict[str, object]:
@@ -52,7 +59,7 @@ def _exported(dsn: str) -> dict[str, object]:
 
 def test_an_exported_campaign_verifies_with_every_check(migrated_db: str) -> None:
     bundle = _exported(migrated_db)
-    report = verify_bundle(bundle)
+    report = verify_bundle(bundle, trust())
     statuses = {c.name: c.status for c in report.checks}
     assert report.ok, [c for c in report.checks if c.status != "passed"]
     assert set(statuses.values()) == {"passed"}
@@ -80,7 +87,7 @@ def test_a_real_token_over_another_object_fails_the_time_stamp_check(migrated_db
     assert stamp is not None and stamp.token_key and stamp.token_version_id
     token = store.get(stamp.token_key, stamp.token_version_id)
     bundle["timestamp_token"] = base64.b64encode(token).decode()
-    failed = {c.name for c in verify_bundle(bundle).checks if c.status == "failed"}
+    failed = {c.name for c in verify_bundle(bundle, trust()).checks if c.status == "failed"}
     assert failed == {"timestamp"}
 
 
@@ -91,7 +98,7 @@ def test_an_artifact_changed_in_the_bundle_is_pointed_at(migrated_db: str) -> No
     raw = bytearray(base64.b64decode(artifacts[1]["artifact"]))
     raw[-3] ^= 0x01
     artifacts[1]["artifact"] = base64.b64encode(bytes(raw)).decode()
-    failed = {c.name for c in verify_bundle(bundle).checks if c.status == "failed"}
+    failed = {c.name for c in verify_bundle(bundle, trust()).checks if c.status == "failed"}
     assert failed == {"artifact_inclusion[1]"}
     with psycopg.connect(migrated_db) as conn:
         assert conn.execute("SELECT count(*) FROM argos.evidence_index").fetchone() == (2,)

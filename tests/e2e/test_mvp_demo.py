@@ -6,6 +6,7 @@ verifier, and one corrupted byte caught in front of the audience. The backup
 bundle in docs/demo/respaldo is plan B: it must verify on its own, offline.
 """
 
+import datetime as dt
 import importlib.util
 import json
 from pathlib import Path
@@ -13,7 +14,7 @@ from types import ModuleType
 
 import pytest
 
-from argos_verifier.checks import verify_bundle
+from argos_verifier.checks import Trust, verify_bundle
 
 pytestmark = pytest.mark.integration
 
@@ -43,13 +44,23 @@ def test_the_demonstration_runs_from_inventory_to_the_public_verifier(tmp_path: 
     assert summary["verification"]["ok"] is True
     assert summary["tampered"]["ok"] is False
     assert summary["tampered"]["failed"] == ["artifact_inclusion[0]"]
-    for name in ("dossier.pdf", "dossier.json", "credential.json", "bundle.json", "report.json"):
+    for name in (
+        "dossier.pdf",
+        "dossier.json",
+        "credential.json",
+        "bundle.json",
+        "trust.json",
+        "report.json",
+    ):
         assert (tmp_path / name).is_file(), name
 
 
 def test_plan_b_verifies_offline_on_its_own() -> None:
     bundle = json.loads(BACKUP.read_text(encoding="utf-8"))
-    report = verify_bundle(bundle)
+    # Plan B is an archived handover: it is verified as of the day its status list was issued,
+    # with the trust that travelled beside it (the development key of that day).
+    issued = dt.datetime.fromisoformat(bundle["status_list"]["validFrom"].replace("Z", "+00:00"))
+    report = verify_bundle(bundle, Trust.from_file(BACKUP.parent / "trust.json"), at=issued)
     assert report.ok, [c for c in report.checks if c.status != "passed"]
     statuses = {c.name: c.status for c in report.checks}
     assert statuses["timestamp"] == "passed"

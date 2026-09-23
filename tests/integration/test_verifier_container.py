@@ -5,7 +5,7 @@ import pytest
 
 from argos_verifier.checks import verify_bundle
 
-from .test_verifier_bundle import _exported
+from .test_verifier_bundle import _exported, trust
 
 pytestmark = pytest.mark.integration
 
@@ -20,7 +20,7 @@ def test_the_container_gives_the_report_of_the_library(migrated_db: str) -> None
     bundle = _exported(migrated_db)
     response = httpx.post(f"{VERIFIER}/verify", json=bundle, timeout=30)
     assert response.status_code == 200
-    assert response.json() == verify_bundle(bundle).as_dict()
+    assert response.json() == verify_bundle(bundle, trust()).as_dict()
     assert response.json()["ok"] is True
 
 

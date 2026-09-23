@@ -24,7 +24,7 @@ from argos_evidence.settings import EvidenceSettings
 from argos_evidence.tsa import http_transport
 from argos_evidence.workflow import EvidenceWorkflow
 from argos_evidence.worm import EVIDENCE_BUCKET, WormStore, ensure_buckets
-from argos_verifier.checks import verify_bundle
+from argos_verifier.checks import Trust, verify_bundle
 
 pytestmark = pytest.mark.integration
 
@@ -138,7 +138,9 @@ def test_the_chain_ends_in_a_verifiable_credential(migrated_db: str) -> None:
             "SELECT dossier_sha256 FROM argos.credentials WHERE campaign_id = %s", (campaign_id,)
         ).fetchall()
     assert [r[0] for r in credentials] == [result["dossier"]]
-    report = verify_bundle(activities.bundle(result["dossier"]))
+    report = verify_bundle(
+        activities.bundle(result["dossier"]), Trust.from_mapping(activities.trust_anchors())
+    )
     assert report.ok, [c for c in report.checks if c.status != "passed"]
     assert {c.status for c in report.checks} == {"passed"}
 

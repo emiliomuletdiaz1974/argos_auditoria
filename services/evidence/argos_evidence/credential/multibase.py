@@ -12,6 +12,9 @@ import base64
 
 _ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 _INDEX = {c: i for i, c in enumerate(_ALPHABET)}
+# Keys (48 characters) and signatures (88) are all base58 carries here. Decoding is quadratic in
+# the length, so anything longer is refused before it is decoded (a bundle is untrusted input).
+MAX_BASE58_CHARS = 128
 ED25519_PUBLIC = b"\xed\x01"
 
 
@@ -26,6 +29,8 @@ def base58btc_encode(data: bytes) -> str:
 
 
 def base58btc_decode(text: str) -> bytes:
+    if len(text) > MAX_BASE58_CHARS:
+        raise ValueError(f"a base58btc value here is at most {MAX_BASE58_CHARS} characters")
     number = 0
     for char in text:
         if char not in _INDEX:
