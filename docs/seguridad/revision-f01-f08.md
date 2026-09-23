@@ -1,6 +1,6 @@
 # Revisión de seguridad de las Fases 01 a 08
 
-**Versión:** 1.0 · **Fecha:** 2026-09-23 · **Base:** `main` en `47711f5` (con la auditoría del 2026-09-18 integrada) · **Confidencialidad:** `client`
+**Versión:** 1.12 · **Fecha:** 2026-09-23 · **Base:** `main` en `47711f5` (con la auditoría del 2026-09-18 integrada) · **Confidencialidad:** `client`
 **Tarea:** F09-02 · **Referencia:** [modelo de amenazas](modelo-amenazas.md)
 
 Tratamos nuestros hallazgos como los de un cliente: cada uno queda **registrado** aquí, se **corrige** en una tarea con un test que lo reproduce primero, y la corrección queda **evidenciada** en el commit y en este registro.
@@ -131,6 +131,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | SEC-025, SEC-043, SEC-047, SEC-048, SEC-050, SEC-052 | Corregido | F09-29 | `14474f7` | 2026-09-23 |
 | SEC-031, SEC-041, SEC-045, SEC-046 | Corregido | F09-30 | `9b6d580` | 2026-09-23 |
 | SEC-022, SEC-024, SEC-027, SEC-028, SEC-054, SEC-055 | Corregido (SEC-027: TLS verificado solo con ODBC 18, pendiente la decisión sobre su licencia) | F09-31 | `e3f540f` | 2026-09-23 |
+| SEC-051 | Corregido | F09-04 | `8dcef99` | 2026-09-23 |
 
 ## 7. Historial
 
@@ -148,3 +149,4 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | 1.9 | 2026-09-23 | Corregidos SEC-025, 043, 047, 048, 050 y 052 (F09-29) |
 | 1.10 | 2026-09-23 | Corregidos SEC-031, 041, 045 y 046 (F09-30) |
 | 1.11 | 2026-09-23 | Corregidos SEC-022, 024, 027, 028, 054 y 055 (F09-31) |
+| 1.12 | 2026-09-23 | Corregido SEC-051 (F09-04) |
