@@ -4,7 +4,7 @@ kind: module
 title: Conectores de bases de datos (argos-connector-sql)
 module: argos-connector-sql
 phases: ["02", "03"]
-version: 0.2.0-alpha
+version: 0.3.0-alpha
 commit: 031b9bc
 date: 2026-09-23
 status: current
@@ -70,6 +70,7 @@ Ninguno necesita DDL ni DML. Además:
 - toda sentencia pasa por la validación de solo lectura y el diario previo del SDK;
 - los validadores desconocidos se rechazan antes de anotar la consulta.
 - **Tiempo máximo también en SQL Server** (SEC-006, F09-21): `driver_options` pasa `statement_timeout_ms` a `pymssql` al conectar (`timeout` y `login_timeout`, en segundos). Antes esperaba sin límite.
+- **Exploración en una sola sentencia registrada** (SEC-023, F09-22): `scan_schema` ejecuta una sentencia literal sobre `information_schema` (`COLUMNS_SQL`; en PostgreSQL, `CATALOG_SQL` con tamaños y columnas en una consulta) que se valida, se registra en el diario y paga su ficha. Ya no se usa el inspector de SQLAlchemy, que lanzaba una consulta por esquema y por tabla sin diario ni presupuesto; queda solo para SQLite, que no es un motor de cliente. El tipo de columna es el del catálogo en mayúsculas, con su longitud.
 
 ## 7. Operación
 
@@ -96,3 +97,4 @@ La integración real con Oracle y SQL Server está escrita pero **no se ha ejecu
 | 0.1.0-alpha | 2026-09-17 | Filtros declarados en la sonda `count`, con la columna validada y el valor enlazado | Fase 05 (F05-99) |
 | 0.1.0-alpha | 2026-09-18 | TLS verificado obligatorio por dialecto salvo `allow_insecure` declarado | Auditoría de seguridad (M10) |
 | 0.2.0-alpha | 2026-09-23 | `driver_options`: tiempo máximo de sentencia en `pymssql` | F09-21 |
+| 0.3.0-alpha | 2026-09-23 | Exploración con `COLUMNS_SQL` y `CATALOG_SQL` literales en lugar del inspector | F09-22 |

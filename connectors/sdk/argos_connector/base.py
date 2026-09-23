@@ -2,7 +2,8 @@
 
 import abc
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from typing import Any, ClassVar, Self, final
 
 from argos_common.errors import ReadOnlyViolationError
@@ -103,6 +104,33 @@ class Connector(abc.ABC):
         self.context.budget.observe_latency(duration)  # 3) feeds the circuit breaker
         journal.complete(seq, ok=error is None, duration_ms=duration, rows=rows, error=error)
         return ProbeResult(str(uuid7()), rendered.kind, error is None, data, duration, rows, seq)
+
+    @contextmanager
+    def follow_up(self, spec: ProbeSpec) -> Iterator[None]:
+        """A further request to the system inside one probe, or when opening the connector.
+
+        A page the server hands out, or the association a protocol needs, is still a request to
+        the customer system: it is journaled before it is sent and it pays its permit from the
+        load budget, like the probe itself (security review F09-02, SEC-023).
+        """
+        journal = self.context.journal
+        seq = journal.register(spec)
+        try:
+            self.context.budget.acquire()
+        except (BudgetExceededError, CircuitOpenError) as exc:
+            journal.complete(seq, ok=False, duration_ms=0, rows=0, error=exc.code)
+            raise
+        started = time.monotonic()
+        try:
+            yield
+        except Exception as exc:
+            journal.complete(
+                seq, ok=False, duration_ms=_elapsed_ms(started), rows=0, error=type(exc).__name__
+            )
+            raise
+        duration = _elapsed_ms(started)
+        self.context.budget.observe_latency(duration)
+        journal.complete(seq, ok=True, duration_ms=duration, rows=0)
 
     def _handler(self, kind: str) -> Handler:
         handlers: dict[str, Handler] = {

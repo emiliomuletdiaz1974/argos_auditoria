@@ -87,7 +87,7 @@ def test_scan_groups_studies_by_modality(pacs: Pacs) -> None:
         "by_modality": {"CT": 10, "MR": 10, "US": 10},
         "capped": False,
     }
-    assert (journal.emitted[0].spec.statement or "").startswith("C-FIND STUDY ")
+    assert (journal.emitted[-1].spec.statement or "").startswith("C-FIND STUDY ")
 
 
 def test_count_sends_validated_keys(pacs: Pacs) -> None:
@@ -97,15 +97,16 @@ def test_count_sends_validated_keys(pacs: Pacs) -> None:
     assert result.data["count"] == 30 and result.data["dates"] == "-20100101"
     assert pacs.queries[-1].StudyDate == "-20100101"
     assert pacs.queries[-1].ModalitiesInStudy == "CT"
-    assert '"StudyDate": "-20100101"' in (journal.emitted[0].spec.statement or "")
+    assert '"StudyDate": "-20100101"' in (journal.emitted[-1].spec.statement or "")
 
 
 @pytest.mark.parametrize(("key", "value"), [("dates", "2020; DROP"), ("modality", "CT\\MR\\*")])
 def test_invalid_query_keys_are_refused_before_journaling(pacs: Pacs, key: str, value: str) -> None:
     connector, journal = _connector(pacs.port)
+    opened = len(journal.records)  # the association of open() is journaled on its own
     with pytest.raises(ValueError):
         connector.execute(ProbeSpec("count", "*", params={key: value}))
-    assert journal.records == []
+    assert len(journal.records) == opened
 
 
 def test_sample_reveals_presence_not_identifiers(pacs: Pacs) -> None:
@@ -148,3 +149,12 @@ def test_unreachable_pacs_fails_at_open() -> None:
 
 def test_no_write_surface() -> None:
     assert_no_write_surface(DicomConnector)
+
+
+def test_the_association_and_its_echo_are_journaled_and_paid(pacs: Pacs) -> None:
+    """SEC-023: opening the connector talks to the PACS; that request is in the journal too."""
+    connector, journal = _connector(pacs.port)
+    budget: Any = connector.context.budget
+    assert budget.acquired == 1
+    assert [r.spec.target for r in journal.emitted] == ["association"]
+    assert journal.emitted[0].outcome is not None and journal.emitted[0].outcome["ok"]

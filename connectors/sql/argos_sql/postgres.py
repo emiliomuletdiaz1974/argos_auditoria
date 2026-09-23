@@ -8,13 +8,19 @@ from argos_connector.probes import ProbeSpec
 
 from .generic import ConfigCheck, SqlConnector
 
+# One row per column (one with NULL column for a table without columns), with the size of its
+# table: the whole scan is this single journaled statement (SEC-023).
 CATALOG_SQL = (
-    "SELECT n.nspname AS schema_name, c.relname AS table_name, "
+    "SELECT n.nspname AS schema_name, c.relname AS table_name, a.attname AS column_name, "
+    "pg_catalog.format_type(a.atttypid, a.atttypmod) AS data_type, "
+    "NOT a.attnotnull AS nullable, "
     "pg_total_relation_size(c.oid) AS bytes, CAST(c.reltuples AS bigint) AS est_rows, "
     "obj_description(c.oid, 'pg_class') AS comment, pg_is_in_recovery() AS standby "
     "FROM pg_class AS c JOIN pg_namespace AS n ON n.oid = c.relnamespace "
+    "LEFT JOIN pg_attribute AS a ON a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped "
     "WHERE c.relkind IN ('r', 'p') AND n.nspname NOT IN ('pg_catalog', 'information_schema') "
-    "AND n.nspname NOT LIKE 'pg_toast%'"
+    "AND n.nspname NOT LIKE 'pg_toast%' "
+    "ORDER BY n.nspname, c.relname, a.attnum"
 )
 PRIVILEGES_SQL = (
     "SELECT grantee.rolname AS role_name, acl.privilege_type AS privilege_type "
@@ -50,15 +56,33 @@ class PostgresConnector(SqlConnector):
         return super().render(spec)
 
     def _do_scan_schema(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
-        base, columns = super()._do_scan_schema(spec)
-        standby = False
+        wanted = set(spec.params.get("schemas", []))
+        schemas: dict[str, dict[str, Any]] = {}
+        columns, standby = 0, False
         for row in self._rows(spec):
             standby = bool(row.standby)
-            entry = base["schemas"].get(row.schema_name, {}).get(row.table_name)
-            if entry is not None:
-                entry.update(bytes=int(row.bytes), est_rows=int(row.est_rows), comment=row.comment)
-        base["is_replica"] = standby  # passive mode: the connection points at a standby
-        return base, columns
+            if wanted and row.schema_name not in wanted:
+                continue
+            table = schemas.setdefault(row.schema_name, {}).setdefault(
+                row.table_name,
+                {
+                    "columns": [],
+                    "bytes": int(row.bytes),
+                    "est_rows": int(row.est_rows),
+                    "comment": row.comment,
+                },
+            )
+            if row.column_name is not None:
+                table["columns"].append(
+                    {
+                        "name": row.column_name,
+                        "type": str(row.data_type).upper(),
+                        "nullable": bool(row.nullable),
+                    }
+                )
+                columns += 1
+        # passive mode: the connection points at a standby
+        return {"schemas": schemas, "is_replica": standby}, columns
 
     def _do_check_config(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
         data, rows = super()._do_check_config(spec)

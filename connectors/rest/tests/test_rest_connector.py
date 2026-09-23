@@ -205,3 +205,14 @@ def test_journaled_statement_includes_the_sorted_query() -> None:
     connector.execute(ProbeSpec("sample", "/patients", params=params))
     assert journal.emitted[0].spec.statement == "GET /patients?a=1&b=2"
     assert json.dumps(journal.emitted[0].spec.params)  # params stay JSON-serialisable
+
+
+def test_every_page_beyond_the_first_is_paid_and_journaled() -> None:
+    """SEC-023: pages the server hands out are requests to the customer system like any other."""
+    connector, api, journal = _connector()
+    result = connector.execute(ProbeSpec("count", "/patients"))
+    assert result.data["pages"] == 3 and len(api.requests) == 3
+    budget: Any = connector.context.budget
+    assert budget.acquired == 3
+    assert len(journal.emitted) == 3
+    assert all(r.outcome is not None and r.outcome["ok"] for r in journal.emitted)

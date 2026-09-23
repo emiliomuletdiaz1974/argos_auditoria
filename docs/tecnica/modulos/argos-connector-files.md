@@ -4,9 +4,9 @@ kind: module
 title: Conector de ficheros SMB, NFS y S3 (argos-connector-files)
 module: argos-connector-files
 phases: ["02"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: b432f8a
-date: 2026-09-18
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -54,6 +54,7 @@ Sondas del SDK sobre metadatos: `scan_schema`, `count` y `sample`, esta con cabe
 
 - La lectura se limita a 4096 bytes por fichero.
 - El recorrido está acotado por `max_walk_entries` y por el presupuesto de carga del SDK.
+- **Recorrido SMB acotado** (SEC-053, F09-22): los directorios listados cuentan contra el tope igual que los ficheros, y los enlaces simbólicos se listan pero no se siguen.
 
 ## 7. Operación
 
@@ -75,3 +76,4 @@ Ninguna específica del conector.
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Conector de ficheros con recorrido de metadatos y muestras minimizadas | Fase 02 (ARG-017) |
 | 0.1.0-alpha | 2026-09-18 | Cifrado SMB 3 exigido y S3 solo por `https://`, salvo `allow_insecure` declarado | Auditoría de seguridad (M10) |
+| 0.2.0-alpha | 2026-09-23 | Recorrido SMB con directorios contados y sin seguir enlaces | F09-22 |

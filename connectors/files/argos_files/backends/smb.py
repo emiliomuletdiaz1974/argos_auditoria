@@ -31,15 +31,25 @@ class SmbBackend:
         return f"{root}\\{relative}" if relative else root
 
     def walk(self, prefix: str, limit: int) -> Iterator[FileEntry]:
+        """Files under `prefix`, at most `limit` entries: files and directories listed both count.
+
+        A tree of empty directories, or a loop of links, would otherwise be listing requests
+        without end under a single probe (SEC-053). Links are listed, never followed.
+        """
         count = 0
         pending = [normalise_prefix(prefix)]
         while pending:
+            if count >= limit:
+                return
             current = pending.pop()
             listing = smbclient.scandir(self._unc(current), port=self._port)
+            count += 1
             for entry in sorted(listing, key=lambda e: e.name):
                 relative = f"{current}/{entry.name}" if current else entry.name
-                if entry.is_dir():
+                if entry.is_dir(follow_symlinks=False):
                     pending.append(relative)
+                    continue
+                if entry.is_symlink():
                     continue
                 # Use the listing's own metadata: SMBDirEntry.stat() reconnects without our port
                 # and would reach whatever SMB server listens on 445 of the same host.

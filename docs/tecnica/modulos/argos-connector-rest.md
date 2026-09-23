@@ -4,9 +4,9 @@ kind: module
 title: Conector REST declarativo (argos-connector-rest)
 module: argos-connector-rest
 phases: ["02"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: 18bcd4a
-date: 2026-09-18
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -50,6 +50,7 @@ Sondas del SDK `count`, `sample` y `check_config` sobre las rutas declaradas.
 - **Carga acotada por sonda:** una sonda consume un permiso del presupuesto de carga, así que su paginación también tiene tope: como mucho `max_pages` peticiones, y el recuento sale marcado `capped` si se alcanza.
 - Validación TLS con la CA configurada.
 - **Solo `https://`:** una URL base `http://` se rechaza al abrir, porque el token Bearer viajaría en claro, salvo que el sistema declare `allow_insecure: true` (en desarrollo, las fuentes en loopback).
+- **Cada página cuenta** (SEC-023, F09-22): a partir de la segunda, cada página que elige el servidor se registra en el diario y paga una ficha del presupuesto (`follow_up`).
 
 ## 7. Operación
 
@@ -72,3 +73,4 @@ Solo admite token Bearer estático desde Vault. El flujo OAuth2 *client credenti
 | 0.1.0-alpha | 2026-09-15 | Conector REST declarativo con lista cerrada de rutas y paginación confinada | Fase 02 (ARG-019) |
 | 0.1.0-alpha | 2026-09-18 | Transporte cifrado obligatorio: `http://` solo con `allow_insecure: true` declarado | Auditoría de seguridad (M10) |
 | 0.1.0-alpha | 2026-09-18 | Tope de páginas por sonda (`max_pages`) | Auditoría de seguridad (M11) |
+| 0.2.0-alpha | 2026-09-23 | Páginas siguientes registradas y pagadas | F09-22 |

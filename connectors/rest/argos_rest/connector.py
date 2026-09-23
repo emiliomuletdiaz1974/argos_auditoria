@@ -221,7 +221,13 @@ class RestConnector(Connector):
         while counted < cap:
             if pages >= max_pages:
                 return {"count": counted, "capped": True, "pages": pages}, counted
-            body = self._json(path, params)
+            if pages == 0:
+                body = self._json(path, params)
+            else:  # the server chose this page: it is journaled and paid for (SEC-023)
+                with self.follow_up(
+                    ProbeSpec("count", path, params={"query": params, "page": pages + 1})
+                ):
+                    body = self._json(path, params)
             items = dig(body, route.items_field) or []
             counted += len(items)
             pages += 1

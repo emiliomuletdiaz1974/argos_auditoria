@@ -175,3 +175,55 @@ def test_unknown_protocol_is_rejected() -> None:
 @pytest.mark.parametrize("cls", [FilesConnector, LocalBackend, SmbBackend, S3Backend])
 def test_no_write_surface(cls: type) -> None:
     assert_no_write_surface(cls)
+
+
+def test_an_smb_directory_loop_ends_within_the_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    """SEC-053: directories count against the limit and links are not followed."""
+
+    class Entry:
+        name = "loop"
+
+        def is_dir(self, follow_symlinks: bool = True) -> bool:
+            return True
+
+        def is_symlink(self) -> bool:
+            return False
+
+    listings: list[str] = []
+
+    def scandir(path: str, port: int) -> list[Entry]:
+        listings.append(path)
+        return [Entry()]
+
+    monkeypatch.setattr("smbclient.register_session", lambda server, **kwargs: None)
+    monkeypatch.setattr("smbclient.scandir", scandir)
+    backend = SmbBackend(
+        {"server": "fs", "share": "s", "username": "u", "password": "p"}, encrypt=True
+    )
+    assert list(backend.walk("", limit=50)) == []
+    assert len(listings) <= 50
+
+
+def test_an_smb_link_to_a_directory_is_not_followed(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Link:
+        name = "elsewhere"
+
+        def is_dir(self, follow_symlinks: bool = True) -> bool:
+            return follow_symlinks  # a directory only through the link
+
+        def is_symlink(self) -> bool:
+            return True
+
+    listings: list[str] = []
+
+    def scandir(path: str, port: int) -> list[Link]:
+        listings.append(path)
+        return [Link()]
+
+    monkeypatch.setattr("smbclient.register_session", lambda server, **kwargs: None)
+    monkeypatch.setattr("smbclient.scandir", scandir)
+    backend = SmbBackend(
+        {"server": "fs", "share": "s", "username": "u", "password": "p"}, encrypt=True
+    )
+    assert list(backend.walk("", limit=50)) == []
+    assert len(listings) == 1

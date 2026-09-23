@@ -49,6 +49,17 @@ SQLGLOT_DIALECTS = {
 EXCLUDED_SCHEMAS = frozenset(
     {"information_schema", "pg_catalog", "pg_toast", "sys", "mysql", "performance_schema"}
 )
+# The scan is one literal statement, journaled, validated and paid for like any probe (SEC-023):
+# SQLAlchemy's inspector ran one query per schema and per table outside the journal and the budget.
+COLUMNS_SQL = (
+    "SELECT c.table_schema AS schema_name, c.table_name AS table_name, "
+    "c.column_name AS column_name, c.data_type AS data_type, c.is_nullable AS is_nullable, "
+    "c.character_maximum_length AS max_length "
+    "FROM information_schema.columns AS c JOIN information_schema.tables AS t "
+    "ON t.table_schema = c.table_schema AND t.table_name = c.table_name "
+    "WHERE t.table_type = 'BASE TABLE' "
+    "ORDER BY c.table_schema, c.table_name, c.ordinal_position"
+)
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_$#]{0,127}$")
 
 
@@ -111,6 +122,14 @@ def _jsonable(value: Any) -> Any:
     if isinstance(value, bytes | bytearray | memoryview):
         return f"<{len(bytes(value))} bytes>"
     return str(value)
+
+
+def column_type(data_type: Any, max_length: Any) -> str:
+    """The declared type as the catalog states it, with its length when it has one."""
+    base = str(data_type).upper()
+    if max_length is not None and int(max_length) > 0 and "(" not in base:
+        return f"{base}({int(max_length)})"
+    return base
 
 
 def driver_options(url: Any, timeout_ms: int) -> dict[str, Any]:
@@ -226,6 +245,8 @@ class SqlConnector(Connector):
 
     # ---------- rendering: the journaled text is the executed text ----------
     def render(self, spec: ProbeSpec) -> ProbeSpec:
+        if spec.kind == "scan_schema" and self.engine.dialect.name != "sqlite":
+            return replace(spec, statement=COLUMNS_SQL)
         if spec.kind == "count":
             return self._compiled(spec, self._count_statement(spec))
         if spec.kind == "sample":
@@ -323,6 +344,27 @@ class SqlConnector(Connector):
             return list(connection.execute(text(spec.statement), binds))
 
     def _do_scan_schema(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
+        if spec.statement is None:  # SQLite (tests and local files): no information_schema
+            return self._inspected_schema(spec)
+        wanted = set(spec.params.get("schemas", []))
+        schemas: dict[str, dict[str, Any]] = {}
+        columns = 0
+        for row in self._rows(spec):
+            schema = str(row.schema_name)
+            if schema.lower() in EXCLUDED_SCHEMAS or (wanted and schema not in wanted):
+                continue
+            table = schemas.setdefault(schema, {}).setdefault(row.table_name, {"columns": []})
+            table["columns"].append(
+                {
+                    "name": row.column_name,
+                    "type": column_type(row.data_type, row.max_length),
+                    "nullable": str(row.is_nullable).upper() in ("YES", "Y", "TRUE", "1"),
+                }
+            )
+            columns += 1
+        return {"schemas": schemas}, columns
+
+    def _inspected_schema(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
         inspector = inspect(self.engine)
         wanted = set(spec.params.get("schemas", []))
         schemas: dict[str, dict[str, Any]] = {}

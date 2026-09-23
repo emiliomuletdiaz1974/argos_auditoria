@@ -1,14 +1,19 @@
-"""Load budget: rate, agreed windows, rows per probe and latency circuit breaker (ARG-013, P-05)."""
+"""Load budget: rate, agreed windows, rows per probe and latency circuit breaker (ARG-013, P-05).
 
-import collections
+`LoadBudget` holds the rules; its state lives in a store. In memory (the default) it is one
+process's; in PostgreSQL (`budget_pg.PostgresBudgetStore`) it is the system's, shared by every
+process that probes it, which is what P-05 asks for (security review F09-02, SEC-004).
+"""
+
 import statistics
 import threading
 import time
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import AbstractContextManager, contextmanager
+from dataclasses import dataclass, field
 from datetime import datetime
 from datetime import time as clock_time
-from typing import Any
+from typing import Any, Protocol
 from zoneinfo import ZoneInfo
 
 from argos_common.logs import get_logger
@@ -69,6 +74,41 @@ def parse_windows(raw: object) -> tuple[Window, ...]:
     return tuple(Window(_days(w["days"]), _hhmm(w["from"]), _hhmm(w["to"])) for w in raw)
 
 
+LATENCY_WINDOW = 20
+
+
+@dataclass
+class BudgetState:
+    """What a budget remembers. Times are seconds on the store's clock; `now` is read under lock."""
+
+    tokens: float
+    now: float
+    last: float
+    circuit: str = "closed"
+    opened_at: float | None = None
+    trial_at: float | None = None
+    latencies: list[int] = field(default_factory=list)
+
+
+class BudgetStore(Protocol):
+    def locked(self, burst: float) -> AbstractContextManager[BudgetState]: ...
+
+
+class InMemoryBudgetStore:
+    """The state of one process, behind a thread lock."""
+
+    def __init__(self, burst: float, clock: Callable[[], float]) -> None:
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._state = BudgetState(tokens=burst, now=clock(), last=clock())
+
+    @contextmanager
+    def locked(self, burst: float) -> Iterator[BudgetState]:
+        with self._lock:
+            self._state.now = self._clock()
+            yield self._state
+
+
 class LoadBudget:
     def __init__(
         self,
@@ -79,6 +119,7 @@ class LoadBudget:
         monotonic: Callable[[], float] = time.monotonic,
         now: Callable[[], datetime] | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        store: BudgetStore | None = None,
     ) -> None:
         unknown = set(config or {}) - set(DEFAULTS)
         if unknown:
@@ -99,17 +140,12 @@ class LoadBudget:
         self._monotonic = monotonic
         self._now = now or (lambda: datetime.now(self._tz))
         self._sleep = sleep
-        self._lock = threading.Lock()
-        self._tokens = self._burst
-        self._last = monotonic()
-        self._latencies: collections.deque[int] = collections.deque(maxlen=20)
-        self._state = "closed"
-        self._opened_at = 0.0
-        self._trial_in_flight = False
+        self._store: BudgetStore = store or InMemoryBudgetStore(self._burst, monotonic)
 
     @property
     def state(self) -> str:
-        return self._state
+        with self._store.locked(self._burst) as st:
+            return st.circuit
 
     @property
     def max_rows_per_probe(self) -> int:
@@ -126,59 +162,56 @@ class LoadBudget:
         details = {"system_id": self.system_id}
         if not self.in_window():
             raise BudgetExceededError("outside the agreed probe window", details=details)
-        with self._lock:
-            if self._state == "open":
-                if self._monotonic() - self._opened_at < self._cooldown:
+        with self._store.locked(self._burst) as st:
+            if st.circuit == "open":
+                if st.opened_at is not None and st.now - st.opened_at < self._cooldown:
                     raise CircuitOpenError("circuit open: the system is responding slowly", details)
-                self._state, self._trial_in_flight = "half_open", False
-            if self._state == "half_open":
-                if self._trial_in_flight:
+                st.circuit, st.trial_at = "half_open", None
+            if st.circuit == "half_open":
+                # A trial handed out and never reported (its process died) expires with the
+                # cooldown: the system is not left locked for ever.
+                if st.trial_at is not None and st.now - st.trial_at < self._cooldown:
                     raise CircuitOpenError("circuit half-open: a trial probe is in flight", details)
-                self._trial_in_flight = True
+                st.trial_at = st.now
         deadline = self._monotonic() + self._max_wait
         while True:
-            with self._lock:
-                self._refill()
-                if self._tokens >= 1.0:
-                    self._tokens -= 1.0
+            with self._store.locked(self._burst) as st:
+                st.tokens = min(self._burst, st.tokens + max(0.0, st.now - st.last) * self._rate)
+                st.last = st.now
+                if st.tokens >= 1.0:
+                    st.tokens -= 1.0
                     return
             if self._monotonic() >= deadline:
-                with self._lock:
-                    self._trial_in_flight = False
+                with self._store.locked(self._burst) as st:
+                    if st.circuit == "half_open":
+                        st.trial_at = None
                 raise BudgetExceededError("rate budget exhausted (maximum wait reached)", details)
             self._sleep(0.25)
-
-    def _refill(self) -> None:
-        now = self._monotonic()
-        self._tokens = min(self._burst, self._tokens + (now - self._last) * self._rate)
-        self._last = now
 
     # ---------- circuit breaker ----------
     def observe_latency(self, ms: int) -> None:
         opened_with: float | None = None
-        with self._lock:
-            if self._state == "half_open":
-                self._trial_in_flight = False
+        with self._store.locked(self._burst) as st:
+            if st.circuit == "half_open":
+                st.trial_at = None
                 if ms <= self._limit_ms:
-                    self._state = "closed"
-                    self._latencies.clear()
+                    st.circuit, st.latencies = "closed", []
                 else:
                     opened_with = float(ms)
-                    self._open()
-            elif self._state == "closed":
-                self._latencies.append(ms)
-                if len(self._latencies) >= 5:
-                    p50 = float(statistics.median(self._latencies))
+                    self._open(st)
+            elif st.circuit == "closed":
+                st.latencies = [*st.latencies, ms][-LATENCY_WINDOW:]
+                if len(st.latencies) >= 5:
+                    p50 = float(statistics.median(st.latencies))
                     if p50 > self._limit_ms:
                         opened_with = p50
-                        self._open()
+                        self._open(st)
         if opened_with is not None and self._on_open is not None:
             try:
                 self._on_open(self.system_id, opened_with)
             except Exception:
                 _log.exception("circuit listener failed", extra={"trace_id": self.system_id})
 
-    def _open(self) -> None:
-        self._state = "open"
-        self._opened_at = self._monotonic()
-        self._latencies.clear()
+    @staticmethod
+    def _open(st: BudgetState) -> None:
+        st.circuit, st.opened_at, st.latencies = "open", st.now, []

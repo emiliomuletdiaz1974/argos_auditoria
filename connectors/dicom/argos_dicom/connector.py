@@ -51,13 +51,15 @@ class DicomConnector(Connector):
         timeout = float(self.config.get("timeout_s", 30))
         ae.acse_timeout = ae.dimse_timeout = ae.network_timeout = timeout
         self._ae = ae
-        association = self._associate()
-        try:
-            status = association.send_c_echo()
-        finally:
-            association.release()
-        if status is None or getattr(status, "Status", None) != 0x0000:
-            raise ConnectionError("C-ECHO did not succeed")
+        # Opening talks to the PACS (association and C-ECHO): journaled and paid for (SEC-023).
+        with self.follow_up(ProbeSpec("check_config", "association", params={"check": "c_echo"})):
+            association = self._associate()
+            try:
+                status = association.send_c_echo()
+            finally:
+                association.release()
+            if status is None or getattr(status, "Status", None) != 0x0000:
+                raise ConnectionError("C-ECHO did not succeed")
 
     def close(self) -> None:
         self._ae = None

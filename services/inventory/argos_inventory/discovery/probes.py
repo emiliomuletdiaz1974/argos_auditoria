@@ -8,7 +8,8 @@ import psycopg
 
 from argos_common.secret_stores import SecretStore
 from argos_connector.base import Connector
-from argos_connector.budget import LoadBudget
+from argos_connector.budget import CircuitListener, LoadBudget
+from argos_connector.budget_pg import PostgresBudgetStore
 from argos_connector.context import ConnectorContext
 from argos_connector.credentials import load_credentials
 from argos_connector.journal import QueryJournal
@@ -66,12 +67,27 @@ def connector_class(path: str) -> type[Connector]:
     return candidate
 
 
-def open_connector(dsn: str, store: SecretStore, system: RegisteredSystem) -> Connector:
+def open_connector(
+    dsn: str,
+    store: SecretStore,
+    system: RegisteredSystem,
+    on_circuit_open: CircuitListener | None = None,
+) -> Connector:
+    """The connector of a system, with the budget of that system: one, whoever opens it.
+
+    The budget's state lives in `argos.load_budget`, so a campaign, a rescan and a classification
+    running at once share its tokens and its circuit breaker (P-05, SEC-004).
+    """
     cls = connector_class(system.connector)
     credentials = load_credentials(store, system.id)
     context = ConnectorContext(
         journal=QueryJournal(dsn, system.id),
-        budget=LoadBudget(system.id, dict(system.config.get("budget", {}))),
+        budget=LoadBudget(
+            system.id,
+            dict(system.config.get("budget", {})),
+            store=PostgresBudgetStore(dsn, system.id),
+            on_circuit_open=on_circuit_open,
+        ),
         hasher=ValueHasher.from_hex(credentials["hash_key"]),
         credentials=credentials,
     )
@@ -81,8 +97,14 @@ def open_connector(dsn: str, store: SecretStore, system: RegisteredSystem) -> Co
     return connector
 
 
-def run_probe(dsn: str, store: SecretStore, system_id: str, spec: ProbeSpec) -> ProbeResult:
-    connector = open_connector(dsn, store, load_system(dsn, system_id))
+def run_probe(
+    dsn: str,
+    store: SecretStore,
+    system_id: str,
+    spec: ProbeSpec,
+    on_circuit_open: CircuitListener | None = None,
+) -> ProbeResult:
+    connector = open_connector(dsn, store, load_system(dsn, system_id), on_circuit_open)
     try:
         return connector.execute(spec)
     finally:

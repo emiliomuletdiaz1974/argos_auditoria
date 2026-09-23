@@ -4,7 +4,7 @@ kind: module
 title: SDK de conectores de solo lectura (argos-connector-sdk)
 module: argos-connector-sdk
 phases: ["02", "03"]
-version: 0.2.0-alpha
+version: 0.3.0-alpha
 commit: 031b9bc
 date: 2026-09-23
 status: current
@@ -80,6 +80,8 @@ Otras piezas:
   - la lista de denegadas se compara con cada segmento del nombre cualificado;
   - una función que sqlglot no modela pasa solo si está en `ALLOWED_ANONYMOUS` y es de un esquema de catálogo.
   - Las evasiones forman parte de `SQL_WRITE_ATTEMPTS`, que recorren el test puro en los cinco dialectos y la integración contra las fuentes reales.
+- **Presupuesto compartido por sistema** (SEC-004, F09-22): `LoadBudget` guarda su estado en un almacén. En memoria es el de un proceso; en `PostgresBudgetStore` (tabla `argos.load_budget`, una fila por sistema bloqueada con `FOR UPDATE`, con el reloj de la base) es el del sistema, compartido por campañas, reexploraciones y clasificación. Una sonda de prueba del semiabierto cuyo proceso muere caduca con el enfriamiento.
+- **Peticiones adicionales** (SEC-023): `Connector.follow_up(spec)` registra en el diario y paga del presupuesto toda petición al sistema que no es la sonda misma (páginas que elige el servidor, asociación DICOM).
 
 ## 7. Operación
 
@@ -105,3 +107,4 @@ El presupuesto de carga vive en la memoria de cada proceso; con varias réplicas
 | 0.1.0-alpha | 2026-09-18 | La validación de solo lectura rechaza funciones con efectos por familia y paquete, y sentencias de escritura pasadas como texto | Auditoría de seguridad (A1) |
 | 0.1.0-alpha | 2026-09-18 | `require_tls`: transporte cifrado obligatorio salvo declaración explícita en el sistema | Auditoría de seguridad (M10) |
 | 0.2.0-alpha | 2026-09-23 | Sin comentarios ejecutables ni pistas, lista de denegadas por segmento y funciones no modeladas solo desde `ALLOWED_ANONYMOUS` | F09-21 |
+| 0.3.0-alpha | 2026-09-23 | Estado del presupuesto en un almacén (`BudgetState`, `InMemoryBudgetStore`, `budget_pg.PostgresBudgetStore`) y `follow_up` para las peticiones adicionales | F09-22 |

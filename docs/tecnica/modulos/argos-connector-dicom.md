@@ -4,9 +4,9 @@ kind: module
 title: Conector DICOM (argos-connector-dicom)
 module: argos-connector-dicom
 phases: ["02"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: d018a74
-date: 2026-09-17
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -43,6 +43,7 @@ Sondas del SDK `count` y `sample` sobre estudios.
 **Permisos que necesita en el PACS del cliente:** un AE Title para ARGOS (por ejemplo `ARGOS_QR`) con permiso **solo de consulta** (C-ECHO y C-FIND); sin C-MOVE, C-GET ni C-STORE.
 
 Las muestras de atributos de estudio se minimizan con el hash con clave del SDK.
+- **La apertura también cuenta** (SEC-023, F09-22): la asociación y el C-ECHO de `open()` se registran en el diario (`check_config` sobre `association`) y pagan su ficha.
 
 ## 7. Operación
 
@@ -64,3 +65,4 @@ Ninguna específica del conector.
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-15 | Conector DICOM limitado a C-ECHO y C-FIND con muestras minimizadas | Fase 02 (ARG-020) |
+| 0.2.0-alpha | 2026-09-23 | Asociación y C-ECHO de la apertura registrados y pagados | F09-22 |

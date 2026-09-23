@@ -42,7 +42,9 @@ from argos_common.config import get_config
 from argos_common.errors import ReadOnlyViolationError
 from argos_common.journal_pg import PostgresJournal
 from argos_common.secret_stores import SecretStore
+from argos_connector.budget import CircuitListener
 from argos_connector.errors import BudgetExceededError, CircuitOpenError
+from argos_connector.events import bus_circuit_listener
 from argos_inventory.discovery.probes import run_probe
 from argos_inventory.graph.model import system_key
 from argos_inventory.graph.store import GraphStore
@@ -333,13 +335,21 @@ class ChallengeActivities:
             return {"ok": True, "data": {}}
         return {"ok": True, "data": {"count": int(row[0])}}
 
-    def _run_probe(self, unit: Mapping[str, Any]) -> dict[str, Any]:
+    def _run_probe(
+        self, unit: Mapping[str, Any], on_circuit_open: CircuitListener | None = None
+    ) -> dict[str, Any]:
         if str(unit["probe"]["kind"]) in INTERNAL_PROBES:
             answer = self._internal_probe(unit)
             answer["data"] = minimise(answer["data"], unit["evidence"]["capture"])
             return answer
         try:
-            result = run_probe(self._dsn, self._secrets, str(unit["system_id"]), probe_spec(unit))
+            result = run_probe(
+                self._dsn,
+                self._secrets,
+                str(unit["system_id"]),
+                probe_spec(unit),
+                on_circuit_open,
+            )
         except ReadOnlyViolationError as exc:
             PostgresJournal(self._dsn).append(
                 "system:campaign",
@@ -360,7 +370,13 @@ class ChallengeActivities:
 
     @activity.defn(name="probe")
     async def probe(self, unit: dict[str, Any]) -> dict[str, Any]:
-        return await asyncio.to_thread(self._run_probe, unit)
+        # A slow system opens its circuit here; the campaigns asking it pause (ARG-013 → ARG-043).
+        listener = (
+            bus_circuit_listener(self._bus, asyncio.get_running_loop())
+            if self._bus is not None
+            else None
+        )
+        return await asyncio.to_thread(self._run_probe, unit, listener)
 
     @activity.defn(name="wait_window")
     async def wait_window(self, system_id: str) -> None:
