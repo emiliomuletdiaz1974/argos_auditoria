@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.2 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.3 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -75,7 +75,7 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-09 | E: el gateway se quita su rol con `RESET ROLE` | Gateway de IA | A2 | Credencial propia del gateway en lugar de `SET ROLE` sobre el superusuario | ARG-052, ARG-085 | F09-04 | en desarrollo | — |
 | M-10 | T: borrar o sobrescribir evidencia | WORM | A2, A3 | Object lock en modo conformidad probado con un test, y un cliente del almacén sin método de borrado | ARG-061 | F07-04 | implementada | `tests/integration/test_worm_conformance.py`, `tests/architecture/test_worm_has_no_delete.py` |
 | M-11 | T/R: alterar la evidencia después de sellar | Evidencia | A3 | Árbol de Merkle, raíz firmada, sello de tiempo RFC 3161 y anclaje del diario | ARG-063, ARG-064, ARG-065, ARG-066 | F07-06 | implementada | `services/evidence/argos_evidence/merkle.py`, `services/evidence/argos_evidence/signing.py` |
-| M-12 | S: falsificar una credencial o su comprobación | Comprobador público | A1 | Credencial VC 2.0 firmada con estado de revocación; comprobador aislado que no depende de nuestros servicios (huecos de la revisión F09-02, ver `docs/seguridad/revision-f01-f08.md`) | ARG-068, ARG-069 | F07-11, F09-20 | en desarrollo | `services/evidence/argos_evidence/credential`, `tests/architecture/test_verifier_isolation.py` |
+| M-12 | S: falsificar una credencial o su comprobación | Comprobador público | A1 | Credencial VC 2.0 firmada con estado de revocación que caduca; comprobador aislado que ancla el emisor y las raíces de TSA por configuración (nunca del bundle), exige la firma del emisor sobre el expediente y resiste bundles hostiles | ARG-068, ARG-069 | F07-11, F09-20 | implementada | `services/verifier/argos_verifier/checks.py`, `services/verifier/tests/test_verifier.py`, `tests/architecture/test_verifier_isolation.py` |
 | M-13 | E: actuar fuera del propio rol | API v1 | A8 | Matriz de autorización versionada, denegación por defecto, separación de deberes y test exhaustivo de rol × permiso (huecos de la revisión F09-02, ver `docs/seguridad/revision-f01-f08.md`) | ARG-072 | F08-02, F09-24 | en desarrollo | `services/api/argos_api/authz/permissions.yaml`, `tests/contract/test_api_authz.py` |
 | M-14 | R: negar una acción humana | API v1 | A8, A3 | Cada mutación deja su asiento en el diario con la persona detrás (huecos de la revisión F09-02, ver `docs/seguridad/revision-f01-f08.md`) | ARG-071 | F08-03, F09-26 | en desarrollo | `tests/integration/test_api_core.py` |
 | M-15 | T: cerrar un hallazgo sin corregirlo | Motor de retos | A8, A3 | Un hallazgo solo se cierra por la reejecución de subsanación; el dominio prohíbe el cierre manual | ARG-048, ARG-049 | F08-06 | implementada | `tests/integration/test_findings.py` |
@@ -129,3 +129,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.0 | 2026-09-23 | Primera versión (F09-01) |
 | 1.1 | 2026-09-23 | M-39 pasa a implementada al integrar la auditoría del 2026-09-18 (F09-17) |
 | 1.2 | 2026-09-23 | M-01, M-03, M-05, M-06, M-12, M-13, M-14 y M-28 vuelven a «en desarrollo» por los huecos que encontró la revisión F09-02, con su tarea de corrección |
+| 1.3 | 2026-09-23 | M-12 vuelve a «implementada» tras F09-20 |

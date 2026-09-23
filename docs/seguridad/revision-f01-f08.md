@@ -114,8 +114,17 @@ Tratamos nuestros hallazgos como los de un cliente: cada uno queda **registrado*
 
 Hay mitigaciones que el modelo daba por implementadas y tienen huecos: M-01, M-03, M-05, M-06, M-12, M-13, M-14 y M-28. En la versión 1.2 del modelo pasan a «en desarrollo» con su tarea de corrección, y vuelven a «implementada» cuando esa tarea se cierre.
 
-## 6. Historial
+## 6. Seguimiento de las correcciones
+
+Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el commit donde se ve la corrección y su test.
+
+| Hallazgo | Estado | Tarea | Commit | Fecha |
+|---|---|---|---|---|
+| SEC-001, SEC-002, SEC-003, SEC-018, SEC-038, SEC-039, SEC-056 | Corregido | F09-20 | `90790cf` | 2026-09-23 |
+
+## 7. Historial
 
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 1.0 | 2026-09-23 | Primera revisión (F09-02) |
+| 1.1 | 2026-09-23 | Corregidos SEC-001, 002, 003, 018, 038, 039 y 056 (F09-20) |
