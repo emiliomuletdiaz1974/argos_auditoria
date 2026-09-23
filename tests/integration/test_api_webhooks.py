@@ -47,13 +47,20 @@ def _as(role: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {role}"}
 
 
+def _public(_host: str) -> list[str]:
+    """The example domains of these tests do not resolve: they stand for a public ITSM."""
+    return ["93.184.216.34"]
+
+
 def _secrets() -> VaultSecretStore:
     return VaultSecretStore(VAULT, "root")
 
 
 def _api(dsn: str) -> TestClient:
     validator = cast(JwtValidator, PersonValidator())
-    return TestClient(create_app(validator, dsn=dsn, webhook_secrets=_secrets()))
+    return TestClient(
+        create_app(validator, dsn=dsn, webhook_secrets=_secrets(), webhook_resolve=_public)
+    )
 
 
 def _subscribe(
@@ -98,7 +105,9 @@ class Receiver:
 async def _deliver(dsn: str, receiver: Receiver, delivery_id: str, attempts: int) -> str:
     client = await Client.connect(get_config().TEMPORAL_ADDRESS, namespace="default")
     queue = f"argos-webhooks-test-{uuid.uuid4().hex[:8]}"
-    activities = WebhookActivities(dsn, _secrets(), transport=httpx.MockTransport(receiver))
+    activities = WebhookActivities(
+        dsn, _secrets(), transport=httpx.MockTransport(receiver), resolve=_public
+    )
     async with Worker(
         client, task_queue=queue, workflows=[WebhookDelivery], activities=activities.all()
     ):
@@ -258,3 +267,33 @@ def test_a_gate_awaiting_approval_is_announced_once(migrated_db: str) -> None:
     [(subject, _, data)] = bus.published
     assert subject == "argos.campaign.approval_requested"
     assert data == {"campaign_id": campaign_id, "gate": "sampling", "approvals_needed": 2}
+
+
+def test_a_name_that_now_resolves_inside_is_not_delivered_and_says_why(migrated_db: str) -> None:
+    """SEC-031: checked again at delivery, and the inbox keeps the kind of error, not its text."""
+    api = _api(migrated_db)
+    webhook_id = _subscribe(api)
+    [delivery_id] = [
+        d
+        for d in enqueue_event(migrated_db, "finding_opened", {"finding_id": "f-5"})
+        if _owner(migrated_db, d) == webhook_id
+    ]
+    reached: list[httpx.Request] = []
+
+    def receiver(request: httpx.Request) -> httpx.Response:
+        reached.append(request)
+        return httpx.Response(200)
+
+    activities = WebhookActivities(
+        migrated_db,
+        _secrets(),
+        transport=httpx.MockTransport(receiver),
+        resolve=lambda _host: ["10.0.0.9"],
+    )
+    assert activities.deliver_now(delivery_id) == "failed"
+    assert reached == []
+    inbox = api.get(
+        f"{API_PREFIX}/webhooks/{webhook_id}/deliveries", headers=_as("platform_admin")
+    ).json()["items"]
+    [entry] = [item for item in inbox if item["id"] == delivery_id]
+    assert (entry["status"], entry["last_error"]) == ("failed", "destination_refused")

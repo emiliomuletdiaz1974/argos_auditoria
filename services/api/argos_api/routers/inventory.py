@@ -37,7 +37,7 @@ class ReviewDecision(BaseModel):
         )
     )
     category: str | None = Field(default=None, description="only when correcting")
-    note: str = ""
+    note: str = Field(default="", max_length=2000)
 
     @model_validator(mode="after")
     def _a_correction_names_a_category(self) -> Self:

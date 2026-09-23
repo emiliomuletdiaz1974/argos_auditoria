@@ -21,6 +21,7 @@ from argos_api import SERVICE_NAME
 from argos_api.app import create_app
 from argos_api.assistant import AssistantClient
 from argos_api.keycloak import Keycloak
+from argos_api.webhooks.worker import allowed_targets
 from argos_auth import JwtValidator
 from argos_common.config import ArgosConfig, Environment, get_config
 from argos_common.logs import configure_logging
@@ -103,6 +104,8 @@ def build_app(cfg: ArgosConfig) -> Any:
         dsn=cfg.DATABASE_URL,
         refresher=realm.refresh,
         code_exchanger=realm.exchange,
+        session_revoker=realm.logout,
+        webhook_allowed=allowed_targets(cfg),
         campaign_runner=TemporalCampaigns(cfg.TEMPORAL_ADDRESS),
         evidence=_evidence(cfg),
         assistant=AssistantClient(gateway) if gateway else None,

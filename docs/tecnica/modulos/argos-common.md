@@ -4,8 +4,8 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.2.0-alpha
-commit: 2a18039
+version: 0.3.0-alpha
+commit: fdc1311
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -62,6 +62,7 @@ Variables con prefijo `ARGOS_`:
 - `OPA_URL` y `OPA_TOKEN` (secreto);
 - `OIDC_ISSUER` y `OIDC_AUDIENCE`;
 - `WORM_STORAGE_PATH`, `LOG_LEVEL`, `LOG_FORMAT_JSON`, `LLM_LOCAL_ENDPOINT`, `LLM_MODEL` y `EMBEDDING_MODEL` (nombre del modelo de embeddings servido, por defecto `argos-embed`);
+- `WEBHOOK_ALLOWED_TARGETS`: destinos privados que un webhook puede alcanzar (el ITSM del cliente), nombres o redes separados por comas. Vacío por defecto: solo destinos `https` públicos;
 - `VAULT_ADDR` y `VAULT_TOKEN`, solo para los servicios que abren conectores; el token se guarda como secreto y no se registra.
 
 En entorno de producción la configuración se rechaza si:
@@ -125,3 +126,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.1.0-alpha | 2026-09-18 | `PostgresJournal` se carga al primer uso desde `argos_common`; la interfaz no cambia | F07-11 (ARG-069) |
 | 0.1.0-alpha | 2026-09-21 | `VaultSecretStore.write`: guarda un secreto que llega de fuera (el de un webhook), con el mismo error si la ruta no es escribible | F08-09 |
 | 0.2.0-alpha | 2026-09-23 | `EMBEDDING_MODEL`: el nombre del modelo de embeddings que usa el asistente del gateway | F09-29 |
+| 0.3.0-alpha | 2026-09-23 | `WEBHOOK_ALLOWED_TARGETS`: la excepción de destinos privados de los webhooks | F09-30 |

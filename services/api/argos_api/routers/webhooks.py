@@ -14,6 +14,11 @@ from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
 from argos_api.http import IdempotencyKey, caller, database
 from argos_api.paging import Page, Paging, paginate
+from argos_api.webhooks.destination import (
+    DestinationRefusedError,
+    check_destination,
+    resolve_host,
+)
 from argos_api.webhooks.store import (
     EVENT_TYPES,
     SecretWriter,
@@ -28,7 +33,9 @@ router = APIRouter(prefix="/webhooks", tags=["webhooks"], route_class=CoreRoute)
 
 
 class NewWebhook(BaseModel):
-    url: str = Field(pattern="^https?://", max_length=2000, description="endpoint of the client")
+    url: str = Field(
+        pattern="^https://", max_length=2000, description="endpoint of the client, https only"
+    )
     events: list[str] = Field(min_length=1, description="events it subscribes to")
     template: str = Field(default="generic", description="servicenow, jira, generic…")
     secret: str = Field(
@@ -67,6 +74,12 @@ def _secrets(request: Request) -> SecretWriter:
 def subscribe(
     request: Request, body: NewWebhook, idempotency_key: IdempotencyKey = None
 ) -> dict[str, Any]:
+    allowed = getattr(request.app.state, "webhook_allowed", ())
+    resolve = getattr(request.app.state, "webhook_resolve", resolve_host)
+    try:
+        check_destination(body.url, resolve=resolve, allowed=allowed)
+    except DestinationRefusedError as refused:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(refused)) from None
     return create_webhook(
         database(request),
         _secrets(request),

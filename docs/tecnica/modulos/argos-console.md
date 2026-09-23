@@ -4,8 +4,8 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.9.0-alpha
-commit: 47f474c
+version: 0.10.0-alpha
+commit: fdc1311
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -69,6 +69,8 @@ Los nombres del documento de fase (`--sev-critica`, `--verdict`…) pasan a ingl
 - El refresco nunca llega al JavaScript de la página: viaja solo en la cookie `HttpOnly`.
 - Una vuelta de Keycloak con un `state` que la consola no envió se rechaza.
 - Sin dependencias servidas desde una CDN: todo va en el paquete que sirve el appliance.
+- **«Salir»** (F09-30, SEC-041): el botón del menú borra el token de la memoria y pide a la API que revoque el refresco y borre su cookie; al recargar, la consola pide entrar de nuevo. La cookie es de sesión, así que cerrar el navegador también cierra la sesión.
+- **Política de contenidos** (F09-30, SEC-046): la consola se sirve con `default-src 'self'; frame-ancestors 'none'`. Lo permite porque no tiene nada en línea ni pide nada a otro origen: su único salto fuera es la navegación a Keycloak.
 - Una cita del asistente con `detail` vacío no despliega ningún fragmento (F09-28, SEC-033): una cadena vacía está contenida en cualquier referencia y antes enlazaba la primera.
 
 ## 7. Operación
@@ -110,3 +112,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | 0.7.0-alpha | 2026-09-22 | Guion completo con Playwright y pruebas de foco visible; arreglado el `fetch` sin enlazar que impedía iniciar sesión en un navegador real; el aviso de la reejecución sobrevive al cierre del hallazgo | F08-16 |
 | 0.8.0-alpha | 2026-09-22 | La consola se construye dentro de la imagen de la API y se sirve desde su mismo origen; el realm acepta la vuelta a `http://127.0.0.1:8000/callback` | F08-17 |
 | 0.9.0-alpha | 2026-09-23 | Una cita sin `detail` no se enlaza a ningún fragmento | F09-28 |
+| 0.10.0-alpha | 2026-09-23 | Botón «Salir» que revoca la sesión, y consola servida con CSP estricta | F09-30 |

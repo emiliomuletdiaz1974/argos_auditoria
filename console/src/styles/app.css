@@ -39,6 +39,11 @@ a {
   background: var(--panel-2);
 }
 
+.shell-logout {
+  margin-top: 16px;
+  width: 100%;
+}
+
 .shell-main {
   padding: 24px;
 }

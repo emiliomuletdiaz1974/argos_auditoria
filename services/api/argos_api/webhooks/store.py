@@ -13,6 +13,7 @@ from argos_common.ids import uuid7
 from argos_common.journal_pg import PostgresJournal
 
 VAULT_FOLDER = "webhooks"  # the path under the secret store, never the secret
+_ERROR_KINDS = ("destination_refused", "timeout", "connection", "transport")
 EVENT_TYPES = ("finding_opened", "campaign_sealed", "approval_requested")
 
 
@@ -114,7 +115,8 @@ def list_deliveries(
             "status": row[2],
             "attempts": row[3],
             "last_status_code": row[4],
-            "last_error": row[5],
+            # Rows written before the error kinds existed may hold raw text: never shown.
+            "last_error": row[5] if row[5] in _ERROR_KINDS or row[5] is None else "transport",
             "last_at": row[6].isoformat() if row[6] else None,
             "delivered_at": row[7].isoformat() if row[7] else None,
             "created_at": row[8].isoformat(),

@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.9 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.10 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -79,10 +79,10 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-13 | E: actuar fuera del propio rol | API v1 | A8 | Matriz de autorización versionada, denegación por defecto, roles incompatibles rechazados en toda ruta y separación de deberes por persona en el dominio (nadie aprueba ni confirma lo que pidió) | ARG-072 | F08-02, F09-24 | implementada | `services/api/argos_api/authz/permissions.yaml`, `tests/contract/test_api_authz.py`, `tests/integration/test_separation_of_duties.py` |
 | M-14 | R: negar una acción humana | API v1 | A8, A3 | Cada mutación deja su asiento en el diario con la persona detrás (huecos de la revisión F09-02, ver `docs/seguridad/revision-f01-f08.md`) | ARG-071 | F08-03, F09-26 | en desarrollo | `tests/integration/test_api_core.py` |
 | M-15 | T: cerrar un hallazgo sin corregirlo | Motor de retos | A8, A3 | Un hallazgo solo se cierra por la reejecución de subsanación; el dominio prohíbe el cierre manual | ARG-048, ARG-049 | F08-06 | implementada | `tests/integration/test_findings.py` |
-| M-16 | S: robar la sesión de la consola | Consola | A1 | OIDC con PKCE, token de acceso en memoria y refresco en una cookie `HttpOnly`, `Secure` y `SameSite=Strict` limitada a su ruta | ARG-073, ARG-008 | F08-10 | implementada | `services/api/argos_api/keycloak.py`, `tests/contract/test_api_session.py` |
+| M-16 | S: robar la sesión de la consola | Consola | A1 | OIDC con PKCE, token de acceso en memoria y refresco en una cookie de sesión `HttpOnly`, `Secure` y `SameSite=Strict` limitada a `/api/v1/auth`; cierre de sesión que revoca el refresco en el realm; CSP `default-src 'self'; frame-ancestors 'none'`, `nosniff` y `Referrer-Policy` en toda respuesta | ARG-073, ARG-008 | F08-10, F09-30 | implementada | `services/api/argos_api/keycloak.py`, `tests/contract/test_api_session.py`, `services/api/tests/test_api_console_hardening_pure.py`, `console/e2e/logout.spec.ts` |
 | M-17 | S: usar una contraseña robada de quien aprueba | Keycloak y API | A1, A8 | Segundo factor TOTP obligatorio para `platform_admin` y `dpo_reviewer`; la API exige `otp` en `amr` | ARG-008, ARG-072 | F09-07 | en desarrollo | — |
 | M-18 | S: fuerza bruta contra el inicio de sesión | Keycloak | A1 | Bloqueo temporal por intentos fallidos y política de contraseñas | ARG-008 | F09-07 | en desarrollo | — |
-| M-19 | S/T: webhooks falsos o secretos filtrados | Webhooks | A1 | Firma HMAC-SHA256 con marca de tiempo; el secreto va solo a Vault y nunca vuelve en respuestas | ARG-079 | F08-09 | implementada | `services/api/argos_api/webhooks`, `tests/integration/test_api_webhooks.py` |
+| M-19 | S/T: webhooks falsos o secretos filtrados | Webhooks | A1 | Firma HMAC-SHA256 con marca de tiempo; el secreto va solo a Vault y nunca vuelve en respuestas; destino solo `https` y público, comprobado al suscribir y antes de cada entrega, con la excepción privada escrita por quien instala; la bandeja guarda la clase de error, no su texto | ARG-079 | F08-09, F09-30 | implementada | `services/api/argos_api/webhooks`, `tests/integration/test_api_webhooks.py` |
 | M-20 | I: secretos en el repositorio | CI | A5 | gitleaks en cada commit del CI | ARG-010 | — | implementada | `.gitleaks.toml` |
 | M-21 | I: un servicio lee las credenciales de un conector | Vault | A2 | Política de Vault exclusiva del SDK de conectores para `argos/data/connectors/*` (P-04) | ARG-009 | F1-05 | implementada | `deploy/dev/vault/setup.sh` |
 | M-22 | S/I: suplantar un servicio o escuchar la red interna | Red interna | A1, A2 | mTLS entre servicios con certificados de la PKI de Vault (30 días, rotación automática); PostgreSQL y NATS con TLS | ARG-083 | F09-06 | en desarrollo | — |
@@ -136,3 +136,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.7 | 2026-09-23 | M-13 vuelve a «implementada» tras F09-24 |
 | 1.8 | 2026-09-23 | M-28 vuelve a «implementada» tras F09-25 |
 | 1.9 | 2026-09-23 | M-08 recoge los guardarraíles normalizados y las cifras con respaldo de F09-28 |
+| 1.10 | 2026-09-23 | M-16 y M-19 recogen el cierre de sesión, las cabeceras y los webhooks sin destinos internos de F09-30 |

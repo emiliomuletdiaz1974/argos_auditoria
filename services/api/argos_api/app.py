@@ -34,8 +34,9 @@ from argos_api.routers import (
     systems,
     webhooks,
 )
-from argos_api.routers.session import CodeExchanger
+from argos_api.routers.session import CodeExchanger, SessionRevoker
 from argos_api.runner import CampaignRunner
+from argos_api.webhooks.destination import Resolver, resolve_host
 from argos_api.webhooks.store import SecretWriter
 from argos_auth import JwtValidator
 from argos_common import PostgresJournal
@@ -79,6 +80,11 @@ def _as_problem(document: dict[str, Any]) -> dict[str, Any]:
 
 
 Refresher = Callable[[str], Awaitable[dict[str, Any]]]
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'self'; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "same-origin",
+}
 
 
 def create_app(
@@ -91,6 +97,9 @@ def create_app(
     assistant: AssistantClient | None = None,
     webhook_secrets: SecretWriter | None = None,
     code_exchanger: CodeExchanger | None = None,
+    session_revoker: SessionRevoker | None = None,
+    webhook_allowed: tuple[str, ...] = (),
+    webhook_resolve: Resolver = resolve_host,
     console: Path | None = None,
     publish_docs: bool = False,
 ) -> FastAPI:
@@ -117,6 +126,23 @@ def create_app(
     app.state.assistant = assistant
     app.state.webhook_secrets = webhook_secrets
     app.state.code_exchanger = code_exchanger
+    app.state.session_revoker = session_revoker
+    app.state.webhook_allowed = webhook_allowed
+    app.state.webhook_resolve = webhook_resolve
+
+    @app.middleware("http")
+    async def _security_headers(
+        request: Request, call_next: Callable[[Request], Awaitable[Any]]
+    ) -> Any:
+        """The console and the API, from this one origin, with no frames and no sniffing (SEC-046).
+
+        The route map of development loads its page from a CDN, so it keeps its own headers.
+        """
+        response = await call_next(request)
+        if not (publish_docs and request.url.path == f"{API_PREFIX}/docs"):
+            response.headers.update(SECURITY_HEADERS)
+        return response
+
     app.state.idempotency = IdempotencyStore(dsn) if dsn else None
     app.state.journal = PostgresJournal(dsn) if dsn else None
 

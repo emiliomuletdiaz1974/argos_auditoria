@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.20.0-alpha
-commit: 2a18039
+version: 0.21.0-alpha
+commit: fdc1311
 date: 2026-09-23
 status: current
 confidentiality: client
@@ -55,7 +55,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Función pública | `app.create_app(validator=None) -> FastAPI` | La aplicación; sin validador, toda ruta autenticada responde `401` |
 | Contrato | `services/api/openapi.json` | OpenAPI 3.1 de la v1, versionado y comprobado en CI |
 | Herramienta | `tools/api_contract.py [--check]` | Genera el contrato o comprueba que el fichero está al día |
-| Rutas | `/api/v1/{systems,inventory,campaigns,findings,evidence,credentials,assistant,approvals,webhooks,auth}` | 33 operaciones declaradas; ver el contrato |
+| Rutas | `/api/v1/{systems,inventory,campaigns,findings,evidence,credentials,assistant,approvals,webhooks,auth}` | 34 operaciones declaradas; ver el contrato |
 | Salud | `GET /health` | Sin token |
 | Recursos vivos | `GET /systems`, `GET /inventory/coverage`, `GET /inventory/nodes/{node_key}`, `GET /inventory/review-queue`, `POST /inventory/review-queue/{node_key}` | Llaman a `argos_inventory`; ningún router escribe SQL propio |
 | Campañas | `POST /campaigns` (idempotente), `GET /campaigns`, `GET /campaigns/{id}`, `POST /campaigns/{id}/launch`, `GET /campaigns/{id}/plan`, `GET /campaigns/{id}/progress`, `GET /campaigns/{id}/gates`, `POST /campaigns/{id}/gates/{gate}/approve` | Llaman a `argos_challenges.store`; el plan previo es la lista literal de unidades y lo no verificable, y existe desde que la campaña está preparada (`409` antes) |
@@ -64,7 +64,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Credenciales | `GET /credentials/preview`, `POST /credentials`, `GET /credentials/{id}`, `POST /credentials/{id}/revoke` | Emitir es un acto explícito de `dpo_reviewer`: la vista previa muestra el sujeto exacto y `withheld`, lo que se queda en el expediente, y la emisión nombra por su hash el expediente que se vio; si cambió entremedias, `409`. Revocar exige motivo |
 | Asistente | `POST /assistant/ask` | Reenvía la pregunta al gateway de IA **por HTTP** —el único servicio al que llama la API (ADR-0012)— y devuelve respuesta, citas, herramientas consultadas, `complete`, `refused` y `fragments` (los fragmentos normativos recuperados, para desplegar las citas o juzgar un rehúso); siempre con `assisted: true` y el aviso de que no es un veredicto. Sin modelo local, `503` con el motivo |
 | Cliente | `assistant.AssistantClient(base_url)` y `create_app(assistant=...)` | Sin cliente, la ruta responde `503`; un gateway inalcanzable, también. La API no importa `argos_ai`: un test lo impide |
-| Webhooks | `POST /webhooks`, `GET /webhooks`, `GET /webhooks/{id}/deliveries` | Solo `platform_admin`. El secreto lo elige el cliente, va al almacén de secretos (`webhooks/<id>`) y no sale nunca en una respuesta, en la base de datos ni en el diario. La bandeja guarda cada intento: estado, intentos, último código y error |
+| Webhooks | `POST /webhooks`, `GET /webhooks`, `GET /webhooks/{id}/deliveries` | Solo `platform_admin`. El secreto lo elige el cliente, va al almacén de secretos (`webhooks/<id>`) y no sale nunca en una respuesta, en la base de datos ni en el diario. La bandeja guarda cada intento: estado, intentos, último código y la **clase** de error (`destination_refused`, `timeout`, `connection`, `transport`), nunca el texto de la otra parte. El destino es solo `https` y no puede apuntar dentro del appliance (ver Seguridad) |
 | Firma | `X-Argos-Signature: t=<segundos>,v1=<hex>` | HMAC-SHA256 con el secreto sobre `t`, un punto y los bytes exactos del cuerpo; el receptor rechaza una marca con más de 300 s (`webhooks.signing.verify` es lo que haría él). `X-Argos-Event` lleva el tipo |
 | Plantillas | `argos_api/webhooks/templates.yaml` | ServiceNow, Jira y genérico como **configuración**: marcadores `{campo}`, el evento entero y búsqueda por campo; añadir un destino no toca código |
 | Entrega | `webhooks.workflow.WebhookDelivery` + `webhooks.dispatch.WebhookActivities` (cola `argos-webhooks`) | Reintentos con retroceso exponencial (1, 2, 4… s, 8 intentos por defecto) |
@@ -96,6 +96,10 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 - **Mapa de rutas solo en desarrollo:** `/api/v1/docs` y `/api/v1/openapi.json` se sirven con `ARGOS_ENVIRONMENT=development`; el contrato versionado se sigue generando de `openapi()`.
 - **Sujeto sintético ligado a su campaña:** la autorización pasa el `campaign_id` de la ruta y el dominio rechaza un sujeto de otra campaña.
 - **Señal a campañas sin workflow propio** (F09-23): `TemporalCampaigns.signal` ignora que no exista `campaign-<id>`, porque una campaña de subsanación consulta sus compuertas por su cuenta.
+- **Webhooks sin destinos internos** (F09-30, SEC-031): `webhooks.destination.check_destination` exige `https`, rechaza los nombres de los servicios del appliance y `localhost`, resuelve el nombre y rechaza cualquier dirección que no sea pública (loopback, privada, link-local, reservada). Se comprueba al suscribir (422) y otra vez antes de cada entrega (queda `failed` con `destination_refused`, sin enviar nada). La excepción para el ITSM del cliente en su red privada la escribe quien instala, en `ARGOS_WEBHOOK_ALLOWED_TARGETS` (nombres o redes, separados por comas).
+- **Sesión que se cierra** (F09-30, SEC-041): `POST /auth/logout` revoca el refresco en Keycloak y borra la cookie. La cookie de refresco es de sesión (sin `Max-Age`: muere con el navegador) y su ruta es `/api/v1/auth`, para que la lean el refresco y el cierre. Un refresco que el realm rechaza responde 401 problem+json, y una respuesta del realm que no es JSON (un proxy que contesta HTML) es un rechazo, no un error 500.
+- **Cabeceras de seguridad** (F09-30, SEC-046): toda respuesta, de la consola y de la API, lleva `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff` y `Referrer-Policy: same-origin`. Solo la página de `/api/v1/docs` de desarrollo, que carga de una CDN, queda fuera.
+- **Límites de texto** (F09-30, SEC-045): `Revocation.reason` y `ReviewDecision.note` hasta 2000 caracteres, `Exercise.right` hasta 40 y la cabecera `Idempotency-Key` hasta 200.
 - **Quién pregunta al asistente** (F09-29, SEC-043): `AssistantClient.ask(question, person)` envía al gateway el actor autenticado (`user:<sub>`), y la cuota del asistente se cuenta por persona.
 - **Fechas del cliente en el ejercicio de un derecho** (F09-27, SEC-014): `POST /synthetic/{id}/confirm-exercise` exige `requested_at` y `answered_at` con zona horaria. El plazo se mide entre ambas, nunca con la hora de la petición; unas fechas futuras o desordenadas responden 409.
 - **Roles incompatibles** (F09-24, SEC-008): `permissions.yaml` declara `_incompatible_roles` (`campaign_manager` con `dpo_reviewer`), y el guardián de permisos rechaza con 403 en toda ruta un token que los traiga juntos. `risk_expiry` fuera de rango responde 422.
@@ -123,6 +127,7 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 
 ## 9. Limitaciones conocidas y pendientes
 
+- **Webhooks y *DNS rebinding*:** el destino se resuelve y se comprueba al suscribir y justo antes de cada entrega, pero la conexión vuelve a resolver el nombre. Un DNS que cambie de respuesta entre esas dos resoluciones podría llevar una entrega a una dirección interna. Cerrarlo del todo exige fijar la IP en la conexión HTTPS con su SNI y la verificación del certificado por nombre.
 - La API de campañas de la Fase 05 (`challenge-api`) está retirada: sus rutas viven aquí desde F08-17.
 - El listado de hallazgos pagina por su propio orden (severidad y recurrencia) con el mismo cursor opaco.
 - El vecindario de un nodo se devuelve con `limit` y `has_more`, no con cursor: el cursor por desplazamiento del GraphQL es suyo y no se mezcla con el de las listas.
@@ -153,3 +158,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.18.0-alpha | 2026-09-23 | `_incompatible_roles` en la matriz y tope de la aceptación de riesgo | F09-24 |
 | 0.19.0-alpha | 2026-09-23 | `confirm-exercise` recibe las fechas de solicitud y respuesta del cliente | F09-27 |
 | 0.20.0-alpha | 2026-09-23 | El asistente recibe quién pregunta para su cuota por persona | F09-29 |
+| 0.21.0-alpha | 2026-09-23 | Webhooks sin destinos internos y con clase de error, `POST /auth/logout` con cookie de sesión, cabeceras de seguridad, límites de texto y refresco rechazado como 401 | F09-30 |

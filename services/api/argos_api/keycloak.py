@@ -12,6 +12,7 @@ import httpx
 
 CONSOLE_CLIENT = "argos-console"
 TOKEN_ENDPOINT = "/protocol/openid-connect/token"  # noqa: S105 - a path, not a secret
+LOGOUT_ENDPOINT = "/protocol/openid-connect/logout"
 TIMEOUT = 10.0
 
 
@@ -22,6 +23,7 @@ class Keycloak:
         self, issuer: str, *, client_id: str = CONSOLE_CLIENT, transport: Any = None
     ) -> None:
         self._url = f"{issuer.rstrip('/')}{TOKEN_ENDPOINT}"
+        self._logout_url = f"{issuer.rstrip('/')}{LOGOUT_ENDPOINT}"
         self._client_id = client_id
         self._transport = transport
 
@@ -29,9 +31,11 @@ class Keycloak:
         async with httpx.AsyncClient(transport=self._transport, timeout=TIMEOUT) as client:
             answer = await client.post(self._url, data={**form, "client_id": self._client_id})
         if answer.status_code >= httpx.codes.BAD_REQUEST:
-            reason = answer.json().get("error", answer.text) if answer.content else answer.text
-            raise PermissionError(str(reason))
-        tokens: dict[str, Any] = answer.json()
+            raise PermissionError(_reason(answer))
+        try:
+            tokens: dict[str, Any] = answer.json()
+        except ValueError as exc:
+            raise PermissionError("the realm did not answer with tokens") from exc
         return tokens
 
     async def exchange(self, code: str, verifier: str, redirect_uri: str) -> dict[str, Any]:
@@ -48,3 +52,22 @@ class Keycloak:
     async def refresh(self, refresh_token: str) -> dict[str, Any]:
         """A new access token from the refresh token of the cookie."""
         return await self._tokens({"grant_type": "refresh_token", "refresh_token": refresh_token})
+
+    async def logout(self, refresh_token: str) -> None:
+        """End the session at the realm, so the refresh token is worth nothing (SEC-041)."""
+        async with httpx.AsyncClient(transport=self._transport, timeout=TIMEOUT) as client:
+            answer = await client.post(
+                self._logout_url,
+                data={"client_id": self._client_id, "refresh_token": refresh_token},
+            )
+        if answer.status_code >= httpx.codes.BAD_REQUEST:
+            raise PermissionError(_reason(answer))
+
+
+def _reason(answer: httpx.Response) -> str:
+    """Why the realm refused, whether it answered JSON or not (a proxy may answer HTML)."""
+    try:
+        body = answer.json()
+    except ValueError:
+        return f"the realm answered {answer.status_code}"
+    return str(body.get("error", answer.status_code)) if isinstance(body, dict) else str(body)

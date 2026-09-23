@@ -1,16 +1,17 @@
-"""The open routes of the v1: opening and refreshing the console session (ADR-0013, PKCE).
+"""The open routes of the v1: opening, refreshing and closing the console session (ADR-0013, PKCE).
 
 The access token lives in the memory of the console and nowhere else; the refresh token never
-reaches the browser's JavaScript: it travels in a cookie that only the refresh path can read. That
-is why these routes are open —there is no access token yet to show— and why they answer with the
-access token alone. They are not domain mutations either, so they do not go through the audited
-route class.
+reaches the browser's JavaScript: it travels in a cookie that only the refresh and logout paths can
+read. That is why these routes are open —there is no access token yet to show— and why they answer
+with the access token alone. They are not domain mutations either, so they do not go through the
+audited route class.
 """
 
+import contextlib
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
@@ -19,11 +20,12 @@ from argos_api.http import pending
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 COOKIE = "argos_refresh"
-COOKIE_PATH = f"{API_PREFIX}/auth/refresh"
-DEFAULT_COOKIE_AGE = 8 * 60 * 60
+# The refresh and the logout read it; nothing else of the API sees it.
+COOKIE_PATH = f"{API_PREFIX}/auth"
 _CHALLENGE = {"WWW-Authenticate": "Bearer"}
 
 CodeExchanger = Callable[[str, str, str], Awaitable[dict[str, Any]]]
+SessionRevoker = Callable[[str], Awaitable[None]]
 
 
 class Authorization(BaseModel):
@@ -44,10 +46,12 @@ def _with_cookie(tokens: dict[str, Any], fallback_refresh: str | None = None) ->
     )
     refresh = tokens.get("refresh_token", fallback_refresh)
     if refresh:
+        # A session cookie: without `max_age` it dies with the browser, so a shared desk does not
+        # keep the previous person signed in (security review F09-02, SEC-041). The realm still
+        # bounds how long the refresh token itself is valid.
         answer.set_cookie(
             COOKIE,
             str(refresh),
-            max_age=int(tokens.get("refresh_expires_in", DEFAULT_COOKIE_AGE)),
             path=COOKIE_PATH,
             httponly=True,
             secure=True,
@@ -78,5 +82,28 @@ async def refresh(request: Request) -> JSONResponse:
     refresher = getattr(request.app.state, "refresher", None)
     if refresher is None:
         pending("the session refresh")
-    tokens: dict[str, Any] = await refresher(token)
+    try:
+        tokens: dict[str, Any] = await refresher(token)
+    except PermissionError as refused:
+        # The realm said no (expired, revoked): the session is over, and the page signs in again.
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED, f"the session was refused: {refused}", _CHALLENGE
+        ) from None
     return _with_cookie(tokens, fallback_refresh=token)
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Close the console session: revoke the refresh token and delete its cookie",
+)
+async def logout(request: Request) -> Response:
+    token = request.cookies.get(COOKIE)
+    revoker: SessionRevoker | None = getattr(request.app.state, "session_revoker", None)
+    if token and revoker is not None:
+        # Already expired or revoked at the realm: the cookie goes anyway.
+        with contextlib.suppress(PermissionError):
+            await revoker(token)
+    answer = Response(status_code=status.HTTP_204_NO_CONTENT)
+    answer.delete_cookie(COOKIE, path=COOKIE_PATH, httponly=True, secure=True, samesite="strict")
+    return answer

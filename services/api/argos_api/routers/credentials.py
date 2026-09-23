@@ -31,7 +31,7 @@ class NewCredential(BaseModel):
 
 
 class Revocation(BaseModel):
-    reason: str = Field(min_length=1)
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 def _current(dsn: str, campaign_id: UUID) -> dict[str, Any]:

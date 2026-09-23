@@ -80,6 +80,14 @@ export function App() {
             {section.label}
           </a>
         ))}
+        {/* On a shared desk the next person must not walk in as the previous one (SEC-041). */}
+        <button
+          type="button"
+          className="btn-secondary shell-logout"
+          onClick={() => void session.logout().finally(() => setStatus("signed-out"))}
+        >
+          Salir
+        </button>
       </nav>
       <main className="shell-main">
         <ApiProvider api={api}>

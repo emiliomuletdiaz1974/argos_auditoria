@@ -15,6 +15,12 @@ import httpx
 import psycopg
 from temporalio import activity
 
+from argos_api.webhooks.destination import (
+    DestinationRefusedError,
+    Resolver,
+    check_destination,
+    resolve_host,
+)
 from argos_api.webhooks.signing import EVENT_HEADER, SIGNATURE_HEADER, sign
 from argos_api.webhooks.store import SecretWriter
 from argos_api.webhooks.templates import render
@@ -23,6 +29,19 @@ from argos_api.webhooks.workflow import MAX_ATTEMPTS, TIMEOUT_SECONDS
 DELIVERED = "delivered"
 FAILED = "failed"
 RETRYING = "retrying"
+# What the inbox says about a failure: its kind, never the text of the other side, which can carry
+# internal names, addresses or whatever the destination chose to answer (SEC-031).
+ERROR_KINDS = ("destination_refused", "timeout", "connection", "transport")
+
+
+def error_kind(exc: Exception) -> str:
+    if isinstance(exc, DestinationRefusedError):
+        return "destination_refused"
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout"
+    if isinstance(exc, httpx.ConnectError):
+        return "connection"
+    return "transport"
 
 
 class DeliveryFailedError(Exception):
@@ -62,14 +81,24 @@ class WebhookActivities:
         secrets: SecretWriter,
         transport: httpx.BaseTransport | None = None,
         clock: Callable[[], float] = time.time,
+        allowed: tuple[str, ...] = (),
+        resolve: Resolver = resolve_host,
     ) -> None:
         self._dsn = dsn
         self._secrets = secrets
         self._transport = transport
         self._clock = clock
+        self._allowed = allowed
+        self._resolve = resolve
 
     def deliver_now(self, delivery_id: str, max_attempts: int = MAX_ATTEMPTS) -> str:
         url, secret_ref, template, event, attempts = _load(self._dsn, delivery_id)
+        try:
+            # Checked again before each delivery: a name may resolve elsewhere by now (SEC-031).
+            check_destination(url, resolve=self._resolve, allowed=self._allowed)
+        except DestinationRefusedError as refused:
+            _record(self._dsn, delivery_id, attempts + 1, FAILED, None, error_kind(refused))
+            return FAILED
         body = json.dumps(render(template, event), ensure_ascii=False).encode()
         secret = self._secrets.read(secret_ref)["secret"]
         headers = {
@@ -83,7 +112,7 @@ class WebhookActivities:
             with httpx.Client(transport=self._transport, timeout=TIMEOUT_SECONDS) as client:
                 code = client.post(url, content=body, headers=headers).status_code
         except httpx.HTTPError as exc:
-            error = str(exc)[:200]
+            error = error_kind(exc)
         attempts += 1
         arrived = code is not None and code < 300
         if arrived:
@@ -94,6 +123,10 @@ class WebhookActivities:
             return FAILED
         _record(self._dsn, delivery_id, attempts, RETRYING, code, error)
         raise DeliveryFailedError(f"attempt {attempts} did not arrive: {code or error}")
+
+    @property
+    def allowed(self) -> tuple[str, ...]:
+        return self._allowed
 
     @activity.defn(name="deliver_webhook")
     async def deliver(self, delivery_id: str, max_attempts: int) -> str:

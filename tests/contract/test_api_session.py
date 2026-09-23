@@ -1,8 +1,8 @@
 """ADR-0013 · the console session on the side of the API: the refresh token never reaches the page.
 
 The console hands the code and its PKCE verifier to `/api/v1/auth/session`; the API exchanges them,
-keeps the refresh token in an HttpOnly cookie that only `/api/v1/auth/refresh` sees, and answers
-with the access token alone.
+keeps the refresh token in an HttpOnly cookie that only `/api/v1/auth` (refresh and logout) sees,
+and answers with the access token alone.
 """
 
 from typing import Any
@@ -39,7 +39,7 @@ def test_the_code_becomes_an_access_token_and_a_cookie_the_page_cannot_read() ->
     assert "argos_refresh=the-refresh" in cookie
     assert "HttpOnly" in cookie and "Secure" in cookie
     assert "samesite=strict" in cookie.lower()
-    assert f"Path={API_PREFIX}/auth/refresh" in cookie
+    assert f"Path={API_PREFIX}/auth" in cookie  # the refresh and the logout, nothing else
 
 
 def test_a_verifier_that_is_not_pkce_is_refused() -> None:

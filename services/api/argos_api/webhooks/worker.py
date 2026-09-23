@@ -26,7 +26,16 @@ SERVICE = "argos-webhook-worker"
 
 def activities(cfg: ArgosConfig) -> WebhookActivities:
     token = cfg.VAULT_TOKEN.get_secret_value() if cfg.VAULT_TOKEN else ""
-    return WebhookActivities(cfg.DATABASE_URL, VaultSecretStore(cfg.VAULT_ADDR, token))
+    return WebhookActivities(
+        cfg.DATABASE_URL,
+        VaultSecretStore(cfg.VAULT_ADDR, token),
+        allowed=allowed_targets(cfg),
+    )
+
+
+def allowed_targets(cfg: ArgosConfig) -> tuple[str, ...]:
+    """The private destinations the installer allowed for webhooks (SEC-031)."""
+    return tuple(t.strip() for t in cfg.WEBHOOK_ALLOWED_TARGETS.split(",") if t.strip())
 
 
 async def create_worker(client: Client, cfg: ArgosConfig) -> Worker:

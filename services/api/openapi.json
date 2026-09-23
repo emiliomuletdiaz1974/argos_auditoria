@@ -47,6 +47,7 @@
           "right": {
             "default": "erasure",
             "description": "the right exercised",
+            "maxLength": 40,
             "minLength": 1,
             "title": "Right",
             "type": "string"
@@ -181,9 +182,9 @@
             "type": "string"
           },
           "url": {
-            "description": "endpoint of the client",
+            "description": "endpoint of the client, https only",
             "maxLength": 2000,
-            "pattern": "^https?://",
+            "pattern": "^https://",
             "title": "Url",
             "type": "string"
           }
@@ -321,6 +322,7 @@
           },
           "note": {
             "default": "",
+            "maxLength": 2000,
             "title": "Note",
             "type": "string"
           }
@@ -334,6 +336,7 @@
       "Revocation": {
         "properties": {
           "reason": {
+            "maxLength": 2000,
             "minLength": 1,
             "title": "Reason",
             "type": "string"
@@ -610,6 +613,80 @@
         "summary": "Ask the assistant; it answers with citations or refuses",
         "tags": [
           "assistant"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "no valid token"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "the role does not allow it"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "it does not exist"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "the state does not allow it"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
+          }
+        },
+        "summary": "Close the console session: revoke the refresh token and delete its cookie",
+        "tags": [
+          "auth"
         ]
       }
     },
@@ -911,6 +988,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 200,
                   "type": "string"
                 },
                 {
@@ -1993,6 +2071,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 200,
                   "type": "string"
                 },
                 {
@@ -4615,6 +4694,7 @@
             "schema": {
               "anyOf": [
                 {
+                  "maxLength": 200,
                   "type": "string"
                 },
                 {

@@ -180,6 +180,11 @@ function api(request, response, url) {
     state.signedIn = true;
     return json(response, { access_token: "access-token-of-the-script" });
   }
+  if (path === "/auth/logout" && method === "POST") {
+    state.signedIn = false;
+    response.writeHead(204);
+    return response.end();
+  }
   if (path === "/auth/refresh" && method === "POST") {
     return state.signedIn
       ? json(response, { access_token: "access-token-of-the-script" })

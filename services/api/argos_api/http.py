@@ -59,6 +59,7 @@ IdempotencyKey = Annotated[
     Header(
         alias="Idempotency-Key",
         description="key chosen by the client; repeating it returns the first result",
+        max_length=200,
     ),
 ]
 

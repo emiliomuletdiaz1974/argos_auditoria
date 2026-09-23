@@ -89,4 +89,15 @@ describe("Session", () => {
     await expect(expired.refresh()).resolves.toBe(false);
     expect(expired.accessToken()).toBeNull();
   });
+
+  it("closes the session: the API revokes the refresh cookie and the token leaves memory", async () => {
+    // Security review F09-02, SEC-041: on a shared desk the next person must not walk in.
+    const fetch = answering({ access_token: TOKEN, expires_in: 300 });
+    const session = new Session(CONFIG, { fetch, navigate: vi.fn() });
+    await session.refresh();
+    await session.logout();
+    expect(session.accessToken()).toBeNull();
+    const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
+    expect(calls.at(-1)).toEqual(["/api/v1/auth/logout", { method: "POST", credentials: "same-origin" }]);
+  });
 });

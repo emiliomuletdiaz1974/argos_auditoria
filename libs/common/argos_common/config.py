@@ -57,6 +57,9 @@ class ArgosConfig(BaseSettings):
     LLM_LOCAL_ENDPOINT: str | None = "http://127.0.0.1:8000/v1"
     LLM_MODEL: str = "argos-llm"  # the served model name, never a model in code (ADR-0009)
     EMBEDDING_MODEL: str = "argos-embed"  # the served embedding model name (ADR-0009)
+    # Private destinations a webhook may reach (the client's ITSM), comma-separated host names
+    # or networks. Empty: only public https destinations (security review F09-02, SEC-031).
+    WEBHOOK_ALLOWED_TARGETS: str = ""
     OPA_URL: str = "http://127.0.0.1:8181"  # operational rules of the challenge engine (ARG-036)
     OPA_TOKEN: SecretStr | None = None  # bearer token OPA accepts for evaluating argos.* packages
     VAULT_ADDR: str = "http://127.0.0.1:8200"

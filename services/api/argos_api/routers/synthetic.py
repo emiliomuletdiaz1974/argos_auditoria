@@ -26,7 +26,9 @@ router = APIRouter(prefix="/synthetic", tags=["synthetic"], route_class=CoreRout
 
 
 class Exercise(BaseModel):
-    right: str = Field(default="erasure", min_length=1, description="the right exercised")
+    right: str = Field(
+        default="erasure", min_length=1, max_length=40, description="the right exercised"
+    )
     # The term of a right is the client's process, measured with the client's dates, never with
     # the time of this request (security review F09-02, SEC-014).
     requested_at: AwareDatetime = Field(description="when the client received the request")
