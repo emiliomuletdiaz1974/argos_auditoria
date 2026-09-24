@@ -5,7 +5,7 @@ title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
 version: 0.9.0-alpha
-commit: d47decd
+commit: 196e3f7
 date: 2026-09-23
 status: current
 confidentiality: client
