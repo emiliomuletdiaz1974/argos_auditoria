@@ -3,6 +3,7 @@
 from argos_api.authz.enforce import (
     MATRIX_FILE,
     PERMISSIONS,
+    SECOND_FACTOR,
     AuthzError,
     PermissionGuard,
     load_matrix,
@@ -12,6 +13,7 @@ from argos_api.authz.enforce import (
 __all__ = [
     "MATRIX_FILE",
     "PERMISSIONS",
+    "SECOND_FACTOR",
     "AuthzError",
     "PermissionGuard",
     "load_matrix",

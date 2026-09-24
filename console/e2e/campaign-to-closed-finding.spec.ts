@@ -1,6 +1,7 @@
 // The script of the phase, end to end and only through the console: sign in, read the plan before
-// anything runs, approve the gate, follow the run, triage the finding, declare it remediated, ask
-// for the re-run, and see that it closes because the challenge passed again — never by a button.
+// anything runs, approve the gate (signing in again with the second factor), follow the run,
+// triage the finding, declare it remediated, ask for the re-run, and see that it closes because
+// the challenge passed again — never by a button.
 // At the end, the evidence of the campaign and its credential.
 //
 // The rule of this file: no request is made from the test. Everything happens by clicking.
@@ -27,6 +28,14 @@ test("de la campaña al cierre verificado de un hallazgo", async ({ page }) => {
     const plan = page.getByRole("region", { name: "Plan previo" });
     await expect(plan).toContainText("SHOW ssl");
     await expect(plan).toContainText("Ninguna sonda se ha ejecutado todavía");
+  });
+
+  await test.step("aprobar la compuerta pide el segundo factor", async () => {
+    // Signed in with the password alone: the console sends the person to sign in again with the
+    // code and brings them back to the campaign, where they repeat the action (F09-07).
+    await page.getByRole("button", { name: "Aprobar" }).click();
+    await expect(page.getByRole("status")).toContainText("segundo factor");
+    await expect(page).toHaveURL(new RegExp(`/campaigns/${CAMPAIGN}$`));
   });
 
   await test.step("aprobar la compuerta y seguir el progreso", async () => {

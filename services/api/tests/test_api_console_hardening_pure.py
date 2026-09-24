@@ -69,7 +69,12 @@ def test_the_itsm_of_the_client_on_a_private_network_is_allowed_by_configuration
 
 class Admin:
     def validate(self, token: str) -> Identity:
-        return Identity(sub="admin", name="Admin", roles=frozenset({"platform_admin"}))
+        return Identity(
+            sub="admin",
+            name="Admin",
+            roles=frozenset({"platform_admin"}),
+            amr=frozenset({"pwd", "otp"}),
+        )
 
 
 class Store:
@@ -192,7 +197,9 @@ class Roles:
         self._roles = frozenset(roles)
 
     def validate(self, token: str) -> Identity:
-        return Identity(sub="someone", name="Someone", roles=self._roles)
+        return Identity(
+            sub="someone", name="Someone", roles=self._roles, amr=frozenset({"pwd", "otp"})
+        )
 
 
 @pytest.mark.parametrize(

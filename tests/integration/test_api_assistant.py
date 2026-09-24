@@ -39,7 +39,9 @@ NOWHERE = "http://127.0.0.1:9"
 
 class PersonValidator:
     def validate(self, token: str) -> Identity:
-        return Identity(sub=token, name=token, roles=frozenset({token}))
+        return Identity(
+            sub=token, name=token, roles=frozenset({token}), amr=frozenset({"pwd", "otp"})
+        )
 
 
 def _as(role: str) -> dict[str, str]:

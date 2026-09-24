@@ -23,6 +23,15 @@ class AuthzError(Exception):
 
 
 INCOMPATIBLE_KEY = "_incompatible_roles"
+SECOND_FACTOR_KEY = "_second_factor"
+# The roles whose people sign in with TOTP (DP-14): a permission that asks for a second factor may
+# only be held by them, or it could never be exercised.
+ROLES_WITH_TOTP = frozenset({"platform_admin", "dpo_reviewer"})
+# RFC 9470: the token is valid, but it was not issued with the authentication the action needs.
+STEP_UP = (
+    'Bearer error="insufficient_user_authentication",'
+    ' error_description="a second factor is required", acr_values="otp"'
+)
 
 
 def _raw(path: Path) -> dict[str, Any]:
@@ -59,8 +68,22 @@ def load_matrix(path: Path = MATRIX_FILE) -> dict[str, frozenset[str]]:
     return matrix
 
 
+def load_second_factor(
+    matrix: dict[str, frozenset[str]], path: Path = MATRIX_FILE
+) -> frozenset[str]:
+    """The permissions that ask for a second factor (F09-07)."""
+    listed = frozenset(str(p) for p in _raw(path).get(SECOND_FACTOR_KEY) or [])
+    for permission in listed:
+        if permission not in matrix:
+            raise AuthzError(f"{SECOND_FACTOR_KEY} names an undeclared permission: {permission}")
+        if not matrix[permission] <= ROLES_WITH_TOTP:
+            raise AuthzError(f"{permission} asks for a second factor that some of its roles lack")
+    return listed
+
+
 PERMISSIONS: dict[str, frozenset[str]] = load_matrix()
 INCOMPATIBLE: tuple[frozenset[str], ...] = load_incompatible()
+SECOND_FACTOR: frozenset[str] = load_second_factor(PERMISSIONS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +102,13 @@ class PermissionGuard:
         if not identity.roles & self.roles:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, f"the permission {self.permission} is not yours"
+            )
+        if self.permission in SECOND_FACTOR and not identity.has_second_factor:
+            # Only after the role check: the refusal says what to do, not which permission it was.
+            raise HTTPException(
+                status.HTTP_401_UNAUTHORIZED,
+                "this action requires signing in with a second factor",
+                {"WWW-Authenticate": STEP_UP},
             )
         # The route already knows who this is; the journal entry of the core route reads it here.
         request.state.identity = identity

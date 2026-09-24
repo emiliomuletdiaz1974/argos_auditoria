@@ -40,7 +40,9 @@ SECRET = "the-client-chose-this-secret-" + uuid.uuid4().hex
 
 class PersonValidator:
     def validate(self, token: str) -> Identity:
-        return Identity(sub=token, name=token, roles=frozenset({token}))
+        return Identity(
+            sub=token, name=token, roles=frozenset({token}), amr=frozenset({"pwd", "otp"})
+        )
 
 
 def _as(role: str) -> dict[str, str]:

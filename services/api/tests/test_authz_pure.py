@@ -13,7 +13,9 @@ MATRIX = Path(__file__).resolve().parents[1] / "argos_api" / "authz" / "permissi
 
 
 def _identity(*roles: str) -> Identity:
-    return Identity(sub="someone", name="Someone", roles=frozenset(roles))
+    return Identity(
+        sub="someone", name="Someone", roles=frozenset(roles), amr=frozenset({"pwd", "otp"})
+    )
 
 
 def _request() -> Request:

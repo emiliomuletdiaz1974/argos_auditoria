@@ -4,7 +4,7 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.10.0-alpha
+version: 0.11.0-alpha
 commit: fdc1311
 date: 2026-09-23
 status: current
@@ -65,6 +65,10 @@ Los nombres del documento de fase (`--sev-critica`, `--verdict`…) pasan a ingl
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Segundo factor bajo demanda** (F09-07):
+  - Ante un `401` con `insufficient_user_authentication`, el cliente no renueva la sesión. `Session.requireSecondFactor()` guarda la página, que es una ruta y nunca un token, y vuelve a pedir el inicio de sesión con `prompt=login&acr_values=otp`.
+  - Al volver, la consola lleva a la persona a esa página con un aviso para que repita la acción.
+  - El guion e2e lo recorre al aprobar la compuerta.
 - Ningún token de acceso en `localStorage` ni en `sessionStorage`: lo comprueba una prueba que revisa todo lo guardado tras iniciar sesión y tras renovar.
 - El refresco nunca llega al JavaScript de la página: viaja solo en la cookie `HttpOnly`.
 - Una vuelta de Keycloak con un `state` que la consola no envió se rechaza.
@@ -113,3 +117,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | 0.8.0-alpha | 2026-09-22 | La consola se construye dentro de la imagen de la API y se sirve desde su mismo origen; el realm acepta la vuelta a `http://127.0.0.1:8000/callback` | F08-17 |
 | 0.9.0-alpha | 2026-09-23 | Una cita sin `detail` no se enlaza a ningún fragmento | F09-28 |
 | 0.10.0-alpha | 2026-09-23 | Botón «Salir» que revoca la sesión, y consola servida con CSP estricta | F09-30 |
+| 0.11.0-alpha | 2026-09-23 | Vuelta a iniciar sesión con segundo factor cuando la API lo pide | F09-07 (ARG-072) |

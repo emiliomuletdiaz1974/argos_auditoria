@@ -1,6 +1,6 @@
 """Validation of JWTs issued by Keycloak, realm argos (ARG-008)."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Protocol
 
@@ -10,6 +10,9 @@ from jwt import PyJWKClient
 from argos_common.config import get_config
 
 ROLES = ("platform_admin", "campaign_manager", "dpo_reviewer", "read_only_auditor")
+# Authentication methods (RFC 8176) that count as a second factor. The realm reports `otp` when the
+# person entered their TOTP code (F09-07).
+SECOND_FACTORS = frozenset({"otp"})
 
 
 class AuthError(Exception):
@@ -25,11 +28,17 @@ class Identity:
     sub: str
     name: str
     roles: frozenset[str]
+    # How the person signed in, as the realm says in `amr` (F09-07): {"pwd"}, {"pwd", "otp"}...
+    amr: frozenset[str] = field(default_factory=frozenset)
 
     @property
     def actor(self) -> str:
         """Actor under which this person's actions enter the journal (P-19)."""
         return f"user:{self.sub}"
+
+    @property
+    def has_second_factor(self) -> bool:
+        return bool(self.amr & SECOND_FACTORS)
 
 
 class JwtValidator:
@@ -56,7 +65,9 @@ class JwtValidator:
         roles = frozenset(claims.get("realm_access", {}).get("roles", []))
         if required_role is not None and required_role not in roles:
             raise AuthError(f"role {required_role} is required")
-        return Identity(str(claims["sub"]), str(claims.get("preferred_username", "")), roles)
+        methods = claims.get("amr")
+        amr = frozenset(str(m) for m in methods) if isinstance(methods, list) else frozenset()
+        return Identity(str(claims["sub"]), str(claims.get("preferred_username", "")), roles, amr)
 
 
 @lru_cache(maxsize=1)

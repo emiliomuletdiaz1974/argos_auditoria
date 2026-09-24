@@ -8,7 +8,13 @@
     "realm": [
       {
         "name": "platform_admin",
-        "description": "Appliance administration"
+        "description": "Appliance administration",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "mfa_required"
+          ]
+        }
       },
       {
         "name": "campaign_manager",
@@ -16,11 +22,21 @@
       },
       {
         "name": "dpo_reviewer",
-        "description": "Approvals and review (Accountable in RACI)"
+        "description": "Approvals and review (Accountable in RACI)",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "mfa_required"
+          ]
+        }
       },
       {
         "name": "read_only_auditor",
         "description": "Read-only access to case files"
+      },
+      {
+        "name": "mfa_required",
+        "description": "Signs in with a second factor (TOTP): part of the roles that decide (F09-07)"
       }
     ]
   },
@@ -51,6 +67,17 @@
             "access.token.claim": "true",
             "id.token.claim": "false"
           }
+        },
+        {
+          "name": "amr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
         }
       ]
     },
@@ -74,6 +101,17 @@
             "access.token.claim": "true",
             "id.token.claim": "false"
           }
+        },
+        {
+          "name": "amr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
         }
       ]
     }
@@ -89,8 +127,15 @@
       "credentials": [
         {
           "type": "password",
-          "value": "test",
-          "temporary": false
+          "temporary": false,
+          "secretData": "{\"value\": \"BKAjNh1UhB3Kyr3PTLHlM9iKULE5wM81eT60sZEqBRoxOGrrLAyzIO7Sc7meCGTPLEWBXhtvoCpt0tQyxv2bsA==\", \"salt\": \"XRGmkzMf9cUL5/pMEJ4Rjg==\", \"additionalParameters\": {}}",
+          "credentialData": "{\"hashIterations\": 210000, \"algorithm\": \"pbkdf2-sha512\", \"additionalParameters\": {}}"
+        },
+        {
+          "type": "otp",
+          "userLabel": "development authenticator",
+          "secretData": "{\"value\": \"dev-only-totp-dpo-test-7c1e4b9a2f\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA256\"}"
         }
       ],
       "realmRoles": [
@@ -107,13 +152,31 @@
       "credentials": [
         {
           "type": "password",
-          "value": "test",
-          "temporary": false
+          "temporary": false,
+          "secretData": "{\"value\": \"v2DWeIX5Sj1OE/AqTqsNOey8C0FAJMdgTOpbTGSgXxx5nfFjcFViS0AUBukM0jYFxd0BCO38RgML2iEFmbI9pA==\", \"salt\": \"/XFghwCOgbeIYqQq6EqXng==\", \"additionalParameters\": {}}",
+          "credentialData": "{\"hashIterations\": 210000, \"algorithm\": \"pbkdf2-sha512\", \"additionalParameters\": {}}"
         }
       ],
       "realmRoles": [
         "campaign_manager"
       ]
+    },
+    {
+      "username": "lockout.test",
+      "enabled": true,
+      "email": "lockout.test@argos.local",
+      "emailVerified": true,
+      "firstName": "Lockout",
+      "lastName": "Probe",
+      "credentials": [
+        {
+          "type": "password",
+          "temporary": false,
+          "secretData": "{\"value\": \"k2nKy2CgQVMyAEANUKok13ezbExiqKb0H1fhagpqDgXWLH/qNxc3ZLVLjjFw1pwTWLPa13MNSu8e79ZCBO6Hng==\", \"salt\": \"zXFn8TvYdZL6KGBMXNZQVQ==\", \"additionalParameters\": {}}",
+          "credentialData": "{\"hashIterations\": 210000, \"algorithm\": \"pbkdf2-sha512\", \"additionalParameters\": {}}"
+        }
+      ],
+      "realmRoles": []
     }
   ],
   "identityProviders": [
@@ -126,6 +189,192 @@
         "clientId": "SET_AT_DEPLOYMENT",
         "clientSecret": "SET_AT_DEPLOYMENT",
         "defaultScope": "openid profile email groups"
+      }
+    }
+  ],
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA256",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyCodeReusable": false,
+  "passwordPolicy": "length(12) and passwordHistory(5) and notUsername and notEmail",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "maxDeltaTimeSeconds": 43200,
+  "quickLoginCheckMilliSeconds": 1000,
+  "minimumQuickLoginWaitSeconds": 60,
+  "browserFlow": "argos browser",
+  "directGrantFlow": "argos direct grant",
+  "authenticationFlows": [
+    {
+      "alias": "argos browser",
+      "description": "Browser sign-in: password, and TOTP for the roles that decide (F09-07)",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "identity-provider-redirector",
+          "authenticatorFlow": false,
+          "requirement": "ALTERNATIVE",
+          "priority": 25,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "ALTERNATIVE",
+          "priority": 30,
+          "flowAlias": "argos browser forms",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "argos browser forms",
+      "description": "Username and password, then the second factor if the role asks for it",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-username-password-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "argos-reference-pwd"
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "flowAlias": "argos browser second factor",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "argos browser second factor",
+      "description": "TOTP for mfa_required (platform_admin, dpo_reviewer); set up on first sign-in if missing",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-role",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "argos-roles-that-decide"
+        },
+        {
+          "authenticator": "auth-otp-form",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "argos-reference-otp"
+        }
+      ]
+    },
+    {
+      "alias": "argos direct grant",
+      "description": "Direct grant of the development test client, with the TOTP of whoever has one",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "direct-grant-validate-username",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "direct-grant-validate-password",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "argos-reference-pwd-direct"
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 30,
+          "flowAlias": "argos direct grant second factor",
+          "userSetupAllowed": false
+        }
+      ]
+    },
+    {
+      "alias": "argos direct grant second factor",
+      "description": "TOTP of a user that has it configured",
+      "providerId": "basic-flow",
+      "topLevel": false,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "conditional-user-configured",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false
+        },
+        {
+          "authenticator": "direct-grant-validate-otp",
+          "authenticatorFlow": false,
+          "requirement": "REQUIRED",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "authenticatorConfig": "argos-reference-otp-direct"
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "argos-reference-pwd",
+      "config": {
+        "default.reference.value": "pwd"
+      }
+    },
+    {
+      "alias": "argos-reference-otp",
+      "config": {
+        "default.reference.value": "otp"
+      }
+    },
+    {
+      "alias": "argos-reference-pwd-direct",
+      "config": {
+        "default.reference.value": "pwd"
+      }
+    },
+    {
+      "alias": "argos-reference-otp-direct",
+      "config": {
+        "default.reference.value": "otp"
+      }
+    },
+    {
+      "alias": "argos-roles-that-decide",
+      "config": {
+        "condUserRole": "mfa_required",
+        "negate": "false"
       }
     }
   ]

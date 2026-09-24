@@ -40,7 +40,9 @@ class RoleValidator:
         self._roles = roles
 
     def validate(self, token: str) -> Identity:
-        return Identity(sub="someone", name="Someone", roles=self._roles)
+        return Identity(
+            sub="someone", name="Someone", roles=self._roles, amr=frozenset({"pwd", "otp"})
+        )
 
 
 class FakeModel:

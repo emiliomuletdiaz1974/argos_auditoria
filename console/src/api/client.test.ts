@@ -69,4 +69,25 @@ describe("createApiFetch", () => {
     expect((await api("/api/v1/findings")).status).toBe(401);
     expect(network).toHaveBeenCalledTimes(2);
   });
+
+  // F09-07 (RFC 9470): a valid token without the second factor is not an expired one.
+  it("a step-up challenge sends the person to sign in with the second factor, not to refresh", async () => {
+    const network = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response(JSON.stringify({ title: "a second factor is required" }), {
+          status: 401,
+          headers: {
+            "WWW-Authenticate":
+              'Bearer error="insufficient_user_authentication", error_description="a second factor is required", acr_values="otp"',
+          },
+        }),
+    );
+    const session = new Session(CONFIG, { fetch: network as unknown as typeof fetch, navigate: vi.fn() });
+    const stepUp = vi.spyOn(session, "requireSecondFactor").mockResolvedValue();
+    const api = createApiFetch(session, network as unknown as typeof fetch);
+
+    expect((await api("/api/v1/campaigns/c-1/gates/start/approve", { method: "POST" })).status).toBe(401);
+    expect(stepUp).toHaveBeenCalledOnce();
+    expect(network.mock.calls.map((call) => call[0])).toEqual(["/api/v1/campaigns/c-1/gates/start/approve"]);
+  });
 });

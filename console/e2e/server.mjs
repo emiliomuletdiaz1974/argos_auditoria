@@ -32,12 +32,20 @@ const FINDING = "0192c000-0000-7000-8000-000000000001";
 const VERDICT = "0192d000-0000-7000-8000-000000000001";
 const SHA = "d".repeat(64);
 const CODE = "authorization-code-of-the-script";
+// F09-07: the first sign-in is with the password alone; the actions that decide answer with the
+// step-up challenge of RFC 9470 until the console signs in again asking for the second factor.
+const TOKEN = "access-token-of-the-script";
+const TOKEN_WITH_OTP = "access-token-of-the-script-with-otp";
+const STEP_UP =
+  'Bearer error="insufficient_user_authentication", error_description="a second factor is required", acr_values="otp"';
 
 // The whole state of the stand-in. The script moves it only through the console; the only thing a
 // test may do by hand is `POST /api/v1/__reset`, which puts this world back at the beginning
 // between scripts. It resets, it never advances.
 const initial = () => ({
   signedIn: false,
+  token: TOKEN,
+  askedForSecondFactor: false,
   remediated: false,
   campaign: { id: CAMPAIGN, name: "Campaña de otoño", status: "pinned", seal: null },
   gate: { gate: "start", approvals: 0, needed: 1, approved_by: [] },
@@ -155,6 +163,16 @@ function problem(response, status, detail) {
   response.end(JSON.stringify({ type: "about:blank", title: detail, status, detail }));
 }
 
+// The actions that decide ask for the second factor, as the API does (permissions.yaml, _second_factor).
+function withoutSecondFactor(request, response) {
+  if (request.headers.authorization === `Bearer ${TOKEN_WITH_OTP}`) {
+    return false;
+  }
+  response.writeHead(401, { "Content-Type": "application/problem+json", "WWW-Authenticate": STEP_UP });
+  response.end(JSON.stringify({ type: "about:blank", title: "a second factor is required", status: 401 }));
+  return true;
+}
+
 function json(response, body, status = 200, headers = {}) {
   response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", ...headers });
   response.end(JSON.stringify(body));
@@ -178,7 +196,9 @@ function api(request, response, url) {
   }
   if (path === "/auth/session" && method === "POST") {
     state.signedIn = true;
-    return json(response, { access_token: "access-token-of-the-script" });
+    state.token = state.askedForSecondFactor ? TOKEN_WITH_OTP : TOKEN;
+    state.askedForSecondFactor = false;
+    return json(response, { access_token: state.token });
   }
   if (path === "/auth/logout" && method === "POST") {
     state.signedIn = false;
@@ -187,7 +207,7 @@ function api(request, response, url) {
   }
   if (path === "/auth/refresh" && method === "POST") {
     return state.signedIn
-      ? json(response, { access_token: "access-token-of-the-script" })
+      ? json(response, { access_token: state.token })
       : problem(response, 401, "no session");
   }
   if (!state.signedIn) {
@@ -207,6 +227,9 @@ function api(request, response, url) {
     return json(response, { items: [state.gate], next: null });
   }
   if (path === `/campaigns/${CAMPAIGN}/gates/start/approve` && method === "POST") {
+    if (withoutSecondFactor(request, response)) {
+      return undefined;
+    }
     state.gate = { ...state.gate, approvals: 1, approved_by: ["user:dpo"] };
     state.campaign = { ...state.campaign, status: "running" };
     return json(response, { gate: "start", approvals: 1, needed: 1, open: false });
@@ -228,6 +251,9 @@ function api(request, response, url) {
     return json(response, findingDetail());
   }
   if (path === `/findings/${FINDING}/transition` && method === "POST") {
+    if (withoutSecondFactor(request, response)) {
+      return undefined;
+    }
     return body(request).then((sent) => {
       const to = String(sent.to ?? "");
       if (to === "closed_compliant" || to === "reopened") {
@@ -303,6 +329,9 @@ function api(request, response, url) {
     });
   }
   if (path === "/credentials" && method === "POST") {
+    if (withoutSecondFactor(request, response)) {
+      return undefined;
+    }
     return body(request).then((sent) => {
       if (sent.dossier_sha256 !== SHA) {
         return problem(response, 409, "the dossier changed since the preview");
@@ -337,7 +366,9 @@ createServer((request, response) => {
     return api(request, response, url);
   }
   if (url.pathname === "/oidc/realms/argos/protocol/openid-connect/auth") {
-    // The realm sends the person back with a code, as Keycloak would.
+    // The realm sends the person back with a code, as Keycloak would; asked for the second factor,
+    // the next token carries it.
+    state.askedForSecondFactor = url.searchParams.get("acr_values") === "otp";
     const back = new URL(String(url.searchParams.get("redirect_uri")));
     back.search = new URLSearchParams({
       code: CODE,

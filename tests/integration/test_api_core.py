@@ -34,7 +34,12 @@ class RoleValidator:
         self._role = role
 
     def validate(self, token: str) -> Identity:
-        return Identity(sub=self._role, name=self._role, roles=frozenset({self._role}))
+        return Identity(
+            sub=self._role,
+            name=self._role,
+            roles=frozenset({self._role}),
+            amr=frozenset({"pwd", "otp"}),
+        )
 
 
 def _validator(role: str) -> JwtValidator:
@@ -197,7 +202,12 @@ class PersonValidator:
         self.roles = roles
 
     def validate(self, token: str) -> Identity:
-        return Identity(sub="the-person", name="the-person", roles=frozenset(self.roles))
+        return Identity(
+            sub="the-person",
+            name="the-person",
+            roles=frozenset(self.roles),
+            amr=frozenset({"pwd", "otp"}),
+        )
 
 
 def _keyed_client(dsn: str, validator: Any, delay: float = 0.0) -> tuple[TestClient, list[str]]:

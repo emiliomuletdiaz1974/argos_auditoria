@@ -34,12 +34,19 @@ export function App() {
   const api = useMemo(() => createApiFetch(session), [session]);
   const [status, setStatus] = useState<Status>("starting");
   const [problem, setProblem] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
     const start = async () => {
       if (window.location.pathname === CALLBACK_PATH) {
         await session.completeLogin(window.location.href);
-        window.history.replaceState(null, "", "/");
+        const back = session.takeSecondFactorReturn();
+        window.history.replaceState(null, "", back ?? "/");
+        if (back) {
+          setNotice(
+            "Has vuelto a entrar con tu segundo factor. Repite la acción que querías hacer: esta vez se aplicará.",
+          );
+        }
         return true;
       }
       return session.refresh();
@@ -90,6 +97,11 @@ export function App() {
         </button>
       </nav>
       <main className="shell-main">
+        {notice ? (
+          <p role="status" className="panel">
+            {notice}
+          </p>
+        ) : null}
         <ApiProvider api={api}>
           <Section path={window.location.pathname} />
         </ApiProvider>

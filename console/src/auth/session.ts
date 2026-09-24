@@ -20,6 +20,8 @@ export interface SessionDeps {
 }
 
 const PENDING = "argos.pkce";
+// F09-07: where the person was when an action asked for the second factor (a path, never a token).
+const SECOND_FACTOR_RETURN = "argos.second-factor";
 const SESSION_PATH = "/api/v1/auth/session";
 const REFRESH_PATH = "/api/v1/auth/refresh";
 const LOGOUT_PATH = "/api/v1/auth/logout";
@@ -40,12 +42,11 @@ export class Session {
     return this.#token;
   }
 
-  async login(): Promise<void> {
+  async login(secondFactor = false): Promise<void> {
     const verifier = newVerifier();
     const state = newVerifier();
     window.sessionStorage.setItem(PENDING, JSON.stringify({ verifier, state }));
-    const url = new URL(`${this.config.issuer}/protocol/openid-connect/auth`);
-    url.search = new URLSearchParams({
+    const params = new URLSearchParams({
       client_id: this.config.clientId,
       redirect_uri: this.config.redirectUri,
       response_type: "code",
@@ -53,8 +54,31 @@ export class Session {
       state,
       code_challenge: await challengeOf(verifier),
       code_challenge_method: "S256",
-    }).toString();
+    });
+    if (secondFactor) {
+      // Sign in again, with the second factor (RFC 9470): not the session the realm remembers.
+      params.set("prompt", "login");
+      params.set("acr_values", "otp");
+    }
+    const url = new URL(`${this.config.issuer}/protocol/openid-connect/auth`);
+    url.search = params.toString();
     this.deps.navigate(url.toString());
+  }
+
+  /** The API asked for the second factor: sign in again with it and come back to this page. */
+  async requireSecondFactor(): Promise<void> {
+    window.sessionStorage.setItem(
+      SECOND_FACTOR_RETURN,
+      window.location.pathname + window.location.search + window.location.hash,
+    );
+    await this.login(true);
+  }
+
+  /** Where to go back after signing in with the second factor, once; null if nothing asked. */
+  takeSecondFactorReturn(): string | null {
+    const back = window.sessionStorage.getItem(SECOND_FACTOR_RETURN);
+    window.sessionStorage.removeItem(SECOND_FACTOR_RETURN);
+    return back && back.startsWith("/") && !back.startsWith("//") ? back : null;
   }
 
   async completeLogin(callbackUrl: string): Promise<void> {

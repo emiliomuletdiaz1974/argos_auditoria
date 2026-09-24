@@ -85,3 +85,21 @@ def test_signed_with_another_key(validator: JwtValidator) -> None:
 def test_symmetric_algorithm_rejected(validator: JwtValidator) -> None:
     with pytest.raises(AuthError):
         validator.validate(_token(key="shared-secret-of-thirty-two-bytes", alg="HS256"))
+
+
+# --- F09-07: the second factor, as the realm reports it in `amr` (RFC 8176) -----------------------
+
+
+def test_a_token_with_otp_carries_its_second_factor(validator: JwtValidator) -> None:
+    identity = validator.validate(_token(amr=["pwd", "otp"]))
+    assert identity.amr == frozenset({"pwd", "otp"})
+    assert identity.has_second_factor
+
+
+def test_a_token_with_the_password_alone_has_no_second_factor(validator: JwtValidator) -> None:
+    assert not validator.validate(_token(amr=["pwd"])).has_second_factor
+    assert not validator.validate(_token()).has_second_factor
+
+
+def test_an_amr_that_is_not_a_list_is_not_a_second_factor(validator: JwtValidator) -> None:
+    assert not validator.validate(_token(amr="otp")).has_second_factor

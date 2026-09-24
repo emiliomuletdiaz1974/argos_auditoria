@@ -64,7 +64,12 @@ class Runner:
 class PersonValidator:
     def validate(self, token: str) -> Identity:
         role, _, person = token.partition(":")
-        return Identity(sub=person or role, name=person or role, roles=frozenset({role}))
+        return Identity(
+            sub=person or role,
+            name=person or role,
+            roles=frozenset({role}),
+            amr=frozenset({"pwd", "otp"}),
+        )
 
 
 def _as(role: str) -> dict[str, str]:

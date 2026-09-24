@@ -61,7 +61,9 @@ def test_a_client_document_is_never_cited_as_regulation(migrated_db: str) -> Non
 
 class PersonValidator:
     def validate(self, token: str) -> Identity:
-        return Identity(sub=token, name=token, roles=frozenset({"dpo_reviewer"}))
+        return Identity(
+            sub=token, name=token, roles=frozenset({"dpo_reviewer"}), amr=frozenset({"pwd", "otp"})
+        )
 
 
 def test_the_api_tells_the_gateway_who_asks(migrated_db: str) -> None:

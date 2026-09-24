@@ -100,4 +100,28 @@ describe("Session", () => {
     const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls as [string, RequestInit][];
     expect(calls.at(-1)).toEqual(["/api/v1/auth/logout", { method: "POST", credentials: "same-origin" }]);
   });
+
+  // F09-07: an action that asks for a second factor sends the person back to sign in with it.
+  it("asks for the second factor again, and remembers where the person was", async () => {
+    window.history.replaceState(null, "", "/campaigns/c-1");
+    const navigate = vi.fn();
+    await new Session(CONFIG, { fetch: answering({}), navigate }).requireSecondFactor();
+
+    const url = new URL(navigate.mock.calls[0]?.[0] as string);
+    expect(url.searchParams.get("acr_values")).toBe("otp");
+    expect(url.searchParams.get("prompt")).toBe("login");
+    expect(url.searchParams.get("code_challenge_method")).toBe("S256");
+    const back = new Session(CONFIG, { fetch: answering({}), navigate });
+    expect(back.takeSecondFactorReturn()).toBe("/campaigns/c-1");
+    expect(back.takeSecondFactorReturn()).toBeNull();
+  });
+
+  it("an ordinary sign-in does not ask for the second factor again", async () => {
+    const navigate = vi.fn();
+    await new Session(CONFIG, { fetch: answering({}), navigate }).login();
+    const url = new URL(navigate.mock.calls[0]?.[0] as string);
+    expect(url.searchParams.get("acr_values")).toBeNull();
+    expect(url.searchParams.get("prompt")).toBeNull();
+    expect(new Session(CONFIG, { fetch: answering({}), navigate }).takeSecondFactorReturn()).toBeNull();
+  });
 });

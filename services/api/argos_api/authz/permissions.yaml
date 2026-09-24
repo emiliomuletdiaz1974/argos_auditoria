@@ -21,6 +21,18 @@
 _incompatible_roles:
   - [campaign_manager, dpo_reviewer]
 
+# The permissions that decide ask for a second factor (F09-07, DP-14): a token without `otp` in its
+# `amr` gets 401 with `error="insufficient_user_authentication"` (RFC 9470) and the console asks the
+# person to sign in again with their code. Only roles whose people have TOTP may hold them.
+_second_factor:
+  - campaigns.approve
+  - findings.transition
+  - credentials.create
+  - credentials.revoke
+  - synthetic.authorize
+  - inventory.review
+  - webhooks.create
+
 systems.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
 
 inventory.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]

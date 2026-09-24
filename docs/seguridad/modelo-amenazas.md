@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.16 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.17 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -80,8 +80,8 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-14 | R: negar una acción humana | API v1 | A8, A3 | Cada mutación deja su asiento en el diario con la persona detrás, antes de guardar la respuesta idempotente; la idempotencia va después del guardián de permisos y reserva la clave; lanzar una campaña y emitir una credencial asientan la persona y los identificadores | ARG-071 | F08-03, F09-26 | implementada | `services/api/argos_api/core.py`, `tests/integration/test_api_core.py`, `tests/integration/test_api_evidence.py` |
 | M-15 | T: cerrar un hallazgo sin corregirlo | Motor de retos | A8, A3 | Un hallazgo solo se cierra por la reejecución de subsanación; el dominio prohíbe el cierre manual | ARG-048, ARG-049 | F08-06 | implementada | `tests/integration/test_findings.py` |
 | M-16 | S: robar la sesión de la consola | Consola | A1 | OIDC con PKCE, token de acceso en memoria y refresco en una cookie de sesión `HttpOnly`, `Secure` y `SameSite=Strict` limitada a `/api/v1/auth`; cierre de sesión que revoca el refresco en el realm; CSP `default-src 'self'; frame-ancestors 'none'`, `nosniff` y `Referrer-Policy` en toda respuesta | ARG-073, ARG-008 | F08-10, F09-30 | implementada | `services/api/argos_api/keycloak.py`, `tests/contract/test_api_session.py`, `services/api/tests/test_api_console_hardening_pure.py`, `console/e2e/logout.spec.ts` |
-| M-17 | S: usar una contraseña robada de quien aprueba | Keycloak y API | A1, A8 | Segundo factor TOTP obligatorio para `platform_admin` y `dpo_reviewer`; la API exige `otp` en `amr` | ARG-008, ARG-072 | F09-07 | en desarrollo | — |
-| M-18 | S: fuerza bruta contra el inicio de sesión | Keycloak | A1 | Bloqueo temporal por intentos fallidos y política de contraseñas | ARG-008 | F09-07 | en desarrollo | — |
+| M-17 | S: usar una contraseña robada de quien aprueba | Keycloak y API | A1, A8 | Segundo factor TOTP obligatorio para `platform_admin` y `dpo_reviewer`; la API exige `otp` en `amr` a los permisos de `_second_factor` (401 con el reto de RFC 9470) | ARG-008, ARG-072 | F09-07 | implementada | `deploy/dev/keycloak/realm-argos.json`, `tests/integration/test_keycloak_mfa.py`, `tests/contract/test_api_authz.py` |
+| M-18 | S: fuerza bruta contra el inicio de sesión | Keycloak | A1 | Bloqueo temporal tras 5 fallos (60 s a 15 min) y política de contraseñas (12 caracteres, historial de 5) | ARG-008 | F09-07 | implementada | `tests/integration/test_keycloak_mfa.py` |
 | M-19 | S/T: webhooks falsos o secretos filtrados | Webhooks | A1 | Firma HMAC-SHA256 con marca de tiempo; el secreto va solo a Vault y nunca vuelve en respuestas; destino solo `https` y público, comprobado al suscribir y antes de cada entrega, con la excepción privada escrita por quien instala; la bandeja guarda la clase de error, no su texto | ARG-079 | F08-09, F09-30 | implementada | `services/api/argos_api/webhooks`, `tests/integration/test_api_webhooks.py` |
 | M-20 | I: secretos en el repositorio | CI | A5 | gitleaks en cada commit del CI | ARG-010 | — | implementada | `.gitleaks.toml` |
 | M-21 | I: un servicio lee las credenciales de un conector | Vault | A2 | Política de Vault exclusiva del SDK de conectores para `argos/data/connectors/*` (P-04) | ARG-009 | F1-05 | implementada | `deploy/dev/vault/setup.sh` |
@@ -143,3 +143,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.14 | 2026-09-23 | M-05 y M-14 vuelven a «implementada» con el diario acotado por rol y en canónico, y la idempotencia de F09-26 |
 | 1.15 | 2026-09-23 | M-26 pasa a «implementada» con las credenciales dinámicas de F09-05 |
 | 1.16 | 2026-09-23 | M-22 pasa a «implementada» con el TLS mutuo de F09-06; M-23 avanza (solo certificados de la CA interna) y queda en desarrollo |
+| 1.17 | 2026-09-23 | M-17 y M-18 pasan a «implementada» con el segundo factor y el bloqueo de F09-07 |

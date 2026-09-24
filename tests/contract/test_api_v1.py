@@ -72,7 +72,9 @@ class FakeValidator:
     """Accepts any token: what these tests check is the contract, not Keycloak."""
 
     def validate(self, token: str) -> Identity:
-        return Identity(sub="dpo", name="DPO", roles=frozenset({"dpo_reviewer"}))
+        return Identity(
+            sub="dpo", name="DPO", roles=frozenset({"dpo_reviewer"}), amr=frozenset({"pwd", "otp"})
+        )
 
 
 def _client_with_identity() -> TestClient:

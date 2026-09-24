@@ -4,9 +4,9 @@ kind: module
 title: Validación de identidades (argos-auth)
 module: argos-auth
 phases: ["01"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: 1aadd28
-date: 2026-09-17
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -37,7 +37,7 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 |---|---|---|
 | Clase | `JwtValidator(issuer, audience, keys=None)` | Validador con proveedor de claves inyectable |
 | Método o función | `validate(token, required_role=None) -> Identity` | Devuelve la identidad o lanza `AuthError` |
-| Clase | `Identity(sub, name, roles)` | Identidad verificada; `actor` para el diario |
+| Clase | `Identity(sub, name, roles, amr)` | Identidad verificada; `actor` para el diario; `has_second_factor` si `amr` trae `otp` (F09-07) |
 | Constante | `ROLES` | `platform_admin`, `campaign_manager`, `dpo_reviewer`, `read_only_auditor` |
 | Realm | `argos` en Keycloak | Clientes `argos-console` y `argos-api` |
 
@@ -47,6 +47,13 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Segundo factor** (F09-07, DP-14):
+  - `platform_admin` y `dpo_reviewer` heredan el rol `mfa_required`, y el flujo de navegador del realm (`argos browser`) les pide TOTP después de la contraseña. Si aún no lo tienen, se lo hace configurar.
+  - Política TOTP: HMAC-SHA-256, 6 dígitos, 30 s, sin reutilizar un código.
+  - El token lleva `amr` (RFC 8176) con `pwd` y `otp`, gracias a las referencias de cada autenticador y al mapper `amr`. `Identity.amr` lo recoge.
+  - Contraseñas: longitud mínima 12, historial de 5, ni el usuario ni el correo.
+  - Bloqueo temporal tras 5 fallos (de 60 s a 15 min).
+  - En desarrollo, `dpo.test` tiene un secreto TOTP sembrado (`dev-only-…`) que solo existe en el realm de desarrollo. Lo comprueba `tests/integration/test_keycloak_mfa.py`.
 - **Algoritmo:** solo `RS256`; se rechaza cualquier otro.
 - **Claims obligatorios:** `exp`, `iat`, `iss`, `aud` y `sub`; se comprueban emisor y audiencia.
 - **Roles:** se leen de `realm_access.roles`. Pedir un rol que no está en la lista cerrada es un error de programación y se rechaza.
@@ -72,3 +79,4 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-14 | Realm con cuatro roles y validación común de JWT | Fase 01 (ARG-008) |
+| 0.2.0-alpha | 2026-09-23 | `amr` en la identidad y segundo factor TOTP en el realm para los roles que deciden | F09-07 (ARG-072) |

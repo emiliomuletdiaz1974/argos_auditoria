@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.26.0-alpha
+version: 0.27.0-alpha
 commit: 4f6309a
 date: 2026-09-23
 status: current
@@ -85,6 +85,10 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Segundo factor para lo que decide** (F09-07, ARG-072):
+  - Qué permisos lo exigen: `permissions.yaml` los declara en `_second_factor`. Son aprobar compuertas, mover hallazgos (aceptar un riesgo incluido), emitir y revocar credenciales, autorizar un punto de inyección, decidir sobre una columna en revisión y crear integraciones.
+  - Qué responde la API sin él: con un token sin `otp` en `amr`, `401` con `WWW-Authenticate: Bearer error="insufficient_user_authentication"` (RFC 9470), solo después de comprobar el rol y sin nombrar el permiso.
+  - Quién puede tenerlos: solo los roles con TOTP. Si la matriz dice otra cosa, la API no arranca.
 - **TLS mutuo hacia el gateway de IA** (F09-06, ARG-083): `AssistantClient(base_url, tls_dir=)` presenta el certificado de la API y verifica el del gateway (`ARGOS_AI_GATEWAY_URL=https://ai-gateway:8005`). PostgreSQL y NATS, con TLS verificado (`sslmode=verify-full` en la cadena de conexión).
 - **Ninguna acción humana sin asiento** (F09-26, SEC-029, SEC-030, SEC-040, SEC-044): el asiento `api.mutation` se escribe antes de guardar la respuesta idempotente; lanzar una campaña deja `campaign.launch` y emitir una credencial deja `credential.issued`, los dos con la persona y los identificadores; una respuesta guardada nunca se entrega sin pasar antes el guardián de permisos, y validar el token no bloquea el bucle de eventos.
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
@@ -169,3 +173,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.24.0-alpha | 2026-09-23 | Idempotencia tras el guardián, con reserva, clave acotada y huella por ruta real; asientos `campaign.launch` y `credential.issued` con la persona | F09-26 (ARG-005, ARG-071) |
 | 0.25.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-api`, `svc-webhook`), renovado en caliente | F09-05 (ARG-085) |
 | 0.26.0-alpha | 2026-09-23 | Llamada al gateway de IA con TLS mutuo; PostgreSQL verificado | F09-06 (ARG-083) |
+| 0.27.0-alpha | 2026-09-23 | Segundo factor exigido a los permisos de `_second_factor` (401 con el reto de RFC 9470) | F09-07 (ARG-072) |

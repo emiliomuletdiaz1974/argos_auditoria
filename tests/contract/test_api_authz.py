@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 
 from argos_api import API_PREFIX
 from argos_api.app import AUTHENTICATED, create_app
-from argos_api.authz import PERMISSIONS, PermissionGuard
+from argos_api.authz import PERMISSIONS, SECOND_FACTOR, PermissionGuard
 from argos_api.routers import session
 from argos_auth import ROLES, Identity, JwtValidator
 
@@ -41,7 +41,12 @@ class RoleValidator:
         self._role = role
 
     def validate(self, token: str) -> Identity:
-        return Identity(sub=self._role, name=self._role, roles=frozenset({self._role}))
+        return Identity(
+            sub=self._role,
+            name=self._role,
+            roles=frozenset({self._role}),
+            amr=frozenset({"pwd", "otp"}),
+        )
 
 
 def _client(role: str) -> TestClient:
@@ -135,7 +140,7 @@ class TwoRolesValidator:
 
     def validate(self, token: str) -> Identity:
         roles = frozenset({"campaign_manager", "dpo_reviewer"})
-        return Identity(sub="both", name="Both", roles=roles)
+        return Identity(sub="both", name="Both", roles=roles, amr=frozenset({"pwd", "otp"}))
 
 
 def test_a_token_with_incompatible_roles_is_refused_everywhere() -> None:
@@ -145,3 +150,67 @@ def test_a_token_with_incompatible_roles_is_refused_everywhere() -> None:
         response = client.get(path, headers=BEARER)
         assert response.status_code == 403, path
         assert "incompatible" in response.json()["detail"]
+
+
+# --- F09-07 (ARG-072): the permissions that decide ask for a second factor -----------------------
+
+# Written by hand from DP-14 and the task: approving gates, moving findings (accepting a risk is
+# one of the moves), issuing and revoking credentials, authorising an injection point, deciding on
+# a column under review and the integrations with the ITSM.
+EXPECTED_SECOND_FACTOR = {
+    "campaigns.approve",
+    "findings.transition",
+    "credentials.create",
+    "credentials.revoke",
+    "synthetic.authorize",
+    "inventory.review",
+    "webhooks.create",
+}
+# The roles whose people have TOTP in the realm (DP-14): only they can ever meet the demand.
+ROLES_WITH_TOTP = {"platform_admin", "dpo_reviewer"}
+
+
+class FactorValidator:
+    def __init__(self, role: str, amr: frozenset[str]) -> None:
+        self._role, self._amr = role, amr
+
+    def validate(self, token: str) -> Identity:
+        return Identity(
+            sub=self._role, name=self._role, roles=frozenset({self._role}), amr=self._amr
+        )
+
+
+def test_the_matrix_declares_the_permissions_that_ask_for_a_second_factor() -> None:
+    assert set(SECOND_FACTOR) == EXPECTED_SECOND_FACTOR
+
+
+def test_only_roles_with_totp_hold_a_permission_that_asks_for_it() -> None:
+    for permission in SECOND_FACTOR:
+        assert PERMISSIONS[permission] <= ROLES_WITH_TOTP, permission
+
+
+@pytest.mark.parametrize("permission", sorted(EXPECTED_SECOND_FACTOR))
+def test_without_the_second_factor_the_answer_is_a_step_up_challenge(permission: str) -> None:
+    method, path = _one_route_per_permission()[permission]
+    role = sorted(PERMISSIONS[permission])[0]
+    password_only = TestClient(
+        create_app(cast(JwtValidator, FactorValidator(role, frozenset({"pwd"}))))
+    )
+    response = _call(password_only, method, path)
+    assert response.status_code == 401, (permission, response.text)
+    challenge = response.headers["www-authenticate"]
+    assert 'error="insufficient_user_authentication"' in challenge  # RFC 9470
+    assert permission not in response.text + challenge, "the refusal does not name the permission"
+
+    with_otp = TestClient(
+        create_app(cast(JwtValidator, FactorValidator(role, frozenset({"pwd", "otp"}))))
+    )
+    assert _call(with_otp, method, path).status_code not in (401, 403), permission
+
+
+def test_a_permission_that_does_not_decide_needs_no_second_factor() -> None:
+    method, path = _one_route_per_permission()["campaigns.read"]
+    client = TestClient(
+        create_app(cast(JwtValidator, FactorValidator("dpo_reviewer", frozenset({"pwd"}))))
+    )
+    assert _call(client, method, path).status_code not in (401, 403)

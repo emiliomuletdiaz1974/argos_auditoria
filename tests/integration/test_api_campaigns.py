@@ -6,11 +6,7 @@ before a single probe, the live progress, and the gates with the double control 
 They also carry over what the campaign API of Phase 05 proved with real tokens of the realm.
 """
 
-import json
 import os
-import time
-import urllib.parse
-import urllib.request
 from typing import Any, cast
 
 import pytest
@@ -21,6 +17,8 @@ from argos_api.app import create_app
 from argos_auth import Identity, JwtValidator
 from argos_challenges.store import pin_campaign, request_approval, save_units
 from argos_common.journal_pg import PostgresJournal
+
+from .keycloak import token
 
 pytestmark = pytest.mark.integration
 
@@ -92,7 +90,12 @@ class PersonValidator:
 
     def validate(self, token: str) -> Identity:
         role, _, person = token.partition(":")
-        return Identity(sub=person or role, name=person or role, roles=frozenset({role}))
+        return Identity(
+            sub=person or role,
+            name=person or role,
+            roles=frozenset({role}),
+            amr=frozenset({"pwd", "otp"}),
+        )
 
 
 def _as(role: str, person: str = "") -> dict[str, str]:
@@ -280,25 +283,7 @@ def test_a_gate_that_was_not_asked_cannot_be_approved(api: TestClient) -> None:
 
 
 def _token(username: str) -> str:
-    body = urllib.parse.urlencode(
-        {
-            "grant_type": "password",
-            "client_id": "argos-tests",
-            "username": username,
-            "password": "test",  # noqa: S106 - development realm
-            "scope": "openid",
-        }
-    ).encode()
-    request = urllib.request.Request(  # noqa: S310
-        f"{ISSUER}/protocol/openid-connect/token", data=body
-    )
-    for _ in range(30):
-        try:
-            with urllib.request.urlopen(request, timeout=5) as response:  # noqa: S310
-                return str(json.loads(response.read())["access_token"])
-        except OSError:
-            time.sleep(2)
-    raise RuntimeError("Keycloak did not issue a token")
+    return token(username)  # the DPO signs in with its TOTP code since F09-07
 
 
 def test_with_real_tokens_the_journal_says_who_approved(migrated_db: str, runner: Runner) -> None:
