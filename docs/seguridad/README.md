@@ -7,6 +7,7 @@ Documentación de seguridad del appliance ARGOS. Es la base del dossier para ENS
 | [Modelo de amenazas](modelo-amenazas.md) | Activos, adversarios, superficies y mitigaciones, cada una con su componente, su tarea y su evidencia | v1.0 (F09-01) |
 | [Revisión de seguridad de F1–F8](revision-f01-f08.md) | 57 hallazgos tratados como los de un cliente, cada uno con su decisión y su tarea | v1.0 (F09-02) |
 | [Backup y restauración probada](backup-restauracion.md) | Qué se copia, cómo se cifra, cómo se prueba la restauración y sus alertas | v1.0 (F09-12) |
+| [Endurecimiento de la imagen y sellado del disco](endurecimiento-imagen.md) | Script CIS idempotente, excepciones, puerta de puntuación y scripts de sellado al TPM, probados sin hardware | v1.0 (F09-14) |
 | Batería de accesos indebidos | Informe generado por la prueba contra la API desplegada | Pendiente (F09-15) |
 | Dossier ENS / ISO 27001 | Medidas y controles con su estado y su evidencia | Pendiente (F09-16) |
 

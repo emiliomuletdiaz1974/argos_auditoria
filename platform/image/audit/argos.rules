@@ -1,0 +1,27 @@
+# ARG-081 · audit rules of the appliance (CIS 4.1). What matters, not everything.
+# Loaded by augenrules at boot; versioned here and installed by harden.sh as it is.
+
+# The configuration of the system and who may become root.
+-w /etc/ -p wa -k etc_changes
+-w /etc/sudoers -p wa -k sudoers
+-w /etc/sudoers.d/ -p wa -k sudoers
+
+# The keys and the state of ARGOS on the node.
+-w /var/lib/argos/keys/ -p rwa -k argos_keys
+-w /etc/argos/ -p wa -k argos_config
+
+# Every program run as root, every mount, every kernel module.
+-a always,exit -F arch=b64 -S execve -F euid=0 -k root_exec
+-a always,exit -F arch=b64 -S mount -S umount2 -k mounts
+-a always,exit -F arch=b64 -S init_module -S finit_module -S delete_module -k modules
+
+# Changes of time, which the evidence and the journal depend on.
+-a always,exit -F arch=b64 -S adjtimex -S settimeofday -S clock_settime -k time_change
+-w /etc/localtime -p wa -k time_change
+
+# Logins and sessions.
+-w /var/log/lastlog -p wa -k logins
+-w /var/run/faillock/ -p wa -k logins
+
+# The rules cannot change until the next boot.
+-e 2

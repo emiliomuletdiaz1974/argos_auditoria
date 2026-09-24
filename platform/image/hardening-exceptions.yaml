@@ -1,0 +1,22 @@
+# ARG-081 · deviations of the appliance image from CIS Ubuntu Linux 24.04 LTS, Level 1 Server.
+#
+# Each one says which check, why it cannot be met and who accepted it. tools/cis_gate.py refuses
+# the file if any of the three is missing, and lets through only the failures listed here. The
+# exceptions do not raise the score: the image still needs 90 % of the profile.
+exceptions:
+  - id: "3.3.1"
+    title: Ensure ip forwarding is disabled
+    justification: >-
+      k3s routes the traffic between the pods and the services through the node; without
+      net.ipv4.ip_forward=1 there is no cluster. The network policies (ARG-003) and the mutual TLS
+      inside the appliance (ARG-083) decide who may talk to whom.
+    accepted_by: equipo de plataforma (ADR-0014)
+    component: ARG-003
+  - id: "1.1.1.10"
+    title: Ensure usb-storage kernel module is not available
+    justification: >-
+      The appliance has no network to the outside (P-02): updates, content, time stamps and the
+      diagnostic package travel on removable media through the airlock (ARG-090), which verifies
+      every file and mounts the medium read-only except while it writes an export.
+    accepted_by: equipo de plataforma (ADR-0014)
+    component: ARG-090
