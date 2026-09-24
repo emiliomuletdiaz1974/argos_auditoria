@@ -5,7 +5,7 @@ title: TLS mutuo entre servicios (argos-tls)
 module: argos-tls
 phases: ["09"]
 version: 0.1.0-alpha
-commit: pendiente
+commit: 4f6309a
 date: 2026-09-23
 status: current
 confidentiality: client
