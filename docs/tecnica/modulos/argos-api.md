@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.32.0-alpha
+version: 0.33.0-alpha
 commit: 02046fd
 date: 2026-09-24
 status: current
@@ -85,6 +85,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Mismo origen en las mutaciones** (F09-15, SEC-058): un `POST`, `PUT`, `PATCH` o `DELETE` con una cabecera `Origin` de otro origen (o `null`) recibe `403` problem+json antes de llegar a la ruta, y queda en el registro de seguridad (`http.origin_refused`). La consola vive en el mismo origen (ADR-0013); un cliente sin navegador no envía `Origin` y se juzga solo por su token.
 - **Esclusa** (F09-13, ARG-090): `POST /api/v1/airgap/imports` y `POST /api/v1/airgap/exports` (`airgap.import` y `airgap.export`, solo `platform_admin` con segundo factor). La API construye la esclusa (`argos-airgap`) con los importadores y exportadores de los servicios que tiene configurados; un tipo de exportación fuera de la lista cerrada responde `403` y queda registrado. Desde la migración 0038, `svc_api` puede insertar las cuádruplas de una versión de contenido que `load_bundle` ya verificó.
 - **Pruebas de restauración** (F09-12, ARG-089): `/metrics` publica `argos_backup_last_restore_test_timestamp_seconds` (cuándo pasó la última prueba; 0 si nunca) y `argos_backup_last_restore_test_success` (si la última pasó), leídas de `argos.restore_tests`. Las alertas `BackupRestoreTestStale` y `BackupRestoreTestFailed` las usan (ver `docs/seguridad/backup-restauracion.md`).
 - **Paquete de diagnóstico** (F09-11, ARG-088): `POST /api/v1/support/diagnostics` encola la petición para el recolector; `GET /api/v1/support/diagnostics/{id}` muestra la vista previa en claro (índice y cada fichero), y `POST …/{id}/package` la cifra para la clave del soporte (`ARGOS_SUPPORT_RECIPIENT_FILE`) solo si la huella del índice es la que el operador aprobó y ningún fichero cambió. Pedir y leer exige `support.diagnose`; cifrar, `support.package` con segundo factor. Solo `platform_admin`. La API no recoge nada: lo hace `argos-support` junto al orquestador (ver `argos-support.md`).
@@ -189,3 +190,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.30.0-alpha | 2026-09-24 | Rutas `/support/diagnostics`: pedir, revisar y cifrar el paquete de diagnóstico | F09-11 (ARG-088) |
 | 0.31.0-alpha | 2026-09-24 | Métricas de las pruebas de restauración en `/metrics` | F09-12 (ARG-089) |
 | 0.32.0-alpha | 2026-09-24 | Rutas `/airgap/imports` y `/airgap/exports`, e inserción de cuádruplas de contenido verificado | F09-13 (ARG-090) |
+| 0.33.0-alpha | 2026-09-24 | Rechazo de mutaciones de otro origen (SEC-058) | F09-15 |

@@ -1,6 +1,6 @@
 # Revisión de seguridad de las Fases 01 a 08
 
-**Versión:** 1.15 · **Fecha:** 2026-09-23 · **Base:** `main` en `47711f5` (con la auditoría del 2026-09-18 integrada) · **Confidencialidad:** `client`
+**Versión:** 1.16 · **Fecha:** 2026-09-23 · **Base:** `main` en `47711f5` (con la auditoría del 2026-09-18 integrada) · **Confidencialidad:** `client`
 **Tarea:** F09-02 · **Referencia:** [modelo de amenazas](modelo-amenazas.md)
 
 Tratamos nuestros hallazgos como los de un cliente: cada uno queda **registrado** aquí, se **corrige** en una tarea con un test que lo reproduce primero, y la corrección queda **evidenciada** en el commit y en este registro.
@@ -87,6 +87,9 @@ Tratamos nuestros hallazgos como los de un cliente: cada uno queda **registrado*
 | SEC-054 | La sonda de privilegios de PostgreSQL falla con nombres con mayúsculas o puntos y deja tablas sin aristas de acceso (`argos_sql/postgres.py:27`) | Conectores | Baja | L | Corregir | F09-31 |
 | SEC-055 | Inyección de Markdown/HTML en el informe de inventario con nombres de columna (`catalog/report.py:97-108`) | Inventario | Baja | L | Corregir | F09-31 |
 | SEC-056 | `GET /status/{n}` de `evidence-api` firma con Vault en cada petición, sin autenticar: amplificador de coste | Evidencia | Baja | L | Corregir | F09-20 |
+| SEC-058 | Una mutación con `Origin` de otra web se ejecuta: la API no comprobaba el origen (lo encontró la batería de accesos, F09-15) | API | Baja | C | Corregir | F09-15 |
+| SEC-059 | El comprobador público sirve `/openapi.json`, la descripción de sus rutas (batería de accesos, F09-15) | Comprobador público | Baja | C | Corregir | F09-15 |
+| SEC-060 | Tras cerrar sesión, el token de acceso sigue valiendo hasta que caduca, cinco minutos como mucho: se revoca el refresco, no la sesión (batería de accesos, F09-15) | API | Baja | C | Corregir | F09-32 |
 | SEC-057 | `vitest` con dos avisos moderados (lectura de ficheros en el servidor de pruebas) | Consola (desarrollo) | Baja | C | **Aceptar** hasta F09-09: es dependencia de desarrollo y no viaja en la imagen; la puerta de vulnerabilidades la tratará con excepción justificada o con la actualización | F09-09 |
 
 **Resumen:** 9 altas, 27 medias y 21 bajas. 56 a corregir, 1 aceptada con fecha (hasta F09-09).
@@ -135,6 +138,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | SEC-017, SEC-029, SEC-030, SEC-040, SEC-044 | Corregido | F09-26 | `f920e7f` | 2026-09-23 |
 | SEC-026 | Corregido | F09-06 | `4f6309a` | 2026-09-23 |
 | SEC-057 | Tratado: excepción en `platform/security/vex.yaml` hasta el 2026-12-31 (dependencia de desarrollo que no viaja en la imagen); actualizar vitest queda en pendientes | F09-09 | `196e3f7` | 2026-09-23 |
+| SEC-058, SEC-059 | Corregido | F09-15 | `COMMIT` | 2026-09-24 |
 
 ## 7. Historial
 
@@ -156,3 +160,4 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | 1.13 | 2026-09-23 | Corregidos SEC-017, 029, 030, 040 y 044 (F09-26) |
 | 1.14 | 2026-09-23 | Corregido SEC-026 (F09-06) |
 | 1.15 | 2026-09-23 | SEC-057 tratado con excepción que caduca (F09-09) |
+| 1.16 | 2026-09-24 | La batería de accesos (F09-15) añade SEC-058 y SEC-059, corregidos, y SEC-060, abierto en F09-32 |

@@ -9,6 +9,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 import psycopg
 from fastapi import APIRouter, Depends, FastAPI, Request, status
@@ -21,7 +22,7 @@ from argos_airgap import Gate
 from argos_api import API_PREFIX, API_VERSION, SERVICE_NAME
 from argos_api.assistant import AssistantClient
 from argos_api.authz import require_perm
-from argos_api.core import IdempotencyStore
+from argos_api.core import MUTATIONS, IdempotencyStore
 from argos_api.http import ERRORS, PROBLEM_MEDIA_TYPE, ProblemResponse, problem_response
 from argos_api.routers import (
     airgap,
@@ -42,7 +43,7 @@ from argos_api.routers import (
 )
 from argos_api.routers.session import CodeExchanger, SessionRevoker
 from argos_api.runner import CampaignRunner
-from argos_api.security_events import backup_metrics, security_metrics
+from argos_api.security_events import backup_metrics, security_event, security_metrics
 from argos_api.webhooks.destination import Resolver, resolve_host
 from argos_api.webhooks.store import SecretWriter
 from argos_auth import JwtValidator
@@ -146,6 +147,27 @@ def create_app(
     app.state.session_revoker = session_revoker
     app.state.webhook_allowed = webhook_allowed
     app.state.webhook_resolve = webhook_resolve
+
+    @app.middleware("http")
+    async def _same_origin(request: Request, call_next: Callable[[Request], Awaitable[Any]]) -> Any:
+        """A mutation a page of another origin sends is refused before it runs (F09-15, SEC-058).
+
+        The console lives on this origin (ADR-0013); browsers add `Origin` to every POST, and an
+        opaque one (`null`) is another origin too. A client without a browser sends no `Origin`
+        and is judged by its token alone.
+        """
+        origin = request.headers.get("origin")
+        if (
+            origin is not None
+            and request.method in MUTATIONS
+            and urlsplit(origin).netloc != request.headers.get("host", "")
+        ):
+            detail = {"origin": origin[:100]}
+            security_event(request, "http.origin_refused", "anonymous", "refused", detail)
+            return problem_response(
+                request, status.HTTP_403_FORBIDDEN, _title(403), "a change sent from another origin"
+            )
+        return await call_next(request)
 
     @app.middleware("http")
     async def _security_headers(

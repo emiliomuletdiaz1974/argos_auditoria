@@ -334,3 +334,10 @@ def test_a_did_web_that_leaves_its_host_is_refused(did: str) -> None:
 
 def test_a_did_web_with_a_port_still_resolves() -> None:
     assert did_web_url("did:web:localhost%3A8008") == "https://localhost:8008/.well-known/did.json"
+
+
+def test_the_route_map_is_not_served() -> None:
+    """F09-15 (SEC-059): a public service serves its routes, not a description of them."""
+    client = TestClient(app)
+    assert client.get("/openapi.json").status_code == 404
+    assert client.get("/docs").status_code == 404

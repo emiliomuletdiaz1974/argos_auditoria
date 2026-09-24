@@ -114,6 +114,59 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "argos-other",
+      "description": "DEVELOPMENT ONLY: tokens for another audience (access battery, F09-15)",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "amr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "argos-expiring",
+      "description": "DEVELOPMENT ONLY: tokens that expire in 5 s (access battery, F09-15)",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "argos-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "argos-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        },
+        {
+          "name": "amr",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-amr-mapper",
+          "consentRequired": false,
+          "config": {
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "attributes": {
+        "access.token.lifespan": "5"
+      }
     }
   ],
   "users": [
@@ -159,6 +212,50 @@
       ],
       "realmRoles": [
         "campaign_manager"
+      ]
+    },
+    {
+      "username": "admin.test",
+      "enabled": true,
+      "email": "admin.test@argos.local",
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Synthetic",
+      "credentials": [
+        {
+          "type": "password",
+          "temporary": false,
+          "secretData": "{\"value\": \"BKAjNh1UhB3Kyr3PTLHlM9iKULE5wM81eT60sZEqBRoxOGrrLAyzIO7Sc7meCGTPLEWBXhtvoCpt0tQyxv2bsA==\", \"salt\": \"XRGmkzMf9cUL5/pMEJ4Rjg==\", \"additionalParameters\": {}}",
+          "credentialData": "{\"hashIterations\": 210000, \"algorithm\": \"pbkdf2-sha512\", \"additionalParameters\": {}}"
+        },
+        {
+          "type": "otp",
+          "userLabel": "development authenticator",
+          "secretData": "{\"value\": \"dev-only-totp-admin-test-3b8e5d1c6a\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA256\"}"
+        }
+      ],
+      "realmRoles": [
+        "platform_admin"
+      ]
+    },
+    {
+      "username": "auditor.test",
+      "enabled": true,
+      "email": "auditor.test@argos.local",
+      "emailVerified": true,
+      "firstName": "Auditor",
+      "lastName": "Manager",
+      "credentials": [
+        {
+          "type": "password",
+          "temporary": false,
+          "secretData": "{\"value\": \"v2DWeIX5Sj1OE/AqTqsNOey8C0FAJMdgTOpbTGSgXxx5nfFjcFViS0AUBukM0jYFxd0BCO38RgML2iEFmbI9pA==\", \"salt\": \"/XFghwCOgbeIYqQq6EqXng==\", \"additionalParameters\": {}}",
+          "credentialData": "{\"hashIterations\": 210000, \"algorithm\": \"pbkdf2-sha512\", \"additionalParameters\": {}}"
+        }
+      ],
+      "realmRoles": [
+        "read_only_auditor"
       ]
     },
     {

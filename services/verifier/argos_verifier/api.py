@@ -22,7 +22,9 @@ from argos_verifier.checks import Trust, verify_bundle
 MAX_BUNDLE_BYTES = 16 * 1024 * 1024
 log = logging.getLogger("argos_verifier")
 
-app = FastAPI(title="ARGOS public verifier", docs_url=None, redoc_url=None)
+# The verifier is public, but its route map is not a service: nothing is served but the routes
+# (F09-15, SEC-059), as the evidence service and the API outside development.
+app = FastAPI(title="ARGOS public verifier", docs_url=None, redoc_url=None, openapi_url=None)
 
 
 @app.get("/health")
