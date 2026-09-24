@@ -92,3 +92,12 @@ def test_acceptance_rates_ignore_nulls() -> None:
     rates, seen = acceptance_rates(values, {"dni": is_valid_dni, "nie": is_valid_nie})
     assert (rates, seen) == ({"dni": 0.6667, "nie": 0.0}, 3)
     assert acceptance_rates([None], {"dni": is_valid_dni}) == ({"dni": 0.0}, 0)
+
+
+def test_scrub_identifiers_replaces_only_what_validates() -> None:
+    from argos_connector.validators import scrub_identifiers
+
+    table = [{"marker": "DNI", "validator": "dni", "pattern": r"(?<!\d)\d{8}[A-Za-z]"}]
+    clean, substitutions = scrub_identifiers("00000000T y 00000000T, no 00000000A", table)
+    assert clean == "[DNI-1] y [DNI-1], no 00000000A"
+    assert substitutions == 2

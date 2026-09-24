@@ -19,3 +19,7 @@ efc20dff99251eb13c3d450a8a1570425870dd64:tests/integration/test_api_core.py:gene
 # Not a secret: the container URL of the gateway barrier test (`http://api:8000/api/v1/...`).
 # What looks like a key is the port followed by the path of the v1.
 72a7663bd690fcd095cbba6cb8077fd279355a43:tests/integration/test_ai_containers.py:generic-api-key:48
+
+# Not a secret: a type annotation of the updater tests (`key: Ed25519PrivateKey = KEY`), the name
+# of a class read as a value.
+c5fd428fbf69436c3684dbcfb6a7e2f986abcf7a:services/updater/tests/test_updater_pure.py:generic-api-key:51

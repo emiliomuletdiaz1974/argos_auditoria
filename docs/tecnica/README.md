@@ -41,6 +41,7 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | `argos-example` | [argos-example.md](modulos/argos-example.md) | 01 (interno) |
 | `argos-inventory` | [argos-inventory.md](modulos/argos-inventory.md) | 03, 04 |
 | `argos-ontology` | [argos-ontology.md](modulos/argos-ontology.md) | 04 |
+| `argos-support` | [argos-support.md](modulos/argos-support.md) | 09 |
 | `argos-tls` | [argos-tls.md](modulos/argos-tls.md) | 09 |
 | `argos-updater` | [argos-updater.md](modulos/argos-updater.md) | 09 |
 | `argos-verifier` | [argos-verifier.md](modulos/argos-verifier.md) | 07 |

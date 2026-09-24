@@ -15,6 +15,7 @@ deploy/dev/sources/certs/
 deploy/dev/sources/ldap/
 deploy/dev/secrets/
 deploy/dev/update/
+deploy/dev/support/
 .repo-map.xml
 .repo-map.stamp
 

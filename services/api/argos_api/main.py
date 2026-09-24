@@ -21,13 +21,14 @@ from argos_api import SERVICE_NAME
 from argos_api.app import create_app
 from argos_api.assistant import AssistantClient
 from argos_api.keycloak import Keycloak
-from argos_api.routers import system
+from argos_api.routers import support, system
 from argos_api.webhooks.worker import allowed_targets
 from argos_auth import JwtValidator
 from argos_common.config import ArgosConfig, Environment, get_config
 from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging
 from argos_common.secret_stores import VaultSecretStore
+from argos_support import DiagnosticsStore
 
 DEV_HOST = "127.0.0.1"
 DEV_PORT = 8000
@@ -115,6 +116,7 @@ def build_app(cfg: ArgosConfig) -> Any:
         console=CONSOLE,
         publish_docs=cfg.ENVIRONMENT is Environment.DEVELOPMENT,
         updates=_updates(cfg),
+        support=_support(cfg),
     )
 
 
@@ -129,6 +131,14 @@ def _updates(cfg: ArgosConfig) -> system.UpdateRequests | None:
         state=base,
         release_key=Path(cfg.RELEASE_PUBLIC_KEY_FILE).read_bytes(),
     )
+
+
+def _support(cfg: ArgosConfig) -> support.SupportDiagnostics | None:
+    """The folder shared with the diagnostics collector and the key of support (ARG-088)."""
+    if not cfg.SUPPORT_DIR or not cfg.SUPPORT_RECIPIENT_FILE:
+        return None
+    recipient = Path(cfg.SUPPORT_RECIPIENT_FILE).read_text(encoding="utf-8").strip()
+    return support.SupportDiagnostics(DiagnosticsStore(Path(cfg.SUPPORT_DIR)), recipient)
 
 
 def main() -> None:  # pragma: no cover - process entry point

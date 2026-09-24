@@ -84,6 +84,31 @@ VALIDATORS: Mapping[str, Validator] = {
 }
 
 
+def scrub_identifiers(text: str, identifiers: Iterable[Mapping[str, object]]) -> tuple[str, int]:
+    """The text with every validated identifier replaced by a stable marker, and how many were.
+
+    `identifiers` is the table of the guardrails (ARG-060, `library/prompts/guardrails.yaml`):
+    marker, validator and pattern. Only what validates is replaced, so a product code that looks
+    like a DNI survives. The same value receives the same marker inside one text. It lives here,
+    next to the validators, so that whoever scrubs does not import the AI layer (ADR-0012).
+    """
+    clean = text
+    substitutions = 0
+    for entry in identifiers:
+        marker, validator = str(entry["marker"]), VALIDATORS[str(entry["validator"])]
+        seen: dict[str, str] = {}
+        for match in reversed(list(re.finditer(str(entry["pattern"]), clean))):
+            value = match.group(0)
+            # Separators are how people write identifiers; the validator judges the bare value.
+            if not validator(re.sub(r"[ .\-/]", "", value).upper()):
+                continue
+            if value not in seen:
+                seen[value] = f"[{marker}-{len(seen) + 1}]"
+            clean = clean[: match.start()] + seen[value] + clean[match.end() :]
+            substitutions += 1
+    return clean, substitutions
+
+
 def resolve_validators(
     names: Iterable[str], mrn_pattern: str | None = None
 ) -> dict[str, Validator]:

@@ -27,7 +27,7 @@ from typing import Any
 import yaml
 
 from argos_common.errors import ArgosError
-from argos_connector.validators import VALIDATORS
+from argos_connector.validators import scrub_identifiers
 
 PATTERNS_FILE = Path(__file__).resolve().parents[4] / "library" / "prompts" / "guardrails.yaml"
 
@@ -53,23 +53,7 @@ def scrub_input(text: str) -> tuple[str, int]:
     would destroy the meaning of the sentence for the model, which is the point of scrubbing and
     not simply deleting.
     """
-    patterns = load_patterns()
-    clean = text
-    substitutions = 0
-    for entry in patterns["identifiers"]:
-        marker, validator = str(entry["marker"]), VALIDATORS[str(entry["validator"])]
-        seen: dict[str, str] = {}
-        matches = list(re.finditer(str(entry["pattern"]), clean))
-        for match in reversed(matches):
-            value = match.group(0)
-            # Separators are how people write identifiers; the validator judges the bare value.
-            if not validator(re.sub(r"[ .\-/]", "", value).upper()):
-                continue
-            if value not in seen:
-                seen[value] = f"[{marker}-{len(seen) + 1}]"
-            clean = clean[: match.start()] + seen[value] + clean[match.end() :]
-            substitutions += 1
-    return clean, substitutions
+    return scrub_identifiers(text, load_patterns()["identifiers"])
 
 
 def _texts(value: Any) -> list[str]:

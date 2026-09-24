@@ -10,6 +10,7 @@ import { CampaignsView } from "./views/campaigns/CampaignsView";
 import { EvidenceView } from "./views/evidence/EvidenceView";
 import { FindingsView } from "./views/findings/FindingsView";
 import { InventoryView } from "./views/inventory/InventoryView";
+import { SupportView } from "./views/support/SupportView";
 
 const SECTIONS = [
   { path: "/inventory", label: "Inventario" },
@@ -17,6 +18,7 @@ const SECTIONS = [
   { path: "/findings", label: "Hallazgos" },
   { path: "/evidence", label: "Evidencia" },
   { path: "/assistant", label: "Asistente" },
+  { path: "/support", label: "Soporte" },
 ];
 
 type Status = "starting" | "signed-in" | "signed-out" | "failed";
@@ -125,6 +127,9 @@ function Section({ path }: { path: string }) {
   }
   if (path.startsWith("/assistant")) {
     return <AssistantView />;
+  }
+  if (path.startsWith("/support")) {
+    return <SupportView />;
   }
   return (
     <div className="panel">

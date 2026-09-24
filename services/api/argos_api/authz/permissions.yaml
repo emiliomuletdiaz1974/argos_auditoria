@@ -33,6 +33,7 @@ _second_factor:
   - inventory.review
   - webhooks.create
   - system.update
+  - support.package
 
 systems.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
 
@@ -71,3 +72,8 @@ security.read: [platform_admin, read_only_auditor]
 # F09-10 (ARG-086): asking the updater to apply a verified bundle: the platform administrator,
 # with the second factor. The updater applies it; the API only verifies and queues.
 system.update: [platform_admin]
+
+# F09-11 (ARG-088): the diagnostic package. The administrator asks for it and reads it; encrypting
+# it for support, which is what leaves the appliance, also asks for the second factor.
+support.diagnose: [platform_admin]
+support.package: [platform_admin]

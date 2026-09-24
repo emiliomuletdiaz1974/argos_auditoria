@@ -32,6 +32,7 @@ from argos_api.routers import (
     inventory,
     security,
     session,
+    support,
     synthetic,
     system,
     systems,
@@ -63,6 +64,7 @@ AUTHENTICATED = (
     synthetic.router,
     security.router,
     system.router,
+    support.router,
 )
 DESCRIPTION = (
     "Campaigns, inventory, findings and evidence of the ARGOS appliance. "
@@ -109,6 +111,7 @@ def create_app(
     console: Path | None = None,
     publish_docs: bool = False,
     updates: system.UpdateRequests | None = None,
+    support: support.SupportDiagnostics | None = None,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
     still answer, and the tests that do not touch the database do not need one.
@@ -128,6 +131,7 @@ def create_app(
     app.state.validator = validator
     app.state.dsn = dsn
     app.state.updates = updates
+    app.state.support = support
     app.state.refresher = refresher
     app.state.campaign_runner = campaign_runner
     app.state.evidence = evidence

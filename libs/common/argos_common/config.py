@@ -61,6 +61,10 @@ class ArgosConfig(BaseSettings):
     # key the API verifies a bundle with before it queues it. Unset: the API takes no updates.
     UPDATE_DIR: str | None = None
     RELEASE_PUBLIC_KEY_FILE: str | None = None
+    # F09-11 (ARG-088): the folder shared with the diagnostics collector (queue/, previews/) and
+    # the age public key of support. Unset: the API offers no diagnostic packages.
+    SUPPORT_DIR: str | None = None
+    SUPPORT_RECIPIENT_FILE: str | None = None
     NATS_URL: str = "nats://127.0.0.1:4222"
     # Each service connects with its own NATS user: the server decides what it may publish.
     NATS_USER: str | None = None

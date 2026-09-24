@@ -166,6 +166,7 @@ EXPECTED_SECOND_FACTOR = {
     "inventory.review",
     "webhooks.create",
     "system.update",
+    "support.package",
 }
 # The roles whose people have TOTP in the realm (DP-14): only they can ever meet the demand.
 ROLES_WITH_TOTP = {"platform_admin", "dpo_reviewer"}

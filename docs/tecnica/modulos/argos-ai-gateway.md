@@ -4,9 +4,9 @@ kind: module
 title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
-version: 0.7.0-alpha
+version: 0.8.0-alpha
 commit: 4f6309a
-date: 2026-09-23
+date: 2026-09-24
 status: draft
 confidentiality: client
 ---
@@ -28,7 +28,7 @@ Implementa ARG-051 a ARG-060. En su estado actual contiene los guardarraíles (A
 
 ## 3. Arquitectura
 
-- **`argos_ai.guardrails`** (ARG-060): `scrub_input` a la entrada y `check_output` a la salida. Puro, sin modelo y sin entrada/salida, para poder probarlo entero.
+- **`argos_ai.guardrails`** (ARG-060): `scrub_input` a la entrada y `check_output` a la salida. Desde F09-11, `scrub_input` delega en `argos_connector.validators.scrub_identifiers`, que también usa el paquete de diagnóstico; el comportamiento no cambia. Puro, sin modelo y sin entrada/salida, para poder probarlo entero.
 - **`argos_ai.gateway.Gateway`** (ARG-052): la puerta. El diario y el registro de uso se inyectan, así que el gateway se ejerce entero sin base de datos; `argos_ai.quotas.postgres_gateway` lo monta como corre en el appliance.
 - **`argos_ai.rag`** (ARG-053, ARG-054): troceado por estructura jurídica, embeddings, índice sobre pgvector y el pipeline de respuesta con cita obligatoria.
 - **`argos_ai.classify`** (ARG-055): el clasificador semántico que rellena la interfaz ARG-025 de la Fase 03, con la confianza calibrada por las decisiones del DPD.
@@ -303,3 +303,4 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.5.0-alpha | 2026-09-23 | Usuario de base `login_ai_gateway` en `svc_ai_gateway`, sin lectura del diario completo ni de campañas (SEC-051) | F09-04 (ARG-085) |
 | 0.6.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-ai-gateway`) que renueva el contenedor acompañante `ai-db-credentials` | F09-05 (ARG-085) |
 | 0.7.0-alpha | 2026-09-23 | Servido con TLS mutuo: sin certificado de la CA interna no responde | F09-06 (ARG-083) |
+| 0.8.0-alpha | 2026-09-24 | `scrub_input` delega en el depurador compartido del SDK de conectores | F09-11 (ARG-088) |
