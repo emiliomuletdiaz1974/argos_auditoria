@@ -1,6 +1,6 @@
 # Batería de accesos indebidos
 
-**Generado:** 2026-09-24 09:55 UTC · **Commit:** `1cba07e` · **API atacada:** http://127.0.0.1:8000 · **Confidencialidad:** `client`
+**Generado:** 2026-09-24 10:39 UTC · **Commit:** `a2436af` · **API atacada:** http://127.0.0.1:8000 · **Confidencialidad:** `client`
 
 Informe generado por `tests/security/test_access_battery.py` y `tools/security_report.py` (F09-15). La batería ataca el contenedor `api` desplegado con tokens reales del realm, como lo haría alguien dentro de la red, y comprueba después el estado: una denegación que dejó efecto no es una denegación. No se edita a mano.
 
@@ -10,18 +10,16 @@ Informe generado por `tests/security/test_access_battery.py` y `tools/security_r
 |---|---|---|---|
 | matrix | 78 | 78 | 0 |
 | second factor | 2 | 2 | 0 |
-| tokens | 33 | 32 | 1 |
+| tokens | 33 | 33 | 0 |
 | separation of duties | 4 | 4 | 0 |
 | surface | 8 | 8 | 0 |
 | internal services | 3 | 3 | 0 |
 | public services | 5 | 5 | 0 |
-| security log | 2 | 2 | 0 |
+| security log | 3 | 3 | 0 |
 
 ## Fallos
 
-| Categoría | Caso | Esperado | Obtenido |
-|---|---|---|---|
-| tokens | access token after logout | 401 | 200 |
+Ningún fallo: cada intento indebido fue rechazado y no dejó efecto.
 
 ## Combinaciones probadas
 
@@ -151,7 +149,7 @@ Informe generado por `tests/security/test_access_battery.py` y `tools/security_r
 | account without roles GET /api/v1/evidence/artifacts/{verdict_id} | 403 | 403 | correcto |
 | account without roles GET /api/v1/evidence/{campaign_id}/dossier.json | 403 | 403 | correcto |
 | no token | 401 with WWW-Authenticate | 401 | correcto |
-| access token after logout | 401 | 200 | **fallo** |
+| access token of a session closed from the console | 401 | 401 | correcto |
 
 ### Separación de deberes
 
@@ -199,3 +197,4 @@ Informe generado por `tests/security/test_access_battery.py` y `tools/security_r
 |---|---|---|---|
 | refused attempts of kind auth.token_rejected | recorded | recorded | correcto |
 | refused attempts of kind authz.denied | recorded | recorded | correcto |
+| refused attempts of kind auth.session_closed | recorded | recorded | correcto |

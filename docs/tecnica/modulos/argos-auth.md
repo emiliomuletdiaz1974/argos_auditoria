@@ -5,7 +5,7 @@ title: Validación de identidades (argos-auth)
 module: argos-auth
 phases: ["01"]
 version: 0.3.0-alpha
-commit: c922062
+commit: a2436af
 date: 2026-09-24
 status: current
 confidentiality: client

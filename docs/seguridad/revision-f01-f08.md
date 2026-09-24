@@ -139,7 +139,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | SEC-026 | Corregido | F09-06 | `4f6309a` | 2026-09-23 |
 | SEC-057 | Tratado: excepción en `platform/security/vex.yaml` hasta el 2026-12-31 (dependencia de desarrollo que no viaja en la imagen); actualizar vitest queda en pendientes | F09-09 | `196e3f7` | 2026-09-23 |
 | SEC-058, SEC-059 | Corregido | F09-15 | `1cba07e` | 2026-09-24 |
-| SEC-060 | Corregido | F09-32 | `COMMIT` | 2026-09-24 |
+| SEC-060 | Corregido | F09-32 | `a2436af` | 2026-09-24 |
 
 ## 7. Historial
 
