@@ -248,7 +248,7 @@ services:
       context: ../..
       dockerfile: services/api/Dockerfile
     image: argos-api:dev
-    volumes: ["./secrets/approle-api:/run/secrets/approle:ro", "tls-api:/run/tls:ro"]
+    volumes: ["./secrets/approle-api:/run/secrets/approle:ro", "tls-api:/run/tls:ro", "./update:/var/lib/argos/update"]
     command: ["/app/.venv/bin/python", "-m", "argos_api.main"]
     environment: &api_env
       ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
@@ -267,6 +267,9 @@ services:
       ARGOS_OIDC_AUDIENCE: argos-api
       # The assistant is the one thing the API asks another service for, over HTTP (ADR-0012).
       ARGOS_AI_GATEWAY_URL: https://ai-gateway:8005   # mutual TLS (F09-06)
+      # F09-10 (ARG-086): the API verifies a bundle of the inbox and queues it for the updater.
+      ARGOS_UPDATE_DIR: /var/lib/argos/update
+      ARGOS_RELEASE_PUBLIC_KEY_FILE: /var/lib/argos/update/release.pub
       ARGOS_EVIDENCE_ISSUER_DID: did:web:127.0.0.1%3A8008
       ARGOS_EVIDENCE_STATUS_BASE_URL: http://127.0.0.1:8008/status
       ARGOS_EVIDENCE_CREDENTIAL_BASE_URL: http://127.0.0.1:8008/credentials

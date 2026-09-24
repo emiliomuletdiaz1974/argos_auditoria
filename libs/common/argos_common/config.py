@@ -57,6 +57,10 @@ class ArgosConfig(BaseSettings):
     # F09-06 (ARG-083): the folder with this service's certificate, key and internal CA
     # (tls.crt, tls.key, ca.crt). Set, the service speaks mutual TLS to the other ARGOS services.
     TLS_DIR: str | None = None
+    # F09-10 (ARG-086): the folder of the updater (inbox/, queue/, version) and the pinned release
+    # key the API verifies a bundle with before it queues it. Unset: the API takes no updates.
+    UPDATE_DIR: str | None = None
+    RELEASE_PUBLIC_KEY_FILE: str | None = None
     NATS_URL: str = "nats://127.0.0.1:4222"
     # Each service connects with its own NATS user: the server decides what it may publish.
     NATS_USER: str | None = None

@@ -21,6 +21,7 @@ from argos_api import SERVICE_NAME
 from argos_api.app import create_app
 from argos_api.assistant import AssistantClient
 from argos_api.keycloak import Keycloak
+from argos_api.routers import system
 from argos_api.webhooks.worker import allowed_targets
 from argos_auth import JwtValidator
 from argos_common.config import ArgosConfig, Environment, get_config
@@ -113,6 +114,20 @@ def build_app(cfg: ArgosConfig) -> Any:
         webhook_secrets=VaultSecretStore(cfg.VAULT_ADDR, token),
         console=CONSOLE,
         publish_docs=cfg.ENVIRONMENT is Environment.DEVELOPMENT,
+        updates=_updates(cfg),
+    )
+
+
+def _updates(cfg: ArgosConfig) -> system.UpdateRequests | None:
+    """The updater's folders and the pinned release key, when this appliance takes updates."""
+    if not cfg.UPDATE_DIR or not cfg.RELEASE_PUBLIC_KEY_FILE:
+        return None
+    base = Path(cfg.UPDATE_DIR)
+    return system.UpdateRequests(
+        inbox=base / "inbox",
+        queue=base / "queue",
+        state=base,
+        release_key=Path(cfg.RELEASE_PUBLIC_KEY_FILE).read_bytes(),
     )
 
 

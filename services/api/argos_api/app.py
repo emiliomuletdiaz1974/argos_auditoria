@@ -33,6 +33,7 @@ from argos_api.routers import (
     security,
     session,
     synthetic,
+    system,
     systems,
     webhooks,
 )
@@ -61,6 +62,7 @@ AUTHENTICATED = (
     webhooks.router,
     synthetic.router,
     security.router,
+    system.router,
 )
 DESCRIPTION = (
     "Campaigns, inventory, findings and evidence of the ARGOS appliance. "
@@ -106,6 +108,7 @@ def create_app(
     webhook_resolve: Resolver = resolve_host,
     console: Path | None = None,
     publish_docs: bool = False,
+    updates: system.UpdateRequests | None = None,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
     still answer, and the tests that do not touch the database do not need one.
@@ -124,6 +127,7 @@ def create_app(
     )
     app.state.validator = validator
     app.state.dsn = dsn
+    app.state.updates = updates
     app.state.refresher = refresher
     app.state.campaign_runner = campaign_runner
     app.state.evidence = evidence

@@ -27,6 +27,7 @@ members = [
     "argos-ontology",
     "argos-platform",
     "argos-tls",
+    "argos-updater",
     "argos-verifier",
 ]
 
@@ -104,6 +105,7 @@ dependencies = [
     { name = "argos-inventory" },
     { name = "argos-ontology" },
     { name = "argos-tls" },
+    { name = "argos-updater" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pyyaml" },
@@ -120,6 +122,7 @@ requires-dist = [
     { name = "argos-inventory", editable = "services/inventory" },
     { name = "argos-ontology", editable = "services/ontology" },
     { name = "argos-tls", editable = "libs/tls" },
+    { name = "argos-updater", editable = "services/updater" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -465,6 +468,7 @@ dependencies = [
     { name = "argos-inventory" },
     { name = "argos-ontology" },
     { name = "argos-tls" },
+    { name = "argos-updater" },
     { name = "argos-verifier" },
 ]
 
@@ -511,6 +515,7 @@ requires-dist = [
     { name = "argos-inventory", editable = "services/inventory" },
     { name = "argos-ontology", editable = "services/ontology" },
     { name = "argos-tls", editable = "libs/tls" },
+    { name = "argos-updater", editable = "services/updater" },
     { name = "argos-verifier", editable = "services/verifier" },
 ]
 
@@ -550,6 +555,21 @@ dependencies = [
 requires-dist = [
     { name = "cryptography", specifier = ">=43" },
     { name = "httpx", specifier = ">=0.27" },
+]
+
+[[package]]
+name = "argos-updater"
+version = "0.1.0a0"
+source = { editable = "services/updater" }
+dependencies = [
+    { name = "argos-common" },
+    { name = "argos-ontology" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-common", editable = "libs/common" },
+    { name = "argos-ontology", editable = "services/ontology" },
 ]
 
 [[package]]

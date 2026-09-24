@@ -3,11 +3,13 @@
 uv run python tools/release.py build --version 0.1.0 [--sbom dist/sbom]
 uv run python tools/release.py sign      # uses VAULT_ADDR and VAULT_TOKEN
 uv run python tools/release.py verify    # offline, with dist/release.pub
+uv run python tools/release.py bundle    # the update bundle of the signed release (ARG-086)
 """
 
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 from datetime import UTC, datetime
@@ -66,6 +68,31 @@ def _images(version: str) -> list[dict[str, str]]:
     return images
 
 
+def write_bundle(out: Path | None) -> Path:
+    """What the updater applies (ARG-086, F09-10): the signed manifest and its signature, the SBOMs
+    and vulnerability reports, every image exported by the id the manifest signed, and the
+    migrations. The release key does not travel in it: the appliance keeps its own."""
+    if not MANIFEST.is_file() or not SIGNATURE.is_file():
+        raise SystemExit("build and sign the release first: there is no signed manifest in dist/")
+    manifest = json.loads(MANIFEST.read_bytes())
+    target = out or DIST / f"bundle-{manifest['version']}"
+    if target.exists():
+        shutil.rmtree(target)
+    (target / "images").mkdir(parents=True)
+    shutil.copy2(MANIFEST, target / MANIFEST.name)
+    shutil.copy2(SIGNATURE, target / SIGNATURE.name)
+    shutil.copytree(DIST / "sbom", target / "sbom")
+    shutil.copytree(Path("services/api/migrations"), target / "migrations")
+    for image in manifest["images"]:
+        ref, image_id = str(image["ref"]).split("@", 1)
+        name = ref.rsplit(":", 1)[0].rsplit("/", 1)[-1]
+        subprocess.run(  # noqa: S603 - a list of arguments
+            ["docker", "save", "-o", str(target / "images" / f"{name}.tar"), image_id],  # noqa: S607
+            check=True,
+        )
+    return target
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
@@ -73,6 +100,8 @@ def main() -> int:
     build.add_argument("--version", required=True)
     build.add_argument("--sbom", type=Path, default=DIST / "sbom")
     sub.add_parser("sign")
+    bundle = sub.add_parser("bundle")
+    bundle.add_argument("--out", type=Path, help="default: dist/bundle-<version>")
     verify = sub.add_parser("verify")
     verify.add_argument("--fingerprint", help="or ARGOS_RELEASE_KEY_FINGERPRINT")
     args = parser.parse_args()
@@ -89,6 +118,8 @@ def main() -> int:
         PUBLIC_KEY.write_bytes(signer.public_key())
         print(f"signature in {SIGNATURE}, public key in {PUBLIC_KEY}")
         print(f"key fingerprint {key_fingerprint(signer.public_key())}: record it apart from dist/")
+    elif args.command == "bundle":
+        print(f"update bundle in {write_bundle(args.out)}")
     else:
         # The key sits beside the manifest in dist/: it is trusted only by a fingerprint kept apart.
         public_key = PUBLIC_KEY.read_bytes()

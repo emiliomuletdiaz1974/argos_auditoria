@@ -381,6 +381,27 @@
         ],
         "title": "Transition",
         "type": "object"
+      },
+      "UpdateRequest": {
+        "properties": {
+          "allow_downgrade": {
+            "default": false,
+            "description": "an older version, on purpose; the updater records it",
+            "title": "Allow Downgrade",
+            "type": "boolean"
+          },
+          "bundle": {
+            "description": "folder of the bundle in the inbox",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
+            "title": "Bundle",
+            "type": "string"
+          }
+        },
+        "required": [
+          "bundle"
+        ],
+        "title": "UpdateRequest",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -4563,6 +4584,126 @@
         "summary": "The client says it put the source back as it was",
         "tags": [
           "synthetic"
+        ]
+      }
+    },
+    "/api/v1/system/updates": {
+      "post": {
+        "operationId": "request_update_api_v1_system_updates_post",
+        "parameters": [
+          {
+            "description": "key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 128,
+                  "pattern": "^[A-Za-z0-9_-]{1,128}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Request Update Api V1 System Updates Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "no valid token"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "the role does not allow it"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "it does not exist"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "the state does not allow it"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "invalid body"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "not configured yet"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Verify an update bundle of the inbox and queue it for the updater",
+        "tags": [
+          "system"
         ]
       }
     },

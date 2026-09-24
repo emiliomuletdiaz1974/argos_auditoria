@@ -4,9 +4,9 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.28.0-alpha
+version: 0.29.0-alpha
 commit: d47decd
-date: 2026-09-23
+date: 2026-09-24
 status: current
 confidentiality: client
 ---
@@ -85,6 +85,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Petición de actualización** (F09-10, ARG-086): `POST /api/v1/system/updates` (`system.update`, solo `platform_admin` con segundo factor) verifica el paquete de la bandeja con la clave de release fijada (`ARGOS_RELEASE_PUBLIC_KEY_FILE`) y lo encola en `ARGOS_UPDATE_DIR/queue`. No aplica nada: lo hace el actualizador (`argos-updater`). Un nombre de paquete que saldría de la bandeja se rechaza.
 - **Registro de seguridad** (F09-08). La API deja en `security.events`:
   - los tokens ausentes o rechazados (con el tipo de fallo, nunca el token);
   - los permisos denegados, los roles incompatibles y el segundo factor exigido;
@@ -181,3 +182,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.26.0-alpha | 2026-09-23 | Llamada al gateway de IA con TLS mutuo; PostgreSQL verificado | F09-06 (ARG-083) |
 | 0.27.0-alpha | 2026-09-23 | Segundo factor exigido a los permisos de `_second_factor` (401 con el reto de RFC 9470) | F09-07 (ARG-072) |
 | 0.28.0-alpha | 2026-09-23 | Registro de seguridad de autenticación, autorización y administración; `GET /security/events` y `/metrics` | F09-08 |
+| 0.29.0-alpha | 2026-09-24 | `POST /system/updates`: verificar y encolar una actualización | F09-10 (ARG-086) |

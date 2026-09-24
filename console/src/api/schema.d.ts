@@ -651,6 +651,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify an update bundle of the inbox and queue it for the updater */
+        post: operations["request_update_api_v1_system_updates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/systems": {
         parameters: {
             query?: never;
@@ -935,6 +952,20 @@ export interface components {
              * @description target state of the finding
              */
             to: string;
+        };
+        /** UpdateRequest */
+        UpdateRequest: {
+            /**
+             * Allow Downgrade
+             * @description an older version, on purpose; the updater records it
+             * @default false
+             */
+            allow_downgrade: boolean;
+            /**
+             * Bundle
+             * @description folder of the bundle in the inbox
+             */
+            bundle: string;
         };
     };
     responses: never;
@@ -3969,6 +4000,89 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: string;
+                    };
+                };
+            };
+            /** @description no valid token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description the role does not allow it */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description it does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description the state does not allow it */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description invalid body */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description not configured yet */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    request_update_api_v1_system_updates_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description key chosen by the client, 1 to 128 letters, digits, '-' or '_'; repeating it with the same request returns the first result, and with another request answers 409 */
+                "Idempotency-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
                     };
                 };
             };

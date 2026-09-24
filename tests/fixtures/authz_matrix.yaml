@@ -37,6 +37,7 @@ platform_admin:
   webhooks.read: true
   webhooks.create: true
   security.read: true
+  system.update: true
 
 campaign_manager:
   systems.read: true
@@ -61,6 +62,7 @@ campaign_manager:
   webhooks.read: false
   webhooks.create: false
   security.read: false
+  system.update: false
 
 dpo_reviewer:
   systems.read: true
@@ -85,6 +87,7 @@ dpo_reviewer:
   webhooks.read: false
   webhooks.create: false
   security.read: false
+  system.update: false
 
 read_only_auditor:
   systems.read: true
@@ -109,3 +112,4 @@ read_only_auditor:
   webhooks.read: false
   webhooks.create: false
   security.read: true
+  system.update: false

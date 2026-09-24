@@ -32,6 +32,7 @@ _second_factor:
   - synthetic.authorize
   - inventory.review
   - webhooks.create
+  - system.update
 
 systems.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
 
@@ -66,3 +67,7 @@ webhooks.create: [platform_admin]
 
 # F09-08: who tried what (the security log): the administrator and the auditor, reading only.
 security.read: [platform_admin, read_only_auditor]
+
+# F09-10 (ARG-086): asking the updater to apply a verified bundle: the platform administrator,
+# with the second factor. The updater applies it; the API only verifies and queues.
+system.update: [platform_admin]
