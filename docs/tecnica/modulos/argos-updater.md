@@ -5,7 +5,7 @@ title: Actualizador firmado transaccional (argos-updater)
 module: argos-updater
 phases: ["09"]
 version: 0.1.0-alpha
-commit: pendiente
+commit: c5fd428
 date: 2026-09-24
 status: current
 confidentiality: client
