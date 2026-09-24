@@ -3,9 +3,10 @@ name = "argos-events"
 version = "0.1.0-alpha"
 description = "CloudEvents over NATS JetStream for ARGOS (ARG-006)"
 requires-python = ">=3.12"
-dependencies = ["argos-common", "nats-py>=2.9"]
+dependencies = ["argos-tls", "argos-common", "nats-py>=2.9"]
 
 [tool.uv.sources]
+argos-tls = { workspace = true }
 argos-common = { workspace = true }
 
 [build-system]

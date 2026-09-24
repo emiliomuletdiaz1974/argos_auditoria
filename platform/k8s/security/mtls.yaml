@@ -1,0 +1,194 @@
+# ARG-083 · mutual TLS inside the appliance (F09-06): cert-manager issues the certificate of every
+# service from Vault's internal CA, the same one cert-issuer uses in the development environment.
+#
+# Every certificate lives 30 days, is renewed 10 days before (day 20) with a new key, and serves
+# both roles: the service presents it as a server and as a client. The Secret `tls-<service>` is
+# mounted only by its own pod, at /run/tls (tls.crt, tls.key, ca.crt), where argos_tls reads it and
+# takes the renewed one without a restart.
+#
+# Validated statically by tests/security/test_k8s_manifests.py; applying it is F09-92.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-intermediate
+spec:
+  vault:
+    server: https://vault.argos-core.svc:8200
+    path: pki_int/sign/argos-svc
+    caBundleSecretRef:
+      name: vault-ca
+      key: ca.crt
+    auth:
+      kubernetes:
+        role: cert-manager
+        mountPath: /v1/auth/kubernetes
+        serviceAccountRef:
+          name: cert-manager
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api
+  namespace: argos-services
+spec:
+  secretName: tls-api
+  commonName: api
+  dnsNames: ["api", "api.argos-services.svc", "localhost"]
+  ipAddresses: ["127.0.0.1"]
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-intermediate
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: webhook
+  namespace: argos-services
+spec:
+  secretName: tls-webhook
+  commonName: webhook
+  dnsNames: ["webhook", "webhook.argos-services.svc", "localhost"]
+  ipAddresses: ["127.0.0.1"]
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-intermediate
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: challenge
+  namespace: argos-services
+spec:
+  secretName: tls-challenge
+  commonName: challenge
+  dnsNames: ["challenge", "challenge.argos-services.svc", "localhost"]
+  ipAddresses: ["127.0.0.1"]
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-intermediate
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: evidence
+  namespace: argos-services
+spec:
+  secretName: tls-evidence
+  commonName: evidence
+  dnsNames: ["evidence", "evidence.argos-services.svc", "localhost"]
+  ipAddresses: ["127.0.0.1"]
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-intermediate
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: example
+  namespace: argos-services
+spec:
+  secretName: tls-example
+  commonName: example
+  dnsNames: ["example", "example.argos-services.svc", "localhost"]
+  ipAddresses: ["127.0.0.1"]
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-intermediate
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ai-gateway
+  namespace: argos-ai
+spec:
+  secretName: tls-ai-gateway
+  commonName: ai-gateway
+  dnsNames: ["ai-gateway", "ai-gateway.argos-ai.svc", "localhost"]
+  ipAddresses: ["127.0.0.1"]
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-intermediate
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: postgres
+  namespace: argos-core
+spec:
+  secretName: tls-postgres
+  commonName: postgres
+  dnsNames: ["postgres", "postgres.argos-core.svc", "localhost"]
+  ipAddresses: ["127.0.0.1"]
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-intermediate
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nats
+  namespace: argos-core
+spec:
+  secretName: tls-nats
+  commonName: nats
+  dnsNames: ["nats", "nats.argos-core.svc", "localhost"]
+  ipAddresses: ["127.0.0.1"]
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-intermediate
+    kind: ClusterIssuer

@@ -96,3 +96,36 @@ def test_the_files_connector_only_reads_its_mount() -> None:
     assert "deny /** w," in profile
     assert "/mnt/argos-source/** r," in profile
     assert " w," not in profile.replace("deny /** w,", "")
+
+
+# --- ARG-083 (F09-06): the certificates of every service, from Vault's internal CA ----------------
+
+
+def _mtls() -> list[dict[str, Any]]:
+    documents = yaml.safe_load_all((SECURITY / "mtls.yaml").read_text(encoding="utf-8"))
+    return [doc for doc in documents if doc]
+
+
+def test_the_cluster_issuer_signs_with_the_intermediate_ca_of_vault() -> None:
+    [issuer] = [d for d in _mtls() if d["kind"] == "ClusterIssuer"]
+    assert issuer["metadata"]["name"] == "vault-intermediate"
+    vault = issuer["spec"]["vault"]
+    assert vault["path"] == "pki_int/sign/argos-svc"
+    assert vault["server"].startswith("https://"), "the issuer reaches Vault over TLS"
+    assert "kubernetes" in vault["auth"], "service accounts, not a stored token"
+
+
+def test_every_certificate_lives_30_days_renews_at_20_and_serves_both_roles() -> None:
+    certificates = [d for d in _mtls() if d["kind"] == "Certificate"]
+    assert {c["metadata"]["namespace"] for c in certificates} <= NAMESPACES
+    names = {c["spec"]["commonName"] for c in certificates}
+    assert {"api", "ai-gateway", "postgres", "nats"} <= names
+    for cert in certificates:
+        spec = cert["spec"]
+        assert spec["issuerRef"] == {"name": "vault-intermediate", "kind": "ClusterIssuer"}
+        assert spec["duration"] == "720h"
+        assert spec["renewBefore"] == "240h"
+        assert {"server auth", "client auth"} <= set(spec["usages"])
+        assert spec["privateKey"]["algorithm"] == "ECDSA"
+        assert spec["privateKey"]["rotationPolicy"] == "Always", "a new key on every renewal"
+        assert spec["secretName"] == f"tls-{cert['metadata']['name']}"

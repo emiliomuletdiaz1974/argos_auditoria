@@ -10,7 +10,7 @@ import nats
 import pytest
 
 from argos_common.journal_pg import PostgresJournal
-from argos_events import Bus, ensure_streams
+from argos_events import Bus, ensure_streams, tls_from_environment
 
 pytestmark = pytest.mark.integration
 NATS_URL = os.environ.get("ARGOS_TEST_NATS", "nats://argos-dev:dev-only-nats-host@127.0.0.1:4222")
@@ -30,7 +30,7 @@ def _names() -> tuple[str, str]:
 
 
 async def test_ensure_streams_is_idempotent() -> None:
-    nc = await nats.connect(NATS_URL)
+    nc = await nats.connect(NATS_URL, tls=tls_from_environment())
     js = nc.jetstream()
     await ensure_streams(js)
     await ensure_streams(js)

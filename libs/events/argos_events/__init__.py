@@ -1,11 +1,17 @@
 """argos_events: CloudEvents 1.0 publishing and consumption over NATS JetStream (ARG-006).
 
 Every service uses this library; nobody talks to NATS directly.
+
+Since F09-06 (ARG-083, security review SEC-026) a service connects with its client certificate and
+does not create or change streams: the streams are the platform's, created once by
+`tools/nats_streams.py` with its own user (`ensure_streams`).
 """
 
 import asyncio
 import json
+import os
 import re
+import ssl
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
@@ -21,6 +27,7 @@ from argos_common.config import ArgosConfig
 from argos_common.ids import uuid7
 from argos_common.journal_pg import PostgresJournal
 from argos_common.logs import get_logger
+from argos_tls import ReloadingTLS
 
 _DAY = 86400
 STREAMS: tuple[StreamConfig, ...] = (
@@ -85,7 +92,14 @@ def bus_from_config(
 ) -> "Bus":
     """The bus of a service with the NATS identity of its configuration."""
     password = cfg.NATS_PASSWORD.get_secret_value() if cfg.NATS_PASSWORD else None
-    return Bus(service, cfg.NATS_URL, journal, user=cfg.NATS_USER, password=password)
+    tls = ReloadingTLS(server=False, cert_dir=cfg.TLS_DIR).context() if cfg.TLS_DIR else None
+    return Bus(service, cfg.NATS_URL, journal, user=cfg.NATS_USER, password=password, tls=tls)
+
+
+def tls_from_environment() -> ssl.SSLContext | None:
+    """The client certificate of this process, when ARGOS_TLS_DIR names one (tests, tools)."""
+    folder = os.environ.get("ARGOS_TLS_DIR")
+    return ReloadingTLS(server=False, cert_dir=folder).context() if folder else None
 
 
 class Bus:
@@ -99,6 +113,7 @@ class Bus:
         *,
         user: str | None = None,
         password: str | None = None,
+        tls: ssl.SSLContext | None = None,
     ) -> None:
         self.service = service
         self._url = url
@@ -107,11 +122,12 @@ class Bus:
         self._max_deliveries = max_deliveries
         # The server's permissions for this user decide which subjects the service may publish.
         self._credentials = {"user": user, "password": password} if user else {}
+        self._tls = tls if tls is not None else tls_from_environment()
+        self._nc: Client | None = None
+        self._js: JetStreamContext | None = None
 
     def __repr__(self) -> str:
         return f"Bus(service={self.service!r}, url={self._url!r})"
-        self._nc: Client | None = None
-        self._js: JetStreamContext | None = None
 
     @property
     def js(self) -> JetStreamContext:
@@ -120,9 +136,11 @@ class Bus:
         return self._js
 
     async def connect(self) -> None:
-        self._nc = await nats.connect(self._url, name=self.service, **self._credentials)
+        options: dict[str, Any] = dict(self._credentials)
+        if self._tls is not None:
+            options["tls"] = self._tls
+        self._nc = await nats.connect(self._url, name=self.service, **options)
         self._js = self._nc.jetstream()
-        await ensure_streams(self._js)
 
     async def close(self) -> None:
         if self._nc is not None:

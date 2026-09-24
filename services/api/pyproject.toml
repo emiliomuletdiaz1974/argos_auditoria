@@ -4,6 +4,7 @@ version = "0.1.0-alpha"
 description = "ARGOS single authenticated API, v1 (ARG-071…080)"
 requires-python = ">=3.12"
 dependencies = [
+    "argos-tls",
     "argos-auth",
     "argos-challenge-engine",
     "argos-common",
@@ -18,6 +19,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+argos-tls = { workspace = true }
 argos-auth = { workspace = true }
 argos-challenge-engine = { workspace = true }
 argos-common = { workspace = true }

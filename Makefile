@@ -7,6 +7,11 @@ VERSION := $(strip $(file < VERSION))
 # F09-04: the development database asks every network connection for a password. Host processes
 # (migrations, tools, tests) connect as the superuser with this development-only one.
 export PGPASSWORD := dev-only-postgres
+# F09-06: NATS asks every client for a certificate; host processes present the one that
+# tools/dev_tls.py issues on every `make dev`. PostgreSQL is verified through the connection string
+# of ARGOS (.env.example), never with PGSSLMODE: that variable would also reach the sources of the
+# client, whose TLS the connectors decide source by source (F09-31).
+export ARGOS_TLS_DIR := deploy/dev/secrets/tls-host
 
 .PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
 
@@ -38,11 +43,14 @@ help:
 
 dev:
 	uv run python tools/prepare_dev_sources.py
-	$(COMPOSE) up -d --build --wait postgres vault
+	$(COMPOSE) up -d --wait vault
 	$(COMPOSE) exec -T -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN=root vault sh -s < deploy/dev/vault/setup.sh
+	uv run python tools/dev_tls.py
+	$(COMPOSE) up -d --build --wait cert-issuer postgres nats
 	$(COMPOSE) exec -T postgres psql -q -U argos -d argos -c "ALTER ROLE argos PASSWORD '$(PGPASSWORD)'"
 	uv run --env-file .env.example python tools/migrate.py
 	uv run --env-file .env.example python tools/dev_db_users.py
+	uv run --env-file .env.example python tools/nats_streams.py
 	$(COMPOSE) up -d --build --wait
 	uv run --env-file .env.example python tools/register_dev_sources.py
 	uv run python tools/seed_dev_clinical.py

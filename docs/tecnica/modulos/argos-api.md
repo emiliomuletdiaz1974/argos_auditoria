@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.25.0-alpha
+version: 0.26.0-alpha
 commit: de1f1d3
 date: 2026-09-23
 status: current
@@ -85,6 +85,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **TLS mutuo hacia el gateway de IA** (F09-06, ARG-083): `AssistantClient(base_url, tls_dir=)` presenta el certificado de la API y verifica el del gateway (`ARGOS_AI_GATEWAY_URL=https://ai-gateway:8005`). PostgreSQL y NATS, con TLS verificado (`sslmode=verify-full` en la cadena de conexión).
 - **Ninguna acción humana sin asiento** (F09-26, SEC-029, SEC-030, SEC-040, SEC-044): el asiento `api.mutation` se escribe antes de guardar la respuesta idempotente; lanzar una campaña deja `campaign.launch` y emitir una credencial deja `credential.issued`, los dos con la persona y los identificadores; una respuesta guardada nunca se entrega sin pasar antes el guardián de permisos, y validar el token no bloquea el bucle de eventos.
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - **Base de datos con mínimo privilegio** (F09-04, ARG-085): la API se conecta como `login_api`, miembro del rol `svc_api`, y el worker de webhooks como `login_webhook`, miembro de `svc_webhook` (migración `0033`), y nunca como superusuario. El rol tiene solo las tablas y operaciones que usa su código; el diario se escribe únicamente con `argos.journal_append()`. Lo comprueban `tests/integration/test_service_roles.py` (la matriz `tests/fixtures/db_access_matrix.yaml` y el usuario de cada contenedor en marcha).
@@ -167,3 +168,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.23.0-alpha | 2026-09-23 | Usuario de base `login_api` en `svc_api` (y `login_webhook` en `svc_webhook`); contraseña en fichero de secreto | F09-04 (ARG-085) |
 | 0.24.0-alpha | 2026-09-23 | Idempotencia tras el guardián, con reserva, clave acotada y huella por ruta real; asientos `campaign.launch` y `credential.issued` con la persona | F09-26 (ARG-005, ARG-071) |
 | 0.25.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-api`, `svc-webhook`), renovado en caliente | F09-05 (ARG-085) |
+| 0.26.0-alpha | 2026-09-23 | Llamada al gateway de IA con TLS mutuo; PostgreSQL verificado | F09-06 (ARG-083) |

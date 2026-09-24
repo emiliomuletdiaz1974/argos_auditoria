@@ -4,9 +4,9 @@ kind: module
 title: Bus de eventos (argos-events)
 module: argos-events
 phases: ["01"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: c438d27
-date: 2026-09-18
+date: 2026-09-23
 status: current
 confidentiality: client
 ---
@@ -52,10 +52,12 @@ Dependencias: `argos-common` (identificadores, diario y registro) y `nats-py`.
 ## 5. Configuración
 
 - `ARGOS_NATS_URL`, `ARGOS_NATS_USER` y `ARGOS_NATS_PASSWORD` (desde `argos-common`); en producción usuario y contraseña son obligatorios.
+- `ARGOS_TLS_DIR` (F09-06): el certificado con el que el servicio se presenta a NATS. `Bus(..., tls=)` lo recibe explícito; si no, `tls_from_environment()` lo toma de esa variable. Sin certificado, NATS no acepta la conexión.
 - Por servicio: `retry_delay` (espera antes de reintentar) y `max_deliveries` (entregas máximas por mensaje).
 
 ## 6. Seguridad y tratamiento de datos
 
+- **TLS mutuo y permisos por consumidor** (F09-06, ARG-083, SEC-026): cada servicio conecta con su certificado de la CA interna y su usuario solo puede consultar, crear y confirmar sus propios consumidores. `Bus.connect()` ya no crea ni actualiza streams: `ensure_streams` lo ejecuta una vez el usuario de plataforma (`tools/nats_streams.py`). Corregido de paso: `Bus` no inicializaba su conexión en el constructor (las dos líneas estaban tras un `return` en `__repr__`), así que `close()` sobre un bus sin conectar fallaba.
 - Sujetos y tipos se validan con patrones cerrados (`argos.<dominio>.<evento>`, `dominio.evento.vN`); se rechaza cualquier otro valor.
 - **Publicación auditada** (`audit=True`): el asiento `event.publish` se escribe en el diario **antes** de publicar, así queda constancia aunque la publicación falle después.
 - Un mensaje malformado se descarta definitivamente y se registra sin su contenido.
@@ -85,3 +87,4 @@ Dependencias: `argos-common` (identificadores, diario y registro) y `nats-py`.
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-14 | Librería de eventos con CloudEvents, reintentos acotados y auditoría opcional | Fase 01 (ARG-006) |
 | 0.1.0-alpha | 2026-09-18 | Identidad NATS por servicio y permisos por familia de sujetos | Auditoría de seguridad (M6) |
+| 0.2.0-alpha | 2026-09-23 | TLS mutuo con NATS; los servicios ya no crean streams (SEC-026); `tls_from_environment()` | F09-06 (ARG-083) |

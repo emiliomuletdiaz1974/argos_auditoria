@@ -26,6 +26,7 @@ members = [
     "argos-inventory",
     "argos-ontology",
     "argos-platform",
+    "argos-tls",
     "argos-verifier",
 ]
 
@@ -69,6 +70,7 @@ dependencies = [
     { name = "argos-common" },
     { name = "argos-connector-sdk" },
     { name = "argos-inventory" },
+    { name = "argos-tls" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "jsonschema" },
@@ -82,6 +84,7 @@ requires-dist = [
     { name = "argos-common", editable = "libs/common" },
     { name = "argos-connector-sdk", editable = "connectors/sdk" },
     { name = "argos-inventory", editable = "services/inventory" },
+    { name = "argos-tls", editable = "libs/tls" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "jsonschema", specifier = ">=4.23,<5" },
@@ -100,6 +103,7 @@ dependencies = [
     { name = "argos-evidence" },
     { name = "argos-inventory" },
     { name = "argos-ontology" },
+    { name = "argos-tls" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pyyaml" },
@@ -115,6 +119,7 @@ requires-dist = [
     { name = "argos-evidence", editable = "services/evidence" },
     { name = "argos-inventory", editable = "services/inventory" },
     { name = "argos-ontology", editable = "services/ontology" },
+    { name = "argos-tls", editable = "libs/tls" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -308,12 +313,14 @@ version = "0.1.0a0"
 source = { editable = "libs/events" }
 dependencies = [
     { name = "argos-common" },
+    { name = "argos-tls" },
     { name = "nats-py" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "argos-common", editable = "libs/common" },
+    { name = "argos-tls", editable = "libs/tls" },
     { name = "nats-py", specifier = ">=2.9" },
 ]
 
@@ -457,6 +464,7 @@ dependencies = [
     { name = "argos-example" },
     { name = "argos-inventory" },
     { name = "argos-ontology" },
+    { name = "argos-tls" },
     { name = "argos-verifier" },
 ]
 
@@ -502,6 +510,7 @@ requires-dist = [
     { name = "argos-example", editable = "services/example" },
     { name = "argos-inventory", editable = "services/inventory" },
     { name = "argos-ontology", editable = "services/ontology" },
+    { name = "argos-tls", editable = "libs/tls" },
     { name = "argos-verifier", editable = "services/verifier" },
 ]
 
@@ -526,6 +535,21 @@ dev = [
     { name = "types-hvac", specifier = ">=2.4.0.20260731" },
     { name = "types-jsonschema", specifier = ">=4.23" },
     { name = "types-pyyaml", specifier = ">=6.0" },
+]
+
+[[package]]
+name = "argos-tls"
+version = "0.1.0a0"
+source = { editable = "libs/tls" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "httpx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", specifier = ">=43" },
+    { name = "httpx", specifier = ">=0.27" },
 ]
 
 [[package]]

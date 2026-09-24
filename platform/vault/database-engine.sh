@@ -13,14 +13,16 @@ set -eu
 : "${VAULT_DB_ADMIN_PW:?the password of vault_admin, in the environment}"
 DB_HOST="${ARGOS_DB_HOST:-postgres:5432}"
 DB_NAME="${ARGOS_DB_NAME:-argos}"
+# F09-06: Vault verifies PostgreSQL with the internal CA, as every other client does.
+DB_TLS="${ARGOS_DB_TLS:-sslmode=verify-full&sslrootcert=/run/tls/ca.crt}"
 DEFAULT_TTL="${ARGOS_DB_DEFAULT_TTL:-24h}"
 MAX_TTL="${ARGOS_DB_MAX_TTL:-72h}"
 
 vault secrets list -format=json | grep -q '"db/"' || vault secrets enable -path=db database
 
 # The password travels in a JSON body read from standard input, not as an argument.
-printf '{"plugin_name":"postgresql-database-plugin","allowed_roles":"svc-*","connection_url":"postgresql://{{username}}:{{password}}@%s/%s","username":"vault_admin","password":"%s","password_authentication":"scram-sha-256"}' \
-  "$DB_HOST" "$DB_NAME" "$VAULT_DB_ADMIN_PW" | vault write "db/config/$DB_NAME" -
+printf '{"plugin_name":"postgresql-database-plugin","allowed_roles":"svc-*","connection_url":"postgresql://{{username}}:{{password}}@%s/%s?%s","username":"vault_admin","password":"%s","password_authentication":"scram-sha-256"}' \
+  "$DB_HOST" "$DB_NAME" "$DB_TLS" "$VAULT_DB_ADMIN_PW" | vault write "db/config/$DB_NAME" -
 vault write -f "db/rotate-root/$DB_NAME" >/dev/null
 
 # Vault role -> PostgreSQL role of the service.

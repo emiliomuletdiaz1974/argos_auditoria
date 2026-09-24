@@ -11,6 +11,7 @@ from argos_ai.quotas import postgres_gateway
 from argos_ai.rag.embeddings import ServedEmbedder
 from argos_common.config import get_config
 from argos_common.logs import configure_logging
+from argos_tls import serve
 
 
 def main() -> None:  # pragma: no cover - process entry point
@@ -24,12 +25,13 @@ def main() -> None:  # pragma: no cover - process entry point
     tools = default_toolbox(cfg.DATABASE_URL, embedder)
     # Inside a container the loopback address would hide the service from the published port;
     # compose sets ARGOS_API_BIND and keeps the port on 127.0.0.1 of the host.
-    uvicorn.run(
-        create_app(gateway, tools),
-        host=os.environ.get("ARGOS_API_BIND", DEV_HOST),
-        port=DEV_PORT,
-        log_config=None,
-    )
+    app = create_app(gateway, tools)
+    host = os.environ.get("ARGOS_API_BIND", DEV_HOST)
+    if cfg.TLS_DIR:
+        # F09-06: only a client with a certificate of the internal CA gets an answer (ARG-083).
+        serve(app, host, DEV_PORT, cfg.TLS_DIR, log_config=None)
+    else:
+        uvicorn.run(app, host=host, port=DEV_PORT, log_config=None)
 
 
 if __name__ == "__main__":  # pragma: no cover

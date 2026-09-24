@@ -21,7 +21,8 @@ pytestmark = pytest.mark.integration
 
 VAULT = "http://127.0.0.1:8200"
 ROOT = "root"  # development Vault started with -dev-root-token-id=root
-DSN = "postgresql://127.0.0.1:55432/argos?service=argos&connect_timeout=5"
+CA = Path(__file__).resolve().parents[2] / "deploy" / "dev" / "secrets" / "tls-host" / "ca.crt"
+DSN = f"postgresql://127.0.0.1:55432/argos?service=argos&connect_timeout=5&sslmode=verify-full&sslrootcert={CA}"
 
 
 def _vault(method: str, path: str, body: dict[str, object] | None = None) -> None:

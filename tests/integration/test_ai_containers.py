@@ -5,18 +5,19 @@ one thing and the running network another. From the gateway, the campaign API mu
 while the database —reached through its own network and with the restricted role— must.
 """
 
-import json
 import re
 import subprocess
-import urllib.request
 from pathlib import Path
 
 import pytest
+
+from argos_tls import mtls_client
 
 pytestmark = pytest.mark.integration
 
 REPO = Path(__file__).resolve().parents[2]
 DOCKERFILE = REPO / "services" / "ai-gateway" / "Dockerfile"
+HOST_TLS = REPO / "deploy" / "dev" / "secrets" / "tls-host"
 COMPOSE = ["docker", "compose", "-f", str(REPO / "deploy" / "dev" / "compose.yaml")]
 
 
@@ -31,8 +32,10 @@ def _inside(code: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_the_gateway_answers_its_health_check() -> None:
-    with urllib.request.urlopen("http://127.0.0.1:8005/health", timeout=10) as response:  # noqa: S310
-        assert json.loads(response.read()) == {"status": "ok", "service": "argos-ai-gateway"}
+    """Over mutual TLS (F09-06): the host presents its own certificate of the internal CA."""
+    with mtls_client(HOST_TLS, timeout=10) as client:
+        response = client.get("https://localhost:8005/health")
+    assert response.json() == {"status": "ok", "service": "argos-ai-gateway"}
 
 
 def test_from_inside_the_gateway_the_api_answers_only_with_a_token() -> None:

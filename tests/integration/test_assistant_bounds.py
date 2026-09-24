@@ -8,8 +8,7 @@
 """
 
 import json
-import urllib.error
-import urllib.request
+from pathlib import Path
 from typing import Any, cast
 
 import httpx
@@ -24,6 +23,7 @@ from fastapi.testclient import TestClient
 from argos_api.app import create_app
 from argos_api.assistant import AssistantClient
 from argos_auth import Identity, JwtValidator
+from argos_tls import mtls_client
 
 pytestmark = pytest.mark.integration
 
@@ -84,14 +84,12 @@ def test_the_api_tells_the_gateway_who_asks(migrated_db: str) -> None:
 
 
 def test_the_gateway_container_starts_with_its_tools() -> None:
-    body = json.dumps({"question": "¿qué pide el RGPD?", "person": "user:ana"}).encode()
-    request = urllib.request.Request(  # noqa: S310 - the development gateway on loopback
-        "http://127.0.0.1:8005/v1/assistant/ask",
-        data=body,
-        headers={"Content-Type": "application/json"},
-    )
-    with pytest.raises(urllib.error.HTTPError) as refused:
-        urllib.request.urlopen(request, timeout=30)  # noqa: S310
-    detail = refused.value.read().decode("utf-8")
-    assert refused.value.code == 503, detail
-    assert "no assistant tools" not in detail
+    # Over mutual TLS (F09-06): the host presents its own certificate of the internal CA.
+    host_tls = Path(__file__).resolve().parents[2] / "deploy" / "dev" / "secrets" / "tls-host"
+    with mtls_client(host_tls, timeout=30) as client:
+        answer = client.post(
+            "https://localhost:8005/v1/assistant/ask",
+            json={"question": "¿qué pide el RGPD?", "person": "user:ana"},
+        )
+    assert answer.status_code == 503, answer.text
+    assert "no assistant tools" not in answer.text

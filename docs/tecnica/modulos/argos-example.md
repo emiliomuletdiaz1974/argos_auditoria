@@ -4,7 +4,7 @@ kind: module
 title: Servicio de ejemplo (argos-example)
 module: argos-example
 phases: ["01"]
-version: 0.4.0-alpha
+version: 0.5.0-alpha
 commit: de1f1d3
 date: 2026-09-23
 status: current
@@ -46,6 +46,7 @@ Aplicación FastAPI con ciclo de vida que abre el diario y monta las rutas de sa
 
 ## 6. Seguridad y tratamiento de datos
 
+- **TLS hacia PostgreSQL y NATS** (F09-06, ARG-083): el contenedor monta su propio certificado en `/run/tls`, que no monta ningún otro servicio. libpq verifica PostgreSQL (`verify-full`) y NATS exige el certificado del servicio.
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - **Base de datos con mínimo privilegio** (F09-04, ARG-085): el servicio se conecta como `login_example`, miembro del rol `svc_example` (migración `0033`), y nunca como superusuario. El rol tiene solo las tablas y operaciones que usa su código; el diario se escribe únicamente con `argos.journal_append()`. Lo comprueban `tests/integration/test_service_roles.py` (la matriz `tests/fixtures/db_access_matrix.yaml` y el usuario de cada contenedor en marcha).
 - **Credencial de base de datos efímera** (F09-05, ARG-085): el servicio entra con un usuario que Vault crea para él, miembro de ``svc_example``, válido 24 h y borrado al vencer. Lo renueva en caliente `argos_common.dynamic_db`. El AppRole con el que lo pide llega por volumen y no aparece en `docker inspect`.
@@ -72,3 +73,4 @@ Ninguna: es un servicio de referencia.
 | 0.2.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 | F09-03 |
 | 0.3.0-alpha | 2026-09-23 | Usuario de base `login_example` en `svc_example`: solo escribe el diario por su función | F09-04 (ARG-085) |
 | 0.4.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-example`), renovado en caliente | F09-05 (ARG-085) |
+| 0.5.0-alpha | 2026-09-23 | TLS verificado hacia PostgreSQL y NATS con su propio certificado | F09-06 (ARG-083) |

@@ -24,9 +24,13 @@ if ! vault list pki_int/issuers >/dev/null 2>&1; then
   CERT=$(vault write -field=certificate pki/root/sign-intermediate csr="$CSR" format=pem_bundle ttl=8760h)
   vault write pki_int/intermediate/set-signed certificate="$CERT" >/dev/null
 fi
+# ARG-083 · one certificate per service, 30 days, renewed at 20 by cert-issuer (F09-06). The bare
+# names are the services of the development compose; the domains with subdomains, those of k3s.
 vault write pki_int/roles/argos-svc \
-  allowed_domains="argos-core,argos-services,argos-edge,argos-ai" \
-  allow_subdomains=true max_ttl=720h ttl=720h >/dev/null
+  allowed_domains="argos-core,argos-services,argos-edge,argos-ai,api,webhook,challenge,evidence,ai-gateway,example,postgres,nats,vault,argos-dev,localhost" \
+  allow_subdomains=true allow_bare_domains=true allow_localhost=true allow_ip_sans=true \
+  key_type=ec key_bits=256 max_ttl=720h ttl=720h >/dev/null
+printf 'path "pki_int/issue/argos-svc" { capabilities = ["update"] }\n' | vault policy write argos-cert-issuer - >/dev/null
 
 for svc in inventory ontology challenge evidence credentials api; do
   printf 'path "argos/data/services/%s/*" { capabilities = ["read"] }\npath "pki_int/issue/argos-svc" { capabilities = ["update"] }\n' "$svc" \

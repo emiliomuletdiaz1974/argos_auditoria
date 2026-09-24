@@ -11,9 +11,10 @@ from typing import Any
 import httpx
 import nats
 import pytest
+from nats.errors import Error as NatsError
 from nats.errors import NoServersError
 
-from argos_events import Bus
+from argos_events import Bus, tls_from_environment
 
 pytestmark = pytest.mark.integration
 
@@ -54,6 +55,7 @@ async def _connect_once(**credentials: str) -> Any:
 
     connection = nats.connect(
         f"nats://{NATS_HOST}",
+        tls=tls_from_environment(),  # the certificate is valid: what is refused is the identity
         allow_reconnect=False,
         max_reconnect_attempts=0,
         connect_timeout=2,
@@ -86,9 +88,11 @@ def test_each_service_publishes_on_its_own_subjects() -> None:
     assert asyncio.run(_publish(_bus("challenge"), "argos.challenge.auth_probe")) > 0
 
 
-def test_the_inventory_consumes_discovery_with_a_durable_consumer() -> None:
-    # What the ingest does: its permissions must cover creating the consumer and acknowledging.
-    received: list[str] = []
+def test_the_inventory_cannot_create_a_consumer_that_is_not_its_own() -> None:
+    """SEC-026 (F09-06): the inventory user creates only `inventory-ingest`, on DISCOVERY.
+
+    That it may create and read its own is checked without touching it in test_mtls.py.
+    """
 
     async def run() -> None:
         consumer = _bus("inventory")
@@ -96,19 +100,16 @@ def test_the_inventory_consumes_discovery_with_a_durable_consumer() -> None:
         try:
 
             async def handle(data: dict[str, Any], event: dict[str, Any]) -> None:
-                received.append(str(event["type"]))
+                return None
 
-            await consumer.subscribe(PROBE_SUBJECT, durable="auth-probe", handler=handle)
-            await _publish(_bus("inventory"), PROBE_SUBJECT)
-            for _ in range(50):
-                if received:
-                    return
-                await asyncio.sleep(0.1)
+            await asyncio.wait_for(
+                consumer.subscribe(PROBE_SUBJECT, durable="auth-probe", handler=handle), 10
+            )
         finally:
             await consumer.close()
 
-    asyncio.run(run())
-    assert f"eu.argos.{PROBE_TYPE}" in received
+    with pytest.raises((NatsError, TimeoutError)):
+        asyncio.run(run())
 
 
 def _refused(response: httpx.Response) -> bool:

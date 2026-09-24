@@ -4,6 +4,7 @@ version = "0.1.0-alpha"
 description = "ARGOS local AI gateway (ARG-051…060)"
 requires-python = ">=3.12"
 dependencies = [
+    "argos-tls",
     "argos-challenge-engine",
     "argos-common",
     "argos-connector-sdk",
@@ -16,6 +17,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
+argos-tls = { workspace = true }
 argos-challenge-engine = { workspace = true }
 argos-common = { workspace = true }
 argos-connector-sdk = { workspace = true }

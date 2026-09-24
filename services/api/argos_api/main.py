@@ -109,7 +109,7 @@ def build_app(cfg: ArgosConfig) -> Any:
         webhook_allowed=allowed_targets(cfg),
         campaign_runner=TemporalCampaigns(cfg.TEMPORAL_ADDRESS),
         evidence=_evidence(cfg),
-        assistant=AssistantClient(gateway) if gateway else None,
+        assistant=AssistantClient(gateway, tls_dir=cfg.TLS_DIR) if gateway else None,
         webhook_secrets=VaultSecretStore(cfg.VAULT_ADDR, token),
         console=CONSOLE,
         publish_docs=cfg.ENVIRONMENT is Environment.DEVELOPMENT,

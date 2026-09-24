@@ -4,7 +4,7 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.6.0-alpha
+version: 0.7.0-alpha
 commit: de1f1d3
 date: 2026-09-23
 status: current
@@ -59,6 +59,7 @@ Dependencias externas: PostgreSQL 16 (esquema `argos`), HashiCorp Vault (kv-v2 y
 ## 5. Configuración
 
 Variables con prefijo `ARGOS_`:
+- `TLS_DIR` (F09-06, ARG-083): carpeta con el certificado, la clave y la CA interna del servicio (`argos-tls`);
 - `DATABASE_VAULT_ROLE`, `DATABASE_SERVICE_FILE` (por defecto `/tmp/argos-db/pg_service.conf`) y `VAULT_APPROLE_DIR` (F09-05): el rol del motor `db/` de Vault, dónde deja la credencial y dónde están `role_id` y `secret_id`;
 - `DATABASE_URL` (obligatoria) y `DATABASE_PASSWORD_FILE` (F09-04: fichero con la contraseña, que se añade a la cadena de conexión; es un error que la cadena ya traiga otra), `NATS_URL`, `NATS_USER`, `NATS_PASSWORD` (secreto), `TEMPORAL_ADDRESS`;
 - `OPA_URL` y `OPA_TOKEN` (secreto);
@@ -135,3 +136,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.4.0-alpha | 2026-09-23 | `DATABASE_PASSWORD_FILE`: la contraseña de la base en un fichero de secreto; `DATABASE_URL` fuera del `repr` | F09-04 (ARG-085) |
 | 0.5.0-alpha | 2026-09-23 | `journal_append` exige la forma canónica y los actores y acciones de cada rol (`argos.journal_grants`) | F09-26 (ARG-005, ARG-071) |
 | 0.6.0-alpha | 2026-09-23 | `dynamic_db`: credenciales dinámicas de Vault renovadas en caliente; `DATABASE_VAULT_ROLE`, `DATABASE_SERVICE_FILE`, `VAULT_APPROLE_DIR` | F09-05 (ARG-085) |
+| 0.7.0-alpha | 2026-09-23 | `TLS_DIR`: el certificado del servicio para el TLS mutuo | F09-06 (ARG-083) |

@@ -9,6 +9,8 @@ from typing import Any
 
 import httpx
 
+from argos_tls import ReloadingTLS
+
 ASK_PATH = "/v1/assistant/ask"
 TIMEOUT_SECONDS = 120.0
 
@@ -28,16 +30,22 @@ class AssistantClient:
         base_url: str,
         transport: httpx.AsyncBaseTransport | None = None,
         timeout: float = TIMEOUT_SECONDS,
+        tls_dir: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._transport = transport
         self._timeout = timeout
+        # F09-06: the gateway requires the API's certificate (mutual TLS, ARG-083).
+        self._tls = ReloadingTLS(server=False, cert_dir=tls_dir) if tls_dir else None
 
     async def ask(self, question: str, person: str) -> dict[str, Any]:
         """The gateway's answer; `person` is who asks, so the quota is theirs (SEC-043)."""
         try:
             async with httpx.AsyncClient(
-                base_url=self._base_url, transport=self._transport, timeout=self._timeout
+                base_url=self._base_url,
+                transport=self._transport,
+                timeout=self._timeout,
+                verify=self._tls.context() if self._tls else True,
             ) as client:
                 response = await client.post(
                     ASK_PATH, json={"question": question, "person": person}

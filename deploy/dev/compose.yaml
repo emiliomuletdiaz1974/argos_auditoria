@@ -39,13 +39,21 @@ services:
     image: argos-dev/postgres:16-age-vector
     # F09-04: nobody connects over the network without a password (postgres/pg_hba.conf). The
     # services connect as their own login users, members of the roles of migration 0033.
-    command: ["postgres", "-c", "shared_preload_libraries=age", "-c", "hba_file=/etc/postgresql/pg_hba.conf"]
+    # F09-06: TLS 1.3 only, with the certificate of cert-issuer (postgres/tls-entrypoint.sh).
+    command: ["postgres", "-c", "shared_preload_libraries=age", "-c", "hba_file=/etc/postgresql/pg_hba.conf",
+              "-c", "ssl=on", "-c", "ssl_min_protocol_version=TLSv1.3",
+              "-c", "ssl_cert_file=/var/lib/postgresql/tls/server.crt",
+              "-c", "ssl_key_file=/var/lib/postgresql/tls/server.key"]
     environment:
       POSTGRES_USER: argos
       POSTGRES_DB: argos
       POSTGRES_PASSWORD: dev-only-postgres   # the superuser, for migrations and tests from the host
     ports: ["127.0.0.1:55432:5432"]
-    volumes: ["pg-data:/var/lib/postgresql/data", "./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro"]
+    volumes: ["pg-data:/var/lib/postgresql/data", "./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro",
+              "tls-postgres:/run/tls:ro"]
+    depends_on:
+      cert-issuer:
+        condition: service_healthy
     # The AI gateway reaches the database through its own network, with the restricted role
     # `argos_ai`; it never shares a network with the campaign API (F06-01, F06-13).
     networks: [default, ai-data]
@@ -57,9 +65,14 @@ services:
   nats:
     image: nats:2.10-alpine
     # One user per service and per subject family (nats/nats.conf): nobody publishes anonymously.
-    command: ["-c", "/etc/nats/nats.conf"]
+    # F09-06: mutual TLS for every client; run.sh reloads the certificate when it is renewed.
+    entrypoint: ["sh", "/etc/nats/run.sh"]
     ports: ["127.0.0.1:4222:4222", "127.0.0.1:8222:8222"]
-    volumes: ["nats-data:/data", "./nats/nats.conf:/etc/nats/nats.conf:ro"]
+    volumes: ["nats-data:/data", "./nats/nats.conf:/etc/nats/nats.conf:ro", "./nats/run.sh:/etc/nats/run.sh:ro",
+              "tls-nats:/run/tls:ro"]
+    depends_on:
+      cert-issuer:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8222/healthz"]
       interval: 5s
@@ -102,6 +115,8 @@ services:
     command: ["server", "-dev", "-dev-root-token-id=root", "-dev-listen-address=0.0.0.0:8200"]
     cap_add: ["IPC_LOCK"]
     ports: ["127.0.0.1:8200:8200"]
+    # F09-06: the internal CA, so its database engine verifies PostgreSQL (verify-full).
+    volumes: ["tls-vault:/run/tls:ro"]
     healthcheck:
       test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
       interval: 5s
@@ -142,13 +157,16 @@ services:
       dockerfile: services/example/Dockerfile
     environment:
       # F09-05: an ephemeral user that Vault issues and the service renews (argos_common.dynamic_db).
-      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos
+      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
       ARGOS_DATABASE_VAULT_ROLE: svc-example
       ARGOS_VAULT_APPROLE_DIR: /run/secrets/approle
       PGSERVICEFILE: /tmp/argos-db/pg_service.conf   # where libpq reads the credential
+      # F09-06 (ARG-083): its certificate, key and the internal CA (the connection string verifies
+      # PostgreSQL; PGSSLMODE is not used because it would also reach the sources of the client).
+      ARGOS_TLS_DIR: /run/tls
       ARGOS_VAULT_ADDR: http://vault:8200
       ARGOS_LOG_LEVEL: INFO
-    volumes: ["./secrets/approle-example:/run/secrets/approle:ro"]
+    volumes: ["./secrets/approle-example:/run/secrets/approle:ro", "tls-example:/run/tls:ro"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -165,15 +183,18 @@ services:
       context: ../..
       dockerfile: services/challenge-engine/Dockerfile
     image: argos-challenge-engine:dev
-    volumes: ["./secrets/approle-challenge:/run/secrets/approle:ro"]
+    volumes: ["./secrets/approle-challenge:/run/secrets/approle:ro", "tls-challenge:/run/tls:ro"]
     command: ["/app/.venv/bin/python", "-m", "argos_challenges.worker"]
     environment: &challenge_engine_env
-      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos
+      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
       ARGOS_DATABASE_VAULT_ROLE: svc-challenge
       ARGOS_VAULT_APPROLE_DIR: /run/secrets/approle
       PGSERVICEFILE: /tmp/argos-db/pg_service.conf   # where libpq reads the credential
+      # F09-06 (ARG-083): its certificate, key and the internal CA (the connection string verifies
+      # PostgreSQL; PGSSLMODE is not used because it would also reach the sources of the client).
+      ARGOS_TLS_DIR: /run/tls
       ARGOS_TEMPORAL_ADDRESS: temporal:7233
-      ARGOS_NATS_URL: nats://nats:4222
+      ARGOS_NATS_URL: tls://nats:4222
       ARGOS_NATS_USER: challenge
       ARGOS_NATS_PASSWORD: dev-only-nats-challenge
       ARGOS_OPA_URL: http://opa:8181
@@ -195,6 +216,29 @@ services:
       opa:
         condition: service_started
 
+  # ── F09-06 (ARG-083): issues and renews the certificate of every ARGOS service from Vault's
+  # internal CA (30 days, renewed at 20). Each certificate goes to a volume only its service mounts.
+  cert-issuer:
+    <<: *argos-posture
+    build:   # the image of the API, which carries argos_tls
+      context: ../..
+      dockerfile: services/api/Dockerfile
+    image: argos-api:dev
+    command: ["/app/.venv/bin/python", "-m", "argos_tls.issuer"]
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_APPROLE_DIR: /run/secrets/approle
+      ARGOS_TLS_ROOT: /certs
+      ARGOS_TLS_SERVICES: "api=api;webhook=webhook;challenge=challenge;evidence=evidence;ai-gateway=ai-gateway;example=example;postgres=postgres;nats=nats;vault=vault"
+    volumes: ["./secrets/approle-cert-issuer:/run/secrets/approle:ro", "tls-api:/certs/api", "tls-webhook:/certs/webhook", "tls-challenge:/certs/challenge", "tls-evidence:/certs/evidence", "tls-ai-gateway:/certs/ai-gateway", "tls-example:/certs/example", "tls-postgres:/certs/postgres", "tls-nats:/certs/nats", "tls-vault:/certs/vault"]
+    depends_on:
+      vault:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import pathlib, sys; sys.exit(not (pathlib.Path('/certs/api/tls.crt').exists() and pathlib.Path('/certs/webhook/tls.crt').exists() and pathlib.Path('/certs/challenge/tls.crt').exists() and pathlib.Path('/certs/evidence/tls.crt').exists() and pathlib.Path('/certs/ai-gateway/tls.crt').exists() and pathlib.Path('/certs/example/tls.crt').exists() and pathlib.Path('/certs/postgres/tls.crt').exists() and pathlib.Path('/certs/nats/tls.crt').exists() and pathlib.Path('/certs/vault/tls.crt').exists()))"]
+      interval: 2s
+      retries: 60
+
   # ── The single API (ADR-0012) with the console inside (ADR-0013). The campaign API of Phase 05
   # is gone: its routes live under /api/v1. It is the only service that reaches the AI gateway. ──
   api:
@@ -203,13 +247,16 @@ services:
       context: ../..
       dockerfile: services/api/Dockerfile
     image: argos-api:dev
-    volumes: ["./secrets/approle-api:/run/secrets/approle:ro"]
+    volumes: ["./secrets/approle-api:/run/secrets/approle:ro", "tls-api:/run/tls:ro"]
     command: ["/app/.venv/bin/python", "-m", "argos_api.main"]
     environment: &api_env
-      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos
+      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
       ARGOS_DATABASE_VAULT_ROLE: svc-api
       ARGOS_VAULT_APPROLE_DIR: /run/secrets/approle
       PGSERVICEFILE: /tmp/argos-db/pg_service.conf   # where libpq reads the credential
+      # F09-06 (ARG-083): its certificate, key and the internal CA (the connection string verifies
+      # PostgreSQL; PGSSLMODE is not used because it would also reach the sources of the client).
+      ARGOS_TLS_DIR: /run/tls
       ARGOS_TEMPORAL_ADDRESS: temporal:7233
       ARGOS_VAULT_ADDR: http://vault:8200
       ARGOS_VAULT_TOKEN: root   # development Vault started with -dev-root-token-id=root
@@ -218,7 +265,7 @@ services:
       ARGOS_OIDC_ISSUER: http://keycloak:8080/realms/argos
       ARGOS_OIDC_AUDIENCE: argos-api
       # The assistant is the one thing the API asks another service for, over HTTP (ADR-0012).
-      ARGOS_AI_GATEWAY_URL: http://ai-gateway:8005
+      ARGOS_AI_GATEWAY_URL: https://ai-gateway:8005   # mutual TLS (F09-06)
       ARGOS_EVIDENCE_ISSUER_DID: did:web:127.0.0.1%3A8008
       ARGOS_EVIDENCE_STATUS_BASE_URL: http://127.0.0.1:8008/status
       ARGOS_EVIDENCE_CREDENTIAL_BASE_URL: http://127.0.0.1:8008/credentials
@@ -258,13 +305,13 @@ services:
     <<: *argos-posture
     build: *api_build
     image: argos-api:dev
-    volumes: ["./secrets/approle-webhook:/run/secrets/approle:ro"]
+    volumes: ["./secrets/approle-webhook:/run/secrets/approle:ro", "tls-webhook:/run/tls:ro"]
     command: ["/app/.venv/bin/python", "-m", "argos_api.webhooks.worker"]
     environment:
       <<: *api_env
       ARGOS_DATABASE_VAULT_ROLE: svc-webhook
       # Only the worker listens on the bus; the API itself neither publishes nor subscribes.
-      ARGOS_NATS_URL: nats://nats:4222
+      ARGOS_NATS_URL: tls://nats:4222
       ARGOS_NATS_USER: webhook
       ARGOS_NATS_PASSWORD: dev-only-nats-webhook
     depends_on:
@@ -309,15 +356,18 @@ services:
       context: ../..
       dockerfile: services/evidence/Dockerfile
     image: argos-evidence:dev
-    volumes: ["./secrets/approle-evidence:/run/secrets/approle:ro"]
+    volumes: ["./secrets/approle-evidence:/run/secrets/approle:ro", "tls-evidence:/run/tls:ro"]
     command: ["/app/.venv/bin/python", "-m", "argos_evidence.worker"]
     environment: &evidence_env
-      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos
+      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
       ARGOS_DATABASE_VAULT_ROLE: svc-evidence
       ARGOS_VAULT_APPROLE_DIR: /run/secrets/approle
       PGSERVICEFILE: /tmp/argos-db/pg_service.conf   # where libpq reads the credential
+      # F09-06 (ARG-083): its certificate, key and the internal CA (the connection string verifies
+      # PostgreSQL; PGSSLMODE is not used because it would also reach the sources of the client).
+      ARGOS_TLS_DIR: /run/tls
       ARGOS_TEMPORAL_ADDRESS: temporal:7233
-      ARGOS_NATS_URL: nats://nats:4222
+      ARGOS_NATS_URL: tls://nats:4222
       ARGOS_NATS_USER: evidence
       ARGOS_NATS_PASSWORD: dev-only-nats-evidence
       ARGOS_VAULT_ADDR: http://vault:8200
@@ -353,7 +403,7 @@ services:
     security_opt: ["no-new-privileges:true", "seccomp=../../platform/k8s/security/seccomp/evidence.json"]
     build: *evidence_build
     image: argos-evidence:dev
-    volumes: ["./secrets/approle-evidence:/run/secrets/approle:ro"]
+    volumes: ["./secrets/approle-evidence:/run/secrets/approle:ro", "tls-evidence:/run/tls:ro"]
     command: ["/app/.venv/bin/python", "-m", "argos_evidence.api"]
     environment:
       <<: *evidence_env
@@ -415,7 +465,7 @@ services:
     pull_policy: never   # built by the api service
     command: ["/app/.venv/bin/python", "-m", "argos_common.dynamic_db"]
     environment:
-      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos
+      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos   # required by the configuration; it does not connect
       ARGOS_DATABASE_VAULT_ROLE: svc-ai-gateway
       ARGOS_VAULT_APPROLE_DIR: /run/secrets/approle
       ARGOS_DATABASE_SERVICE_FILE: /run/argos-db/pg_service.conf
@@ -439,14 +489,17 @@ services:
       context: ../..
       dockerfile: services/ai-gateway/Dockerfile
     image: argos-ai-gateway:dev
-    volumes: ["ai-db-credentials:/run/argos-db:ro"]
+    volumes: ["ai-db-credentials:/run/argos-db:ro", "tls-ai-gateway:/run/tls:ro"]
     environment:
       # An ephemeral member of svc_ai_gateway: it reads what its tools use, writes its own tables
       # and appends to the journal; it cannot touch a verdict or a finding (F06-01, F09-04). The
       # gateway does not reach Vault: ai-db-credentials renews the user and leaves it in the
       # volume, where libpq reads it for every new connection (F09-05).
-      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos
+      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
       PGSERVICEFILE: /run/argos-db/pg_service.conf
+      # F09-06 (ARG-083): its certificate, key and the internal CA (the connection string verifies
+      # PostgreSQL; PGSSLMODE is not used because it would also reach the sources of the client).
+      ARGOS_TLS_DIR: /run/tls
       ARGOS_LLM_LOCAL_ENDPOINT: http://llm:8080/v1
       ARGOS_LLM_MODEL: argos-llm
       ARGOS_API_BIND: 0.0.0.0   # published below on 127.0.0.1 only
@@ -459,7 +512,7 @@ services:
         condition: service_healthy
     ports: ["127.0.0.1:8005:8005"]
     healthcheck:
-      test: ["CMD", "/app/.venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8005/health', timeout=2)"]
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import sys; from argos_tls import mtls_client; sys.exit(mtls_client('/run/tls', timeout=2).get('https://localhost:8005/health').status_code != 200)"]
       interval: 5s
       retries: 30
 
@@ -605,6 +658,25 @@ networks:
 
 volumes:
   pg-data:
+  # F09-06: one certificate volume per service, in memory; only cert-issuer and its service mount it.
+  tls-api:
+    driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
+  tls-webhook:
+    driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
+  tls-challenge:
+    driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
+  tls-evidence:
+    driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
+  tls-ai-gateway:
+    driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
+  tls-example:
+    driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
+  tls-postgres:
+    driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
+  tls-nats:
+    driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
+  tls-vault:
+    driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0755"}
   # The gateway's database credential: in memory, readable only by the container user.
   ai-db-credentials:
     driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}

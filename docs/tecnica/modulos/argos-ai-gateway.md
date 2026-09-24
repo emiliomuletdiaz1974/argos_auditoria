@@ -4,7 +4,7 @@ kind: module
 title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
-version: 0.6.0-alpha
+version: 0.7.0-alpha
 commit: de1f1d3
 date: 2026-09-23
 status: draft
@@ -189,6 +189,7 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Solo servicios con certificado** (F09-06, ARG-083): con `ARGOS_TLS_DIR`, el gateway sirve con `argos_tls.serve` y exige un certificado de la CA interna a quien llama; sin él no hay respuesta, ni siquiera `/health`. La comprobación de salud del contenedor usa su propio certificado. El nombre del servicio de `/v1/chat_json` aún llega en el cuerpo, no del certificado (pendiente).
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - Ningún dato personal validado llega al modelo: se sustituye antes por un marcador.
 - Ningún prompt se escribe en un log ni en una tabla; lo que se registra es su hash (ARG-052, `argos.ai_usage`).
@@ -301,3 +302,4 @@ La búsqueda léxica pasó además a «cualquiera de las palabras» ordenado por
 | 0.4.0-alpha | 2026-09-23 | Contenedor con la postura restringida de ARG-084 | F09-03 |
 | 0.5.0-alpha | 2026-09-23 | Usuario de base `login_ai_gateway` en `svc_ai_gateway`, sin lectura del diario completo ni de campañas (SEC-051) | F09-04 (ARG-085) |
 | 0.6.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-ai-gateway`) que renueva el contenedor acompañante `ai-db-credentials` | F09-05 (ARG-085) |
+| 0.7.0-alpha | 2026-09-23 | Servido con TLS mutuo: sin certificado de la CA interna no responde | F09-06 (ARG-083) |

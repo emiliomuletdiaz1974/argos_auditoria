@@ -54,6 +54,9 @@ class ArgosConfig(BaseSettings):
     DATABASE_VAULT_ROLE: str | None = None
     DATABASE_SERVICE_FILE: str = "/tmp/argos-db/pg_service.conf"  # noqa: S108 - tmpfs of the container
     VAULT_APPROLE_DIR: str | None = None
+    # F09-06 (ARG-083): the folder with this service's certificate, key and internal CA
+    # (tls.crt, tls.key, ca.crt). Set, the service speaks mutual TLS to the other ARGOS services.
+    TLS_DIR: str | None = None
     NATS_URL: str = "nats://127.0.0.1:4222"
     # Each service connects with its own NATS user: the server decides what it may publish.
     NATS_USER: str | None = None
