@@ -13,6 +13,8 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+from argos_common import security_log
+from argos_common.errors import IntegrityError
 from argos_common.release import (
     VaultTransitSigner,
     build_manifest,
@@ -90,8 +92,25 @@ def main() -> int:
         # The key sits beside the manifest in dist/: it is trusted only by a fingerprint kept apart.
         public_key = PUBLIC_KEY.read_bytes()
         fingerprint = args.fingerprint or os.environ.get("ARGOS_RELEASE_KEY_FINGERPRINT")
-        require_trusted_key(public_key, fingerprint)
-        verify_signature(MANIFEST.read_bytes(), SIGNATURE.read_bytes(), public_key)
+        try:
+            require_trusted_key(public_key, fingerprint)
+            verify_signature(MANIFEST.read_bytes(), SIGNATURE.read_bytes(), public_key)
+        except IntegrityError as refused:
+            # F09-08: where there is a database to record in (the appliance, the development
+            # environment), the refused release stays in the security log.
+            if os.environ.get("ARGOS_DATABASE_URL"):
+                security_log.configure(os.environ["ARGOS_DATABASE_URL"])
+            security_log.record(
+                "release.signature_rejected",
+                "system:release",
+                "refused",
+                {
+                    "version": str(json.loads(MANIFEST.read_bytes()).get("version", ""))[:40],
+                    "reason": str(refused)[:200],
+                },
+                source="argos-release",
+            )
+            raise
         print("valid signature")
     return 0
 

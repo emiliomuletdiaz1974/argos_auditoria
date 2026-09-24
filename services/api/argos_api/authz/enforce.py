@@ -13,6 +13,7 @@ import yaml
 from fastapi import HTTPException, Request, status
 
 from argos_api.auth import CurrentIdentity
+from argos_api.security_events import security_event
 from argos_auth import ROLES, Identity
 
 MATRIX_FILE = Path(__file__).with_name("permissions.yaml")
@@ -95,20 +96,50 @@ class PermissionGuard:
 
     def __call__(self, request: Request, identity: CurrentIdentity) -> Identity:
         if any(group <= identity.roles for group in INCOMPATIBLE):
+            security_event(
+                request,
+                "authz.incompatible_roles",
+                identity.actor,
+                "refused",
+                {"permission": self.permission},
+            )
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 "this identity holds incompatible roles: planning and approving are two people",
             )
         if not identity.roles & self.roles:
+            security_event(
+                request, "authz.denied", identity.actor, "refused", {"permission": self.permission}
+            )
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN, f"the permission {self.permission} is not yours"
             )
         if self.permission in SECOND_FACTOR and not identity.has_second_factor:
             # Only after the role check: the refusal says what to do, not which permission it was.
+            security_event(
+                request,
+                "authz.second_factor_required",
+                identity.actor,
+                "refused",
+                {"permission": self.permission},
+            )
             raise HTTPException(
                 status.HTTP_401_UNAUTHORIZED,
                 "this action requires signing in with a second factor",
                 {"WWW-Authenticate": STEP_UP},
+            )
+        if (
+            request.method in ("POST", "PUT", "PATCH", "DELETE")
+            and "platform_admin" in identity.roles
+            and "platform_admin" in self.roles
+        ):
+            # Every use of an administration permission, allowed, stays in the security log.
+            security_event(
+                request,
+                "authz.admin_action",
+                identity.actor,
+                "allowed",
+                {"permission": self.permission},
             )
         # The route already knows who this is; the journal entry of the core route reads it here.
         request.state.identity = identity

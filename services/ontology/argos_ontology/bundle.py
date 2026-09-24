@@ -6,6 +6,7 @@ every file with its SHA-256; the canonical manifest is signed with the content k
 the release key; nothing is loaded before the signature and every hash check out (ADR-0006).
 """
 
+import contextlib
 import gzip
 import hashlib
 import io
@@ -20,6 +21,7 @@ from typing import Any
 import psycopg
 from rdflib import Graph
 
+from argos_common import security_log
 from argos_common.errors import IntegrityError
 from argos_common.release import (
     Signer,
@@ -197,6 +199,15 @@ def _semver(version: str) -> tuple[int, ...]:
     return tuple(int(part) for part in version.split("."))
 
 
+def _refused(dsn: str, kind: str, detail: Mapping[str, str | None]) -> None:
+    """Every content that does not verify stays in the security log (F09-08); never fails itself."""
+    # The refusal itself still reaches the caller as an exception, logged or not.
+    with contextlib.suppress(psycopg.Error, OSError, ValueError):
+        security_log.log(dsn).record(
+            kind, "system:ontology", "refused", dict(detail), source="argos-ontology"
+        )
+
+
 def _newest_loaded(dsn: str) -> str | None:
     with psycopg.connect(dsn) as conn:
         rows = conn.execute("SELECT version FROM argos.ontology_bundles").fetchall()
@@ -219,10 +230,24 @@ def load_bundle(
     a version older than one already loaded is refused unless the rollback is explicit: 1.1.0 after
     1.1.1 would bring back what 1.1.1 corrected (security review F09-02, SEC-020).
     """
-    require_trusted_key(public_key, fingerprint)
-    verified = verify_bundle(bundle, signature, public_key)
+    digest = hashlib.sha256(bundle).hexdigest()
+    try:
+        require_trusted_key(public_key, fingerprint)
+        verified = verify_bundle(bundle, signature, public_key)
+    except (BundleRejectedError, IntegrityError) as refused:
+        _refused(
+            dsn,
+            "content.signature_rejected",
+            {"bundle_sha256": digest, "reason": str(refused)[:200]},
+        )
+        raise
     newest = _newest_loaded(dsn)
     if newest is not None and _semver(verified.version) < _semver(newest) and not allow_rollback:
+        _refused(
+            dsn,
+            "content.rollback_refused",
+            {"bundle_sha256": digest, "version": verified.version, "newest": newest},
+        )
         raise BundleRejectedError(
             f"bundle {verified.version} is older than {newest}, already loaded: not a rollback"
         )
@@ -250,6 +275,7 @@ def verify_on_disk(dsn: str, version: str, library_dir: Path) -> str:
     }
     differ = sorted(n for n in set(signed) | set(on_disk) if signed.get(n) != on_disk.get(n))
     if differ:
+        _refused(dsn, "content.integrity_failed", {"version": version, "files": str(len(differ))})
         raise IntegrityError(f"the content on disk is not the signed bundle {version}: {differ}")
     return sha256
 
@@ -284,6 +310,9 @@ def verify_running_policies(dsn: str, version: str, loaded: Mapping[str, str]) -
     }
     differ = sorted(n for n in set(expected) | set(running) if expected.get(n) != running.get(n))
     if differ:
+        _refused(
+            dsn, "content.policies_mismatch", {"version": version, "policies": str(len(differ))}
+        )
         raise IntegrityError(f"OPA is not running the signed bundle {version}: {differ}")
 
 

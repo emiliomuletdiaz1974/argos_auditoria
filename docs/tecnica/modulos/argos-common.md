@@ -4,7 +4,7 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.7.0-alpha
+version: 0.8.0-alpha
 commit: 4f6309a
 date: 2026-09-23
 status: current
@@ -33,6 +33,7 @@ Base compartida por todos los servicios de ARGOS: configuración validada al arr
 | `health` | Rutas uniformes `/health/live` y `/health` para servicios HTTP |
 | `ids` | Identificadores UUID v7 ordenables en el tiempo |
 | `journal` | Diario encadenado v1: canonicalización, hash y verificación independientes de la base de datos |
+| `security_log` | Registro de seguridad (F09-08): `log(dsn).record(kind, actor, outcome, detail, source=)` añade a `security.events`, una cadena propia con el algoritmo del diario v1 y otro génesis; `verify_chain(dsn)` la verifica con el verificador del diario y comprueba que las columnas coinciden con lo que cubre el hash; las ráfagas de un mismo origen se pliegan en un resumen |
 | `dynamic_db` | Credenciales dinámicas de base de datos (F09-05, ARG-085): `DynamicCredentials` pide a Vault un usuario efímero, lo escribe en el fichero de servicio de libpq y lo renueva antes de que venza; `start_from_config(cfg)` al arrancar cada servicio, o `python -m argos_common.dynamic_db` como proceso aparte |
 | `journal_pg` | Cliente PostgreSQL del diario: añadir, leer y verificar. `argos_common.PostgresJournal` se carga al primer uso, no con el paquete: importar las partes puras (hash y forma canónica del diario, errores) no arrastra el cliente de PostgreSQL, y así las usa el comprobador público (ARG-069) |
 | `migrations` | Migrador de SQL numerado con suma de control y un asiento por migración |
@@ -83,6 +84,12 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Registro de seguridad** (F09-08, ADR-0014, ENS op.exp.8):
+  - vive en el esquema `security`, con su propia cadena (génesis `ARGOS-SECURITY-GENESIS`);
+  - solo se escribe con `security.append`, que ejecutan los miembros de `svc_security_writer` (API, worker de campañas, ontología y evidencia);
+  - nadie lo actualiza, borra ni vacía;
+  - `detail` solo admite escalares cortos (identificadores y motivos, nunca contenidos);
+  - de cada combinación de tipo, resultado y origen se escriben 10 eventos por minuto y el resto se pliega en un resumen con su cuenta, así que una ráfaga no llena la base.
 - **La cadena de conexión no se imprime** (F09-04): `DATABASE_URL` no sale en el `repr` de la configuración, porque con `DATABASE_PASSWORD_FILE` lleva la contraseña. Un fichero ilegible o vacío impide arrancar sin mostrar su contenido.
 - **Diario encadenado v1** (ADR-0002):
   - cada asiento guarda la marca de tiempo y la carga en forma canónica;
@@ -137,3 +144,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.5.0-alpha | 2026-09-23 | `journal_append` exige la forma canónica y los actores y acciones de cada rol (`argos.journal_grants`) | F09-26 (ARG-005, ARG-071) |
 | 0.6.0-alpha | 2026-09-23 | `dynamic_db`: credenciales dinámicas de Vault renovadas en caliente; `DATABASE_VAULT_ROLE`, `DATABASE_SERVICE_FILE`, `VAULT_APPROLE_DIR` | F09-05 (ARG-085) |
 | 0.7.0-alpha | 2026-09-23 | `TLS_DIR`: el certificado del servicio para el TLS mutuo | F09-06 (ARG-083) |
+| 0.8.0-alpha | 2026-09-23 | `security_log`: registro de seguridad encadenado, separado del diario y con plegado de ráfagas | F09-08 |

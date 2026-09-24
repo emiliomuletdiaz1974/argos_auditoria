@@ -14,6 +14,7 @@ import psycopg
 from fastapi import APIRouter, Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.openapi.utils import get_openapi
+from fastapi.responses import PlainTextResponse
 from starlette.exceptions import HTTPException
 
 from argos_api import API_PREFIX, API_VERSION, SERVICE_NAME
@@ -29,6 +30,7 @@ from argos_api.routers import (
     evidence,
     findings,
     inventory,
+    security,
     session,
     synthetic,
     systems,
@@ -36,6 +38,7 @@ from argos_api.routers import (
 )
 from argos_api.routers.session import CodeExchanger, SessionRevoker
 from argos_api.runner import CampaignRunner
+from argos_api.security_events import security_metrics
 from argos_api.webhooks.destination import Resolver, resolve_host
 from argos_api.webhooks.store import SecretWriter
 from argos_auth import JwtValidator
@@ -57,6 +60,7 @@ AUTHENTICATED = (
     approvals.router,
     webhooks.router,
     synthetic.router,
+    security.router,
 )
 DESCRIPTION = (
     "Campaigns, inventory, findings and evidence of the ARGOS appliance. "
@@ -178,6 +182,13 @@ def create_app(
     @app.get("/health", tags=["health"], summary="Liveness of the API")
     def health() -> dict[str, str]:
         return {"status": "ok", "service": SERVICE_NAME, "version": API_VERSION}
+
+    @app.get("/metrics", include_in_schema=False)
+    def metrics() -> PlainTextResponse:
+        """What Prometheus scrapes on the internal network: the security log (F09-08)."""
+        if not dsn:
+            return PlainTextResponse("", status_code=503)
+        return PlainTextResponse(security_metrics(dsn), media_type="text/plain; version=0.0.4")
 
     # Each route declares its permission (ARG-072); the guard resolves the identity on its way.
     for router in AUTHENTICATED:

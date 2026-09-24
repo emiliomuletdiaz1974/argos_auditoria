@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.27.0-alpha
+version: 0.28.0-alpha
 commit: c922062
 date: 2026-09-23
 status: current
@@ -85,6 +85,12 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Registro de seguridad** (F09-08). La API deja en `security.events`:
+  - los tokens ausentes o rechazados (con el tipo de fallo, nunca el token);
+  - los permisos denegados, los roles incompatibles y el segundo factor exigido;
+  - cada uso permitido de un permiso de `platform_admin` que cambia algo.
+
+  Guarda la plantilla de la ruta y no la ruta concreta, que puede llevar datos del cliente. Se consulta en `GET /api/v1/security/events` (`security.read`: `platform_admin` y `read_only_auditor`), paginado por cursor. `GET /metrics` publica `argos_security_events_total{kind,outcome}` y `argos_security_chain_ok` para Prometheus, fuera del contrato v1.
 - **Segundo factor para lo que decide** (F09-07, ARG-072):
   - Qué permisos lo exigen: `permissions.yaml` los declara en `_second_factor`. Son aprobar compuertas, mover hallazgos (aceptar un riesgo incluido), emitir y revocar credenciales, autorizar un punto de inyección, decidir sobre una columna en revisión y crear integraciones.
   - Qué responde la API sin él: con un token sin `otp` en `amr`, `401` con `WWW-Authenticate: Bearer error="insufficient_user_authentication"` (RFC 9470), solo después de comprobar el rol y sin nombrar el permiso.
@@ -174,3 +180,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.25.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-api`, `svc-webhook`), renovado en caliente | F09-05 (ARG-085) |
 | 0.26.0-alpha | 2026-09-23 | Llamada al gateway de IA con TLS mutuo; PostgreSQL verificado | F09-06 (ARG-083) |
 | 0.27.0-alpha | 2026-09-23 | Segundo factor exigido a los permisos de `_second_factor` (401 con el reto de RFC 9470) | F09-07 (ARG-072) |
+| 0.28.0-alpha | 2026-09-23 | Registro de seguridad de autenticación, autorización y administración; `GET /security/events` y `/metrics` | F09-08 |

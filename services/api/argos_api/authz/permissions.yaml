@@ -63,3 +63,6 @@ assistant.ask: [platform_admin, campaign_manager, dpo_reviewer]
 
 webhooks.read: [platform_admin]
 webhooks.create: [platform_admin]
+
+# F09-08: who tried what (the security log): the administrator and the auditor, reading only.
+security.read: [platform_admin, read_only_auditor]

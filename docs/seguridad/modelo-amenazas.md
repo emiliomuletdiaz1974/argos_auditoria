@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.17 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.18 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -100,7 +100,7 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-34 | I: extraer las claves de firma | Claves | A4, A3 | Claves en TPM no exportables (hoy, Vault transit no exportable y marcado `non_production`) | ARG-064, ARG-082 | F07-15, F09-91 | pendiente de hardware | — |
 | M-35 | T: el root del sistema de ficheros toca los objetos del WORM | WORM | A3 | Cifrado del volumen y endurecimiento del sistema operativo; auditd sobre las rutas de claves | ARG-061, ARG-081, ARG-082 | F1-11a, F09-91 | pendiente de hardware | — |
 | M-36 | E: superficie del sistema operativo | Sistema operativo | A1, A3 | Imagen endurecida con el perfil CIS Level 1 (umbral 90 %), SSH solo con llave y auditd | ARG-081 | F09-14, F09-90 | pendiente de hardware | — |
-| M-37 | R: actividad maliciosa que nadie ve | Toda la plataforma | A1, A3, A8 | Registro de seguridad separado y encadenado (autenticación, denegaciones, administración, actualizaciones, esclusa) con alertas | ARG-005, ARG-072 | F09-08 | en desarrollo | — |
+| M-37 | R: actividad maliciosa que nadie ve | Toda la plataforma | A1, A3, A8 | Registro de seguridad separado y encadenado con alertas: autenticación, denegaciones, segundo factor, administración y firmas rechazadas (hecho en F09-08); actualizaciones, esclusa, diagnóstico y copias los añaden F09-10…F09-13 | ARG-005, ARG-072 | F09-08, F09-10…F09-13 | en desarrollo | — |
 | M-38 | D/T: consultas abusivas a la API del grafo | API GraphQL | A1, A8 | Etiquetas en lista blanca, prefijos acotados, paginación y profundidad máxima 4 | ARG-029 | F03-12 | implementada | `services/inventory/argos_inventory/api/schema.py`, `services/inventory/tests/test_api_http.py` |
 | M-39 | I/T: tráfico en claro hacia los sistemas del cliente | Conectores | A1 | Transporte cifrado y verificado obligatorio en SQL, ficheros, LDAPS, REST, FHIR y DICOM, salvo declaración explícita por sistema (auditoría del 2026-09-18, integrada en F09-17); SQL Server solo cuenta como cifrado con ODBC Driver 18 verificando | ARG-014, ARG-017, ARG-018, ARG-019, ARG-020 | F09-17, F09-31 | implementada | `connectors/sdk/tests/test_sdk_tls.py`, `connectors/sql/tests/test_sql_generic.py`, `connectors/rest/tests/test_rest_connector.py` |
 | M-40 | I: el material público revela algo que no debe | `evidence-api` y comprobador | A1 | Solo sirven material público; la credencial no lleva datos personales (lo comprueba un test con los validadores de ARG-024) | ARG-068, ARG-069 | F07-10 | implementada | `tests/integration/test_credential.py` |
@@ -144,3 +144,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.15 | 2026-09-23 | M-26 pasa a «implementada» con las credenciales dinámicas de F09-05 |
 | 1.16 | 2026-09-23 | M-22 pasa a «implementada» con el TLS mutuo de F09-06; M-23 avanza (solo certificados de la CA interna) y queda en desarrollo |
 | 1.17 | 2026-09-23 | M-17 y M-18 pasan a «implementada» con el segundo factor y el bloqueo de F09-07 |
+| 1.18 | 2026-09-23 | M-37 recoge el registro de seguridad de F09-08; sigue en desarrollo hasta que F09-10…F09-13 registren sus operaciones |

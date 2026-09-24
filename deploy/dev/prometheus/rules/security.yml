@@ -1,0 +1,30 @@
+# F09-08 · the alerts of the security log. The one for an expired restoration test arrives with
+# F09-12. Each one says what happened and where to look: GET /api/v1/security/events.
+groups:
+  - name: argos-security
+    rules:
+      - alert: SecurityRefusalBurst
+        # Many refused authentications or permissions in a few minutes: someone is trying.
+        expr: sum(increase(argos_security_events_total{kind=~`auth\..*|authz\..*`, outcome="refused"}[5m])) > 50
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 50 refused authentications or permissions in 5 minutes"
+          description: "Read the security log (GET /api/v1/security/events) for the origin."
+      - alert: SecurityChainBroken
+        # The security log was changed: its chain no longer verifies.
+        expr: argos_security_chain_ok == 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "The chain of the security log does not verify"
+          description: "Somebody changed the security log. Keep the database as it is and escalate."
+      - alert: SecuritySignatureRejected
+        # A release, a content bundle or the running policies did not verify.
+        expr: sum(increase(argos_security_events_total{kind=~".*signature_rejected|.*integrity_failed|.*policies_mismatch"}[15m])) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "A signature or a signed content was refused"
+          description: "A release or content that does not verify was offered to the appliance."

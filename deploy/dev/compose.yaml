@@ -134,7 +134,8 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.54.1
-    volumes: ["./prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    # F09-08: the configuration and the alert rules of the security log.
+    volumes: ["./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro", "./prometheus/rules:/etc/prometheus/rules:ro"]
     ports: ["127.0.0.1:9090:9090"]
 
   loki:

@@ -4,7 +4,7 @@ kind: module
 title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
-version: 0.3.0-alpha
+version: 0.4.0-alpha
 commit: 3bf7634
 date: 2026-09-23
 status: current
@@ -404,6 +404,12 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Rechazos en el registro de seguridad** (F09-08):
+  - un bundle con firma o clave rechazada deja `content.signature_rejected`;
+  - una vuelta atrás rechazada deja `content.rollback_refused`;
+  - el contenido en disco o las políticas en ejecución que no coinciden con lo firmado dejan `content.integrity_failed` y `content.policies_mismatch`.
+
+  Registrarlo nunca impide que el rechazo llegue a quien llamó.
 - La ontología no contiene datos personales ni del cliente: solo normas, obligaciones y su relación con clases abstractas de activo.
 - **Vocabulario cerrado:** el núcleo no puede declarar términos fuera de la lista (lo comprueba un test).
 - **Idioma** (ADR-0005): identificadores y valores en inglés; etiquetas en castellano.
@@ -519,3 +525,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.1.0-alpha | 2026-09-21 | `editorial.compiler.read_obligation`: la plantilla de una obligación (norma, artículo, título y resumen) para enseñarla junto al hallazgo | F08-06 |
 | 0.2.0-alpha | 2026-09-23 | Bundle en flujo con manifiesto primero y tope total, huella obligatoria y anti-retroceso en `load_bundle`, `publish_library` y comprobación en ejecución del disco y de OPA | F09-25 |
 | 0.3.0-alpha | 2026-09-23 | Grafo de SHACL congelado con la instantánea | F09-27 |
+| 0.4.0-alpha | 2026-09-23 | Los rechazos de contenido quedan en el registro de seguridad | F09-08 |
