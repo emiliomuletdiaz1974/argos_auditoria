@@ -1,0 +1,13 @@
+# ARG-089 (F09-12) · the daily backup, on the node of the appliance (never inside a pod: it needs
+# the orchestrator and the volumes, as the updater does). The repository and the Vault address come
+# from the environment file the installation writes.
+[Unit]
+Description=ARGOS encrypted backup (restic)
+After=network-online.target k3s.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/argos/backup.env
+ExecStart=/opt/argos/.venv/bin/python /opt/argos/platform/backup/backup.py
+Nice=10
+IOSchedulingClass=idle

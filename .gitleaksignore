@@ -23,3 +23,11 @@ efc20dff99251eb13c3d450a8a1570425870dd64:tests/integration/test_api_core.py:gene
 # Not a secret: a type annotation of the updater tests (`key: Ed25519PrivateKey = KEY`), the name
 # of a class read as a value.
 c5fd428fbf69436c3684dbcfb6a7e2f986abcf7a:services/updater/tests/test_updater_pure.py:generic-api-key:51
+
+# Not secrets: the note above and its decision record quote that same annotation.
+34fc10a476793bc5abf76f04b89712e53a073c6e:.gitleaksignore:generic-api-key:23
+34fc10a476793bc5abf76f04b89712e53a073c6e:docs/decisiones/03-plan-y-proceso.md:generic-api-key:262
+
+# Not a secret: the synthetic token the diagnostics tests plant on purpose to prove it never
+# reaches the package (F09-11).
+34fc10a476793bc5abf76f04b89712e53a073c6e:services/support/tests/test_diagnostics_pure.py:generic-api-key:32

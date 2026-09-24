@@ -1,0 +1,11 @@
+# ARG-089 (F09-12) · the monthly restore test: the last copy in a disposable PostgreSQL without
+# network, with the chains of the journal and of the security log verified. The result goes to
+# argos.restore_tests, which the alerts of Prometheus read.
+[Unit]
+Description=ARGOS restore test of the last backup
+After=argos-backup.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/argos/backup.env
+ExecStart=/opt/argos/.venv/bin/python /opt/argos/platform/backup/restore_test.py

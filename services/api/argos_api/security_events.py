@@ -75,6 +75,35 @@ def security_metrics(dsn: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+_RESTORE = (
+    "SELECT extract(epoch FROM max(tested_at) FILTER (WHERE result = 'passed')),"
+    " (array_agg(result ORDER BY tested_at DESC))[1] FROM argos.restore_tests"
+)
+
+
+def backup_metrics(dsn: str) -> str:
+    """F09-12 (ARG-089): when a restore test last passed, and whether the last one did.
+
+    A backup only exists when its restoration has been tried: with no test that passed, the
+    timestamp is 0 and the alert of a stale test fires by itself.
+    """
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(_RESTORE).fetchone()
+    passed_at, last = row or (None, None)
+    lines = [
+        "# HELP argos_backup_last_restore_test_timestamp_seconds When a restore test last passed.",
+        "# TYPE argos_backup_last_restore_test_timestamp_seconds gauge",
+        f"argos_backup_last_restore_test_timestamp_seconds {int(passed_at or 0)}",
+    ]
+    if last is not None:
+        lines += [
+            "# HELP argos_backup_last_restore_test_success 1 if the last restore test passed.",
+            "# TYPE argos_backup_last_restore_test_success gauge",
+            f"argos_backup_last_restore_test_success {int(last == 'passed')}",
+        ]
+    return "\n".join(lines) + "\n"
+
+
 def list_events(dsn: str, limit: int, after: tuple[str, str] | None = None) -> list[dict[str, Any]]:
     at, seq = after if after else (None, None)
     with psycopg.connect(dsn) as conn:

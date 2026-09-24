@@ -1,0 +1,44 @@
+# promtool test rules: the two alerts of the backup (F09-12). Run by
+# tests/integration/test_backup_restore.py with the pinned image of Prometheus.
+rule_files:
+  - /rules/backup.yml
+evaluation_interval: 1m
+tests:
+  # A test that never passed (timestamp 0) and a last test that failed.
+  - interval: 1m
+    input_series:
+      - series: argos_backup_last_restore_test_timestamp_seconds
+        values: "0x60000"
+      - series: argos_backup_last_restore_test_success
+        values: "0x60000"
+    alert_rule_test:
+      - eval_time: 1h
+        alertname: BackupRestoreTestFailed
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "The last restore test failed"
+              description: "The reasons are in argos.restore_tests; until a test passes, treat the copies as broken."
+      - eval_time: 40d
+        alertname: BackupRestoreTestStale
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "No restore test has passed in the last 35 days"
+              description: "Run make restore-test (or the monthly timer) and read argos.restore_tests."
+  # A test that passes every day: no alert.
+  - interval: 1m
+    input_series:
+      - series: argos_backup_last_restore_test_timestamp_seconds
+        values: "0+60x60000"
+      - series: argos_backup_last_restore_test_success
+        values: "1x60000"
+    alert_rule_test:
+      - eval_time: 40d
+        alertname: BackupRestoreTestStale
+        exp_alerts: []
+      - eval_time: 40d
+        alertname: BackupRestoreTestFailed
+        exp_alerts: []

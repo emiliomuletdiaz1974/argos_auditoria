@@ -48,4 +48,13 @@ vault read transit/keys/argos-content >/dev/null 2>&1 || vault write -f transit/
 # ARG-064 · campaign root signing key: Ed25519, not exportable, one per appliance (a TPM key in production)
 vault read transit/keys/argos-evidence >/dev/null 2>&1 || vault write -f transit/keys/argos-evidence type=ed25519 >/dev/null
 
+# ARG-089 · the password of the restic repository (F09-12). A fixed development value: the dev
+# Vault loses its state on restart, and a new password would leave the copies unreadable. On the
+# appliance it is generated once and kept in the raft storage of Vault (and in the sealed
+# recovery kit of the client).
+vault kv get argos/platform/backup >/dev/null 2>&1 \
+  || vault kv put argos/platform/backup restic_password=dev-only-restic-backup >/dev/null
+printf 'path "argos/data/platform/backup" { capabilities = ["read"] }\npath "db/creds/svc-backup" { capabilities = ["read"] }\npath "sys/leases/revoke" { capabilities = ["update"] }\n' \
+  | vault policy write svc-backup - >/dev/null
+
 echo "development vault configured"

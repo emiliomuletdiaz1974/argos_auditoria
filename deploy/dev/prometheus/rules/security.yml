@@ -1,5 +1,5 @@
-# F09-08 · the alerts of the security log. The one for an expired restoration test arrives with
-# F09-12. Each one says what happened and where to look: GET /api/v1/security/events.
+# F09-08 · the alerts of the security log. Those of the restore tests are in backup.yml (F09-12).
+# Each one says what happened and where to look: GET /api/v1/security/events.
 groups:
   - name: argos-security
     rules:

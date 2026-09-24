@@ -1,0 +1,23 @@
+# F09-12 (ARG-089) · a backup only exists when its restoration has been tried. The API publishes
+# when a restore test last passed and whether the last one did (argos.restore_tests); the tests
+# of these rules are in tests/backup/backup_rules_test.yml.
+groups:
+  - name: argos-backup
+    rules:
+      - alert: BackupRestoreTestStale
+        # No restore test has passed in 35 days: the monthly test did not run, or keeps failing.
+        expr: time() - argos_backup_last_restore_test_timestamp_seconds > 35 * 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No restore test has passed in the last 35 days"
+          description: "Run make restore-test (or the monthly timer) and read argos.restore_tests."
+      - alert: BackupRestoreTestFailed
+        # The last restore test failed: the copies may be unusable.
+        expr: argos_backup_last_restore_test_success == 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "The last restore test failed"
+          description: "The reasons are in argos.restore_tests; until a test passes, treat the copies as broken."

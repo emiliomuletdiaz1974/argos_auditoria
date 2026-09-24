@@ -13,7 +13,7 @@ export PGPASSWORD := dev-only-postgres
 # client, whose TLS the connectors decide source by source (F09-31).
 export ARGOS_TLS_DIR := deploy/dev/secrets/tls-host
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build sbom manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build sbom manifest backup restore-test docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -24,6 +24,8 @@ help:
 	@echo "make cover      all tests with coverage threshold (needs make dev)"
 	@echo "make check-heavy tests that need make dev-heavy"
 	@echo "make sbom       SBOM of every image and the console, grype and the vulnerability gate"
+	@echo "make backup     encrypted backup (restic) of the database, the evidence and the configuration"
+	@echo "make restore-test  restore the last backup in a disposable database and record the result"
 	@echo "make manifest   build images and write dist/release-manifest.json"
 	@echo "make docs-check     technical documentation covers every module and closed phase"
 	@echo "make ontology-gates  the five editorial gates of the ontology"
@@ -111,6 +113,16 @@ build:
 sbom: build
 	uv run python tools/sbom.py --tag $(VERSION)
 	uv run python tools/vuln_gate.py
+
+# ARG-089 (F09-12): the backup runs where Docker is. The repository of development is a local
+# folder (ignored by git); on the appliance, the S3 or SFTP of the client.
+BACKUP_REPOSITORY ?= deploy/dev/backup/repo
+
+backup:
+	uv run python platform/backup/backup.py --repository $(BACKUP_REPOSITORY)
+
+restore-test:
+	uv run python platform/backup/restore_test.py --repository $(BACKUP_REPOSITORY)
 
 manifest: sbom
 	uv run python tools/release.py build --version $(VERSION)

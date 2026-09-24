@@ -1,0 +1,10 @@
+# ARG-089 · once a month; the alert fires when no test has passed in 35 days.
+[Unit]
+Description=ARGOS monthly restore test
+
+[Timer]
+OnCalendar=*-*-01 04:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
