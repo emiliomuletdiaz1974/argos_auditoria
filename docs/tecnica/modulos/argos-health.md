@@ -5,7 +5,7 @@ title: Servicio de salud del dominio (argos-health)
 module: argos-health
 phases: ["10"]
 version: 0.1.0-alpha
-commit: pendiente
+commit: d4f31d0
 date: 2026-09-24
 status: current
 confidentiality: client
