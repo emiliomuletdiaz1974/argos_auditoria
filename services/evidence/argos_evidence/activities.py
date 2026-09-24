@@ -35,7 +35,7 @@ from argos_evidence.journal import journal_report
 from argos_evidence.roots import get_root, record_root, tree_for
 from argos_evidence.settings import EvidenceSettings
 from argos_evidence.signing import sign_campaign_root, signature_key
-from argos_evidence.tsa import Transport, process_queue, stamp_of
+from argos_evidence.tsa import Transport, accept_reply, process_queue, stamp_of
 from argos_evidence.worm import WormAlreadyStoredError, WormIntegrityError, WormStore
 
 ACTOR = "system:evidence"
@@ -71,6 +71,20 @@ class EvidenceActivities:
         from cryptography import x509
 
         return [x509.load_pem_x509_certificate(p.encode()) for p in self._roots_pem]
+
+    # ---------- isolated stamping, through the airlock (ARG-090) ----------
+
+    def queued_time_stamps(self) -> list[str]:
+        """The objects still waiting for their time stamp."""
+        with psycopg.connect(self._dsn) as conn:
+            rows = conn.execute(
+                "SELECT object_key FROM argos.tsa_queue WHERE status = 'queued' ORDER BY object_key"
+            ).fetchall()
+        return [str(row[0]) for row in rows]
+
+    def accept_time_stamp(self, object_key: str, reply: bytes) -> None:
+        """A reply brought back on removable media, verified like any other (ARG-065)."""
+        accept_reply(self._dsn, self._store, object_key, reply, self._roots(), self._until())
 
     # ---------- the steps, callable directly ----------
 

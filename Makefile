@@ -56,6 +56,7 @@ dev:
 	uv run --env-file .env.example python tools/nats_streams.py
 	uv run python tools/dev_update.py
 	uv run python tools/dev_support.py
+	uv run python tools/dev_airgap.py
 	$(COMPOSE) up -d --build --wait
 	uv run --env-file .env.example python tools/register_dev_sources.py
 	uv run python tools/seed_dev_clinical.py

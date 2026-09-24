@@ -40,6 +40,8 @@ platform_admin:
   system.update: true
   support.diagnose: true
   support.package: true
+  airgap.import: true
+  airgap.export: true
 
 campaign_manager:
   systems.read: true
@@ -67,6 +69,8 @@ campaign_manager:
   system.update: false
   support.diagnose: false
   support.package: false
+  airgap.import: false
+  airgap.export: false
 
 dpo_reviewer:
   systems.read: true
@@ -94,6 +98,8 @@ dpo_reviewer:
   system.update: false
   support.diagnose: false
   support.package: false
+  airgap.import: false
+  airgap.export: false
 
 read_only_auditor:
   systems.read: true
@@ -121,3 +127,5 @@ read_only_auditor:
   system.update: false
   support.diagnose: false
   support.package: false
+  airgap.import: false
+  airgap.export: false

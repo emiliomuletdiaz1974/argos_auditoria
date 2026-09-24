@@ -9,6 +9,7 @@ resolution-markers = [
 [manifest]
 members = [
     "argos-ai-gateway",
+    "argos-airgap",
     "argos-api",
     "argos-auth",
     "argos-challenge-engine",
@@ -95,10 +96,34 @@ requires-dist = [
 ]
 
 [[package]]
+name = "argos-airgap"
+version = "0.1.0a0"
+source = { editable = "services/airgap" }
+dependencies = [
+    { name = "argos-common" },
+    { name = "argos-evidence" },
+    { name = "argos-ontology" },
+    { name = "argos-support" },
+    { name = "argos-updater" },
+    { name = "psycopg", extra = ["binary"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-common", editable = "libs/common" },
+    { name = "argos-evidence", editable = "services/evidence" },
+    { name = "argos-ontology", editable = "services/ontology" },
+    { name = "argos-support", editable = "services/support" },
+    { name = "argos-updater", editable = "services/updater" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+]
+
+[[package]]
 name = "argos-api"
 version = "0.1.0a0"
 source = { editable = "services/api" }
 dependencies = [
+    { name = "argos-airgap" },
     { name = "argos-auth" },
     { name = "argos-challenge-engine" },
     { name = "argos-common" },
@@ -117,6 +142,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "argos-airgap", editable = "services/airgap" },
     { name = "argos-auth", editable = "libs/auth" },
     { name = "argos-challenge-engine", editable = "services/challenge-engine" },
     { name = "argos-common", editable = "libs/common" },
@@ -454,6 +480,7 @@ version = "0.1.0a0"
 source = { virtual = "." }
 dependencies = [
     { name = "argos-ai-gateway" },
+    { name = "argos-airgap" },
     { name = "argos-api" },
     { name = "argos-auth" },
     { name = "argos-challenge-engine" },
@@ -502,6 +529,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "argos-ai-gateway", editable = "services/ai-gateway" },
+    { name = "argos-airgap", editable = "services/airgap" },
     { name = "argos-api", editable = "services/api" },
     { name = "argos-auth", editable = "libs/auth" },
     { name = "argos-challenge-engine", editable = "services/challenge-engine" },

@@ -4,7 +4,7 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.12.0-alpha
+version: 0.13.0-alpha
 commit: 34fc10a
 date: 2026-09-24
 status: current
@@ -65,6 +65,7 @@ Los nombres del documento de fase (`--sev-critica`, `--verdict`…) pasan a ingl
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Esclusa** (F09-13, ARG-090): la sección «Esclusa» muestra el resultado de cada fichero que entra (importado o rechazado, motivo y SHA-256; «sin leer» cuando se rechazó sin abrirlo) y ofrece para la salida solo los tipos de la lista cerrada.
 - **Soporte** (F09-11, ARG-088): la sección «Soporte» pide el paquete de diagnóstico y muestra la nota, el índice con la huella y cada fichero tal como saldrá. La descarga exige marcar que se ha leído, y envía la huella del índice mostrado: la API solo cifra ese índice.
 - **Segundo factor bajo demanda** (F09-07):
   - Ante un `401` con `insufficient_user_authentication`, el cliente no renueva la sesión. `Session.requireSecondFactor()` guarda la página, que es una ruta y nunca un token, y vuelve a pedir el inicio de sesión con `prompt=login&acr_values=otp`.
@@ -120,3 +121,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | 0.10.0-alpha | 2026-09-23 | Botón «Salir» que revoca la sesión, y consola servida con CSP estricta | F09-30 |
 | 0.11.0-alpha | 2026-09-23 | Vuelta a iniciar sesión con segundo factor cuando la API lo pide | F09-07 (ARG-072) |
 | 0.12.0-alpha | 2026-09-24 | Sección «Soporte»: revisión del paquete de diagnóstico antes de descargarlo | F09-11 (ARG-088) |
+| 0.13.0-alpha | 2026-09-24 | Sección «Esclusa»: entrada verificada y salida de lista cerrada | F09-13 (ARG-090) |

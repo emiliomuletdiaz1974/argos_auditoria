@@ -4,7 +4,7 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.11.0-alpha
+version: 0.12.0-alpha
 commit: 34fc10a
 date: 2026-09-24
 status: current
@@ -60,6 +60,7 @@ Dependencias externas: PostgreSQL 16 (esquema `argos`), HashiCorp Vault (kv-v2 y
 ## 5. Configuración
 
 Variables con prefijo `ARGOS_`:
+- `AIRGAP_DIR` y `CONTENT_PUBLIC_KEY_FILE` (F09-13): la carpeta de la esclusa (`in/` de solo lectura, `out/` y `work/`) y la clave de contenido fijada con la que se verifica lo que entra por ella;
 - `SUPPORT_DIR` y `SUPPORT_RECIPIENT_FILE` (F09-11): la carpeta que la API comparte con el recolector de diagnóstico y la clave pública `age` del soporte;
 - `UPDATE_DIR` y `RELEASE_PUBLIC_KEY_FILE` (F09-10): la carpeta del actualizador y la clave de release fijada con la que la API verifica un paquete antes de encolarlo;
 - `TLS_DIR` (F09-06, ARG-083): carpeta con el certificado, la clave y la CA interna del servicio (`argos-tls`);
@@ -151,3 +152,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.9.0-alpha | 2026-09-23 | El manifiesto firmado lleva el SBOM y el informe de vulnerabilidades de cada imagen; `verify_release_files` | F09-09 (ARG-087) |
 | 0.10.0-alpha | 2026-09-24 | `UPDATE_DIR` y `RELEASE_PUBLIC_KEY_FILE` para las peticiones de actualización | F09-10 (ARG-086) |
 | 0.11.0-alpha | 2026-09-24 | `SUPPORT_DIR` y `SUPPORT_RECIPIENT_FILE` para el paquete de diagnóstico | F09-11 (ARG-088) |
+| 0.12.0-alpha | 2026-09-24 | `AIRGAP_DIR` y `CONTENT_PUBLIC_KEY_FILE` para la esclusa | F09-13 (ARG-090) |

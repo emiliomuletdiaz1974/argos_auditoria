@@ -5,6 +5,7 @@ import { createApiFetch } from "./api/client";
 import { ApiProvider } from "./api/context";
 import { Session } from "./auth/session";
 import { CALLBACK_PATH, oidcConfig } from "./config";
+import { AirgapView } from "./views/airgap/AirgapView";
 import { AssistantView } from "./views/assistant/AssistantView";
 import { CampaignsView } from "./views/campaigns/CampaignsView";
 import { EvidenceView } from "./views/evidence/EvidenceView";
@@ -19,6 +20,7 @@ const SECTIONS = [
   { path: "/evidence", label: "Evidencia" },
   { path: "/assistant", label: "Asistente" },
   { path: "/support", label: "Soporte" },
+  { path: "/airgap", label: "Esclusa" },
 ];
 
 type Status = "starting" | "signed-in" | "signed-out" | "failed";
@@ -130,6 +132,9 @@ function Section({ path }: { path: string }) {
   }
   if (path.startsWith("/support")) {
     return <SupportView />;
+  }
+  if (path.startsWith("/airgap")) {
+    return <AirgapView />;
   }
   return (
     <div className="panel">

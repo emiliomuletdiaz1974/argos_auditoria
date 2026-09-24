@@ -23,6 +23,7 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 
 | Paquete | Documento | Fases |
 |---|---|---|
+| `argos-airgap` | [argos-airgap.md](modulos/argos-airgap.md) | 09 |
 | `argos-api` | [argos-api.md](modulos/argos-api.md) | 08 |
 | `argos-auth` | [argos-auth.md](modulos/argos-auth.md) | 01 |
 | `argos-console` | [argos-console.md](modulos/argos-console.md) | 08 |

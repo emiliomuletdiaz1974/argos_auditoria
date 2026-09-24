@@ -34,6 +34,8 @@ _second_factor:
   - webhooks.create
   - system.update
   - support.package
+  - airgap.import
+  - airgap.export
 
 systems.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
 
@@ -77,3 +79,8 @@ system.update: [platform_admin]
 # it for support, which is what leaves the appliance, also asks for the second factor.
 support.diagnose: [platform_admin]
 support.package: [platform_admin]
+
+# F09-13 (ARG-090): the airlock of the isolated appliance. What comes in can change it and what goes
+# out leaves it: the administrator, with the second factor.
+airgap.import: [platform_admin]
+airgap.export: [platform_admin]

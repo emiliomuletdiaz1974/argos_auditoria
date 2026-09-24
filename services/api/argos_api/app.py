@@ -17,12 +17,14 @@ from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse
 from starlette.exceptions import HTTPException
 
+from argos_airgap import Gate
 from argos_api import API_PREFIX, API_VERSION, SERVICE_NAME
 from argos_api.assistant import AssistantClient
 from argos_api.authz import require_perm
 from argos_api.core import IdempotencyStore
 from argos_api.http import ERRORS, PROBLEM_MEDIA_TYPE, ProblemResponse, problem_response
 from argos_api.routers import (
+    airgap,
     approvals,
     assistant,
     campaigns,
@@ -65,6 +67,7 @@ AUTHENTICATED = (
     security.router,
     system.router,
     support.router,
+    airgap.router,
 )
 DESCRIPTION = (
     "Campaigns, inventory, findings and evidence of the ARGOS appliance. "
@@ -112,6 +115,7 @@ def create_app(
     publish_docs: bool = False,
     updates: system.UpdateRequests | None = None,
     support: support.SupportDiagnostics | None = None,
+    airgap: Gate | None = None,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
     still answer, and the tests that do not touch the database do not need one.
@@ -132,6 +136,7 @@ def create_app(
     app.state.dsn = dsn
     app.state.updates = updates
     app.state.support = support
+    app.state.airgap = airgap
     app.state.refresher = refresher
     app.state.campaign_runner = campaign_runner
     app.state.evidence = evidence

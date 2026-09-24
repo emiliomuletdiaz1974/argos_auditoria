@@ -4,9 +4,9 @@ kind: module
 title: Servicio de evidencia (argos-evidence)
 module: argos-evidence
 phases: ["07"]
-version: 0.19.0-alpha
+version: 0.20.0-alpha
 commit: 4f6309a
-date: 2026-09-23
+date: 2026-09-24
 status: current
 confidentiality: client
 ---
@@ -109,6 +109,7 @@ Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. De
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Sellado aislado por la esclusa** (F09-13): `EvidenceActivities.queued_time_stamps()` da los objetos que esperan su sello y `accept_time_stamp(object_key, reply)` verifica una respuesta traída en soporte con `accept_reply`, las raíces de confianza y la retención del servicio. La esclusa no ve ni las raíces ni el almacén.
 - **TLS hacia PostgreSQL y NATS** (F09-06, ARG-083): el contenedor monta su propio certificado en `/run/tls`, que no monta ningún otro servicio. libpq verifica PostgreSQL (`verify-full`) y NATS exige el certificado del servicio.
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp propio `platform/k8s/security/seccomp/evidence.json` (deniega por defecto y no permite nada que abra el host; `ioctl` queda por el TPM del appliance). La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - **Base de datos con mínimo privilegio** (F09-04, ARG-085): el servicio se conecta como `login_evidence`, miembro del rol `svc_evidence` (migración `0033`), y nunca como superusuario. El rol tiene solo las tablas y operaciones que usa su código; el diario se escribe únicamente con `argos.journal_append()`. Lo comprueban `tests/integration/test_service_roles.py` (la matriz `tests/fixtures/db_access_matrix.yaml` y el usuario de cada contenedor en marcha).
@@ -184,3 +185,4 @@ Usa de `argos-common` la base (`ARGOS_DATABASE_URL`), Temporal, NATS y Vault. De
 | 0.17.0-alpha | 2026-09-23 | `issued_by`: la credencial emitida desde la API asienta a la persona que la emite (SEC-030) | F09-26 (ARG-005, ARG-071) |
 | 0.18.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-evidence`), renovado en caliente | F09-05 (ARG-085) |
 | 0.19.0-alpha | 2026-09-23 | TLS verificado hacia PostgreSQL y NATS con su propio certificado | F09-06 (ARG-083) |
+| 0.20.0-alpha | 2026-09-24 | `queued_time_stamps` y `accept_time_stamp` para el sellado por la esclusa | F09-13 (ARG-090) |

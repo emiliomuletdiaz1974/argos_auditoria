@@ -17,6 +17,7 @@ deploy/dev/secrets/
 deploy/dev/update/
 deploy/dev/support/
 deploy/dev/backup/
+deploy/dev/airgap/
 .repo-map.xml
 .repo-map.stamp
 

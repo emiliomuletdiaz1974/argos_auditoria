@@ -17,6 +17,14 @@ import uvicorn
 from temporalio.client import Client
 from temporalio.service import RPCError, RPCStatusCode
 
+from argos_airgap import Gate, recorder
+from argos_airgap.exporters import (
+    credential_exporter,
+    diagnostics_exporter,
+    dossier_exporter,
+    tsq_exporter,
+)
+from argos_airgap.importers import content_importer, tsr_importer, update_importer
 from argos_api import SERVICE_NAME
 from argos_api.app import create_app
 from argos_api.assistant import AssistantClient
@@ -27,7 +35,9 @@ from argos_auth import JwtValidator
 from argos_common.config import ArgosConfig, Environment, get_config
 from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging
+from argos_common.release import key_fingerprint
 from argos_common.secret_stores import VaultSecretStore
+from argos_ontology.bundle import load_bundle
 from argos_support import DiagnosticsStore
 
 DEV_HOST = "127.0.0.1"
@@ -102,6 +112,7 @@ def build_app(cfg: ArgosConfig) -> Any:
     realm = Keycloak(cfg.OIDC_ISSUER)
     gateway = os.environ.get("ARGOS_AI_GATEWAY_URL")
     token = cfg.VAULT_TOKEN.get_secret_value() if cfg.VAULT_TOKEN else ""
+    evidence, updates, diagnostics = _evidence(cfg), _updates(cfg), _support(cfg)
     return create_app(
         JwtValidator(cfg.OIDC_ISSUER, cfg.OIDC_AUDIENCE),
         dsn=cfg.DATABASE_URL,
@@ -110,13 +121,14 @@ def build_app(cfg: ArgosConfig) -> Any:
         session_revoker=realm.logout,
         webhook_allowed=allowed_targets(cfg),
         campaign_runner=TemporalCampaigns(cfg.TEMPORAL_ADDRESS),
-        evidence=_evidence(cfg),
+        evidence=evidence,
         assistant=AssistantClient(gateway, tls_dir=cfg.TLS_DIR) if gateway else None,
         webhook_secrets=VaultSecretStore(cfg.VAULT_ADDR, token),
         console=CONSOLE,
         publish_docs=cfg.ENVIRONMENT is Environment.DEVELOPMENT,
-        updates=_updates(cfg),
-        support=_support(cfg),
+        updates=updates,
+        support=diagnostics,
+        airgap=_airgap(cfg, evidence, updates, diagnostics),
     )
 
 
@@ -139,6 +151,40 @@ def _support(cfg: ArgosConfig) -> support.SupportDiagnostics | None:
         return None
     recipient = Path(cfg.SUPPORT_RECIPIENT_FILE).read_text(encoding="utf-8").strip()
     return support.SupportDiagnostics(DiagnosticsStore(Path(cfg.SUPPORT_DIR)), recipient)
+
+
+def _airgap(
+    cfg: ArgosConfig,
+    evidence: Any,
+    updates: system.UpdateRequests | None,
+    diagnostics: support.SupportDiagnostics | None,
+) -> Gate | None:
+    """The airlock (ARG-090), with the importers and exporters this appliance has."""
+    if not cfg.AIRGAP_DIR:
+        return None
+    base, dsn = Path(cfg.AIRGAP_DIR), cfg.DATABASE_URL
+    importers: dict[str, Any] = {}
+    exporters: dict[str, Any] = {}
+    if updates is not None:
+        importers["update"] = update_importer(
+            updates.inbox, updates.queue, updates.installed, updates.release_key
+        )
+    if cfg.CONTENT_PUBLIC_KEY_FILE:
+        content_key = Path(cfg.CONTENT_PUBLIC_KEY_FILE).read_bytes()
+
+        def load(bundle: bytes, signature: bytes) -> str:
+            pinned = key_fingerprint(content_key)
+            return load_bundle(dsn, bundle, signature, content_key, fingerprint=pinned).version
+
+        importers["content"] = content_importer(load)
+    if evidence is not None:
+        importers["tsr"] = tsr_importer(evidence.queued_time_stamps, evidence.accept_time_stamp)
+        exporters["tsq"] = tsq_exporter(dsn, evidence.store)
+        exporters["dossier"] = dossier_exporter(dsn, evidence.store)
+        exporters["credential"] = credential_exporter(dsn, evidence.store)
+    if diagnostics is not None:
+        exporters["diagnostics"] = diagnostics_exporter(diagnostics.store, diagnostics.recipient)
+    return Gate(base / "in", base / "out", base / "work", importers, exporters, recorder(dsn))
 
 
 def main() -> None:  # pragma: no cover - process entry point

@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.31.0-alpha
+version: 0.32.0-alpha
 commit: b0ca1b4
 date: 2026-09-24
 status: current
@@ -85,6 +85,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Esclusa** (F09-13, ARG-090): `POST /api/v1/airgap/imports` y `POST /api/v1/airgap/exports` (`airgap.import` y `airgap.export`, solo `platform_admin` con segundo factor). La API construye la esclusa (`argos-airgap`) con los importadores y exportadores de los servicios que tiene configurados; un tipo de exportación fuera de la lista cerrada responde `403` y queda registrado. Desde la migración 0038, `svc_api` puede insertar las cuádruplas de una versión de contenido que `load_bundle` ya verificó.
 - **Pruebas de restauración** (F09-12, ARG-089): `/metrics` publica `argos_backup_last_restore_test_timestamp_seconds` (cuándo pasó la última prueba; 0 si nunca) y `argos_backup_last_restore_test_success` (si la última pasó), leídas de `argos.restore_tests`. Las alertas `BackupRestoreTestStale` y `BackupRestoreTestFailed` las usan (ver `docs/seguridad/backup-restauracion.md`).
 - **Paquete de diagnóstico** (F09-11, ARG-088): `POST /api/v1/support/diagnostics` encola la petición para el recolector; `GET /api/v1/support/diagnostics/{id}` muestra la vista previa en claro (índice y cada fichero), y `POST …/{id}/package` la cifra para la clave del soporte (`ARGOS_SUPPORT_RECIPIENT_FILE`) solo si la huella del índice es la que el operador aprobó y ningún fichero cambió. Pedir y leer exige `support.diagnose`; cifrar, `support.package` con segundo factor. Solo `platform_admin`. La API no recoge nada: lo hace `argos-support` junto al orquestador (ver `argos-support.md`).
 - **Petición de actualización** (F09-10, ARG-086): `POST /api/v1/system/updates` (`system.update`, solo `platform_admin` con segundo factor) verifica el paquete de la bandeja con la clave de release fijada (`ARGOS_RELEASE_PUBLIC_KEY_FILE`) y lo encola en `ARGOS_UPDATE_DIR/queue`. No aplica nada: lo hace el actualizador (`argos-updater`). Un nombre de paquete que saldría de la bandeja se rechaza.
@@ -187,3 +188,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.29.0-alpha | 2026-09-24 | `POST /system/updates`: verificar y encolar una actualización | F09-10 (ARG-086) |
 | 0.30.0-alpha | 2026-09-24 | Rutas `/support/diagnostics`: pedir, revisar y cifrar el paquete de diagnóstico | F09-11 (ARG-088) |
 | 0.31.0-alpha | 2026-09-24 | Métricas de las pruebas de restauración en `/metrics` | F09-12 (ARG-089) |
+| 0.32.0-alpha | 2026-09-24 | Rutas `/airgap/imports` y `/airgap/exports`, e inserción de cuádruplas de contenido verificado | F09-13 (ARG-090) |

@@ -65,6 +65,10 @@ class ArgosConfig(BaseSettings):
     # the age public key of support. Unset: the API offers no diagnostic packages.
     SUPPORT_DIR: str | None = None
     SUPPORT_RECIPIENT_FILE: str | None = None
+    # F09-13 (ARG-090): the airlock (in/ read-only, out/ and work/) and the content key pinned
+    # to verify normative bundles that come in through it. Unset: no airlock.
+    AIRGAP_DIR: str | None = None
+    CONTENT_PUBLIC_KEY_FILE: str | None = None
     NATS_URL: str = "nats://127.0.0.1:4222"
     # Each service connects with its own NATS user: the server decides what it may publish.
     NATS_USER: str | None = None

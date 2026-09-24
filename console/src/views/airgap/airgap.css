@@ -1,0 +1,29 @@
+/* ARG-090 · the airlock screen. Colours only through the tokens. */
+.airgap-view > .panel {
+  margin-bottom: 16px;
+}
+
+.airgap-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+}
+
+.airgap-table caption {
+  text-align: left;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.airgap-table th,
+.airgap-table td {
+  text-align: left;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.airgap-hash {
+  word-break: break-all;
+  font-family: ui-monospace, monospace;
+}
