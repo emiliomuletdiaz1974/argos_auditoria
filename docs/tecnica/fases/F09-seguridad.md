@@ -4,7 +4,7 @@ kind: phase
 title: Fase 09 · Seguridad de plataforma
 phase: "09"
 version: 0.1.0-alpha
-commit: pendiente
+commit: 0d9c9ed
 date: 2026-09-24
 status: current
 confidentiality: client
