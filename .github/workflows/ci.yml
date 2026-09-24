@@ -76,14 +76,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: make build
-      - name: sbom
-        run: |
-          mkdir -p dist/sbom
-          for image in argos-example argos-challenge-engine argos-ai-gateway; do
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/dist/sbom:/out" \
-              anchore/syft:v1.14.0 "$image:$(cat VERSION)" -o spdx-json="/out/$image.spdx.json"
-          done
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked
+      # ARG-087 (F09-09): the grype database is downloaded once a day and kept between runs.
+      - id: day
+        run: echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: /home/runner/.cache/grype
+          key: grype-db-${{ steps.day.outputs.date }}
+          restore-keys: grype-db-
+      # SBOM (CycloneDX) of every image and of the console, grype over each, and the gate.
+      - run: make sbom
+        env:
+          ARGOS_GRYPE_CACHE: /home/runner/.cache/grype
       - uses: actions/upload-artifact@v4
         with: { name: sbom, path: dist/sbom }
 

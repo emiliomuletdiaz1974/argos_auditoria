@@ -21,6 +21,7 @@ from argos_common.release import (
     key_fingerprint,
     require_trusted_key,
     serialize,
+    verify_release_files,
     verify_signature,
 )
 
@@ -95,6 +96,8 @@ def main() -> int:
         try:
             require_trusted_key(public_key, fingerprint)
             verify_signature(MANIFEST.read_bytes(), SIGNATURE.read_bytes(), public_key)
+            # F09-09: the SBOMs and vulnerability reports beside it, covered by its hashes.
+            verify_release_files(json.loads(MANIFEST.read_bytes()), DIST / "sbom")
         except IntegrityError as refused:
             # F09-08: where there is a database to record in (the appliance, the development
             # environment), the refused release stays in the security log.

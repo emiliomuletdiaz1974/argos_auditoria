@@ -4,7 +4,7 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.8.0-alpha
+version: 0.9.0-alpha
 commit: d47decd
 date: 2026-09-23
 status: current
@@ -54,7 +54,7 @@ Dependencias externas: PostgreSQL 16 (esquema `argos`), HashiCorp Vault (kv-v2 y
 | Funciones | `canonicalize`, `compute_hash`, `verify_entries`, `require_integrity` | Recalculan y verifican la cadena sin confiar en la base de datos |
 | Función | `apply_migrations(dsn, directory)` | Aplica migraciones `NNNN_nombre.sql` bajo bloqueo consultivo; `tools/migrate.py` |
 | Clases | `VaultSecretStore(url, token, mount)`, `EncryptedFileSecretStore`, `TpmSecretStore` | Lectura de secretos por ruta |
-| Funciones y clases | `build_manifest`, `serialize`, `VaultTransitSigner`, `verify_signature`, `key_fingerprint`, `require_trusted_key` | Manifiesto de release firmado; `tools/release.py build`, `sign` y `verify` (este exige `--fingerprint` o `ARGOS_RELEASE_KEY_FINGERPRINT`, porque la clave vive junto al manifiesto en `dist/`) |
+| Funciones y clases | `build_manifest`, `serialize`, `VaultTransitSigner`, `verify_signature`, `verify_release_files`, `key_fingerprint`, `require_trusted_key` | Manifiesto de release firmado; `tools/release.py build`, `sign` y `verify` (este exige `--fingerprint` o `ARGOS_RELEASE_KEY_FINGERPRINT`, porque la clave vive junto al manifiesto en `dist/`) |
 | Tabla | `argos.audit_journal` y función `argos.journal_append` (migración `0001_core.sql`; permisos y comprobación de forma canónica en `0034_journal_grants.sql`) | Diario de auditoría |
 
 ## 5. Configuración
@@ -105,6 +105,7 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
   - un secreto inaccesible y uno inexistente producen el mismo error, para no revelar su existencia.
 - **Release:**
   - el manifiesto exige imágenes fijadas por digest;
+  - **SBOM y vulnerabilidades bajo la firma** (F09-09, ARG-087): cada imagen lleva en el manifiesto el SHA-256 de su SBOM CycloneDX (`<imagen>.cdx.json`) y de su informe de grype (`<imagen>.vulns.json`); una imagen sin ellos no se publica, y `verify_release_files` comprueba que los ficheros del paquete son los que la firma cubre;
   - se firma con una clave Ed25519 no exportable en Vault Transit;
   - la verificación es posible sin conexión, solo con la clave pública.
 - **Decisiones aplicables:** ADR-0001, ADR-0002, ADR-0003 y ADR-0005; notas de desviación ARG-005 y ARG-010.
@@ -145,3 +146,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.6.0-alpha | 2026-09-23 | `dynamic_db`: credenciales dinámicas de Vault renovadas en caliente; `DATABASE_VAULT_ROLE`, `DATABASE_SERVICE_FILE`, `VAULT_APPROLE_DIR` | F09-05 (ARG-085) |
 | 0.7.0-alpha | 2026-09-23 | `TLS_DIR`: el certificado del servicio para el TLS mutuo | F09-06 (ARG-083) |
 | 0.8.0-alpha | 2026-09-23 | `security_log`: registro de seguridad encadenado, separado del diario y con plegado de ráfagas | F09-08 |
+| 0.9.0-alpha | 2026-09-23 | El manifiesto firmado lleva el SBOM y el informe de vulnerabilidades de cada imagen; `verify_release_files` | F09-09 (ARG-087) |

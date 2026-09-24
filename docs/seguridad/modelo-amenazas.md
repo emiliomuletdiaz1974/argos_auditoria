@@ -1,6 +1,6 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.18 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
+**Versión:** 1.19 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
 **Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
@@ -92,7 +92,7 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-26 | E/I: una credencial de base de datos robada sirve para todo | PostgreSQL | A2, A3 | Un rol por servicio con mínimo privilegio y SCRAM en toda conexión por red; usuarios efímeros de Vault (24 h, máximo 72 h) que el servicio renueva en caliente y Vault borra al vencer; el administrador de Vault no es el superusuario y solo Vault conoce su contraseña | ARG-085 | F09-04, F09-05 | implementada | `platform/vault/database-engine.sh`, `libs/common/argos_common/dynamic_db.py`, `tests/integration/test_dynamic_credentials.py` |
 | M-27 | T: aplicar una actualización manipulada o antigua | Actualizador | A5, A3 | Firma del manifiesto y digests verificados antes de tocar nada, anti-retroceso, aplicación transaccional con plan inverso | ARG-086, ARG-010 | F09-10 | en desarrollo | — |
 | M-28 | T: cargar contenido normativo manipulado | Ontología | A5 | Bundle determinista firmado con clave propia, leído en flujo con tope y verificado antes de cargar con la huella fijada y sin retroceso; cada campaña comprueba que el disco del worker y las políticas cargadas en OPA son las firmadas en vigor | ARG-040 | F04-04, F09-25 | implementada | `services/ontology/argos_ontology/bundle.py`, `tests/integration/test_opa_signed_policies.py`, `tests/integration/test_challenge_activities.py` |
-| M-29 | T: dependencia o imagen vulnerable o manipulada | CI y release | A5 | Lockfiles, SBOM CycloneDX dentro del manifiesto firmado y puerta de vulnerabilidades con excepciones que caducan | ARG-087 | F09-09 | en desarrollo | — |
+| M-29 | T: dependencia o imagen vulnerable o manipulada | CI y release | A5 | Lockfiles; SBOM CycloneDX de cada imagen y de la consola con syft fijado por digest; puerta de vulnerabilidades (grype) con excepciones que caducan; el SHA-256 de cada SBOM e informe dentro del manifiesto firmado; Kyverno solo admite imágenes firmadas por digest (se aplica en F09-92) | ARG-087 | F09-09 | implementada | `tools/vuln_gate.py`, `tools/sbom.py`, `tests/tools/test_vuln_gate.py`, `libs/common/tests/test_release.py` |
 | M-30 | E: acceso remoto del soporte | Canal de soporte | A6 | No existe canal remoto; paquete de diagnóstico sin datos de negocio que el operador revisa antes de enviarlo, cifrado para el soporte | ARG-088 | F09-11 | en desarrollo | — |
 | M-31 | D: pérdida de datos por borrado, cifrado malicioso o avería | Almacenes | A3 | Backup cifrado de extremo a extremo con prueba de restauración fechada que verifica la cadena del diario | ARG-089 | F09-12 | en desarrollo | — |
 | M-32 | T: material que entra o sale por soporte físico | Esclusa | A5, A3 | Importadores que verifican la firma de cada tipo antes de aplicar; exportación de lista cerrada; todo al diario | ARG-090 | F09-13 | en desarrollo | — |
@@ -145,3 +145,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.16 | 2026-09-23 | M-22 pasa a «implementada» con el TLS mutuo de F09-06; M-23 avanza (solo certificados de la CA interna) y queda en desarrollo |
 | 1.17 | 2026-09-23 | M-17 y M-18 pasan a «implementada» con el segundo factor y el bloqueo de F09-07 |
 | 1.18 | 2026-09-23 | M-37 recoge el registro de seguridad de F09-08; sigue en desarrollo hasta que F09-10…F09-13 registren sus operaciones |
+| 1.19 | 2026-09-23 | M-29 pasa a «implementada» con el SBOM y la puerta de vulnerabilidades de F09-09 |

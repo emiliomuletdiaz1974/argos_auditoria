@@ -1,0 +1,42 @@
+# ARG-087 · only the images ARGOS signed run on the appliance, and only by digest (F09-09).
+#
+# Kyverno verifies the signature of every image of the ARGOS namespaces against the public key of
+# the release, replaces a tag with the digest it verified (mutateDigest) and refuses an image given
+# by tag alone (verifyDigest). The key is the public half of the release key (transit/argos-release);
+# the registry is the one of the appliance, loaded offline by the updater (ARG-086).
+#
+# Validated statically by tests/security/test_k8s_manifests.py; applying it is F09-92.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: argos-verify-images
+  annotations:
+    policies.kyverno.io/title: Signed ARGOS images by digest
+    policies.kyverno.io/description: >-
+      Every image in the ARGOS namespaces must be signed with the release key and is run by the
+      digest that was verified.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  webhookTimeoutSeconds: 30
+  rules:
+    - name: argos-images-signed
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [argos-core, argos-services, argos-ai, argos-connect]
+      verifyImages:
+        - imageReferences:
+            - "registry.argos.local/argos-*"
+          mutateDigest: true
+          verifyDigest: true
+          required: true
+          attestors:
+            - entries:
+                - keys:
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      REPLACED-AT-INSTALLATION-WITH-THE-RELEASE-KEY
+                      -----END PUBLIC KEY-----
+                    signatureAlgorithm: sha256

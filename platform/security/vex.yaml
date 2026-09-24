@@ -1,0 +1,24 @@
+# ARG-087 · exceptions to the vulnerability gate (tools/vuln_gate.py, F09-09).
+#
+# Each one lets a finding of the grype reports through while it is in force, and says why. It
+# needs the vulnerability, the package (and optionally the component, the SBOM it applies to), the
+# justification, who granted it and when it expires. An expired exception breaks the gate: whoever
+# granted it looks again, and either renews it with a new reason or the package is updated.
+exceptions:
+  # SEC-057 (security review F09-02): GHSA-82fw-gwwq-j7x9, moderate, in vitest and @vitest/mocker
+  # < 4.1.11, the test runner of the console (a mocked path could read a file of the test machine).
+  # vitest is a development dependency and does not travel in the image, which carries only the
+  # built files of the console. The fix is a major update (npm proposes vitest 5, with vite 7).
+  # Moderate findings do not block; the exceptions give the decision a date to be revisited.
+  - id: GHSA-82fw-gwwq-j7x9
+    package: vitest
+    component: console
+    justification: "Development dependency of the console tests; not in the built image. Fixed from vitest 4.1.11: update with the console tooling."
+    author: "equipo de plataforma"
+    expires: 2026-12-31
+  - id: GHSA-82fw-gwwq-j7x9
+    package: "@vitest/mocker"
+    component: console
+    justification: "Part of vitest (see the entry above): development only, not in the built image."
+    author: "equipo de plataforma"
+    expires: 2026-12-31

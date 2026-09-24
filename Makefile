@@ -13,7 +13,7 @@ export PGPASSWORD := dev-only-postgres
 # client, whose TLS the connectors decide source by source (F09-31).
 export ARGOS_TLS_DIR := deploy/dev/secrets/tls-host
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build sbom manifest docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -23,6 +23,7 @@ help:
 	@echo "make check      lint + typecheck + secrets + all tests (needs make dev)"
 	@echo "make cover      all tests with coverage threshold (needs make dev)"
 	@echo "make check-heavy tests that need make dev-heavy"
+	@echo "make sbom       SBOM of every image and the console, grype and the vulnerability gate"
 	@echo "make manifest   build images and write dist/release-manifest.json"
 	@echo "make docs-check     technical documentation covers every module and closed phase"
 	@echo "make ontology-gates  the five editorial gates of the ontology"
@@ -94,12 +95,22 @@ check-heavy:
 cover:
 	uv run pytest -m "not heavy" --cov=argos_common --cov=argos_events --cov=argos_auth --cov=argos_connector --cov=argos_sql --cov=argos_files --cov=argos_rest --cov=argos_ldap --cov=argos_dicom --cov=argos_fhir --cov=argos_inventory --cov=argos_ontology --cov-report=term-missing --cov-fail-under=80
 
+# Every image of ARGOS (F09-09: the release lists all of them, each with its SBOM).
 build:
 	docker build -f services/example/Dockerfile --label org.argos.component=ARG-001 --label org.argos.version=$(VERSION) -t argos-example:$(VERSION) .
 	docker build -f services/challenge-engine/Dockerfile --label org.argos.component=ARG-043 --label org.argos.version=$(VERSION) -t argos-challenge-engine:$(VERSION) .
 	docker build -f services/ai-gateway/Dockerfile --label org.argos.component=ARG-052 --label org.argos.version=$(VERSION) -t argos-ai-gateway:$(VERSION) .
+	docker build -f services/api/Dockerfile --label org.argos.component=ARG-071 --label org.argos.version=$(VERSION) -t argos-api:$(VERSION) .
+	docker build -f services/evidence/Dockerfile --label org.argos.component=ARG-061 --label org.argos.version=$(VERSION) -t argos-evidence:$(VERSION) .
+	docker build -f services/verifier/Dockerfile --label org.argos.component=ARG-069 --label org.argos.version=$(VERSION) -t argos-verifier:$(VERSION) .
 
-manifest: build
+# ARG-087: the SBOM of every image and of the console, grype over each, and the gate. It downloads
+# the grype database, so it is not part of `make check`.
+sbom: build
+	uv run python tools/sbom.py --tag $(VERSION)
+	uv run python tools/vuln_gate.py
+
+manifest: sbom
 	uv run python tools/release.py build --version $(VERSION)
 
 docs-check:

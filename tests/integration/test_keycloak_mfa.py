@@ -12,6 +12,7 @@ import hashlib
 import html
 import re
 import secrets
+import subprocess
 import urllib.error
 from pathlib import Path
 
@@ -192,13 +193,20 @@ def test_five_wrong_passwords_lock_the_account() -> None:
 def test_the_development_totp_secret_lives_only_in_the_development_realm() -> None:
     secret = totp_secret("dpo.test")
     assert secret is not None and secret.startswith("dev-only-")
+    # The files of the repository, versioned or about to be: ignored ones (dist/, .venv, the
+    # regenerated map of the repository) are not published and may copy anything.
+    listed = subprocess.run(  # noqa: S603 - fixed command
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],  # noqa: S607
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
     found = []
-    for path in REPO.rglob("*"):
-        parts = set(path.parts)
-        if not path.is_file() or parts & {".git", ".venv", "node_modules", ".scratch", "dist"}:
-            continue
-        if path.suffix in {".png", ".pdf", ".pyc", ".gguf"}:
+    for name in listed:
+        path = REPO / name
+        if not path.is_file() or path.suffix in {".png", ".pdf", ".pyc", ".gguf"}:
             continue
         if secret in path.read_text(encoding="utf-8", errors="ignore"):
-            found.append(path.relative_to(REPO).as_posix())
+            found.append(name)
     assert found == [REALM_FILE.relative_to(REPO).as_posix()]

@@ -1,5 +1,6 @@
 """Canonical release manifest and offline signature verification (ARG-010)."""
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -12,6 +13,7 @@ from argos_common.release import (
     key_fingerprint,
     require_trusted_key,
     serialize,
+    verify_release_files,
     verify_signature,
 )
 
@@ -37,15 +39,57 @@ def test_requires_images_pinned_by_digest() -> None:
         )
 
 
+def _sboms(folder: Path, *names: str) -> None:
+    for name in names:
+        (folder / f"{name}.cdx.json").write_text(f'{{"sbom": "{name}"}}', encoding="utf-8")
+        (folder / f"{name}.vulns.json").write_text(f'{{"matches": "{name}"}}', encoding="utf-8")
+
+
 def test_includes_the_hash_of_each_sbom(tmp_path: Path) -> None:
-    (tmp_path / "argos-api.spdx.json").write_text("{}", encoding="utf-8")
+    _sboms(tmp_path, "argos-example")
+    (tmp_path / "console.cdx.json").write_text("{}", encoding="utf-8")
     m = build_manifest("0.1.0", [IMG_A], tmp_path, BUILT_AT)
-    assert m["sboms"] == [
-        {
-            "file": "argos-api.spdx.json",
-            "sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-        }
-    ]
+    files = {entry["file"] for entry in m["sboms"]}
+    assert files == {"argos-example.cdx.json", "argos-example.vulns.json", "console.cdx.json"}
+    console = next(e for e in m["sboms"] if e["file"] == "console.cdx.json")
+    assert console["sha256"] == "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+
+
+# --- F09-09 (ARG-087): the SBOM and the vulnerability report of each image, under the signature ---
+
+
+def test_each_image_carries_the_hash_of_its_sbom_and_its_vulnerabilities(tmp_path: Path) -> None:
+    _sboms(tmp_path, "argos-example", "argos-api")
+    m = build_manifest("0.1.0", [IMG_A, IMG_B], tmp_path, BUILT_AT)
+    for image in m["images"]:
+        name = image["ref"].split(":")[0]
+        sbom = (tmp_path / f"{name}.cdx.json").read_bytes()
+        vulns = (tmp_path / f"{name}.vulns.json").read_bytes()
+        assert image["sbom_sha256"] == hashlib.sha256(sbom).hexdigest()
+        assert image["vulns_sha256"] == hashlib.sha256(vulns).hexdigest()
+
+
+def test_an_image_without_its_sbom_is_not_released(tmp_path: Path) -> None:
+    _sboms(tmp_path, "argos-example")
+    with pytest.raises(ValueError, match="argos-api"):
+        build_manifest("0.1.0", [IMG_A, IMG_B], tmp_path, BUILT_AT)
+
+
+def test_the_files_of_the_bundle_are_the_ones_the_manifest_signed(tmp_path: Path) -> None:
+    _sboms(tmp_path, "argos-example")
+    manifest = build_manifest("0.1.0", [IMG_A], tmp_path, BUILT_AT)
+    verify_release_files(manifest, tmp_path)
+    (tmp_path / "argos-example.cdx.json").write_text('{"sbom": "changed"}', encoding="utf-8")
+    with pytest.raises(IntegrityError, match="argos-example.cdx.json"):
+        verify_release_files(manifest, tmp_path)
+
+
+def test_a_file_the_manifest_lists_must_be_in_the_bundle(tmp_path: Path) -> None:
+    _sboms(tmp_path, "argos-example")
+    manifest = build_manifest("0.1.0", [IMG_A], tmp_path, BUILT_AT)
+    (tmp_path / "argos-example.vulns.json").unlink()
+    with pytest.raises(IntegrityError, match="missing"):
+        verify_release_files(manifest, tmp_path)
 
 
 def test_valid_signature() -> None:

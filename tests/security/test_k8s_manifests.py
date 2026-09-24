@@ -129,3 +129,25 @@ def test_every_certificate_lives_30_days_renews_at_20_and_serves_both_roles() ->
         assert spec["privateKey"]["algorithm"] == "ECDSA"
         assert spec["privateKey"]["rotationPolicy"] == "Always", "a new key on every renewal"
         assert spec["secretName"] == f"tls-{cert['metadata']['name']}"
+
+
+# --- ARG-087 (F09-09): only signed images of ARGOS, by digest ---
+
+
+def test_the_appliance_admits_only_signed_images_pinned_by_digest() -> None:
+    documents = yaml.safe_load_all((SECURITY / "verify-images.yaml").read_text(encoding="utf-8"))
+    [policy] = [d for d in documents if d and d.get("kind") == "ClusterPolicy"]
+    assert policy["spec"]["validationFailureAction"] == "Enforce"
+    [rule] = policy["spec"]["rules"]
+    kinds = rule["match"]["any"][0]["resources"]["kinds"]
+    assert "Pod" in kinds
+    namespaces = set(rule["match"]["any"][0]["resources"]["namespaces"])
+    assert namespaces == NAMESPACES
+    [verify] = rule["verifyImages"]
+    assert verify["mutateDigest"] is True, "a tag becomes the digest that was verified"
+    assert verify["verifyDigest"] is True, "and nothing runs by tag"
+    assert verify["required"] is True
+    assert all(ref.startswith("registry.argos.local/") for ref in verify["imageReferences"])
+    [attestor] = verify["attestors"]
+    [key] = attestor["entries"]
+    assert "publicKeys" in key["keys"], "signed with the release key, verified offline"
