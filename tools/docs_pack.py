@@ -4,11 +4,16 @@ Usage:
   uv run python tools/docs_pack.py --check
   uv run python tools/docs_pack.py --phase 03 --label hospital-x [--module NAME] [--all]
                                    [--include-internal] [--no-pdf] [--output DIR]
+  uv run python tools/docs_pack.py --security --label hospital-x [--sbom DIR]
 
 Every uv workspace member needs docs/tecnica/modulos/<name>.md and every closed phase (one that
 published docs/fases/interfaces-FNN.md) needs docs/tecnica/fases/FNN-*.md, both listed in
 docs/tecnica/README.md. A pack copies the selected documents (client ones only, unless asked),
 renders them to PDF and writes an index and a manifest with the SHA-256 of every file.
+
+The security pack (F09-16) takes the documents of docs/seguridad (the dossier included), each
+marked `client` or `internal` in its header, and the SBOM and vulnerability reports of the last
+release (dist/sbom), copied as they are.
 """
 
 import argparse
@@ -174,11 +179,19 @@ def _index(docs: list[TechnicalDoc], label: str, date: str) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _pdf(markdown: str, title: str, target: Path) -> None:
+# The security dossier is tables of five or six columns: landscape and a smaller font keep the
+# last column on the page (seen in the first PDF of F09-16, where the notes were cut off).
+WIDE_CSS = "table { font-size: 8pt; } td, th { padding: 2px 4px; } code { font-size: 7pt; }"
+
+
+def _pdf(markdown: str, title: str, target: Path, wide: bool = False) -> None:
     from markdown_pdf import MarkdownPdf, Section
 
     document = MarkdownPdf(toc_level=2)
-    document.add_section(Section(markdown))
+    if wide:
+        document.add_section(Section(markdown, paper_size="A4-L"), user_css=WIDE_CSS)
+    else:
+        document.add_section(Section(markdown))
     document.meta["title"] = title
     document.save(str(target))
 
@@ -206,6 +219,73 @@ def build_pack(
     return pack
 
 
+SECURITY_DIR = Path("docs") / "seguridad"
+SECURITY_MARK = re.compile(r"\*\*Confidencialidad:\*\* `(client|internal)`")
+
+
+def _security_docs(root: Path) -> list[tuple[str, str, str, str]]:
+    """(relative name, title, confidentiality, text) of every document of docs/seguridad."""
+    base = root / SECURITY_DIR
+    found = []
+    for path in sorted(base.rglob("*.md")):
+        text = path.read_text(encoding="utf-8").replace("\r\n", "\n")
+        mark = SECURITY_MARK.search(text[:1000])
+        if mark is None:
+            raise ValueError(f"{path.name}: the header does not say its confidentiality")
+        title = next((line[2:] for line in text.splitlines() if line.startswith("# ")), path.stem)
+        found.append((path.relative_to(base).as_posix(), title, mark.group(1), text))
+    return found
+
+
+def build_security_pack(
+    root: Path,
+    output: Path,
+    label: str,
+    date: str,
+    pdf: bool = True,
+    include_internal: bool = False,
+    sbom_dir: Path | None = None,
+) -> Path:
+    """The security dossier for an organisation: documents, SBOM, index and manifest."""
+    if not re.fullmatch(r"[a-z0-9-]+", label):
+        raise ValueError("label must be lowercase letters, digits and hyphens")
+    documents = [doc for doc in _security_docs(root) if doc[2] == "client" or include_internal]
+    pack = output / f"{date}-seguridad-{label}"
+    pack.mkdir(parents=True, exist_ok=True)
+    hashes: dict[str, str] = {}
+    for name, title, _, text in documents:
+        target = pack / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8", newline="\n")
+        hashes[name] = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        if pdf:
+            _pdf(text, title, target.with_suffix(".pdf"), wide=True)
+    for report in sorted(sbom_dir.glob("*.json")) if sbom_dir and sbom_dir.is_dir() else []:
+        data = report.read_bytes()
+        (pack / "sbom").mkdir(exist_ok=True)
+        (pack / "sbom" / report.name).write_bytes(data)
+        hashes[f"sbom/{report.name}"] = hashlib.sha256(data).hexdigest()
+    lines = [
+        f"# Dossier de seguridad de ARGOS · {label}",
+        "",
+        f"Paquete generado el {date}.",
+        "",
+        "| Documento | Título | Confidencialidad |",
+        "|---|---|---|",
+        *[f"| {name} | {title} | {conf} |" for name, title, conf, _ in documents],
+        "",
+        f"SBOM e informes de vulnerabilidades: {sum(k.startswith('sbom/') for k in hashes)}.",
+    ]
+    index = "\n".join(lines) + "\n"
+    (pack / "INDICE.md").write_text(index, encoding="utf-8", newline="\n")
+    hashes["INDICE.md"] = hashlib.sha256(index.encode("utf-8")).hexdigest()
+    manifest = {"label": label, "date": date, "files": hashes}
+    (pack / "manifest.json").write_text(
+        json.dumps(manifest, indent=1, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+    )
+    return pack
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Technical documentation check and packs.")
     parser.add_argument("--root", type=Path, default=ROOT)
@@ -217,7 +297,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-pdf", action="store_true")
     parser.add_argument("--label", default="documentacion")
     parser.add_argument("--output", type=Path, default=Path("dist") / "documentacion")
+    parser.add_argument("--security", action="store_true", help="the security dossier (F09-16)")
+    parser.add_argument("--sbom", type=Path, default=Path("dist") / "sbom")
     args = parser.parse_args(argv)
+    if args.security:
+        date = datetime.now(UTC).date().isoformat()
+        pack = build_security_pack(
+            args.root,
+            args.output,
+            args.label,
+            date,
+            not args.no_pdf,
+            args.include_internal,
+            args.sbom,
+        )
+        print(f"security dossier in {pack}")
+        return 0
     if args.check:
         errors = coverage_errors(args.root)
         for error in errors:

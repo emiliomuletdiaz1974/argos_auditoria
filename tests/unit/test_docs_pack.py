@@ -194,3 +194,63 @@ def test_the_console_is_a_module_too_and_needs_its_document(tmp_path: Path) -> N
     (root / "console" / "package.json").write_text('{"name": "argos-console"}', encoding="utf-8")
     assert "argos-console" in docs_pack.workspace_modules(root)
     assert "module argos-console has no module document" in docs_pack.coverage_errors(root)
+
+
+# F09-16 · the security dossier as a pack: the documents of docs/seguridad and the SBOM.
+
+
+def _security(tmp_path: Path) -> Path:
+    root = tmp_path / "repo"
+    (root / "docs" / "seguridad" / "dossier" / "sbom").mkdir(parents=True)
+    marked = "**Versión:** 1.0 · **Confidencialidad:** `{}`\n\nTexto.\n"
+    (root / "docs" / "seguridad" / "modelo-amenazas.md").write_text(
+        "# Modelo de amenazas\n\n" + marked.format("client"), encoding="utf-8"
+    )
+    (root / "docs" / "seguridad" / "dossier" / "ens-medidas.md").write_text(
+        "# Medidas del ENS\n\n" + marked.format("client"), encoding="utf-8"
+    )
+    (root / "docs" / "seguridad" / "notas-internas.md").write_text(
+        "# Notas\n\n" + marked.format("internal"), encoding="utf-8"
+    )
+    return root
+
+
+def test_the_security_pack_takes_the_client_documents_and_the_sbom(tmp_path: Path) -> None:
+    root = _security(tmp_path)
+    sbom = tmp_path / "sbom"
+    sbom.mkdir()
+    (sbom / "argos-api.cdx.json").write_text('{"bomFormat": "CycloneDX"}', encoding="utf-8")
+    pack = docs_pack.build_security_pack(
+        root, tmp_path / "out", "hospital-x", "2026-09-24", pdf=False, sbom_dir=sbom
+    )
+    manifest = json.loads((pack / "manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["files"]) == {
+        "modelo-amenazas.md", "dossier/ens-medidas.md", "sbom/argos-api.cdx.json", "INDICE.md",
+    }  # fmt: skip
+    assert "notas-internas.md" not in manifest["files"], "internal stays out unless asked"
+    assert (pack / "sbom" / "argos-api.cdx.json").read_text(encoding="utf-8").startswith("{")
+    assert "Medidas del ENS" in (pack / "INDICE.md").read_text(encoding="utf-8")
+
+
+def test_the_security_pack_takes_internal_only_when_asked(tmp_path: Path) -> None:
+    root = _security(tmp_path)
+    pack = docs_pack.build_security_pack(
+        root, tmp_path / "out", "auditor", "2026-09-24", pdf=False, include_internal=True
+    )
+    assert (pack / "notas-internas.md").exists()
+
+
+def test_a_security_document_without_its_confidentiality_is_an_error(tmp_path: Path) -> None:
+    root = _security(tmp_path)
+    (root / "docs" / "seguridad" / "sin-marca.md").write_text("# Sin marca\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="sin-marca.md"):
+        docs_pack.build_security_pack(root, tmp_path / "out", "x", "2026-09-24", pdf=False)
+
+
+def test_the_security_pdfs_are_landscape_so_wide_tables_fit(tmp_path: Path) -> None:
+    import pymupdf
+
+    root = _security(tmp_path)
+    pack = docs_pack.build_security_pack(root, tmp_path / "out", "x", "2026-09-24", pdf=True)
+    page = pymupdf.open(pack / "dossier" / "ens-medidas.pdf")[0]
+    assert page.rect.width > page.rect.height
