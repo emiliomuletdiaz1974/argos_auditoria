@@ -1,8 +1,8 @@
 # ADR-0015 · Operación y despliegue sin appliance: qué se construye ya y qué espera al hardware
 
-- **Estado:** Propuesta
+- **Estado:** Aceptado
 - **Fecha:** 2026-09-24
-- **Decide:** el usuario (tarea F10-00)
+- **Decide:** el usuario (tarea F10-00) · **Aprobado:** 2026-09-24
 - **Contexto:** Fase 10 · Operación y despliegue (ARG-091…ARG-100) · Pliego P-24, P-26, P-27, P-28 y P-29 · Plan Director §8.2 «Fase 10» y «Piloto», §7.2.7 · Especificación Técnica §3.9, §3.10 y §6
 
 ## Contexto
@@ -25,7 +25,7 @@ Lo que hay en el repositorio al empezar:
 ## Decisión
 
 1. **Tres niveles, como ADR-0014, declarados por tarea.**
-   - **Se construye y se prueba ya en el compose:** el servicio de salud del dominio, las reglas con Alertmanager, los paneles aprovisionados, Loki con su recolector, los runbooks enlazados desde las alertas, los límites de talla, la autoverificación de release, el instalador y la conmutación asistida de la talla M (con dos PostgreSQL en contenedores).
+   - **Se construye y se prueba ya en el compose:** el servicio de salud del dominio, las reglas con Alertmanager, los paneles aprovisionados, Loki alimentado por los propios servicios, los runbooks enlazados desde las alertas, los límites de talla, la autoverificación de release, el instalador y la conmutación asistida de la talla M (con dos PostgreSQL en contenedores).
    - **Se escribe y se valida sin hardware:** la comprobación de sala, con los analizadores probados sobre salidas reales capturadas de `ipmitool`, `ethtool`, `ping` y `nvidia-smi`, y los pasos del instalador que tocan la red o el disco, probados con dobles.
    - **Espera al appliance (MANUAL):** la instalación completa desde cero, la comprobación de sala medida, la HA en dos nodos reales y el quórum de la talla L.
 2. **Un servicio de salud del dominio** (`services/health`, paquete `argos_health`), no un sidecar por servicio.
@@ -41,7 +41,7 @@ Lo que hay en el repositorio al empezar:
    - **Datos para la autoverificación** en `/facts`: los mismos hechos, en JSON.
    - **Identidad:** su propio rol de base de datos de solo lectura, con credenciales dinámicas, y mTLS.
 3. **Reglas desde la especificación.** Cada objetivo medible del documento técnico es una fila de una tabla: objetivo → métrica → umbral → runbook. La tabla vive en el repositorio y se prueba con `promtool test rules`. Nombres de alerta en inglés (ADR-0005); resúmenes en castellano. Alertmanager entrega siempre a la consola y, si el organismo lo configura, a su webhook; nada sale del appliance salvo eso.
-4. **Loki con recolector en el compose.** En desarrollo el recolector lee los logs de los contenedores por el socket de Docker en **solo lectura**. Es la única excepción a la postura de F09-03: queda marcada solo para desarrollo, y no pasa al appliance, donde el recolector es un DaemonSet que lee `/var/log/pods`. Solo dos etiquetas (servicio y nivel) para contener la cardinalidad. Los eventos que también son asientos llevan `journal_seq`, y Grafana enlaza del log al asiento.
+4. **Loki sin recolector: cada servicio envía sus logs por HTTP** (opción B de F10-00). Un manejador de `argos_common.logs` manda por lotes a la API de ingesta de Loki los mismos registros JSON que ya escribe en la salida estándar. Tiene una cola acotada, y si Loki no responde descarta y cuenta lo descartado: nunca bloquea al servicio. Sin `ARGOS_LOKI_URL` no envía nada. Así ningún contenedor necesita el socket de Docker y la postura de F09-03 no tiene excepciones. El mismo mecanismo vale en el appliance, donde no hace falta un recolector por nodo para los servicios de ARGOS. Solo dos etiquetas (servicio y nivel) para contener la cardinalidad. Los eventos que también son asientos llevan `journal_seq`, y Grafana enlaza del log al asiento.
 5. **Los runbooks son parte del producto.**
    - **Dónde viven:** `docs/operacion/runbooks/RB-01…RB-12.md`, con la estructura síntoma → diagnóstico → acción → verificación → cuándo escalar.
    - **Enlace:** cada alerta lleva `runbook_url`, y la consola muestra el runbook de la alerta activa.
@@ -70,11 +70,13 @@ Lo que hay en el repositorio al empezar:
 ## Consecuencias
 
 - **Operación completa en desarrollo:** la fase deja la operación entera probada en el compose. Una release del compose se publica ya con su expediente de autoverificación.
-- **Lo que llega con el hardware:** el paso al appliance cambia el orquestador (ya escrito tras un puerto en F09-10), el recolector de logs y la HA real. Nada más.
-- **Excepción de postura:** el recolector de logs de desarrollo tiene acceso de lectura al socket de Docker. Queda documentado en el modelo de amenazas como riesgo de desarrollo.
+- **Lo que llega con el hardware:** el paso al appliance cambia el orquestador (ya escrito tras un puerto en F09-10), y la HA real. Nada más.
+- **Logs:** llegan a Loki solo los de los servicios de ARGOS; los de las piezas de terceros (PostgreSQL, Keycloak, Vault, NATS, Temporal) siguen en `docker compose logs` y en el paquete de diagnóstico. Un corte de Loki pierde logs, nunca servicio, y la pérdida queda contada en una métrica.
 - **Sin CI completo todavía:** la puerta del CI depende de un runner propio. Hasta que exista, la autoverificación la ejecuta quien publica la release.
 
 ## Alternativas descartadas
+
+- **Un recolector que lea el socket de Docker en desarrollo** (propuesto en la primera versión de este ADR). El usuario lo descartó en F10-00: sería la única excepción a la postura de contenedores de F09-03, y el socket da el control del anfitrión.
 
 - **Esperar al hardware para toda la fase.** Dejaría sin hacer la parte que no depende de él y retrasaría la autoverificación, que da sentido al resto.
 - **Un exporter por servicio.** Multiplica los procesos y reparte la misma consulta; el documento de fase también elige un punto único.

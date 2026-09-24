@@ -44,7 +44,7 @@ Leyenda del **Quién**: **U** = decisión nuestra en una tarea DECISIÓN o por i
 | ADR-0012 | 2026-09-20 | U | Una sola API autenticada `/api/v1`; se retira `challenge-api` | [→](01-arquitectura.md#adr-0012) |
 | ADR-0013 | 2026-09-20 | U | Consola en React + Vite + TypeScript estricto, con tipos generados del contrato | [→](01-arquitectura.md#adr-0013) |
 | ADR-0014 | 2026-09-23 | U | Seguridad en tres niveles (compose ya, estático ya, hardware después); roles de base de datos por servicio, mTLS, MFA y registro de seguridad propio | [→](01-arquitectura.md#adr-0014) |
-| ADR-0015 | 2026-09-24 | **Propuesta** | Operación en tres niveles; servicio de salud propio; alertas desde la especificación; límites de talla honestos; ARGOS verifica ARGOS con el mismo motor | [→](01-arquitectura.md#adr-0015) |
+| ADR-0015 | 2026-09-24 | U | Operación en tres niveles; servicio de salud propio; alertas desde la especificación; logs enviados por los servicios; límites de talla honestos; ARGOS verifica ARGOS con el mismo motor | [→](01-arquitectura.md#adr-0015) |
 
 ### Alcance, plan y forma de trabajar
 
@@ -65,5 +65,6 @@ Leyenda del **Quién**: **U** = decisión nuestra en una tarea DECISIÓN o por i
 | DP-13 | 2026-09-22 | U | Verificación proporcional: solo lo tocado, salvo cierres y cambios transversales | [→](03-plan-y-proceso.md#dp-13) |
 | DP-14 | 2026-09-23 | U | Fase 09: registro de seguridad en tabla encadenada, TOTP para dos roles e integrar la rama de auditoría | [→](03-plan-y-proceso.md#dp-14) |
 | DP-15 | varias | U | Las tareas que esperan hardware, accesos o contratos son MANUAL y no bloquean el cierre de su fase | [→](03-plan-y-proceso.md#dp-15) |
+| DP-16 | 2026-09-24 | U | Fase 10: sin recolector por el socket de Docker, tallas del documento y autoverificación como puerta local | [→](03-plan-y-proceso.md#dp-16) |
 
 Las decisiones técnicas tomadas dentro de las tareas (unas 90) están agrupadas por fase en [03 · Plan y proceso](03-plan-y-proceso.md#decisiones-técnicas-dentro-de-las-tareas). Las 31 notas de desviación, en [02 · Desviaciones](02-desviaciones.md).

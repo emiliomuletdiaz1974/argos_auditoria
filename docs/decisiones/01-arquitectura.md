@@ -307,10 +307,10 @@ El texto completo está en `docs/adr/`.
   - El dossier dirá claramente qué controles solo existen en desarrollo.
 
 ## ADR-0015
-**Operación y despliegue sin appliance** · Propuesta 2026-09-24 (pendiente de F10-00)
+**Operación y despliegue sin appliance** · Aceptado 2026-09-24 (F10-00)
 
-- **Proponemos:** los mismos tres niveles que ADR-0014.
-  - **Ya, en el compose:** servicio de salud del dominio (`argos_health`), reglas con Alertmanager, paneles aprovisionados, Loki con recolector, runbooks enlazados desde las alertas, límites de talla, autoverificación de release, instalador y conmutación asistida de la talla M con dos PostgreSQL.
+- **Decidimos:** los mismos tres niveles que ADR-0014.
+  - **Ya, en el compose:** servicio de salud del dominio (`argos_health`), reglas con Alertmanager, paneles aprovisionados, Loki alimentado por los servicios, runbooks enlazados desde las alertas, límites de talla, autoverificación de release, instalador y conmutación asistida de la talla M con dos PostgreSQL.
   - **Ya, sin hardware:** los analizadores de la comprobación de sala, probados con salidas capturadas, y los pasos del instalador que tocan red o disco, con dobles.
   - **Con hardware (MANUAL):** instalación desde cero, sala medida, HA en nodos reales y quórum de la talla L.
   - Además:
@@ -331,7 +331,8 @@ El texto completo está en `docs/adr/`.
   - Esperar al hardware.
   - Un exporter por servicio.
   - Un conector `self.k8s` nuevo.
+  - Un recolector de logs que lea el socket de Docker: sería la única excepción a la postura de F09-03 (DP-16).
   - Failover automático en la talla M: un «split-brain» en un almacén de evidencia es peor que diez minutos con decisión humana.
 - **Consecuencias:**
-  - El recolector de logs de desarrollo lee el socket de Docker en solo lectura, como excepción de postura documentada.
+  - Solo los logs de los servicios de ARGOS llegan a Loki; los de las piezas de terceros siguen en `docker compose logs` y en el paquete de diagnóstico.
   - La puerta del CI necesita un runner propio; hasta entonces, `make selfcheck` es la puerta local de cada release.

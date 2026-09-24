@@ -162,6 +162,21 @@ La fuente de todas es la bitácora del plan (`.scratch/plan/BITACORA.md`), que n
 - **Por qué:** el programa no puede quedarse parado por dependencias externas. Cada informe de cierre las declara como pendientes y ningún documento las presenta como hechas.
 - **Excepción:** la Fase 06 **no tiene tag**, porque F06-99 depende de F06-05 (pesos del modelo, MANUAL). Ver [revisión](04-revision-2026-09-23.md).
 
+### DP-16
+**Fase 10 (F10-00)** · 2026-09-24
+
+- **Decidimos:**
+  - aprobar ADR-0015 y la nota ARG-091-100, con un cambio en el punto 4;
+  - **sin recolector de logs por el socket de Docker**: cada servicio envía sus registros a Loki por HTTP;
+  - las cifras de talla del documento de fase (S: 40 sistemas, 250 000 activos, 2 campañas, 4 M tokens al día; M: 150, 1 M, 4, 12 M; L: 500, 5 M, 10, 40 M);
+  - la autoverificación es una **puerta local** (`make selfcheck`), que ejecuta quien publica; el job del CI queda declarado sin runner;
+  - nombres en inglés, instalador como CLI guiada y conmutación asistida de la talla M, como se propusieron.
+- **Por qué:**
+  - el socket de Docker da el control del anfitrión y sería la única excepción a la postura de F09-03;
+  - un runner propio con el entorno entero es infraestructura que hoy no hace falta para publicar.
+- **Qué comprobamos antes:** que los servicios ya escriben JSON con los campos obligatorios desde F1-02, así que enviar a Loki es añadir un manejador, no reescribir el logging.
+- **Descartamos:** la opción A del punto 4 (recolector por el socket) y la B del punto 7 (runner propio ya).
+
 ---
 
 ## Decisiones técnicas dentro de las tareas
@@ -452,4 +467,5 @@ Formato: `tarea` — **qué decidimos** — por qué (y qué medimos, si consta)
 - `F10-R` — **la autoverificación (ARG-100) va la primera** — el documento la pone al final. Adelantada, el resto de la fase se construye ya con la puerta de release activa, y cada tarea puede añadir su reto `self-*`.
 - `F10-R` — **una ruta `POST /api/v1/systems` nueva para los límites de talla** — hoy los sistemas se dan de alta con un script de desarrollo, y un límite que no tiene dónde aplicarse no limita nada.
 - `F10-R` — **el piloto como seis tareas MANUAL en su propia tabla**, que dependen de publicar la v1.0 (F10-97) — son semanas con un organismo, no trabajo del agente; lo que el agente puede hacer es preparar sus materiales.
+- `F10-00` — **el manejador de Loki descarta en vez de bloquear** — un log que no llega es una pérdida contada; un servicio que se para porque Loki no responde es una caída. Lo concreta F10-05.
 - `F10-R` — **el tag `fase-10` no espera al hardware ni a la release** — igual que en la Fase 09 (DP-15): la prueba de la fase se hace en el compose y lo que espera al hardware queda declarado en el informe de cierre.
