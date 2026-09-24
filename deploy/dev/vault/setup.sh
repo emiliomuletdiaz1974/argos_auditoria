@@ -27,7 +27,7 @@ fi
 # ARG-083 · one certificate per service, 30 days, renewed at 20 by cert-issuer (F09-06). The bare
 # names are the services of the development compose; the domains with subdomains, those of k3s.
 vault write pki_int/roles/argos-svc \
-  allowed_domains="argos-core,argos-services,argos-edge,argos-ai,api,webhook,challenge,evidence,ai-gateway,example,postgres,nats,vault,argos-dev,localhost" \
+  allowed_domains="argos-core,argos-services,argos-edge,argos-ai,api,webhook,challenge,evidence,ai-gateway,example,health,postgres,nats,vault,argos-dev,localhost" \
   allow_subdomains=true allow_bare_domains=true allow_localhost=true allow_ip_sans=true \
   key_type=ec key_bits=256 max_ttl=720h ttl=720h >/dev/null
 printf 'path "pki_int/issue/argos-svc" { capabilities = ["update"] }\n' | vault policy write argos-cert-issuer - >/dev/null

@@ -44,6 +44,13 @@ SERVICES = {
     "evidence": "svc-evidence",
     "ai-gateway": "svc-ai-gateway",
     "example": "svc-example",
+    "health": "svc-health",
+}
+# What an AppRole reads besides its database credential. The health service lists the
+# certificates the internal CA issued, to warn before one expires (F10-02, ARG-094).
+EXTRA_POLICIES = {
+    "health": 'path "pki_int/certs" {\n  capabilities = ["list"]\n}\n'
+    'path "pki_int/cert/*" {\n  capabilities = ["read"]\n}\n',
 }
 F0904_USERS = ("api", "webhook", "challenge", "evidence", "ai_gateway", "example")
 # The AppRole token lives as long as the longest credential it reads: Vault revokes a lease
@@ -106,6 +113,7 @@ def _approles() -> None:
         _vault("POST", "sys/auth/approle", {"type": "approle"})
     for service, role in SERVICES.items():
         policy = f'path "db/creds/{role}" {{\n  capabilities = ["read"]\n}}\n'
+        policy += EXTRA_POLICIES.get(service, "")
         _vault("PUT", f"sys/policies/acl/argos-db-{service}", {"policy": policy})
         _vault(
             "POST",

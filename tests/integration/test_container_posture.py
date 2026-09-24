@@ -23,6 +23,7 @@ SERVICES = (
     "verifier",
     "ai-gateway",
     "example",
+    "health",
 )
 # A process that is not root already has no effective capability and cannot write in `/`: what
 # the posture adds is an empty bounding set, no way to gain privileges and a read-only root mount.

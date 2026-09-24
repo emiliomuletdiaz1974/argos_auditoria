@@ -177,6 +177,42 @@ services:
       interval: 5s
       retries: 30
 
+  # ── F10-02 (ARG-094): the domain health, what no standard exporter measures. It reads what it
+  # measures, writes only its own facts, and sees the evidence volume read-only for its size. ──
+  health:
+    <<: *argos-posture
+    build:
+      context: ../..
+      dockerfile: services/health/Dockerfile
+    image: argos-health:dev
+    environment:
+      ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
+      ARGOS_DATABASE_VAULT_ROLE: svc-health
+      ARGOS_VAULT_APPROLE_DIR: /run/secrets/approle
+      PGSERVICEFILE: /tmp/argos-db/pg_service.conf   # where libpq reads the credential
+      ARGOS_TLS_DIR: /run/tls
+      ARGOS_VAULT_ADDR: http://vault:8200
+      ARGOS_LOG_LEVEL: INFO
+      ARGOS_HEALTH_S3_ENDPOINT: http://evidence-store:7070
+      ARGOS_HEALTH_S3_ACCESS_KEY: dev-only-evidence
+      ARGOS_HEALTH_S3_SECRET_KEY: dev-only-evidence-secret
+      ARGOS_HEALTH_PKI_URL: http://vault:8200/v1/pki_int
+      ARGOS_HEALTH_EVIDENCE_PATH: /evidence
+    volumes: ["./secrets/approle-health:/run/secrets/approle:ro", "tls-health:/run/tls:ro", "evidence-data:/evidence:ro"]
+    networks: [default, evidence]   # the WORM canary talks to the evidence store
+    depends_on:
+      postgres:
+        condition: service_healthy
+      cert-issuer:
+        condition: service_healthy
+      evidence-store:
+        condition: service_started
+    ports: ["127.0.0.1:8009:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live', timeout=2)"]
+      interval: 5s
+      retries: 30
+
   # ── Campaign engine (F05-17): one image, the worker and the API as two entry points. ──
   challenge-worker:
     <<: *argos-posture
@@ -230,13 +266,13 @@ services:
       VAULT_ADDR: http://vault:8200
       VAULT_APPROLE_DIR: /run/secrets/approle
       ARGOS_TLS_ROOT: /certs
-      ARGOS_TLS_SERVICES: "api=api;webhook=webhook;challenge=challenge;evidence=evidence;ai-gateway=ai-gateway;example=example;postgres=postgres;nats=nats;vault=vault"
-    volumes: ["./secrets/approle-cert-issuer:/run/secrets/approle:ro", "tls-api:/certs/api", "tls-webhook:/certs/webhook", "tls-challenge:/certs/challenge", "tls-evidence:/certs/evidence", "tls-ai-gateway:/certs/ai-gateway", "tls-example:/certs/example", "tls-postgres:/certs/postgres", "tls-nats:/certs/nats", "tls-vault:/certs/vault"]
+      ARGOS_TLS_SERVICES: "api=api;webhook=webhook;challenge=challenge;evidence=evidence;ai-gateway=ai-gateway;example=example;health=health;postgres=postgres;nats=nats;vault=vault"
+    volumes: ["./secrets/approle-cert-issuer:/run/secrets/approle:ro", "tls-api:/certs/api", "tls-webhook:/certs/webhook", "tls-challenge:/certs/challenge", "tls-evidence:/certs/evidence", "tls-ai-gateway:/certs/ai-gateway", "tls-example:/certs/example", "tls-health:/certs/health", "tls-postgres:/certs/postgres", "tls-nats:/certs/nats", "tls-vault:/certs/vault"]
     depends_on:
       vault:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "/app/.venv/bin/python", "-c", "import pathlib, sys; sys.exit(not (pathlib.Path('/certs/api/tls.crt').exists() and pathlib.Path('/certs/webhook/tls.crt').exists() and pathlib.Path('/certs/challenge/tls.crt').exists() and pathlib.Path('/certs/evidence/tls.crt').exists() and pathlib.Path('/certs/ai-gateway/tls.crt').exists() and pathlib.Path('/certs/example/tls.crt').exists() and pathlib.Path('/certs/postgres/tls.crt').exists() and pathlib.Path('/certs/nats/tls.crt').exists() and pathlib.Path('/certs/vault/tls.crt').exists()))"]
+      test: ["CMD", "/app/.venv/bin/python", "-c", "import pathlib, sys; sys.exit(not (pathlib.Path('/certs/api/tls.crt').exists() and pathlib.Path('/certs/webhook/tls.crt').exists() and pathlib.Path('/certs/challenge/tls.crt').exists() and pathlib.Path('/certs/evidence/tls.crt').exists() and pathlib.Path('/certs/ai-gateway/tls.crt').exists() and pathlib.Path('/certs/example/tls.crt').exists() and pathlib.Path('/certs/health/tls.crt').exists() and pathlib.Path('/certs/postgres/tls.crt').exists() and pathlib.Path('/certs/nats/tls.crt').exists() and pathlib.Path('/certs/vault/tls.crt').exists()))"]
       interval: 2s
       retries: 60
 
@@ -682,6 +718,7 @@ volumes:
   tls-ai-gateway:
     driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
   tls-example:
+  tls-health:
     driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
   tls-postgres:
     driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}

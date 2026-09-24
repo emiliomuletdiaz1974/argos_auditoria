@@ -29,6 +29,7 @@ SERVICE_ROLES = (
     "svc_ai_gateway",
     "svc_webhook",
     "svc_example",
+    "svc_health",
     "svc_migrator",
 )
 
@@ -117,6 +118,7 @@ CONTAINERS = {
     "evidence-worker": "svc_evidence",
     "evidence-api": "svc_evidence",
     "ai-gateway": "svc_ai_gateway",
+    "health": "svc_health",
 }
 COMPOSE = [
     "docker",

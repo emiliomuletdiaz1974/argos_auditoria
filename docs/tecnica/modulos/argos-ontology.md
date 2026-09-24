@@ -4,7 +4,7 @@ kind: module
 title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
-version: 0.5.0-alpha
+version: 0.6.0-alpha
 commit: 2ef59ef
 date: 2026-09-24
 status: current
@@ -356,7 +356,7 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 
 ### Autoverificación: la especificación como norma (F10-01, ARG-100)
 
-ARGOS se verifica con su propio motor. La especificación técnica del producto se declara como norma `SELF` en `library/ontology/norms/SELF.ttl`, en vigor desde 2026-09-24, y sus promesas verificables son seis obligaciones `OBL-SELF-*` sobre la clase `AC-argos-appliance` (el nodo `System` llamado `argos-appliance`):
+ARGOS se verifica con su propio motor. La especificación técnica del producto se declara como norma `SELF` en `library/ontology/norms/SELF.ttl`, en vigor desde 2026-09-24, y sus promesas verificables son nueve obligaciones `OBL-SELF-*` sobre la clase `AC-argos-appliance` (el nodo `System` llamado `argos-appliance`):
 
 | Obligación | Sección | Severidad | Reto |
 |---|---|---|---|
@@ -365,6 +365,9 @@ ARGOS se verifica con su propio motor. La especificación técnica del producto 
 | `OBL-SELF-3-9-1` restauración probada y reciente | 3.9 | high | `self-003` |
 | `OBL-SELF-3-8-2` conexiones a la base de datos cifradas | 3.8 | high | `self-004` |
 | `OBL-SELF-3-3-1` contenido normativo firmado en vigor | 3.3 | high | `self-005` |
+| `OBL-SELF-3-6-1` el almacén WORM guarda y devuelve (canario) | 3.6 | high | `self-010` |
+| `OBL-SELF-3-8-3` ningún certificado interno caduca en 7 días | 3.8 | high | `self-011` |
+| `OBL-SELF-3-9-2` ninguna cola de sellado o entregas atascada más de un día | 3.9 | medium | `self-012` |
 | `OBL-SELF-7-1` la autoverificación demuestra que evalúa (reto trampa) | 7 | low | `self-099` |
 
 No es una norma jurídica: no pasa por la validación del perfil jurídico-técnico.
@@ -543,3 +546,4 @@ No es una norma jurídica: no pasa por la validación del perfil jurídico-técn
 | 0.3.0-alpha | 2026-09-23 | Grafo de SHACL congelado con la instantánea | F09-27 |
 | 0.4.0-alpha | 2026-09-23 | Los rechazos de contenido quedan en el registro de seguridad | F09-08 |
 | 0.5.0-alpha | 2026-09-24 | Norma `SELF` (la especificación del producto), seis obligaciones `OBL-SELF-*` y la clase `AC-argos-appliance` | F10-01 (ARG-100) |
+| 0.6.0-alpha | 2026-09-24 | Tres obligaciones `OBL-SELF-*` más, sobre lo que observa el servicio de salud (canario WORM, certificados y colas) | F10-02 (ARG-094) |

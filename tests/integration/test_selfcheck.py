@@ -19,6 +19,7 @@ import pytest
 from psycopg import sql
 
 from argos_common.journal_pg import PostgresJournal
+from argos_health.monitor import Monitor
 
 pytestmark = pytest.mark.integration
 
@@ -57,7 +58,27 @@ def _appliance(dsn: str) -> str:
             " duration_seconds) VALUES (%s, 'passed', true, true, 1)",
             (datetime.now(UTC) - timedelta(days=1),),
         )
+    _observe(dsn)
     return system_id
+
+
+class _Store:
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+
+    def put_immutable(self, key: str, data: bytes, retain_until: datetime) -> None:
+        self.objects[key] = data
+
+    def get(self, key: str, version_id: str | None = None) -> bytes:
+        return self.objects[key]
+
+
+def _observe(dsn: str) -> None:
+    """A round of the health service (F10-02): nobody runs it on a disposable database."""
+    monitor = Monitor(dsn, _Store(), list, None, journal_tail=100)
+    monitor.run_all()
+    monitor.check_journal(full=True)
+    monitor.publish()
 
 
 def test_a_sound_appliance_passes_with_only_the_trap(
@@ -89,6 +110,7 @@ def test_a_broken_journal_blocks_the_release(
             (max(head - 1, 1),),
         )
         conn.execute(sql.SQL("ALTER TABLE {} ENABLE TRIGGER USER").format(table))
+    _observe(migrated_db)  # the health service sees the break at its next round
     campaign_id = selfcheck.run_campaign(migrated_db, "test", system_id)
     with psycopg.connect(migrated_db) as conn:
         findings = dict(

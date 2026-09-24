@@ -133,6 +133,27 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
+  name: health
+  namespace: argos-services
+spec:
+  secretName: tls-health
+  commonName: health
+  dnsNames: ["health", "health.argos-services.svc", "localhost"]
+  ipAddresses: ["127.0.0.1"]
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-intermediate
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
   name: ai-gateway
   namespace: argos-ai
 spec:

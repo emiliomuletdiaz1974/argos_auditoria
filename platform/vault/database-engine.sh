@@ -28,7 +28,7 @@ vault write -f "db/rotate-root/$DB_NAME" >/dev/null
 # Vault role -> PostgreSQL role of the service.
 for pair in api:svc_api webhook:svc_webhook challenge:svc_challenge evidence:svc_evidence \
             ai-gateway:svc_ai_gateway example:svc_example inventory:svc_inventory \
-            ontology:svc_ontology backup:svc_backup; do
+            ontology:svc_ontology backup:svc_backup health:svc_health; do
   name="${pair%%:*}"
   role="${pair#*:}"
   vault write "db/roles/svc-$name" \

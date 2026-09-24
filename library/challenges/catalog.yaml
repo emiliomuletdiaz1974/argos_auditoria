@@ -164,6 +164,21 @@ challenges:
     evidence_type: configuration
     description: "El appliance tiene en vigor un bundle de contenido firmado"
     draft: false
+  - id: self-010
+    family: self_verification
+    evidence_type: configuration
+    description: "El almacén WORM guardó y devolvió el último canario"
+    draft: false
+  - id: self-011
+    family: self_verification
+    evidence_type: configuration
+    description: "Ningún certificado interno caduca en los próximos 7 días"
+    draft: false
+  - id: self-012
+    family: self_verification
+    evidence_type: configuration
+    description: "Ninguna cola de sellado o de entregas lleva más de un día atascada"
+    draft: false
   - id: self-099
     family: self_verification
     evidence_type: configuration

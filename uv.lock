@@ -24,6 +24,7 @@ members = [
     "argos-events",
     "argos-evidence",
     "argos-example",
+    "argos-health",
     "argos-inventory",
     "argos-ontology",
     "argos-platform",
@@ -413,6 +414,33 @@ requires-dist = [
 ]
 
 [[package]]
+name = "argos-health"
+version = "0.1.0a0"
+source = { editable = "services/health" }
+dependencies = [
+    { name = "argos-common" },
+    { name = "argos-evidence" },
+    { name = "boto3" },
+    { name = "cryptography" },
+    { name = "fastapi" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic-settings" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-common", editable = "libs/common" },
+    { name = "argos-evidence", editable = "services/evidence" },
+    { name = "boto3", specifier = ">=1.43" },
+    { name = "cryptography", specifier = ">=43" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "pydantic-settings", specifier = ">=2.7" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+]
+
+[[package]]
 name = "argos-inventory"
 version = "0.1.0a0"
 source = { editable = "services/inventory" }
@@ -495,6 +523,7 @@ dependencies = [
     { name = "argos-events" },
     { name = "argos-evidence" },
     { name = "argos-example" },
+    { name = "argos-health" },
     { name = "argos-inventory" },
     { name = "argos-ontology" },
     { name = "argos-support" },
@@ -544,6 +573,7 @@ requires-dist = [
     { name = "argos-events", editable = "libs/events" },
     { name = "argos-evidence", editable = "services/evidence" },
     { name = "argos-example", editable = "services/example" },
+    { name = "argos-health", editable = "services/health" },
     { name = "argos-inventory", editable = "services/inventory" },
     { name = "argos-ontology", editable = "services/ontology" },
     { name = "argos-support", editable = "services/support" },

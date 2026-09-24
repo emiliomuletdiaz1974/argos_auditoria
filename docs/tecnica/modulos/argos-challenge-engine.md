@@ -4,7 +4,7 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.11.0-alpha
+version: 0.12.0-alpha
 commit: 2ef59ef
 date: 2026-09-24
 status: current
@@ -50,7 +50,8 @@ Un reto es un documento YAML con seis bloques obligatorios (`objective`, `select
 
 - **Organización:** `library/challenges/<familia>/<id>.yaml`, con las familias del catálogo (`acc`, `brc`, `coh`, `doc`, `ds`, `dsr`, `ret`, `sec` y `self`) y subcarpetas por vertical.
 - **Autoverificación** (F10-01, ARG-100): la familia `self` son comprobaciones de configuración del conector SQL contra la base del propio appliance. La base las responde en la vista `argos_facts.facts` (migración 0040): filas `(fact, setting)` que calcula al leerse una función `SECURITY DEFINER`:
-  - el último tramo del diario y del registro de seguridad, recalculados con `argos.journal_hash`;
+  - si el diario y el registro de seguridad verifican, según lo que publicó el servicio de salud (`argos-health`) hace menos de 15 minutos con sus verificadores de Python (desde F10-02; en F10-01 se recalculaban en SQL);
+  - el canario WORM, los certificados por caducar y las colas atascadas, también del servicio de salud (retos `self-010…012`);
   - la última prueba de restauración;
   - las conexiones sin TLS;
   - el contenido firmado en vigor;
@@ -396,3 +397,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.9.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-challenge`), renovado en caliente | F09-05 (ARG-085) |
 | 0.10.0-alpha | 2026-09-23 | TLS verificado hacia PostgreSQL y NATS con su propio certificado | F09-06 (ARG-083) |
 | 0.11.0-alpha | 2026-09-24 | Familia `self` (autoverificación), vista `argos_facts.facts` y rol `svc_selfcheck` (migración 0040), y `tools/selfcheck.py` | F10-01 (ARG-100) |
+| 0.12.0-alpha | 2026-09-24 | Los hechos de las cadenas y los retos `self-010…012` los publica el servicio de salud (migración 0041) | F10-02 (ARG-094) |

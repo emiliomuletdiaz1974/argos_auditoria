@@ -1,0 +1,12 @@
+# Autoverificación de ARGOS (ARG-100): hechos que observa el servicio de salud (ARG-094, F10-02).
+id: OBL-SELF-3-8-3
+norma: SELF
+articulo: "3.8"
+titulo: "Certificados internos vigentes"
+vigente_desde: 2026-09-24
+severidad: high
+texto_resumen: "Ningún servicio tiene un certificado interno que caduque en menos de 7 días, según la última observación del servicio de salud."
+aplica_a:
+  - AC-argos-appliance
+verificado_por:
+  - self-011

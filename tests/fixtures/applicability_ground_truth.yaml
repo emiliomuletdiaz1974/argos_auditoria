@@ -88,10 +88,13 @@ asset_classes:
 # The specification of the product taken as a norm (ARG-100, F10-01), in force from 2026-09-24.
 .self: &self
   OBL-SELF-3-3-1: {classes: [AC-argos-appliance], challenges: [self-005]}
+  OBL-SELF-3-6-1: {classes: [AC-argos-appliance], challenges: [self-010]}
   OBL-SELF-3-7-1: {classes: [AC-argos-appliance], challenges: [self-001]}
   OBL-SELF-3-8-1: {classes: [AC-argos-appliance], challenges: [self-002]}
   OBL-SELF-3-8-2: {classes: [AC-argos-appliance], challenges: [self-004]}
+  OBL-SELF-3-8-3: {classes: [AC-argos-appliance], challenges: [self-011]}
   OBL-SELF-3-9-1: {classes: [AC-argos-appliance], challenges: [self-003]}
+  OBL-SELF-3-9-2: {classes: [AC-argos-appliance], challenges: [self-012]}
   OBL-SELF-7-1: {classes: [AC-argos-appliance], challenges: [self-099]}
 
 # Obligations that apply on each campaign date, with their classes and challenges. Obligations

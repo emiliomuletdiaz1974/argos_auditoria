@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-SELF-3-9-2 a argos:Obligation ;
+    rdfs:label "Colas de sellado y de entregas sin atascos"@es ;
+    rdfs:comment "Ninguna petición de sellado ni entrega de webhook lleva más de un día esperando, según la última observación del servicio de salud."@es ;
+    argos:appliesTo n:AC-argos-appliance ;
+    argos:derivesFrom n:SELF-3-9 ;
+    argos:inForceFrom "2026-09-24"^^xsd:date ;
+    argos:severity "medium" ;
+    argos:verifiedBy n:CH-self-012 .
+
+n:CH-self-012 a argos:Challenge ;
+    argos:challengeId "self-012" .
+

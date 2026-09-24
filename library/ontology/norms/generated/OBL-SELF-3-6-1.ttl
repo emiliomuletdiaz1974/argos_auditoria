@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-SELF-3-6-1 a argos:Obligation ;
+    rdfs:label "Almacén de evidencia que guarda y devuelve"@es ;
+    rdfs:comment "El almacén WORM guarda y devuelve intacto el último canario del servicio de salud, observado hace menos de 15 minutos."@es ;
+    argos:appliesTo n:AC-argos-appliance ;
+    argos:derivesFrom n:SELF-3-6 ;
+    argos:inForceFrom "2026-09-24"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-self-010 .
+
+n:CH-self-010 a argos:Challenge ;
+    argos:challengeId "self-010" .
+

@@ -60,6 +60,13 @@ cases:
   # --- the example service knows nothing but its health -------------------------------------
   - [svc_example, systems, SELECT, false]
   - [svc_example, "journal_append()", EXECUTE, true]
+  # --- svc_health (F10-02): reads what it measures, writes only its own facts ----------------
+  - [svc_health, audit_journal, SELECT, true]
+  - [svc_health, audit_journal, INSERT, false]
+  - [svc_health, campaigns, UPDATE, false]
+  - [svc_health, health_facts, INSERT, true]
+  - [svc_health, verdicts, SELECT, false]
+  - [svc_health, "journal_append()", EXECUTE, false]
   # --- PUBLIC gets nothing -----------------------------------------------------------------
   - [PUBLIC, audit_journal, SELECT, false]
   - [PUBLIC, findings, SELECT, false]

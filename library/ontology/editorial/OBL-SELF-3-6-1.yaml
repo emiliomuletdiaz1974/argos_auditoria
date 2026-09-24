@@ -1,0 +1,12 @@
+# Autoverificación de ARGOS (ARG-100): hechos que observa el servicio de salud (ARG-094, F10-02).
+id: OBL-SELF-3-6-1
+norma: SELF
+articulo: "3.6"
+titulo: "Almacén de evidencia que guarda y devuelve"
+vigente_desde: 2026-09-24
+severidad: high
+texto_resumen: "El almacén WORM guarda y devuelve intacto el último canario del servicio de salud, observado hace menos de 15 minutos."
+aplica_a:
+  - AC-argos-appliance
+verificado_por:
+  - self-010

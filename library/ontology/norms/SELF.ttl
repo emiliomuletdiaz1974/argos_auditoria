@@ -12,6 +12,8 @@ n:SELF a argos:Norm ;
 
 n:SELF-3-3 a argos:Article ; argos:partOf n:SELF ;
   rdfs:label "Sección 3.3. C3 — Ontología normativa y políticas: contenido firmado"@es .
+n:SELF-3-6 a argos:Article ; argos:partOf n:SELF ;
+  rdfs:label "Sección 3.6. C6 — Cadena de evidencia en el almacén WORM"@es .
 n:SELF-3-7 a argos:Article ; argos:partOf n:SELF ;
   rdfs:label "Sección 3.7. C7 — Cada acción entra en el diario de auditoría encadenado"@es .
 n:SELF-3-8 a argos:Article ; argos:partOf n:SELF ;

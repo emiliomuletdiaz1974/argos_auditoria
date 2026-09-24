@@ -5,6 +5,9 @@ appliance needs: whether the journal and the security log verify, whether a rest
 whether every connection is encrypted and whether signed content is in force. The self-* challenges
 read it with the SQL connector and the read-only role `svc_selfcheck`, which reads the facts and
 nothing behind them.
+
+Since F10-02 the chains are verified by the health service with their own verifiers, and the view
+answers what it observed in the last 15 minutes: the tests run its monitor, as the service would.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -15,6 +18,7 @@ from psycopg import sql
 
 from argos_common.journal_pg import PostgresJournal
 from argos_common.security_log import log as security_log
+from argos_health.monitor import Monitor
 
 pytestmark = pytest.mark.integration
 
@@ -41,6 +45,15 @@ def _tamper(dsn: str, schema: str, table: str, seq: int) -> None:
         conn.execute(sql.SQL("ALTER TABLE {} ENABLE TRIGGER USER").format(name))
 
 
+def _observe(dsn: str) -> None:
+    """One round of the health service over the chains, published as it publishes them."""
+    monitor = Monitor(dsn, None, None, None, journal_tail=100)
+    monitor.check_journal()
+    monitor.check_journal(full=True)
+    monitor.check_security_log()
+    monitor.publish()
+
+
 def _restore_test(dsn: str, when: datetime, result: str) -> None:
     intact = result == "passed"
     with psycopg.connect(dsn) as conn:
@@ -59,13 +72,18 @@ def test_a_fresh_appliance_answers_every_fact(migrated_db: str) -> None:
         "restore_test_recent",
         "connections_encrypted",
         "signed_content_in_force",
+        # Published by the health service (F10-02): false until it has looked.
+        "worm_canary_ok",
+        "certificates_valid",
+        "queues_flowing",
         "selfcheck_trap",
     }
-    assert facts["journal_tail_intact"] == "true"
-    assert facts["security_log_intact"] == "true"
-    # Nothing was restored nor loaded yet: the facts say so, they do not assume.
+    # Nobody verified, restored nor loaded anything yet: the facts say so, they do not assume.
+    assert facts["journal_tail_intact"] == "false"
+    assert facts["security_log_intact"] == "false"
     assert facts["restore_test_recent"] == "false"
     assert facts["signed_content_in_force"] == "false"
+    assert facts["worm_canary_ok"] == "false"
     assert facts["selfcheck_trap"] == "tripped"
 
 
@@ -73,8 +91,10 @@ def test_the_journal_verifies_and_one_edited_entry_breaks_it(migrated_db: str) -
     journal = PostgresJournal(migrated_db)
     for n in range(5):
         journal.append("user:tester", "test.selfcheck", {"n": n})
+    _observe(migrated_db)
     assert _facts(migrated_db)["journal_tail_intact"] == "true"
     _tamper(migrated_db, "argos", "audit_journal", 3)
+    _observe(migrated_db)
     assert _facts(migrated_db)["journal_tail_intact"] == "false"
     # The fact agrees with the verifier of the journal v1.
     assert not journal.verify().intact
@@ -84,8 +104,10 @@ def test_the_security_log_verifies_and_one_edited_event_breaks_it(migrated_db: s
     events = security_log(migrated_db)
     for n in range(3):
         events.record("auth.login", f"user:tester-{n}", "refused", {"n": n}, source="tests")
+    _observe(migrated_db)
     assert _facts(migrated_db)["security_log_intact"] == "true"
     _tamper(migrated_db, "security", "events", 2)
+    _observe(migrated_db)
     assert _facts(migrated_db)["security_log_intact"] == "false"
 
 
@@ -101,6 +123,7 @@ def test_only_a_recent_passed_restore_counts(migrated_db: str) -> None:
 
 
 def test_the_selfcheck_role_reads_the_facts_and_nothing_behind_them(migrated_db: str) -> None:
+    _observe(migrated_db)
     assert _facts(migrated_db, role="svc_selfcheck")["journal_tail_intact"] == "true"
     with psycopg.connect(migrated_db) as conn:
         conn.execute("SET ROLE svc_selfcheck")
