@@ -447,3 +447,9 @@ Formato: `tarea` — **qué decidimos** — por qué (y qué medimos, si consta)
 - `F09-17` — **todo proceso abre el bus con `bus_from_config`, vigilado por un test arquitectónico** — al fusionar vimos que los procesos añadidos después de la auditoría (worker de campañas reescrito, worker de evidencia y worker de webhooks) abrían NATS sin usuario: con NATS autenticado se habrían quedado fuera sin avisar.
 - `F09-17` — **usuario de NATS propio de solo escucha para `webhook-worker`, y fuera NATS y OPA de la API y de `evidence-api`** — mínimo privilegio: la API y `evidence-api` no usan ninguno de los dos; `evidence-api` hereda por ancla YAML la identidad `evidence` de su servicio, que es de su misma familia.
 - `F09-01` — **cada riesgo residual lleva quién lo acepta** — el organismo (medidas físicas y de personal, talla elegida) o nosotros (texto del LLM, material de desarrollo marcado `non_production`, vulnerabilidades sin parche con excepción que caduca).
+
+### Fase 10
+- `F10-R` — **la autoverificación (ARG-100) va la primera** — el documento la pone al final. Adelantada, el resto de la fase se construye ya con la puerta de release activa, y cada tarea puede añadir su reto `self-*`.
+- `F10-R` — **una ruta `POST /api/v1/systems` nueva para los límites de talla** — hoy los sistemas se dan de alta con un script de desarrollo, y un límite que no tiene dónde aplicarse no limita nada.
+- `F10-R` — **el piloto como seis tareas MANUAL en su propia tabla**, que dependen de publicar la v1.0 (F10-97) — son semanas con un organismo, no trabajo del agente; lo que el agente puede hacer es preparar sus materiales.
+- `F10-R` — **el tag `fase-10` no espera al hardware ni a la release** — igual que en la Fase 09 (DP-15): la prueba de la fase se hace en el compose y lo que espera al hardware queda declarado en el informe de cierre.

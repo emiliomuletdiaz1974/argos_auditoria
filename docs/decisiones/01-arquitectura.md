@@ -305,3 +305,33 @@ El texto completo está en `docs/adr/`.
   - La migración de roles rompe los accesos cruzados entre servicios (es lo que buscamos).
   - El compose gana `cert-issuer` y el actualizador.
   - El dossier dirá claramente qué controles solo existen en desarrollo.
+
+## ADR-0015
+**Operación y despliegue sin appliance** · Propuesta 2026-09-24 (pendiente de F10-00)
+
+- **Proponemos:** los mismos tres niveles que ADR-0014.
+  - **Ya, en el compose:** servicio de salud del dominio (`argos_health`), reglas con Alertmanager, paneles aprovisionados, Loki con recolector, runbooks enlazados desde las alertas, límites de talla, autoverificación de release, instalador y conmutación asistida de la talla M con dos PostgreSQL.
+  - **Ya, sin hardware:** los analizadores de la comprobación de sala, probados con salidas capturadas, y los pasos del instalador que tocan red o disco, con dobles.
+  - **Con hardware (MANUAL):** instalación desde cero, sala medida, HA en nodos reales y quórum de la talla L.
+  - Además:
+    - ARGOS se verifica con los conectores SQL y REST que ya existen, y un reto trampa (`self-099`) que siempre falla;
+    - el instalador es una CLI, no una TUI;
+    - el piloto son seis tareas MANUAL.
+- **Por qué:**
+  - Esperar al hardware dejaría sin hacer la parte que no depende de él.
+  - La autoverificación da sentido al resto: una release llega con su expediente.
+  - Sin un reto que siempre falla, una puerta que no evalúa nada pasaría en verde.
+- **Qué comprobamos antes:**
+  - Prometheus solo recoge la API.
+  - Grafana no tiene paneles, Loki no recibe nada y no hay Alertmanager.
+  - La etapa `selfcheck` del CI está vacía desde F1-10.
+  - No hay ruta de la API para dar de alta sistemas, así que no hay dónde aplicar un límite de talla.
+  - `argos.ai_usage` ya guarda los tokens por uso.
+- **Descartamos:**
+  - Esperar al hardware.
+  - Un exporter por servicio.
+  - Un conector `self.k8s` nuevo.
+  - Failover automático en la talla M: un «split-brain» en un almacén de evidencia es peor que diez minutos con decisión humana.
+- **Consecuencias:**
+  - El recolector de logs de desarrollo lee el socket de Docker en solo lectura, como excepción de postura documentada.
+  - La puerta del CI necesita un runner propio; hasta entonces, `make selfcheck` es la puerta local de cada release.

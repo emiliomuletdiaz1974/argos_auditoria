@@ -18,7 +18,7 @@ Aquí está en un solo sitio **qué hemos decidido, por qué y qué comprobamos 
 
 1. **Primero comprobamos el terreno.** Antes de cada fase leemos el documento de fase entero, el Plan Director, el Pliego y lo que ya está construido. Además probamos con sondas las librerías y las imágenes (versiones reales, qué falla y qué no). Lo que chocaba con la realidad se anotó con su prueba.
 2. **Quién manda en qué.** Los documentos de fase mandan en qué se construye y en las rutas. El Plan Director manda en el orden y en la definición de hecho. **Un ADR manda sobre ambos**, y apartarse de un documento exige antes una nota de desviación.
-3. **Las decisiones de peso pasan por una tarea DECISIÓN** (`E0-03`, `F04-00`, `F05-00`, `F06-00`, `F07-00`, `F08-00`, `F09-00`). En ella se proponen opciones con recomendación, se elige y el ADR pasa a «Aceptado».
+3. **Las decisiones de peso pasan por una tarea DECISIÓN** (`E0-03`, `F04-00`, `F05-00`, `F06-00`, `F07-00`, `F08-00`, `F09-00`, `F10-00`). En ella se proponen opciones con recomendación, se elige y el ADR pasa a «Aceptado».
 4. **Las decisiones pequeñas se toman dentro de la tarea** y quedan escritas en la bitácora con su motivo. Las que cambian una interfaz o se apartan del documento se suben a una nota de desviación.
 5. **Mantenimiento:** toda decisión nueva se añade a este registro en el mismo commit que la aplica.
 
@@ -44,6 +44,7 @@ Leyenda del **Quién**: **U** = decisión nuestra en una tarea DECISIÓN o por i
 | ADR-0012 | 2026-09-20 | U | Una sola API autenticada `/api/v1`; se retira `challenge-api` | [→](01-arquitectura.md#adr-0012) |
 | ADR-0013 | 2026-09-20 | U | Consola en React + Vite + TypeScript estricto, con tipos generados del contrato | [→](01-arquitectura.md#adr-0013) |
 | ADR-0014 | 2026-09-23 | U | Seguridad en tres niveles (compose ya, estático ya, hardware después); roles de base de datos por servicio, mTLS, MFA y registro de seguridad propio | [→](01-arquitectura.md#adr-0014) |
+| ADR-0015 | 2026-09-24 | **Propuesta** | Operación en tres niveles; servicio de salud propio; alertas desde la especificación; límites de talla honestos; ARGOS verifica ARGOS con el mismo motor | [→](01-arquitectura.md#adr-0015) |
 
 ### Alcance, plan y forma de trabajar
 
@@ -65,4 +66,4 @@ Leyenda del **Quién**: **U** = decisión nuestra en una tarea DECISIÓN o por i
 | DP-14 | 2026-09-23 | U | Fase 09: registro de seguridad en tabla encadenada, TOTP para dos roles e integrar la rama de auditoría | [→](03-plan-y-proceso.md#dp-14) |
 | DP-15 | varias | U | Las tareas que esperan hardware, accesos o contratos son MANUAL y no bloquean el cierre de su fase | [→](03-plan-y-proceso.md#dp-15) |
 
-Las decisiones técnicas tomadas dentro de las tareas (unas 90) están agrupadas por fase en [03 · Plan y proceso](03-plan-y-proceso.md#decisiones-técnicas-dentro-de-las-tareas). Las 30 notas de desviación, en [02 · Desviaciones](02-desviaciones.md).
+Las decisiones técnicas tomadas dentro de las tareas (unas 90) están agrupadas por fase en [03 · Plan y proceso](03-plan-y-proceso.md#decisiones-técnicas-dentro-de-las-tareas). Las 31 notas de desviación, en [02 · Desviaciones](02-desviaciones.md).
