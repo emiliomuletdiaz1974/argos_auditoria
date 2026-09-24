@@ -5,7 +5,7 @@ title: SDK de conectores de solo lectura (argos-connector-sdk)
 module: argos-connector-sdk
 phases: ["02", "03"]
 version: 0.6.0-alpha
-commit: 0ead992
+commit: 2ef59ef
 date: 2026-09-24
 status: current
 confidentiality: client

@@ -5,7 +5,7 @@ title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
 version: 0.6.0-alpha
-commit: 0ead992
+commit: 2ef59ef
 date: 2026-09-24
 status: current
 confidentiality: client
