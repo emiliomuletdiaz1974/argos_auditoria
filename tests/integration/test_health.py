@@ -32,6 +32,7 @@ EXPECTED = {
     "argos_evidence_volume_used_ratio",
     "argos_certs_expiring_7d",
     "argos_job_last_success_timestamp_seconds",
+    "argos_scan_last_duration_seconds",
     "argos_health_check_timestamp_seconds",
 }
 
@@ -80,6 +81,12 @@ def _with_a_gate_and_a_circuit(dsn: str) -> None:
             (campaign[0],),
         )
         conn.execute(
+            "INSERT INTO argos.scan_runs (id, system_id, status, started_at, finished_at, events)"
+            " VALUES (gen_random_uuid(), %s, 'completed', now() - interval '3 hours',"
+            " now() - interval '30 minutes', 0)",
+            (system[0],),
+        )
+        conn.execute(
             "INSERT INTO argos.load_budget (system_id, tokens, updated_at, state, opened_at)"
             " VALUES (%s, 0, now(), 'open', now())",
             (system[0],),
@@ -103,6 +110,8 @@ def test_every_measure_is_published(migrated_db: str, tmp_path: Path) -> None:
     [gate] = [o for o in monitor.observations() if o.name == "argos_campaign_gate_waiting_hours"]
     assert gate.labels["gate"] == "start" and 29.9 < gate.value < 30.5
     assert "argos_certs_expiring_7d 0" in text
+    # F10-03: the rescan objective of the specification (under 2 hours) is watched per system.
+    assert 'argos_scan_last_duration_seconds{system="health-test"} 9000' in text
 
 
 def test_a_broken_journal_reads_as_not_intact(migrated_db: str, tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ groups:
         annotations:
           summary: "More than 50 refused authentications or permissions in 5 minutes"
           description: "Read the security log (GET /api/v1/security/events) for the origin."
+          runbook_url: docs/operacion/runbooks/RB-04-seguridad.md
       - alert: SecurityChainBroken
         # The security log was changed: its chain no longer verifies.
         expr: argos_security_chain_ok == 0
@@ -20,6 +21,7 @@ groups:
         annotations:
           summary: "The chain of the security log does not verify"
           description: "Somebody changed the security log. Keep the database as it is and escalate."
+          runbook_url: docs/operacion/runbooks/RB-04-seguridad.md
       - alert: SecuritySignatureRejected
         # A release, a content bundle or the running policies did not verify.
         expr: sum(increase(argos_security_events_total{kind=~".*signature_rejected|.*integrity_failed|.*policies_mismatch"}[15m])) > 0
@@ -28,3 +30,4 @@ groups:
         annotations:
           summary: "A signature or a signed content was refused"
           description: "A release or content that does not verify was offered to the appliance."
+          runbook_url: docs/operacion/runbooks/RB-04-seguridad.md

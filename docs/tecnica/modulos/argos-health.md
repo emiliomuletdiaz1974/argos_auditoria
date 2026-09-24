@@ -4,7 +4,7 @@ kind: module
 title: Servicio de salud del dominio (argos-health)
 module: argos-health
 phases: ["10"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: d4f31d0
 date: 2026-09-24
 status: current
@@ -31,7 +31,7 @@ Lo publica en `/metrics` para Prometheus y en `/facts` en JSON. Además deja en 
 
 - **Qué hace:** mide y publica. Lee lo que mide y solo escribe sus propios hechos.
 - **Qué no hace:**
-  - no decide alertas: eso son las reglas de Prometheus y Alertmanager (F10-03);
+  - no decide alertas: eso son las reglas de `platform/observability/` y Alertmanager (F10-03);
   - no repara nada;
   - no mide la salud de los procesos, que ya da `/health` de cada servicio.
 - **Verificaciones:** el diario y el registro de seguridad se verifican con sus propios verificadores (`PostgresJournal.verify` y `security_log.verify_chain`), nunca con una cadena reimplementada aquí.
@@ -79,6 +79,7 @@ Métricas:
 - `argos_evidence_volume_used_ratio`;
 - `argos_certs_expiring_7d` (-1 si no se pudo medir);
 - `argos_job_last_success_timestamp_seconds{job}` (0 si nunca);
+- `argos_scan_last_duration_seconds{system}`: cuánto duró la última exploración completada de cada sistema (objetivo de reexploración por debajo de 2 horas, §3.10);
 - `argos_health_check_timestamp_seconds{check}`.
 
 ## 5. Configuración
@@ -132,3 +133,4 @@ Métricas:
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-24 | Primera versión | F10-02 (ARG-094) |
+| 0.2.0-alpha | 2026-09-24 | Duración de la última exploración por sistema, para la alerta `ScanTooSlow` | F10-03 (ARG-091) |

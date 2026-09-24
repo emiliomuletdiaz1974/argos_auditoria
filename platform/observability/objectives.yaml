@@ -1,0 +1,147 @@
+# ARG-091 · the specification turned into surveillance (F10-03, ADR-0015 point 3).
+#
+# One row per measurable objective: where the specification or the plan says it, the alert that
+# watches it, its expression, how long it must hold, its severity and the runbook the console shows
+# with it. `tools/alert_rules.py` writes platform/observability/rules/argos.rules.yml from this
+# table; the rows with `existing` point at the rules written before this table (F09-08, F09-12),
+# which keep their files and their tests. A row with `pending` has no alert yet and says why.
+#
+# Severities: `critical` wakes somebody up (repeated every hour); `warning` waits for the next
+# working day (repeated every day).
+objectives:
+  # ---------- integrity of the evidence: critical ----------
+  - id: journal-intact
+    source: "Especificación §3.7: cada acción entra en el diario de auditoría encadenado; ADR-0002"
+    alert: JournalNotIntact
+    expr: min(argos_journal_verify_ok) == 0
+    severity: critical
+    summary: "The chained journal does not verify: possible tampering"
+    description: "Keep the database as it is, do not restart anything, and escalate."
+    runbook: docs/operacion/runbooks/RB-01-diario.md
+  - id: worm-writes
+    source: "Especificación §3.6: la evidencia sellada se guarda en el almacén WORM"
+    alert: WormWriteFailing
+    expr: argos_worm_healthy == 0
+    for: 2m
+    severity: critical
+    summary: "The WORM store does not keep what it is given"
+    description: "The canary of the health service failed twice in a row: evidence cannot be sealed."
+    runbook: docs/operacion/runbooks/RB-02-almacen-evidencia.md
+  - id: evidence-disk
+    source: "Especificación §5.6: dimensionamiento del almacenamiento de evidencia"
+    alert: EvidenceDisk85
+    expr: argos_evidence_volume_used_ratio > 0.85
+    for: 10m
+    severity: critical
+    summary: "The evidence volume is more than 85 % full"
+    description: "Sealed evidence cannot be removed: extend the volume before it fills."
+    runbook: docs/operacion/runbooks/RB-02-almacen-evidencia.md
+
+  # ---------- backup (F09-12): the rules of backup.yml ----------
+  - id: restore-test-passed
+    source: "Pliego P-24 y ADR-0014: una copia solo cuenta cuando su restauración está probada"
+    alert: BackupRestoreTestFailed
+    existing: deploy/dev/prometheus/rules/backup.yml
+    severity: critical
+    runbook: docs/operacion/runbooks/RB-03-copias.md
+  - id: restore-test-recent
+    source: "Plan Director: prueba de restauración mensual, fechada"
+    alert: BackupRestoreTestStale
+    existing: deploy/dev/prometheus/rules/backup.yml
+    severity: warning
+    runbook: docs/operacion/runbooks/RB-03-copias.md
+  - id: backup-daily
+    source: "Especificación §3.9: copia diaria cifrada de la configuración y el grafo (RPO 24 h)"
+    alert: BackupStale
+    expr: time() - argos_job_last_success_timestamp_seconds{job="backup"} > 26 * 3600
+    for: 30m
+    severity: warning
+    summary: "No backup has completed in the last 26 hours"
+    description: "The daily copy did not run or failed: the recovery point is older than a day."
+    runbook: docs/operacion/runbooks/RB-03-copias.md
+
+  # ---------- security log (F09-08): the rules of security.yml ----------
+  - id: security-chain
+    source: "ENS op.exp.8 y ADR-0014: registro de actividad íntegro"
+    alert: SecurityChainBroken
+    existing: deploy/dev/prometheus/rules/security.yml
+    severity: critical
+    runbook: docs/operacion/runbooks/RB-04-seguridad.md
+  - id: signed-content
+    source: "Especificación §3.3 y ARG-040: solo corre contenido firmado"
+    alert: SecuritySignatureRejected
+    existing: deploy/dev/prometheus/rules/security.yml
+    severity: critical
+    runbook: docs/operacion/runbooks/RB-04-seguridad.md
+  - id: refusal-burst
+    source: "ENS op.acc: detección de intentos de acceso"
+    alert: SecurityRefusalBurst
+    existing: deploy/dev/prometheus/rules/security.yml
+    severity: warning
+    runbook: docs/operacion/runbooks/RB-04-seguridad.md
+
+  # ---------- campaigns and queues: warning ----------
+  - id: gate-waiting
+    source: "ARG-043: una compuerta sin aprobar caduca a las 72 h; se avisa antes"
+    alert: CampaignStuckAtGate
+    expr: argos_campaign_gate_waiting_hours > 60
+    severity: warning
+    summary: "Campaign {{ $labels.campaign }} has waited more than 60 hours at its {{ $labels.gate }} gate"
+    description: "Tell the DPO: at 72 hours the gate expires and the campaign must start again."
+    runbook: docs/operacion/runbooks/RB-05-campanas-y-colas.md
+  - id: circuit-open
+    source: "Pliego P-05 y ARG-013: el presupuesto de carga protege los sistemas del cliente"
+    alert: CircuitOpen
+    expr: argos_connector_circuit_open == 1
+    for: 30m
+    severity: warning
+    summary: "The circuit of {{ $labels.system }} has been open for 30 minutes"
+    description: "The system answers slowly: its probes wait. Check it with its owner before closing."
+    runbook: docs/operacion/runbooks/RB-05-campanas-y-colas.md
+  - id: tsa-queue
+    source: "ARG-065: en aislado, los sellos esperan en cola hasta la ventana de conectividad"
+    alert: TsaQueueGrowing
+    expr: argos_tsa_queue_pending > 50 and delta(argos_tsa_queue_pending[6h]) > 0
+    severity: warning
+    summary: "More than 50 time-stamp requests are waiting and the queue keeps growing"
+    description: "The TSA is unreachable, or the airlock export of requests is not being done."
+    runbook: docs/operacion/runbooks/RB-05-campanas-y-colas.md
+  - id: rescan-duration
+    source: "Especificación §3.10: reexploración incremental diaria por debajo de 2 horas"
+    alert: ScanTooSlow
+    expr: argos_scan_last_duration_seconds > 7200
+    severity: warning
+    summary: "The last scan of {{ $labels.system }} took more than 2 hours"
+    description: "The incremental rescan misses its design objective: look at the load budget and the size."
+    runbook: docs/operacion/runbooks/RB-05-campanas-y-colas.md
+
+  # ---------- the platform itself ----------
+  - id: certificates
+    source: "Especificación §3.8: certificados de una CA interna rotados automáticamente"
+    alert: CertificatesExpiring
+    expr: argos_certs_expiring_7d > 0
+    for: 1h
+    severity: warning
+    summary: "An internal certificate expires within 7 days"
+    description: "The automatic rotation did not renew it: look at the cert-issuer."
+    runbook: docs/operacion/runbooks/RB-06-plataforma.md
+  - id: health-watching
+    source: "ADR-0015 punto 2: sin el servicio de salud, las alertas de dominio no pueden dispararse"
+    alert: HealthServiceDown
+    expr: up{job="argos-health"} == 0
+    for: 5m
+    severity: critical
+    summary: "The domain health service is not answering"
+    description: "Without it the journal, the WORM store and the queues go unwatched."
+    runbook: docs/operacion/runbooks/RB-06-plataforma.md
+
+  # ---------- objectives with no alert yet ----------
+  - id: first-token
+    source: "Especificación §3.10: primer token por debajo de 2 s con 20 peticiones concurrentes en talla M"
+    pending: "the latency of the first token is published by the inference server, which arrives with the model weights (F06-05) and is measured on a real GPU (F06-98)"
+  - id: console-views
+    source: "Especificación §3.10: cualquier vista del grafo por debajo de 2 s hasta un millón de nodos"
+    pending: "the API does not publish its latency per route yet; the benchmark of F03-14 measures it on the bench of each release"
+  - id: sealing-rate
+    source: "Especificación §3.10: sellado y encadenado de 10 000 artefactos por hora"
+    pending: "a rate objective for the bench of each release, not a condition of the appliance in operation; the evidence service does not publish its throughput"

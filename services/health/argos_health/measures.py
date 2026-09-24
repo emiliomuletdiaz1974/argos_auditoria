@@ -164,6 +164,12 @@ _CIRCUITS = (
     "SELECT s.name, CASE WHEN b.state = 'open' THEN 1 ELSE 0 END"
     "  FROM argos.load_budget b JOIN argos.systems s ON s.id::text = b.system_id"
 )
+_SCANS = (
+    "SELECT DISTINCT ON (r.system_id) s.name, extract(epoch FROM r.finished_at - r.started_at)"
+    "  FROM argos.scan_runs r JOIN argos.systems s ON s.id = r.system_id"
+    " WHERE r.status = 'completed' AND r.finished_at IS NOT NULL"
+    " ORDER BY r.system_id, r.finished_at DESC"
+)
 _JOBS = {
     "backup": "SELECT max(at) FROM argos.audit_journal WHERE action = 'backup.completed'",
     "restore_test": "SELECT max(tested_at) FROM argos.restore_tests WHERE result = 'passed'",
@@ -196,6 +202,15 @@ def domain_observations(dsn: str) -> tuple[list[Observation], int]:
                     float(is_open),
                     {"system": str(system)},
                     help="Whether the circuit breaker of a system is open.",
+                )
+            )
+        for system, seconds in conn.execute(_SCANS).fetchall():
+            found.append(
+                Observation(
+                    "argos_scan_last_duration_seconds",
+                    round(float(seconds), 1),
+                    {"system": str(system)},
+                    help="How long the last completed scan of each system took.",
                 )
             )
         for job, query in _JOBS.items():

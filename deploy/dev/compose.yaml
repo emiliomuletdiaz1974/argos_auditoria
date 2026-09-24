@@ -135,8 +135,19 @@ services:
   prometheus:
     image: prom/prometheus:v2.54.1
     # F09-08: the configuration and the alert rules of the security log.
-    volumes: ["./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro", "./prometheus/rules:/etc/prometheus/rules:ro"]
+    # F10-03: the rules generated from the objectives of the specification, and Alertmanager.
+    volumes: ["./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro", "./prometheus/rules:/etc/prometheus/rules:ro", "../../platform/observability/rules:/etc/prometheus/argos-rules:ro"]
     ports: ["127.0.0.1:9090:9090"]
+
+  # ── F10-03 (ARG-091): the alerts go to the console, and to the organisation's webhook if it has
+  # one. Nothing else leaves the appliance. ──
+  alertmanager:
+    <<: *argos-posture   # part of the product, not only of development: the restricted posture
+    image: prom/alertmanager:v0.27.0
+    # Its silences and notification log live in /alertmanager; in development they may be lost.
+    tmpfs: ["/tmp:size=64m", "/alertmanager:size=64m,uid=10001,gid=10001"]
+    volumes: ["./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"]
+    ports: ["127.0.0.1:9093:9093"]
 
   loki:
     image: grafana/loki:3.1.1

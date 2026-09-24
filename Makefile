@@ -13,7 +13,7 @@ export PGPASSWORD := dev-only-postgres
 # client, whose TLS the connectors decide source by source (F09-31).
 export ARGOS_TLS_DIR := deploy/dev/secrets/tls-host
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build sbom manifest backup restore-test selfcheck docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build sbom manifest backup restore-test selfcheck alert-rules docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -27,6 +27,7 @@ help:
 	@echo "make backup     encrypted backup (restic) of the database, the evidence and the configuration"
 	@echo "make restore-test  restore the last backup in a disposable database and record the result"
 	@echo "make manifest   build images and write dist/release-manifest.json"
+	@echo "make alert-rules    write the alert rules from the objectives of the specification"
 	@echo "make docs-check     technical documentation covers every module and closed phase"
 	@echo "make ontology-gates  the five editorial gates of the ontology"
 	@echo "make policy-test    Rego unit tests in the OPA container"
@@ -133,6 +134,11 @@ selfcheck:
 
 manifest: sbom
 	uv run python tools/release.py build --version $(VERSION)
+
+# ARG-091 (F10-03): the alert rules, written from platform/observability/objectives.yaml. The
+# tests (tests/observability) fail when the file on disk is not what the table gives.
+alert-rules:
+	uv run python tools/alert_rules.py
 
 docs-check:
 	uv run python tools/docs_pack.py --check

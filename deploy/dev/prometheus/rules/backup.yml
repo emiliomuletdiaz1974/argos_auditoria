@@ -13,6 +13,7 @@ groups:
         annotations:
           summary: "No restore test has passed in the last 35 days"
           description: "Run make restore-test (or the monthly timer) and read argos.restore_tests."
+          runbook_url: docs/operacion/runbooks/RB-03-copias.md
       - alert: BackupRestoreTestFailed
         # The last restore test failed: the copies may be unusable.
         expr: argos_backup_last_restore_test_success == 0
@@ -21,3 +22,4 @@ groups:
         annotations:
           summary: "The last restore test failed"
           description: "The reasons are in argos.restore_tests; until a test passes, treat the copies as broken."
+          runbook_url: docs/operacion/runbooks/RB-03-copias.md

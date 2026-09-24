@@ -1,0 +1,255 @@
+# promtool test rules: every alert of argos.rules.yml fires on the case that breaks its
+# objective and stays quiet on the one that meets it (F10-03). Run by
+# tests/observability/test_alert_rules_promtool.py with the pinned image of Prometheus.
+rule_files:
+- /rules/argos.rules.yml
+evaluation_interval: 1m
+tests:
+- interval: 1m
+  input_series:
+  - series: argos_journal_verify_ok{scope="tail"}
+    values: 1 1 1 0 0 0 0
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: JournalNotIntact
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        objective: journal-intact
+      exp_annotations:
+        summary: 'The chained journal does not verify: possible tampering'
+        description: Keep the database as it is, do not restart anything, and escalate.
+        runbook_url: docs/operacion/runbooks/RB-01-diario.md
+        source: 'Especificación §3.7: cada acción entra en el diario de auditoría encadenado; ADR-0002'
+- interval: 1m
+  input_series:
+  - series: argos_journal_verify_ok{scope="tail"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: JournalNotIntact
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: argos_worm_healthy
+    values: '0x10'
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: WormWriteFailing
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        objective: worm-writes
+      exp_annotations:
+        summary: The WORM store does not keep what it is given
+        description: 'The canary of the health service failed twice in a row: evidence cannot be sealed.'
+        runbook_url: docs/operacion/runbooks/RB-02-almacen-evidencia.md
+        source: 'Especificación §3.6: la evidencia sellada se guarda en el almacén WORM'
+- interval: 1m
+  input_series:
+  - series: argos_worm_healthy
+    values: 1 0 1 0 1 0 1 0
+  alert_rule_test:
+  - eval_time: 5m
+    alertname: WormWriteFailing
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: argos_evidence_volume_used_ratio
+    values: 0.9x20
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: EvidenceDisk85
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        objective: evidence-disk
+      exp_annotations:
+        summary: The evidence volume is more than 85 % full
+        description: 'Sealed evidence cannot be removed: extend the volume before it fills.'
+        runbook_url: docs/operacion/runbooks/RB-02-almacen-evidencia.md
+        source: 'Especificación §5.6: dimensionamiento del almacenamiento de evidencia'
+- interval: 1m
+  input_series:
+  - series: argos_evidence_volume_used_ratio
+    values: 0.5x20
+  alert_rule_test:
+  - eval_time: 15m
+    alertname: EvidenceDisk85
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: argos_job_last_success_timestamp_seconds{job="backup"}
+    values: '0x2000'
+  alert_rule_test:
+  - eval_time: 30h
+    alertname: BackupStale
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        objective: backup-daily
+        job: backup
+      exp_annotations:
+        summary: No backup has completed in the last 26 hours
+        description: 'The daily copy did not run or failed: the recovery point is older than a day.'
+        runbook_url: docs/operacion/runbooks/RB-03-copias.md
+        source: 'Especificación §3.9: copia diaria cifrada de la configuración y el grafo (RPO 24 h)'
+- interval: 1m
+  input_series:
+  - series: argos_job_last_success_timestamp_seconds{job="backup"}
+    values: 0+60x2000
+  alert_rule_test:
+  - eval_time: 30h
+    alertname: BackupStale
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: argos_campaign_gate_waiting_hours{campaign="c-1",gate="start"}
+    values: 61x5
+  alert_rule_test:
+  - eval_time: 2m
+    alertname: CampaignStuckAtGate
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        objective: gate-waiting
+        campaign: c-1
+        gate: start
+      exp_annotations:
+        summary: Campaign c-1 has waited more than 60 hours at its start gate
+        description: 'Tell the DPO: at 72 hours the gate expires and the campaign must start again.'
+        runbook_url: docs/operacion/runbooks/RB-05-campanas-y-colas.md
+        source: 'ARG-043: una compuerta sin aprobar caduca a las 72 h; se avisa antes'
+- interval: 1m
+  input_series:
+  - series: argos_campaign_gate_waiting_hours{campaign="c-1",gate="start"}
+    values: 10x5
+  alert_rule_test:
+  - eval_time: 2m
+    alertname: CampaignStuckAtGate
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: argos_connector_circuit_open{system="dev-source-postgres"}
+    values: 1x40
+  alert_rule_test:
+  - eval_time: 35m
+    alertname: CircuitOpen
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        objective: circuit-open
+        system: dev-source-postgres
+      exp_annotations:
+        summary: The circuit of dev-source-postgres has been open for 30 minutes
+        description: 'The system answers slowly: its probes wait. Check it with its owner before closing.'
+        runbook_url: docs/operacion/runbooks/RB-05-campanas-y-colas.md
+        source: 'Pliego P-05 y ARG-013: el presupuesto de carga protege los sistemas del cliente'
+- interval: 1m
+  input_series:
+  - series: argos_connector_circuit_open{system="dev-source-postgres"}
+    values: 1x20 0x20
+  alert_rule_test:
+  - eval_time: 35m
+    alertname: CircuitOpen
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: argos_tsa_queue_pending
+    values: 40+1x400
+  alert_rule_test:
+  - eval_time: 6h
+    alertname: TsaQueueGrowing
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        objective: tsa-queue
+      exp_annotations:
+        summary: More than 50 time-stamp requests are waiting and the queue keeps growing
+        description: The TSA is unreachable, or the airlock export of requests is not being done.
+        runbook_url: docs/operacion/runbooks/RB-05-campanas-y-colas.md
+        source: 'ARG-065: en aislado, los sellos esperan en cola hasta la ventana de conectividad'
+- interval: 1m
+  input_series:
+  - series: argos_tsa_queue_pending
+    values: 60x400
+  alert_rule_test:
+  - eval_time: 6h
+    alertname: TsaQueueGrowing
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: argos_scan_last_duration_seconds{system="dev-source-postgres"}
+    values: 8000x5
+  alert_rule_test:
+  - eval_time: 2m
+    alertname: ScanTooSlow
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        objective: rescan-duration
+        system: dev-source-postgres
+      exp_annotations:
+        summary: The last scan of dev-source-postgres took more than 2 hours
+        description: 'The incremental rescan misses its design objective: look at the load budget and
+          the size.'
+        runbook_url: docs/operacion/runbooks/RB-05-campanas-y-colas.md
+        source: 'Especificación §3.10: reexploración incremental diaria por debajo de 2 horas'
+- interval: 1m
+  input_series:
+  - series: argos_scan_last_duration_seconds{system="dev-source-postgres"}
+    values: 3000x5
+  alert_rule_test:
+  - eval_time: 2m
+    alertname: ScanTooSlow
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: argos_certs_expiring_7d
+    values: 1x90
+  alert_rule_test:
+  - eval_time: 70m
+    alertname: CertificatesExpiring
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        objective: certificates
+      exp_annotations:
+        summary: An internal certificate expires within 7 days
+        description: 'The automatic rotation did not renew it: look at the cert-issuer.'
+        runbook_url: docs/operacion/runbooks/RB-06-plataforma.md
+        source: 'Especificación §3.8: certificados de una CA interna rotados automáticamente'
+- interval: 1m
+  input_series:
+  - series: argos_certs_expiring_7d
+    values: '0x90'
+  alert_rule_test:
+  - eval_time: 70m
+    alertname: CertificatesExpiring
+    exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: up{job="argos-health",instance="health:8000"}
+    values: '0x10'
+  alert_rule_test:
+  - eval_time: 8m
+    alertname: HealthServiceDown
+    exp_alerts:
+    - exp_labels:
+        severity: critical
+        objective: health-watching
+        job: argos-health
+        instance: health:8000
+      exp_annotations:
+        summary: The domain health service is not answering
+        description: Without it the journal, the WORM store and the queues go unwatched.
+        runbook_url: docs/operacion/runbooks/RB-06-plataforma.md
+        source: 'ADR-0015 punto 2: sin el servicio de salud, las alertas de dominio no pueden dispararse'
+- interval: 1m
+  input_series:
+  - series: up{job="argos-health",instance="health:8000"}
+    values: 1x10
+  alert_rule_test:
+  - eval_time: 8m
+    alertname: HealthServiceDown
+    exp_alerts: []

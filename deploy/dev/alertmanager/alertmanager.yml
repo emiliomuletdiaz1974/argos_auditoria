@@ -1,0 +1,35 @@
+# ARG-091 (F10-03, ADR-0015 point 3): where the alerts go. Nothing leaves the appliance but this:
+# always the console, and the webhook of the organisation when it configures one.
+#
+# Critical alerts wake somebody up and repeat every hour; the rest wait for the next working day
+# and repeat every day. The console receives them on the API (F10-07 adds the route and its
+# authentication); until then the delivery is attempted and logged by Alertmanager.
+route:
+  receiver: console
+  group_by: [alertname, objective]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 24h
+  routes:
+    - matchers: ['severity="critical"']
+      receiver: console
+      group_wait: 10s
+      repeat_interval: 1h
+
+receivers:
+  - name: console
+    webhook_configs:
+      - url: http://api:8000/api/v1/operations/alerts
+        send_resolved: true
+  # The organisation's own channel, when it has one (installer, F10-10). Uncomment and add it as a
+  # second receiver of both routes with `continue: true`:
+  #
+  # - name: organisation
+  #   webhook_configs:
+  #     - url: https://<the organisation's endpoint>
+  #       send_resolved: true
+
+inhibit_rules:
+  # While the health service is down its gauges are stale: do not also page for what it measures.
+  - source_matchers: ['alertname="HealthServiceDown"']
+    target_matchers: ['alertname=~"JournalNotIntact|WormWriteFailing|EvidenceDisk85"']
