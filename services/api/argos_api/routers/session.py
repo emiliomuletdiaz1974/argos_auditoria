@@ -8,6 +8,7 @@ audited route class.
 """
 
 import contextlib
+import datetime as dt
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -17,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from argos_api import API_PREFIX
 from argos_api.http import pending
+from argos_api.sessions import CLOSED_FOR, SessionClosures, sid_of
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 COOKIE = "argos_refresh"
@@ -104,6 +106,12 @@ async def logout(request: Request) -> Response:
         # Already expired or revoked at the realm: the cookie goes anyway.
         with contextlib.suppress(PermissionError):
             await revoker(token)
+            # The realm accepted this very refresh token: its session is closed for the access
+            # tokens too (F09-32, SEC-060). A cookie the realm refuses closes nothing.
+            closures: SessionClosures | None = getattr(request.app.state, "closed_sessions", None)
+            sid = sid_of(token)
+            if closures is not None and sid:
+                closures.close(sid, dt.datetime.now(dt.UTC) + CLOSED_FOR)
     answer = Response(status_code=status.HTTP_204_NO_CONTENT)
     answer.delete_cookie(COOKIE, path=COOKIE_PATH, httponly=True, secure=True, samesite="strict")
     return answer

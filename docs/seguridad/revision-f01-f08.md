@@ -1,6 +1,6 @@
 # Revisión de seguridad de las Fases 01 a 08
 
-**Versión:** 1.16 · **Fecha:** 2026-09-23 · **Base:** `main` en `47711f5` (con la auditoría del 2026-09-18 integrada) · **Confidencialidad:** `client`
+**Versión:** 1.17 · **Fecha:** 2026-09-23 · **Base:** `main` en `47711f5` (con la auditoría del 2026-09-18 integrada) · **Confidencialidad:** `client`
 **Tarea:** F09-02 · **Referencia:** [modelo de amenazas](modelo-amenazas.md)
 
 Tratamos nuestros hallazgos como los de un cliente: cada uno queda **registrado** aquí, se **corrige** en una tarea con un test que lo reproduce primero, y la corrección queda **evidenciada** en el commit y en este registro.
@@ -139,6 +139,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | SEC-026 | Corregido | F09-06 | `4f6309a` | 2026-09-23 |
 | SEC-057 | Tratado: excepción en `platform/security/vex.yaml` hasta el 2026-12-31 (dependencia de desarrollo que no viaja en la imagen); actualizar vitest queda en pendientes | F09-09 | `196e3f7` | 2026-09-23 |
 | SEC-058, SEC-059 | Corregido | F09-15 | `1cba07e` | 2026-09-24 |
+| SEC-060 | Corregido | F09-32 | `COMMIT` | 2026-09-24 |
 
 ## 7. Historial
 
@@ -161,3 +162,4 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | 1.14 | 2026-09-23 | Corregido SEC-026 (F09-06) |
 | 1.15 | 2026-09-23 | SEC-057 tratado con excepción que caduca (F09-09) |
 | 1.16 | 2026-09-24 | La batería de accesos (F09-15) añade SEC-058 y SEC-059, corregidos, y SEC-060, abierto en F09-32 |
+| 1.17 | 2026-09-24 | Corregido SEC-060 (F09-32): el token de acceso de una sesión cerrada se rechaza |

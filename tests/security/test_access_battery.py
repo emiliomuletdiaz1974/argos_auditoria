@@ -325,17 +325,72 @@ def test_no_token_at_all_is_refused() -> None:
     assert ok
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="SEC-060: an access token lives until it expires (5 min at most) after logout; F09-32",
-)
+def _console_session(username: str) -> tuple[str, str]:
+    """A session of the console, as a browser opens it: sign-in at the realm with the code flow
+    and PKCE, then the API exchanges the code and sets the refresh cookie. (access, refresh)"""
+    import hashlib
+    import html
+    import re
+    import secrets
+
+    verifier = secrets.token_urlsafe(48)
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest())
+    redirect = f"{API}/callback"
+    cookies: dict[str, str] = {}
+
+    def send(method: str, url: str, **kwargs: Any) -> httpx.Response:
+        # The realm writes its own address (keycloak:8080) in the forms: sent to the published
+        # port, with the internal Host, so the tokens carry the issuer the API expects.
+        target = url.replace(f"http://{INTERNAL_HOST}", KEYCLOAK)
+        headers = {
+            "Host": INTERNAL_HOST,
+            "Cookie": "; ".join(f"{k}={v}" for k, v in cookies.items()),
+        }
+        answer = httpx.request(method, target, headers=headers, timeout=10, **kwargs)
+        for header in answer.headers.get_list("set-cookie"):
+            name, _, rest = header.partition("=")
+            cookies[name.strip()] = rest.split(";", 1)[0]
+        return answer
+
+    def action(page: str) -> str:
+        found = re.search(r'<form[^>]*action="([^"]+)"', page)
+        assert found, page[:300]
+        return html.unescape(found.group(1))
+
+    page = send(
+        "GET", f"{KEYCLOAK}/realms/argos/protocol/openid-connect/auth",
+        params={"client_id": "argos-console", "redirect_uri": redirect, "response_type": "code",
+                "scope": "openid", "code_challenge": challenge.rstrip(b"=").decode(),
+                "code_challenge_method": "S256"},
+    )  # fmt: skip
+    answer = send("POST", action(page.text), data={"username": username, "password": "test"})
+    assert answer.status_code == 302, answer.text[:300]
+    code = httpx.URL(answer.headers["location"]).params["code"]
+    opened = httpx.post(
+        f"{API}/api/v1/auth/session",
+        json={"code": code, "code_verifier": verifier, "redirect_uri": redirect},
+        timeout=10,
+    )
+    assert opened.status_code == 200, opened.text
+    refresh = next(
+        h.split("=", 1)[1].split(";", 1)[0]
+        for h in opened.headers.get_list("set-cookie")
+        if h.startswith("argos_refresh=")
+    )
+    return str(opened.json()["access_token"]), refresh
+
+
 def test_a_token_is_refused_after_its_session_was_closed() -> None:
-    answer = _token_answer("manager.test")
-    access, refresh = str(answer["access_token"]), str(answer["refresh_token"])
-    closed = httpx.post(f"{API}/api/v1/auth/logout", cookies={"argos_refresh": refresh}, timeout=10)
-    assert closed.status_code in (200, 204)
+    access, refresh = _console_session("manager.test")
+    assert _call("GET", "/api/v1/campaigns", access).status_code == 200, "a live session works"
+    closed = httpx.post(
+        f"{API}/api/v1/auth/logout", headers={"Cookie": f"argos_refresh={refresh}"}, timeout=10
+    )
+    assert closed.status_code == 204
     got = _call("GET", "/api/v1/campaigns", access).status_code
-    record("tokens", "access token after logout", "401", str(got), got == 401)
+    record(
+        "tokens", "access token of a session closed from the console", "401", str(got), got == 401
+    )
     assert got == 401
 
 
@@ -612,7 +667,7 @@ def test_every_kind_of_attempt_reached_the_security_log() -> None:
                 " AND outcome = 'refused'"
             ).fetchall()
         }
-    for kind in ("auth.token_rejected", "authz.denied"):
+    for kind in ("auth.token_rejected", "authz.denied", "auth.session_closed"):
         ok = kind in kinds
         record(
             "security log",

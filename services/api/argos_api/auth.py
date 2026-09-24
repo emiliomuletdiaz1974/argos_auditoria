@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from argos_api.security_events import security_event
+from argos_api.sessions import SessionClosures
 from argos_auth import ROLES, AuthError, Identity, JwtValidator
 
 _CHALLENGE = {"WWW-Authenticate": "Bearer"}
@@ -29,6 +30,11 @@ def authenticate(
         reason = str(refused).rpartition(": ")[2][:80]
         security_event(request, "auth.token_rejected", "anonymous", "refused", {"reason": reason})
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token", _CHALLENGE) from None
+    closed: SessionClosures | None = getattr(request.app.state, "closed_sessions", None)
+    if identity.sid and closed is not None and closed.is_closed(identity.sid):
+        # The person closed this session: its tokens are worth nothing, expired or not (SEC-060).
+        security_event(request, "auth.session_closed", identity.actor, "refused")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "the session was closed", _CHALLENGE)
     if not identity.roles & frozenset(ROLES):
         security_event(request, "auth.no_role", identity.actor, "refused")
         raise HTTPException(status.HTTP_403_FORBIDDEN, "an ARGOS realm role is required")

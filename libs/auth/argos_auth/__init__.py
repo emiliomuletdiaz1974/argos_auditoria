@@ -30,6 +30,8 @@ class Identity:
     roles: frozenset[str]
     # How the person signed in, as the realm says in `amr` (F09-07): {"pwd"}, {"pwd", "otp"}...
     amr: frozenset[str] = field(default_factory=frozenset)
+    # The session of the realm the token belongs to (`sid`), so a closed one is refused (F09-32).
+    sid: str | None = None
 
     @property
     def actor(self) -> str:
@@ -67,7 +69,10 @@ class JwtValidator:
             raise AuthError(f"role {required_role} is required")
         methods = claims.get("amr")
         amr = frozenset(str(m) for m in methods) if isinstance(methods, list) else frozenset()
-        return Identity(str(claims["sub"]), str(claims.get("preferred_username", "")), roles, amr)
+        sid = str(claims["sid"]) if claims.get("sid") else None
+        return Identity(
+            str(claims["sub"]), str(claims.get("preferred_username", "")), roles, amr, sid
+        )
 
 
 @lru_cache(maxsize=1)

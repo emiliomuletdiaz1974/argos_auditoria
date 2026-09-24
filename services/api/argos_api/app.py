@@ -44,6 +44,7 @@ from argos_api.routers import (
 from argos_api.routers.session import CodeExchanger, SessionRevoker
 from argos_api.runner import CampaignRunner
 from argos_api.security_events import backup_metrics, security_event, security_metrics
+from argos_api.sessions import ClosedSessions, SessionClosures
 from argos_api.webhooks.destination import Resolver, resolve_host
 from argos_api.webhooks.store import SecretWriter
 from argos_auth import JwtValidator
@@ -117,6 +118,7 @@ def create_app(
     updates: system.UpdateRequests | None = None,
     support: support.SupportDiagnostics | None = None,
     airgap: Gate | None = None,
+    closed_sessions: SessionClosures | None = None,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
     still answer, and the tests that do not touch the database do not need one.
@@ -138,6 +140,8 @@ def create_app(
     app.state.updates = updates
     app.state.support = support
     app.state.airgap = airgap
+    # F09-32: the sessions closed before their tokens expire, shared by every replica.
+    app.state.closed_sessions = closed_sessions or (ClosedSessions(dsn) if dsn else None)
     app.state.refresher = refresher
     app.state.campaign_runner = campaign_runner
     app.state.evidence = evidence
