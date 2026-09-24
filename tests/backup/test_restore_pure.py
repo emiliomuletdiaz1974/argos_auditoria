@@ -194,3 +194,22 @@ def test_the_result_is_a_record_with_a_date_and_every_check() -> None:
     assert row["tested_at"] == "2026-09-24T00:00:00+00:00"
     assert json.loads(row["counts"]) == {}
     assert row["result"] == "passed"
+
+
+def test_the_copy_is_compared_with_the_counts_of_its_own_moment(tmp_path: Path) -> None:
+    """F09-99: production gains tables (a migration) and rows after the copy; that is not a
+    broken copy. The backup keeps the counts of its moment, and the trial compares with those."""
+    folder = tmp_path / "staging" / "db"
+    folder.mkdir(parents=True)
+    (folder / "counts.json").write_text(
+        json.dumps({"argos.findings": 0, "argos.audit_journal": 250}), encoding="utf-8"
+    )
+    now = {"argos.findings": 10, "argos.audit_journal": 300, "argos.closed_sessions": 1}
+    baseline = restore.baseline_counts(tmp_path, now)
+    assert baseline == {"argos.findings": 0, "argos.audit_journal": 250}
+    assert restore.compare_counts(baseline, {"argos.findings": 0, "argos.audit_journal": 250}) == []
+
+
+def test_without_counts_of_its_moment_the_copy_is_compared_with_production(tmp_path: Path) -> None:
+    now = {"argos.findings": 10}
+    assert restore.baseline_counts(tmp_path, now) == now

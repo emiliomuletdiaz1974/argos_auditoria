@@ -146,6 +146,19 @@ def compare_counts(production: Mapping[str, int], restored: Mapping[str, int]) -
     return problems
 
 
+def baseline_counts(folder: Path, current: Mapping[str, int]) -> dict[str, int]:
+    """What the copy is compared with: the counts the backup recorded at its moment.
+
+    Production keeps changing after the copy (new rows, new tables after a migration), and that
+    is not a broken copy (seen in F09-99, a copy older than migration 0039). A copy without its
+    counts, made before they were recorded, is compared with production as it is now.
+    """
+    recorded = folder / "staging" / "db" / "counts.json"
+    if recorded.is_file():
+        return {str(k): int(v) for k, v in json.loads(recorded.read_text(encoding="utf-8")).items()}
+    return dict(current)
+
+
 def _entry(row: Mapping[str, Any], action_key: str) -> JournalEntry:
     return JournalEntry(
         int(row["seq"]),
@@ -283,11 +296,16 @@ def _verify(
     restored = {k: int(v) for k, v in json.loads(box.sql(COUNTS_SQL)).items()}
     restored["graph:inventory"] = int(box.sql(GRAPH_SQL) or 0)
     current = production.counts()
+    baseline = baseline_counts(folder, current)
     result.counts = {
-        table: {"production": current.get(table, 0), "restored": restored.get(table, 0)}
-        for table in sorted(set(current) | set(restored))
+        table: {
+            "at_backup": baseline.get(table, 0),
+            "production": current.get(table, 0),
+            "restored": restored.get(table, 0),
+        }
+        for table in sorted(set(current) | set(restored) | set(baseline))
     }
-    result.reasons += compare_counts(current, restored)
+    result.reasons += compare_counts(baseline, restored)
 
     # A different sample in each copy, chosen by the id of the snapshot. `psql -c` takes no
     # parameters: the id is checked to be hexadecimal before it goes into the query.

@@ -29,7 +29,7 @@
 4. Se verifica:
    - la cadena del diario, con el verificador del diario v1, y que su último asiento es el mismo en producción;
    - la cadena del registro de seguridad y sus columnas;
-   - los recuentos de cada tabla y los nodos del grafo del inventario, frente a producción. Una tabla ausente o vacía en la copia es un fallo;
+   - los recuentos de cada tabla y los nodos del grafo del inventario, frente a los que el backup apuntó al hacer la copia (`counts.json`, junto al volcado). Una tabla ausente o vacía en la copia es un fallo. La producción de ahora queda como información: tras una migración tiene tablas que la copia no puede tener;
    - una muestra de objetos de evidencia de la copia, frente a la huella de `evidence_index`.
 5. El resultado se guarda con su fecha:
    - una fila en `argos.restore_tests` (de solo inserción);

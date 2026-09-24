@@ -22,11 +22,12 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import backup_common as common
-from restore_test import workspace
+from restore_test import PostgresProduction, workspace
 
 from argos_common import security_log
 from argos_common.journal_pg import PostgresJournal
@@ -69,12 +70,21 @@ def backup(
     evidence_volume: str,
     user: str,
     password: str,
+    counts: Callable[[], dict[str, int]] | None = None,
 ) -> dict[str, str]:
-    """The three sets; returns the snapshot of each."""
+    """The three sets; returns the snapshot of each.
+
+    `counts` gives the rows of every table at the moment of the dump: the restore test compares
+    the copy with them, not with production as it is later.
+    """
     restic.ensure()
     snapshots: dict[str, str] = {}
     with workspace() as staging:
         dump_database(run, compose, user, password, staging / "db")
+        if counts is not None:
+            (staging / "db" / "counts.json").write_text(
+                json.dumps(counts(), sort_keys=True), encoding="utf-8"
+            )
         snapshots["db"] = restic.backup(["/staging/db"], "db", [(str(staging), "/staging", True)])
         snapshots["evidence"] = restic.backup(
             ["/evidence"], "evidence", [(evidence_volume, "/evidence", True)]
@@ -116,7 +126,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with common.Restic(common.docker, args.repository, vault.restic_password()) as restic:
             snapshots = backup(
-                restic, common.docker, vault, args.compose, args.evidence_volume, user, password
+                restic,
+                common.docker,
+                vault,
+                args.compose,
+                args.evidence_volume,
+                user,
+                password,
+                PostgresProduction(dsn).counts,
             )
         record(dsn, snapshots, "succeeded")
     except Exception as failure:
