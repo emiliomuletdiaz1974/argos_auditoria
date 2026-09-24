@@ -1,0 +1,12 @@
+# Autoverificación de ARGOS (ARG-100, F10-01): la especificación técnica tomada como norma.
+id: OBL-SELF-3-3-1
+norma: SELF
+articulo: "3.3"
+titulo: "Contenido normativo firmado en vigor"
+vigente_desde: 2026-09-24
+severidad: high
+texto_resumen: "El appliance tiene en vigor un bundle de contenido firmado: retos, políticas y formas verificados."
+aplica_a:
+  - AC-argos-appliance
+verificado_por:
+  - self-005

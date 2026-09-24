@@ -13,7 +13,7 @@ export PGPASSWORD := dev-only-postgres
 # client, whose TLS the connectors decide source by source (F09-31).
 export ARGOS_TLS_DIR := deploy/dev/secrets/tls-host
 
-.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build sbom manifest backup restore-test docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
+.PHONY: help dev dev-heavy dev-down lint typecheck secrets test check check-heavy cover build sbom manifest backup restore-test selfcheck docs-check ontology-gates policy-test ontology-overlap challenge-lint challenge-catalog api-contract api-contract-write console-install console-lint console-test console-types console-build ai-eval ai-eval-release demo demo-reset
 
 help:
 	@echo "make dev        start the development environment and simulated sources (docker)"
@@ -124,6 +124,12 @@ backup:
 
 restore-test:
 	uv run python platform/backup/restore_test.py --repository $(BACKUP_REPOSITORY)
+
+# ARG-100 (F10-01): ARGOS verifies ARGOS. The local gate of every release (DP-16): a self-* campaign
+# against the development environment, its dossier in dist/selfcheck-<version>/ and a non-zero exit
+# when it has a critical or high finding or lacks the one of the trap.
+selfcheck:
+	uv run --env-file .env.example python tools/selfcheck.py --dev-setup --publish-content
 
 manifest: sbom
 	uv run python tools/release.py build --version $(VERSION)

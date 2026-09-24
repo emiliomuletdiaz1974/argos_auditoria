@@ -1,0 +1,12 @@
+# Autoverificación de ARGOS (ARG-100, F10-01): la especificación técnica tomada como norma.
+id: OBL-SELF-3-7-1
+norma: SELF
+articulo: "3.7"
+titulo: "Diario de auditoría encadenado íntegro"
+vigente_desde: 2026-09-24
+severidad: critical
+texto_resumen: "El último tramo del diario de auditoría enlaza y recalcula sin anomalías con el hash del diario v1."
+aplica_a:
+  - AC-argos-appliance
+verificado_por:
+  - self-001

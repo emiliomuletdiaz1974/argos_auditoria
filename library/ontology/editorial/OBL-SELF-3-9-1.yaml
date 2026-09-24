@@ -1,0 +1,12 @@
+# Autoverificación de ARGOS (ARG-100, F10-01): la especificación técnica tomada como norma.
+id: OBL-SELF-3-9-1
+norma: SELF
+articulo: "3.9"
+titulo: "Restauración probada y reciente"
+vigente_desde: 2026-09-24
+severidad: high
+texto_resumen: "La última prueba de restauración de la copia pasó y tiene menos de 35 días."
+aplica_a:
+  - AC-argos-appliance
+verificado_por:
+  - self-003

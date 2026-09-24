@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-SELF-3-8-1 a argos:Obligation ;
+    rdfs:label "Registro de seguridad íntegro"@es ;
+    rdfs:comment "El registro de seguridad, separado del diario funcional, verifica su propia cadena."@es ;
+    argos:appliesTo n:AC-argos-appliance ;
+    argos:derivesFrom n:SELF-3-8 ;
+    argos:inForceFrom "2026-09-24"^^xsd:date ;
+    argos:severity "critical" ;
+    argos:verifiedBy n:CH-self-002 .
+
+n:CH-self-002 a argos:Challenge ;
+    argos:challengeId "self-002" .
+

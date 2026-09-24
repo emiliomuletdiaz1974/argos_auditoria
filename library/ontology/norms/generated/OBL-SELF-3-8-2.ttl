@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-SELF-3-8-2 a argos:Obligation ;
+    rdfs:label "Conexiones a la base de datos cifradas"@es ;
+    rdfs:comment "Ninguna conexión por red a la base de datos del appliance viaja sin TLS."@es ;
+    argos:appliesTo n:AC-argos-appliance ;
+    argos:derivesFrom n:SELF-3-8 ;
+    argos:inForceFrom "2026-09-24"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-self-004 .
+
+n:CH-self-004 a argos:Challenge ;
+    argos:challengeId "self-004" .
+

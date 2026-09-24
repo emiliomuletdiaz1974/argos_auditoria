@@ -22,8 +22,10 @@ from sqlglot.errors import ParseError
 from argos_connector.minimize import ValueHasher
 
 # The catalogue and configuration sources of each dialect, by schema and by name prefix.
+# `argos_facts` is where the appliance answers its own self-* challenges (ARG-100): a view of
+# `(fact, setting)` rows about itself, the configuration of ARGOS as a system.
 _SCHEMAS: Mapping[str, frozenset[str]] = {
-    "postgres": frozenset({"pg_catalog", "information_schema"}),
+    "postgres": frozenset({"pg_catalog", "information_schema", "argos_facts"}),
     "mysql": frozenset({"information_schema", "performance_schema", "mysql", "sys"}),
     "tsql": frozenset({"sys", "information_schema"}),
     "oracle": frozenset({"sys"}),

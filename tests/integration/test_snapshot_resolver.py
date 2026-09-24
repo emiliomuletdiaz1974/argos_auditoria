@@ -6,6 +6,7 @@ from fixtures.demo_review import apply_demo_review
 
 from argos_challenges.snapshot_resolver import SnapshotSelectorResolver
 from argos_inventory.ai_discovery.detect import discover_ai
+from argos_inventory.api.selector import parse_selector
 from argos_inventory.classify.deterministic import classify_new_columns
 from argos_inventory.graph.store import GraphStore
 from argos_inventory.versioning.snapshots import take_snapshot, verify_snapshot
@@ -49,6 +50,19 @@ def test_every_asset_class_resolves_the_same_nodes_as_the_live_graph(
         assert over_snapshot.resolve(selector) == over_graph.resolve(selector), name
         checked += 1
     assert checked >= 8
+
+
+def test_a_system_node_carries_its_own_id_in_the_snapshot(
+    snapshot: tuple[str, GraphStore, str],
+) -> None:
+    # ARG-100 (F10-01): the self-* challenges select the appliance by its System node, and a node a
+    # campaign measures must say which system it belongs to, as the live graph already answers.
+    snapshot_id, store, dsn = snapshot
+    selector = parse_selector({"label": "System", "name_like": "dev-source-postgres"})
+    over_snapshot = SnapshotSelectorResolver(dsn, snapshot_id).resolve(selector)
+    assert over_snapshot == StoreSelectorResolver(store).resolve(selector)
+    assert len(over_snapshot) == 1
+    assert over_snapshot[0].system_id is not None
 
 
 def test_the_snapshot_keeps_the_status_of_the_confirmed_ai_system(

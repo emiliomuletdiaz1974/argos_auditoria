@@ -51,6 +51,8 @@ asset_classes:
   AC-pending-ai-system: []
   AC-confirmed-ai-system:
     - dev-source-postgres table:readmission_risk
+  # The appliance is not part of the demo snapshot: its self-* challenges run in their own campaign.
+  AC-argos-appliance: []
 
 .personal: &personal
   - AC-stored-personal-data
@@ -83,13 +85,22 @@ asset_classes:
   OBL-AIACT-26-1: {classes: [AC-confirmed-ai-system], challenges: [doc-ai-human-oversight]}
   OBL-AIACT-26-2: {classes: [AC-confirmed-ai-system], challenges: [sec-ai-log-retention]}
 
+# The specification of the product taken as a norm (ARG-100, F10-01), in force from 2026-09-24.
+.self: &self
+  OBL-SELF-3-3-1: {classes: [AC-argos-appliance], challenges: [self-005]}
+  OBL-SELF-3-7-1: {classes: [AC-argos-appliance], challenges: [self-001]}
+  OBL-SELF-3-8-1: {classes: [AC-argos-appliance], challenges: [self-002]}
+  OBL-SELF-3-8-2: {classes: [AC-argos-appliance], challenges: [self-004]}
+  OBL-SELF-3-9-1: {classes: [AC-argos-appliance], challenges: [self-003]}
+  OBL-SELF-7-1: {classes: [AC-argos-appliance], challenges: [self-099]}
+
 # Obligations that apply on each campaign date, with their classes and challenges. Obligations
 # pending verification (OBL-RGPD-33-1, OBL-EHDS-60-1) have no challenge and never enter a plan.
 dates:
   "2026-09-16":
     <<: [*rgpd, *aiact]
   "2029-03-26":
-    <<: [*rgpd, *aiact]
+    <<: [*rgpd, *aiact, *self]
     OBL-EHDS-3-1: {classes: [AC-stored-health-data], challenges: [dsr-ehds-patient-access]}
     OBL-EHDS-8-1: {classes: [AC-stored-health-data], challenges: [dsr-ehds-access-restriction]}
     OBL-EHDS-9-1: {classes: [AC-stored-health-data], challenges: [sec-health-access-log-retention]}

@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-SELF-3-3-1 a argos:Obligation ;
+    rdfs:label "Contenido normativo firmado en vigor"@es ;
+    rdfs:comment "El appliance tiene en vigor un bundle de contenido firmado: retos, políticas y formas verificados."@es ;
+    argos:appliesTo n:AC-argos-appliance ;
+    argos:derivesFrom n:SELF-3-3 ;
+    argos:inForceFrom "2026-09-24"^^xsd:date ;
+    argos:severity "high" ;
+    argos:verifiedBy n:CH-self-005 .
+
+n:CH-self-005 a argos:Challenge ;
+    argos:challengeId "self-005" .
+

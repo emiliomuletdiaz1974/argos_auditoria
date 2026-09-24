@@ -1,0 +1,12 @@
+# Autoverificación de ARGOS (ARG-100, F10-01): la especificación técnica tomada como norma.
+id: OBL-SELF-3-8-2
+norma: SELF
+articulo: "3.8"
+titulo: "Conexiones a la base de datos cifradas"
+vigente_desde: 2026-09-24
+severidad: high
+texto_resumen: "Ninguna conexión por red a la base de datos del appliance viaja sin TLS."
+aplica_a:
+  - AC-argos-appliance
+verificado_por:
+  - self-004

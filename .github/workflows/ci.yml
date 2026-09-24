@@ -129,9 +129,10 @@ jobs:
       - run: uv run python tools/cis_gate.py --report dist/cis-report.json
 
   selfcheck:
-    # ARG-100 · ARGOS verifies ARGOS. Enabled in Phase 10; until then the stage is only declared.
+    # ARG-100 · ARGOS verifies ARGOS. The campaign needs the whole environment, so until there is a
+    # runner with it the gate is local: `make selfcheck` before every release (DP-16, F10-01).
     if: startsWith(github.ref, 'refs/tags/v')
     needs: package
     runs-on: ubuntu-latest
     steps:
-      - run: echo "reserved - self-* verification campaign (ARG-100)"
+      - run: echo "reserved - run make selfcheck locally (ARG-100, DP-16)"

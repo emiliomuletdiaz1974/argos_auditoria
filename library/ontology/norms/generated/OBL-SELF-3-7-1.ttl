@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-SELF-3-7-1 a argos:Obligation ;
+    rdfs:label "Diario de auditoría encadenado íntegro"@es ;
+    rdfs:comment "El último tramo del diario de auditoría enlaza y recalcula sin anomalías con el hash del diario v1."@es ;
+    argos:appliesTo n:AC-argos-appliance ;
+    argos:derivesFrom n:SELF-3-7 ;
+    argos:inForceFrom "2026-09-24"^^xsd:date ;
+    argos:severity "critical" ;
+    argos:verifiedBy n:CH-self-001 .
+
+n:CH-self-001 a argos:Challenge ;
+    argos:challengeId "self-001" .
+

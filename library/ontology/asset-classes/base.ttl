@@ -69,3 +69,9 @@ n:AC-cross-border-flow a argos:AssetClass ;
   rdfs:label "Flujo transfronterizo"@es ;
   argos:graphLabel "System" ;
   argos:verificationPending "El grafo aún no registra el país de destino de FLOWS_TO (nota ARG-031-033)" .
+
+# The appliance itself, registered in its own inventory as the system `argos-appliance` (ARG-100).
+n:AC-argos-appliance a argos:AssetClass ;
+  rdfs:label "El propio appliance de ARGOS"@es ;
+  argos:graphLabel "System" ;
+  argos:selectorJson """{"label": "System", "name_like": "argos-appliance"}""" .

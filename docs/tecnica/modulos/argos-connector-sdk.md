@@ -4,8 +4,8 @@ kind: module
 title: SDK de conectores de solo lectura (argos-connector-sdk)
 module: argos-connector-sdk
 phases: ["02", "03"]
-version: 0.5.0-alpha
-commit: 34fc10a
+version: 0.6.0-alpha
+commit: 0ead992
 date: 2026-09-24
 status: current
 confidentiality: client
@@ -69,7 +69,7 @@ Otras piezas:
 ## 6. Seguridad y tratamiento de datos
 
 - **Depuración de identificadores** (F09-11): `validators.scrub_identifiers(text, identifiers)` sustituye por marcadores estables lo que valida como DNI, NIE, NUSS o IBAN, con la tabla de los guardarraíles (`library/prompts/guardrails.yaml`). La usan el gateway de IA (`scrub_input`) y el paquete de diagnóstico; vive aquí para que quien depura no importe la capa de IA (ADR-0012).
-- **Qué lee y qué devuelve una comprobación de configuración** (F09-31, SEC-022): `config_sources.check_config_sources(statement, dialect)` solo admite vistas de catálogo y configuración de cada dialecto (`pg_*`, `information_schema`, `sys.*`, `dba_*`/`v$*`, `sqlite_*`…) y rechaza cualquier tabla del cliente. `minimise_config_rows` devuelve en claro solo las columnas que nombran un ajuste o una identidad del sistema (`CLEAR_COLUMNS`); el resto sale como digest HMAC, y nunca más de `max_rows_per_probe` filas.
+- **Qué lee y qué devuelve una comprobación de configuración** (F09-31, SEC-022): `config_sources.check_config_sources(statement, dialect)` solo admite vistas de catálogo y configuración de cada dialecto (`pg_*`, `information_schema`, `sys.*`, `dba_*`/`v$*`, `sqlite_*`…) y rechaza cualquier tabla del cliente. En PostgreSQL admite además el esquema `argos_facts`, donde el propio appliance publica sus hechos para los retos `self-*` (ARG-100); no abre ninguna tabla que esté detrás. `minimise_config_rows` devuelve en claro solo las columnas que nombran un ajuste o una identidad del sistema (`CLEAR_COLUMNS`); el resto sale como digest HMAC, y nunca más de `max_rows_per_probe` filas.
 - **Solo lectura en dos capas:** validación en ARGOS y cuenta de solo lectura en el sistema del cliente (ver los permisos en cada documento de conector).
 - **Funciones con efectos:** la validación rechaza, además de las sentencias de escritura, las funciones que ejecutan sentencias en otra sesión o en otro servidor (`dblink`, `OPENQUERY`, `OPENROWSET`, `query_to_xml`), salen a la red o al sistema de ficheros (`UTL_*`, `xp_*`, `pg_read*`, `pg_stat_file`, `lo_*`) o toman bloqueos (`pg_advisory*`, `get_lock`). El nombre se comprueba con su paquete (`utl_http.request`), y cualquier argumento de texto que sea una sentencia de escritura también se rechaza.
 - **Transparencia:** cada consulta queda en `argos.connector_queries` y en el diario encadenado antes de ejecutarse; las rechazadas también quedan anotadas.
@@ -112,3 +112,4 @@ El presupuesto de carga vive en la memoria de cada proceso; con varias réplicas
 | 0.3.0-alpha | 2026-09-23 | Estado del presupuesto en un almacén (`BudgetState`, `InMemoryBudgetStore`, `budget_pg.PostgresBudgetStore`) y `follow_up` para las peticiones adicionales | F09-22 |
 | 0.4.0-alpha | 2026-09-23 | `config_sources`: fuentes permitidas de `check_config`, columnas en claro y minimización con tope de filas | F09-31 |
 | 0.5.0-alpha | 2026-09-24 | `scrub_identifiers`: el depurador de ARG-060, compartido con el paquete de diagnóstico | F09-11 (ARG-088) |
+| 0.6.0-alpha | 2026-09-24 | `argos_facts` es fuente de configuración en PostgreSQL: los hechos del propio appliance | F10-01 (ARG-100) |

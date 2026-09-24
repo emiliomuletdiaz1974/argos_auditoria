@@ -4,9 +4,9 @@ kind: module
 title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
-version: 0.5.0-alpha
-commit: 8dcef99
-date: 2026-09-23
+version: 0.6.0-alpha
+commit: 0ead992
+date: 2026-09-24
 status: current
 confidentiality: client
 ---
@@ -84,7 +84,7 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 - **Informe sin inyección** (F09-31, SEC-055): todo texto del cliente en el informe de inventario va en un *code span* de Markdown, donde ni Markdown ni HTML se interpretan (`<img src=…>` se ve, no se ejecuta).
 - **Procedencia:** cada hecho del grafo es trazable hasta la sonda, el conector y el asiento del diario de consultas que lo produjo.
 - **Decisiones humanas auditadas:** las revisiones de clasificación y la confirmación de sistemas de IA quedan en el diario encadenado (`inventory.review`, `inventory.ai_confirm`). Un sistema de IA solo se confirma con una clase de riesgo válida y una persona identificada.
-- **Instantáneas inmutables:** una instantánea no cambia aunque el grafo vivo sí, y `verify_snapshot` comprueba su integridad. Es la base de campañas reproducibles.
+- **Instantáneas inmutables:** una instantánea no cambia aunque el grafo vivo sí, y `verify_snapshot` comprueba su integridad. Es la base de campañas reproducibles. Un nodo `System` guarda en la instantánea su propio id como sistema (`coalesce(system_id, id)`), igual que responde la API del grafo, para que un reto pueda seleccionar un sistema entero (F10-01).
 - **API de solo lectura:** requiere un token válido del realm con cualquiera de sus roles. El selector no admite texto libre en la consulta: los valores viajan como parámetros y las etiquetas salen del vocabulario cerrado.
 - **Minimización:** la validación de identificadores produce tasas de aceptación, no valores.
 - **Clasificación asistida sin rebajas solas** (F09-29, SEC-025): los lotes que ve el modelo son de una sola tabla (`table_batches`). Una columna cuyo contexto dice categoría especial (su nombre, su tabla o una columna hermana, según el diccionario, `special_hints`) no se acepta sola con una propuesta que no sea `special_category.*`: va a la cola de revisión. Un nombre hostil en el lote no puede sacar una columna de salud de las campañas.
@@ -137,3 +137,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.3.0-alpha | 2026-09-23 | Lotes de clasificación por tabla, revisión obligatoria de una rebaja cuando el contexto dice categoría especial y cobertura filtrada en SQL | F09-29 |
 | 0.4.0-alpha | 2026-09-23 | Clave natural con separador escapado, clasificación que sigue tras una tabla fallida e informe con los nombres como código | F09-31 |
 | 0.5.0-alpha | 2026-09-23 | Rol `svc_inventory`; las sesiones del grafo sin `LOAD 'age'` | F09-04 (ARG-085) |
+| 0.6.0-alpha | 2026-09-24 | El nodo `System` guarda en la instantánea su propio id como sistema | F10-01 (ARG-100) |

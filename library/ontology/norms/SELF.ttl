@@ -1,0 +1,22 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# The technical specification of the product, taken as a norm so ARGOS can verify ARGOS with its
+# own engine (ARG-100, F10-01). Its obligations are the verifiable promises of the specification.
+
+n:SELF a argos:Norm ;
+  rdfs:label "Especificación técnica del producto ARGOS"@es ;
+  argos:inForceFrom "2026-09-24"^^xsd:date .
+
+n:SELF-3-3 a argos:Article ; argos:partOf n:SELF ;
+  rdfs:label "Sección 3.3. C3 — Ontología normativa y políticas: contenido firmado"@es .
+n:SELF-3-7 a argos:Article ; argos:partOf n:SELF ;
+  rdfs:label "Sección 3.7. C7 — Cada acción entra en el diario de auditoría encadenado"@es .
+n:SELF-3-8 a argos:Article ; argos:partOf n:SELF ;
+  rdfs:label "Sección 3.8. C8 — Seguridad de la plataforma"@es .
+n:SELF-3-9 a argos:Article ; argos:partOf n:SELF ;
+  rdfs:label "Sección 3.9. C9 — Operación, observabilidad y respaldo"@es .
+n:SELF-7 a argos:Article ; argos:partOf n:SELF ;
+  rdfs:label "Sección 7. Plan de ingeniería: la release llega con su expediente de autoverificación"@es .

@@ -91,6 +91,8 @@ def test_a_check_brings_at_most_the_rows_of_the_budget(db: Path) -> None:
         ("SELECT privilege_type FROM information_schema.table_privileges", "mysql"),
         ("SELECT name FROM sys.server_audits", "tsql"),
         ("SELECT username FROM dba_users", "oracle"),
+        # ARG-100: the facts ARGOS publishes about itself, for its own self-* challenges.
+        ("SELECT setting FROM argos_facts.facts WHERE fact = 'journal_tail_intact'", "postgres"),
     ],
 )
 def test_catalogue_and_configuration_sources_are_accepted(statement: str, dialect: str) -> None:
@@ -104,6 +106,9 @@ def test_catalogue_and_configuration_sources_are_accepted(statement: str, dialec
         ("SELECT * FROM clinic.patients", "postgres"),
         ("SELECT s.setting FROM pg_settings s JOIN billing.invoices i ON true", "postgres"),
         ("SELECT amount FROM billing.invoices", "mysql"),
+        # The facts schema is not a door to the tables behind it, nor a schema of other dialects.
+        ("SELECT payload FROM argos.audit_journal", "postgres"),
+        ("SELECT setting FROM argos_facts.facts", "mysql"),
     ],
 )
 def test_a_business_table_is_not_a_configuration_source(statement: str, dialect: str) -> None:

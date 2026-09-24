@@ -25,6 +25,7 @@ EXPECTED = {
     "AC-confirmed-ai-system",
     "AC-missing-table",
     "AC-cross-border-flow",
+    "AC-argos-appliance",
 }
 
 

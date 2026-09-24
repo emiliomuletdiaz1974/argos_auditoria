@@ -4,9 +4,9 @@ kind: module
 title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
-version: 0.4.0-alpha
-commit: d47decd
-date: 2026-09-23
+version: 0.5.0-alpha
+commit: 0ead992
+date: 2026-09-24
 status: current
 confidentiality: client
 ---
@@ -128,6 +128,7 @@ Clases base (`library/ontology/asset-classes/base.ttl`):
 | `AC-confirmed-ai-system` | Sistemas de IA confirmados (`{"label": "AISystem", "status": "confirmed"}`) |
 | `AC-missing-table` | Tablas desaparecidas del origen |
 | `AC-cross-border-flow` | Pendiente de verificación: el grafo aún no registra el país de destino de los flujos |
+| `AC-argos-appliance` | El propio appliance, registrado en su inventario como `argos-appliance` (ARG-100) |
 
 Las clases basadas en clasificación exigen una confianza mínima de 0,5, que incluye las clasificaciones por diccionario (0,6) y las validadas. Una clase inválida se detecta con `asset_class_errors`:
 - selector que no es JSON o que la API no acepta;
@@ -353,6 +354,21 @@ La **matriz de solapamiento** (`argos_ontology.overlap`) lista las clases de act
 
 Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.40 y httpx 0.28.
 
+### Autoverificación: la especificación como norma (F10-01, ARG-100)
+
+ARGOS se verifica con su propio motor. La especificación técnica del producto se declara como norma `SELF` en `library/ontology/norms/SELF.ttl`, en vigor desde 2026-09-24, y sus promesas verificables son seis obligaciones `OBL-SELF-*` sobre la clase `AC-argos-appliance` (el nodo `System` llamado `argos-appliance`):
+
+| Obligación | Sección | Severidad | Reto |
+|---|---|---|---|
+| `OBL-SELF-3-7-1` diario de auditoría encadenado íntegro | 3.7 | critical | `self-001` |
+| `OBL-SELF-3-8-1` registro de seguridad íntegro | 3.8 | critical | `self-002` |
+| `OBL-SELF-3-9-1` restauración probada y reciente | 3.9 | high | `self-003` |
+| `OBL-SELF-3-8-2` conexiones a la base de datos cifradas | 3.8 | high | `self-004` |
+| `OBL-SELF-3-3-1` contenido normativo firmado en vigor | 3.3 | high | `self-005` |
+| `OBL-SELF-7-1` la autoverificación demuestra que evalúa (reto trampa) | 7 | low | `self-099` |
+
+No es una norma jurídica: no pasa por la validación del perfil jurídico-técnico.
+
 ## 4. Interfaces
 
 | Tipo | Nombre | Descripción |
@@ -526,3 +542,4 @@ Dependencias: `argos-common`, `argos-inventory`, rdflib 7.6, PyYAML, pySHACL 0.4
 | 0.2.0-alpha | 2026-09-23 | Bundle en flujo con manifiesto primero y tope total, huella obligatoria y anti-retroceso en `load_bundle`, `publish_library` y comprobación en ejecución del disco y de OPA | F09-25 |
 | 0.3.0-alpha | 2026-09-23 | Grafo de SHACL congelado con la instantánea | F09-27 |
 | 0.4.0-alpha | 2026-09-23 | Los rechazos de contenido quedan en el registro de seguridad | F09-08 |
+| 0.5.0-alpha | 2026-09-24 | Norma `SELF` (la especificación del producto), seis obligaciones `OBL-SELF-*` y la clase `AC-argos-appliance` | F10-01 (ARG-100) |

@@ -139,3 +139,33 @@ challenges:
     evidence_type: configuration
     description: "Registro de accesos a la historia clínica con quién, cuándo y qué, conservado al menos tres años"
     draft: true
+  - id: self-001
+    family: self_verification
+    evidence_type: configuration
+    description: "El diario de auditoría del appliance verifica en su último tramo"
+    draft: false
+  - id: self-002
+    family: self_verification
+    evidence_type: configuration
+    description: "El registro de seguridad del appliance verifica su cadena"
+    draft: false
+  - id: self-003
+    family: self_verification
+    evidence_type: configuration
+    description: "La última prueba de restauración pasó hace menos de 35 días"
+    draft: false
+  - id: self-004
+    family: self_verification
+    evidence_type: configuration
+    description: "Ninguna conexión por red a la base del appliance viaja sin TLS"
+    draft: false
+  - id: self-005
+    family: self_verification
+    evidence_type: configuration
+    description: "El appliance tiene en vigor un bundle de contenido firmado"
+    draft: false
+  - id: self-099
+    family: self_verification
+    evidence_type: configuration
+    description: "Reto trampa: siempre falla para demostrar que la campaña evalúa"
+    draft: false

@@ -1,0 +1,17 @@
+@prefix argos: <https://ns.argos.eu/core#> .
+@prefix n: <https://ns.argos.eu/norms/> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+n:OBL-SELF-7-1 a argos:Obligation ;
+    rdfs:label "La autoverificación demuestra que evalúa"@es ;
+    rdfs:comment "La campaña de autoverificación incluye un reto trampa que siempre falla: sin su hallazgo, la campaña no evaluó."@es ;
+    argos:appliesTo n:AC-argos-appliance ;
+    argos:derivesFrom n:SELF-7 ;
+    argos:inForceFrom "2026-09-24"^^xsd:date ;
+    argos:severity "low" ;
+    argos:verifiedBy n:CH-self-099 .
+
+n:CH-self-099 a argos:Challenge ;
+    argos:challengeId "self-099" .
+

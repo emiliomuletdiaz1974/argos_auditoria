@@ -1,0 +1,12 @@
+# Autoverificación de ARGOS (ARG-100, F10-01): la especificación técnica tomada como norma.
+id: OBL-SELF-7-1
+norma: SELF
+articulo: "7"
+titulo: "La autoverificación demuestra que evalúa"
+vigente_desde: 2026-09-24
+severidad: low
+texto_resumen: "La campaña de autoverificación incluye un reto trampa que siempre falla: sin su hallazgo, la campaña no evaluó."
+aplica_a:
+  - AC-argos-appliance
+verificado_por:
+  - self-099

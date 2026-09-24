@@ -23,8 +23,10 @@ from .deltas import JOURNAL_ACTOR
 _NODES = (
     "MATCH (n) WHERE n.key IS NOT NULL AND coalesce(n.missing, false) = false "
     "AND labels(n)[0] <> 'Category' "
-    "RETURN n.key, labels(n)[0], n.name, n.qualified_name, n.system_id, n.status"
+    "RETURN n.key, labels(n)[0], n.name, n.qualified_name, coalesce(n.system_id, n.id), n.status"
 )
+# A System node carries its own id in `id`, not in `system_id`; the snapshot records it as the
+# system it belongs to, as the inventory API already answers (F10-01, the self-* challenges).
 _CLASSIFICATIONS = (
     "MATCH (n)-[r:CLASSIFIED_AS]->(c:Category) RETURN n.key, c.name, r.method, r.confidence"
 )

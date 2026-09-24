@@ -1,0 +1,12 @@
+# Autoverificación de ARGOS (ARG-100, F10-01): la especificación técnica tomada como norma.
+id: OBL-SELF-3-8-1
+norma: SELF
+articulo: "3.8"
+titulo: "Registro de seguridad íntegro"
+vigente_desde: 2026-09-24
+severidad: critical
+texto_resumen: "El registro de seguridad, separado del diario funcional, verifica su propia cadena."
+aplica_a:
+  - AC-argos-appliance
+verificado_por:
+  - self-002

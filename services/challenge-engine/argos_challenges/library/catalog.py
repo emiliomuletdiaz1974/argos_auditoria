@@ -30,6 +30,7 @@ FAMILIES: Mapping[str, str] = {
     "dsr": "data_subject_rights",
     "ret": "retention",
     "sec": "security",
+    "self": "self_verification",
 }
 # The evidence a probe produces, unless the challenge declares another type.
 EVIDENCE_BY_PROBE: Mapping[str, str] = {

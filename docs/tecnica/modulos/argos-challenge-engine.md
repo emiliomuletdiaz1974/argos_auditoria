@@ -4,9 +4,9 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.10.0-alpha
-commit: 4f6309a
-date: 2026-09-23
+version: 0.11.0-alpha
+commit: 0ead992
+date: 2026-09-24
 status: current
 confidentiality: client
 ---
@@ -48,7 +48,22 @@ Un reto es un documento YAML con seis bloques obligatorios (`objective`, `select
 
 ### Biblioteca de retos (ARG-050)
 
-- **Organización:** `library/challenges/<familia>/<id>.yaml`, con las familias del catálogo (`acc`, `brc`, `coh`, `doc`, `ds`, `dsr`, `ret` y `sec`) y subcarpetas por vertical.
+- **Organización:** `library/challenges/<familia>/<id>.yaml`, con las familias del catálogo (`acc`, `brc`, `coh`, `doc`, `ds`, `dsr`, `ret`, `sec` y `self`) y subcarpetas por vertical.
+- **Autoverificación** (F10-01, ARG-100): la familia `self` son comprobaciones de configuración del conector SQL contra la base del propio appliance. La base las responde en la vista `argos_facts.facts` (migración 0040): filas `(fact, setting)` que calcula al leerse una función `SECURITY DEFINER`:
+  - el último tramo del diario y del registro de seguridad, recalculados con `argos.journal_hash`;
+  - la última prueba de restauración;
+  - las conexiones sin TLS;
+  - el contenido firmado en vigor;
+  - la constante del reto trampa `self-099`, que siempre falla.
+
+  El rol `svc_selfcheck` solo puede leer esa vista y ejecutar esa función: ninguna tabla, ninguna otra función y ni siquiera el esquema `argos`. `tools/selfcheck.py` (`make selfcheck`) es la puerta local de cada release (DP-16):
+  1. crea la campaña del sistema `argos-appliance`;
+  2. comprueba que el plan solo tiene retos `self-*`;
+  3. aprueba el arranque con una persona distinta de quien la creó;
+  4. espera el sello y escribe el expediente en `dist/selfcheck-<versión>/`;
+  5. bloquea la release si hay un hallazgo crítico o alto, o si falta el de la trampa.
+
+  Con el diario roto, la cadena de evidencia no ancla la campaña: no hay expediente y la release queda bloqueada igual.
 - **Catálogo generado:** `tools/challenge_catalog.py` lo escribe desde los retos y `--check` (`make challenge-catalog`, también en CI) comprueba que está al día. Ya no se edita a mano, así que la biblioteca y la matriz de trazabilidad de la ontología no pueden divergir.
   - El tipo de evidencia sale de la sonda: configuración para `check_config` y `scan_schema`, resultado de consulta para las demás.
   - Un id que las poblaciones citan pero cuyo reto aún no existe queda con `draft: true`: hoy, 27 entradas de las que 25 están reservadas.
@@ -380,3 +395,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.8.0-alpha | 2026-09-23 | Usuario de base `login_challenge` en `svc_challenge`, el único rol que escribe veredictos; contraseña en fichero de secreto | F09-04 (ARG-085) |
 | 0.9.0-alpha | 2026-09-23 | Usuario de base efímero de Vault (`svc-challenge`), renovado en caliente | F09-05 (ARG-085) |
 | 0.10.0-alpha | 2026-09-23 | TLS verificado hacia PostgreSQL y NATS con su propio certificado | F09-06 (ARG-083) |
+| 0.11.0-alpha | 2026-09-24 | Familia `self` (autoverificación), vista `argos_facts.facts` y rol `svc_selfcheck` (migración 0040), y `tools/selfcheck.py` | F10-01 (ARG-100) |
