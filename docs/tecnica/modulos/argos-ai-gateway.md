@@ -5,7 +5,7 @@ title: Gateway de IA local (argos-ai-gateway)
 module: argos-ai-gateway
 phases: ["06"]
 version: 0.8.0-alpha
-commit: 4f6309a
+commit: 34fc10a
 date: 2026-09-24
 status: draft
 confidentiality: client

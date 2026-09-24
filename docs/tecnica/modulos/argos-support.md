@@ -5,7 +5,7 @@ title: Paquete de diagnóstico revisable (argos-support)
 module: argos-support
 phases: ["09"]
 version: 0.1.0-alpha
-commit: pendiente
+commit: 34fc10a
 date: 2026-09-24
 status: current
 confidentiality: client
