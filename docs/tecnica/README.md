@@ -19,6 +19,7 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | 07 · Evidencia y credencial | [F07-evidencia-credencial.md](fases/F07-evidencia-credencial.md) | Cerrada (`fase-07`) con firma, sello y EDC de desarrollo; TPM, TSA cualificada, EDC real y GXDCH pendientes |
 | 08 · Consola y APIs | [F08-consola-apis.md](fases/F08-consola-apis.md) | Cerrada (`fase-08`); falta la prueba con un usuario de negocio (F08-98) y el asistente espera al modelo local (F06-05) |
 | 09 · Seguridad de plataforma | [F09-seguridad.md](fases/F09-seguridad.md) | Cerrada (`fase-09`) en el entorno de desarrollo; imagen, TPM y k3s esperan el hardware (F09-90…92) y la entrega del dossier es F09-97 |
+| 10 · Operación y despliegue | [F10-operacion.md](fases/F10-operacion.md) | Cerrada (`fase-10`) en el entorno de desarrollo; instalación, sala y alta disponibilidad reales esperan el hardware (F10-90…92), y la v1.0 es F10-97 |
 
 ## Módulos
 
