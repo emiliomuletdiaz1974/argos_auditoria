@@ -1,0 +1,8 @@
+Inlet Temp       | 22.000     | degrees C  | ok    | na        | -7.000    | 3.000     | 42.000    | 47.000    | na
+Exhaust Temp     | 35.000     | degrees C  | ok    | na        | 3.000     | 8.000     | 70.000    | 75.000    | na
+PS1 Status       | 0x0        | discrete   | 0x0100| na        | na        | na        | na        | na        | na
+PS2 Status       | 0x0        | discrete   | 0x0100| na        | na        | na        | na        | na        | na
+PS1 Input Power  | 400.000    | Watts      | ok    | na        | na        | na        | na        | na        | na
+PS2 Input Power  | 380.000    | Watts      | ok    | na        | na        | na        | na        | na        | na
+PS1 Voltage      | 230.000    | Volts      | ok    | na        | 180.000   | 190.000   | 250.000   | 260.000   | na
+PS2 Voltage      | 228.000    | Volts      | ok    | na        | 180.000   | 190.000   | 250.000   | 260.000   | na

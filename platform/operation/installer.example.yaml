@@ -16,3 +16,7 @@ admin:
 idp: null                    # or {alias: corporativo, url: https://idp.organismo.example/realms/x}
 tsa:
   url: https://tsa.organismo.example   # or airgapped: true
+site:                        # the check of the room (ARG-097): measured, never assumed
+  size: M                    # the limits of platform/operation/sizes.yaml, key site
+  data_interface: data0      # the link to the sources, measured with ethtool
+  sources: [10.20.0.8, 10.20.0.9]   # the declared sources; each must answer below 5 ms

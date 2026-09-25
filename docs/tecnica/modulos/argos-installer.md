@@ -4,8 +4,8 @@ kind: module
 title: Instalador de la semana 1 (argos-installer)
 module: argos-installer
 phases: ["10"]
-version: 0.1.0-alpha
-commit: 96b3236
+version: 0.2.0-alpha
+commit: pendiente
 date: 2026-09-25
 status: current
 confidentiality: client
@@ -25,7 +25,7 @@ Cada paso planifica sus órdenes, las ejecuta y verifica el resultado. Un paso s
 - **Qué no hace:**
   - no es una interfaz a pantalla completa: es una CLI guiada, porque el CPD no siempre tiene pantalla y un YAML revisable es lo que el organismo aprueba;
   - no guarda contraseñas: el primer administrador configura su segundo factor y su clave en el primer acceso.
-- **La comprobación de sala** (ARG-097) es un paso aparte (F10-11).
+- **La comprobación de sala** (ARG-097, F10-11) es el segundo paso, `site`, y tiene su propia lista previa al envío.
 
 ## 3. Arquitectura
 
@@ -35,6 +35,7 @@ Cada paso planifica sus órdenes, las ejecuta y verifica el resultado. Un paso s
 | Paso | Qué ejecuta | Cómo lo verifica |
 |---|---|---|
 | `network` | `netplan set`, `netplan apply` | la pasarela y el bastión responden a `ping` |
+| `site` | nada: solo mide | la sala es `fit` para la talla (ver abajo) |
 | `time` | servidor NTP del organismo y `timedatectl` | `NTPSynchronized` = `yes`; en aislado, la deriva declarada queda en el informe |
 | `disk` | `platform/image/seal-disk.sh` (F09-14) | `cryptsetup luksDump` muestra un slot TPM2 |
 | `admin` | `kcadm.sh` crea el usuario con TOTP y cambio de clave obligados, y le da `platform_admin` | el usuario aparece en el realm |
@@ -45,6 +46,12 @@ Cada paso planifica sus órdenes, las ejecuta y verifica el resultado. Un paso s
   - recorre los pasos en orden y se detiene en el primero que no verifica;
   - guarda los pasos hechos en `state.json` y, al volver a ejecutarse, reanuda desde el que falló;
   - en ejecución en seco no ejecuta nada ni escribe estado: devuelve las órdenes que ejecutaría.
+- **`site_check`, la comprobación de sala (ARG-097):**
+  - mide con `ipmitool sensor list` (temperatura de entrada, fuentes, potencia y tensión), `ethtool <interfaz de datos>`, `ping` al bastión y a cada fuente declarada, y `nvidia-smi` (GPU y memoria);
+  - cada analizador es una función pura sobre el texto de su orden;
+  - compara con los límites de la talla (`platform/operation/sizes.yaml`, clave `site`) y da cada comprobación como `fit`, `unfit` o `not_measured`, con su motivo;
+  - una orden que no está es `not_measured`, nunca `fit`; el paso solo pasa si todas son `fit`;
+  - `prerequisites(talla)` da la lista previa al envío (rack, potencia y circuitos, BTU/h, tomas, SAI, climatización y red).
 - **Órdenes:** siempre listas de argumentos. Un test recorre el código y falla si aparece `shell=`.
 
 ## 4. Interfaces
@@ -52,6 +59,8 @@ Cada paso planifica sus órdenes, las ejecuta y verifica el resultado. Un paso s
 | Tipo | Nombre | Descripción |
 |---|---|---|
 | CLI | `argos-install --config <yaml> [--dry-run] [--state-dir <dir>]` | Instala o muestra el plan; código 1 si se detuvo |
+| CLI | `argos-install --prerequisites S\|M\|L [--sizes <yaml>]` | Imprime la lista previa de la sala para esa talla |
+| Configuración | `site: {size, data_interface, sources, limits_file}` | Talla, interfaz de datos y fuentes declaradas (IPv4) de la comprobación de sala |
 | Informe | `installation-report.json` y `.sig` | Esquema `argos/installation/1`: pasos, detalle, códigos de salida y huella de la configuración; firmado con Ed25519 |
 | Diario | `install.completed` / `install.stopped` | Con la huella del informe y el paso en que se detuvo |
 | Esclusa | tipo de exportación `installation` | Saca el informe y su firma (F09-13, `argos-airgap`) |
@@ -88,11 +97,19 @@ La jornada de instalación y el runbook de campo llegan con el hardware (F10-90)
 - el ejemplo del repositorio es válido;
 - ejecución en seco de la CLI.
 
+`services/installer/tests/test_site_check.py`:
+- cada analizador con su salida de referencia (`tests/fixtures/site/`);
+- sala sana apta para la S y no apta para la M por el enlace;
+- sala caliente con una sola fuente, GPU pequeña y fuente inalcanzable: `unfit` con su motivo;
+- cada orden ausente da «no medido», nunca «apto»;
+- la lista previa y su CLI.
+
 `services/airgap/tests/test_installation_export.py`: el informe sale por la esclusa solo si está firmado.
 
 ## 9. Limitaciones conocidas y pendientes
 
 - **Sin hardware:** no se ha ejecutado contra el hardware real. Los pasos que tocan la red, el disco y el TPM se prueban con dobles (F10-90).
+- **Referencias de `ipmitool` y `nvidia-smi` escritas, no capturadas:** siguen el formato documentado; F10-91 las sustituye por capturas del equipo real.
 - **Keycloak:** `kcadm.sh` debe tener una sesión de administración del realm antes del paso `admin`. El runbook de campo de F10-90 lo dirá.
 
 ## 10. Historial
@@ -100,3 +117,4 @@ La jornada de instalación y el runbook de campo llegan con el hardware (F10-90)
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-25 | Primera versión | F10-10 (ARG-096) |
+| 0.2.0-alpha | 2026-09-25 | Comprobación de sala: paso `site`, analizadores, límites por talla y lista previa | F10-11 (ARG-097) |

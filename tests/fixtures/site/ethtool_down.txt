@@ -1,0 +1,6 @@
+Settings for eth1:
+	Supported ports: [ FIBRE ]
+	Speed: Unknown!
+	Duplex: Unknown! (255)
+	Port: FIBRE
+	Link detected: no

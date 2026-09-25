@@ -1,0 +1,4 @@
+Inlet Temp       | 31.000     | degrees C  | nc    | na        | -7.000    | 3.000     | 30.000    | 47.000    | na
+PS1 Status       | 0x0        | discrete   | 0x0100| na        | na        | na        | na        | na        | na
+PS1 Input Power  | 2150.000   | Watts      | ok    | na        | na        | na        | na        | na        | na
+PS1 Voltage      | 229.000    | Volts      | ok    | na        | 180.000   | 190.000   | 250.000   | 260.000   | na

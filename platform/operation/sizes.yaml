@@ -6,19 +6,69 @@
 #   assets               nodes of the latest inventory snapshot
 #   parallel_campaigns   campaigns pinned or running at the same time
 #   ai_tokens_per_day    tokens of the AI gateway in the last 24 hours
+#
+# `site` holds what the room must give each size (ARG-097, F10-11; Especificación §5): inlet
+# temperature (ASHRAE A1), voltage, a redundant supply, the power budget (upper typical draw), the
+# data link, the latency to the bastion and the sources, and the GPU (a 48 GB L40S reports 45 GiB);
+# and, for the list before shipping, the rack, the circuits, the outlets and the UPS.
 sizes:
   S:
     systems: 40
     assets: 250000
     parallel_campaigns: 2
     ai_tokens_per_day: 4000000
+    site:
+      inlet_min_c: 18
+      inlet_max_c: 27
+      voltage_min: 210
+      voltage_max: 240
+      min_supplies: 2
+      power_max_w: 900
+      link_min_gbps: 10
+      latency_max_ms: 5
+      gpu_min_count: 1
+      gpu_min_total_gib: 44
+      rack: "2U corto o torre en despacho técnico cerrado con llave"
+      circuits: 1
+      outlets: 2
+      ups: "1,5 kVA"
   M:
     systems: 150
     assets: 1000000
     parallel_campaigns: 4
     ai_tokens_per_day: 12000000
+    site:
+      inlet_min_c: 18
+      inlet_max_c: 27
+      voltage_min: 210
+      voltage_max: 240
+      min_supplies: 2
+      power_max_w: 1800
+      link_min_gbps: 25
+      latency_max_ms: 5
+      gpu_min_count: 2
+      gpu_min_total_gib: 88
+      rack: '2U en rack de 19" con raíles'
+      circuits: 2
+      outlets: 2
+      ups: "de sala, autonomía ≥ 10 min"
   L:
     systems: 500
     assets: 5000000
     parallel_campaigns: 10
     ai_tokens_per_day: 40000000
+    site:
+      inlet_min_c: 18
+      inlet_max_c: 27
+      voltage_min: 210
+      voltage_max: 240
+      min_supplies: 2
+      power_max_w: 4000
+      link_min_gbps: 25
+      latency_max_ms: 5
+      gpu_min_count: 4
+      gpu_min_total_gib: 176
+      rack: '4U, o tres nodos 2U en clúster (6U), en rack de 19"'
+      circuits: 2
+      outlets: 6
+      ups: "de sala, autonomía ≥ 10 min, doble acometida"

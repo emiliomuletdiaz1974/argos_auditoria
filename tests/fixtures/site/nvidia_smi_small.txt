@@ -1,0 +1,2 @@
+name, memory.total [MiB]
+NVIDIA RTX A2000, 12282 MiB

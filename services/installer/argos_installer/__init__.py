@@ -34,6 +34,7 @@ ACTOR = "system:installer"
 LABEL = r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
 HOSTNAME = re.compile(rf"^(?=.{{1,253}}$){LABEL}(?:\.{LABEL})*$")
 SEAL_SCRIPT = "/opt/argos/platform/image/seal-disk.sh"
+SIZES_FILE = "/opt/argos/platform/operation/sizes.yaml"
 # The first administrator configures a TOTP and a new password at the first sign-in (F09-07).
 REQUIRED_ACTIONS = '["CONFIGURE_TOTP","UPDATE_PASSWORD"]'
 
@@ -87,6 +88,15 @@ class Tsa(BaseModel):
     airgapped: bool = False
 
 
+class Site(BaseModel):
+    size: str = Field(pattern=r"^[SML]$")
+    data_interface: str = Field(pattern=r"^[a-z][a-z0-9]{0,14}$")
+    sources: list[str] = Field(default_factory=list, max_length=64)
+    limits_file: str = SIZES_FILE
+
+    _sources = field_validator("sources")(lambda values: [_ipv4(value) for value in values])
+
+
 class InstallConfig(BaseModel):
     management: Management
     time: Time
@@ -94,6 +104,7 @@ class InstallConfig(BaseModel):
     admin: Admin
     idp: Idp | None = None
     tsa: Tsa
+    site: Site
 
 
 def load_config(path: Path) -> InstallConfig:
@@ -175,6 +186,22 @@ def _verify_network(c: InstallConfig, run: Runner) -> tuple[bool, str]:
     )
 
 
+def _plan_site(c: InstallConfig) -> list[Command]:
+    return []
+
+
+def _verify_site(c: InstallConfig, run: Runner) -> tuple[bool, str]:
+    from .site_check import FIT, evaluate, measure, site_limits
+
+    targets = [c.management.bastion, *c.site.sources]
+    measures = measure(run, c.site.data_interface, targets)
+    result = evaluate(site_limits(Path(c.site.limits_file), c.site.size), measures)
+    detail = "; ".join(f"{k['check']} {k['status']}: {k['reason']}" for k in result["checks"])
+    return result[
+        "verdict"
+    ] == FIT, f"sala {result['verdict']} para la talla {c.site.size}: {detail}"
+
+
 def _plan_time(c: InstallConfig) -> list[Command]:
     if c.time.ntp is None:
         return []
@@ -254,6 +281,7 @@ def _verify_tsa(c: InstallConfig, run: Runner) -> tuple[bool, str]:
 
 STEPS: tuple[Step, ...] = (
     Step("network", "Red de gestión y bastión", _plan_network, _verify_network),
+    Step("site", "Comprobación de sala (ARG-097)", _plan_site, _verify_site),
     Step("time", "Hora (NTP del organismo o deriva declarada)", _plan_time, _verify_time),
     Step("disk", "Sellado del disco al TPM", _plan_disk, _verify_disk),
     Step("admin", "Primer administrador, con segundo factor", _plan_admin, _verify_admin),

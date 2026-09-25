@@ -18,6 +18,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from argos_common.release import verify_signature
 from argos_installer import ORDER, Completed, InstallConfig, Installer, load_config
 
+REPO = Path(__file__).resolve().parents[3]
 CONFIG: dict[str, Any] = {
     "management": {
         "interface": "mgmt0",
@@ -31,11 +32,22 @@ CONFIG: dict[str, Any] = {
     "admin": {"username": "admin.organismo"},
     "idp": None,
     "tsa": {"url": "https://tsa.organismo.example"},
+    "site": {
+        "size": "S",
+        "data_interface": "data0",
+        "sources": ["10.20.0.8"],
+        "limits_file": str(REPO / "platform" / "operation" / "sizes.yaml"),
+    },
 }
+SITE = REPO / "tests" / "fixtures" / "site"
 OUTPUTS = {
     "timedatectl": "yes",
     "cryptsetup": "Tokens:\n  0: systemd-tpm2",
     "kcadm.sh": '[{"username": "admin.organismo"}]',
+    "ipmitool": (SITE / "ipmitool_sensor_list.txt").read_text(encoding="utf-8"),
+    "ethtool": (SITE / "ethtool_10g.txt").read_text(encoding="utf-8"),
+    "ping": (SITE / "ping_ok.txt").read_text(encoding="utf-8"),
+    "nvidia-smi": (SITE / "nvidia_smi_l40s.txt").read_text(encoding="utf-8"),
 }
 
 
@@ -79,7 +91,7 @@ def _installer(
 def test_the_steps_run_in_the_order_of_week_1(tmp_path: Path) -> None:
     report = _installer(tmp_path, Commands()).run()
     assert [step["key"] for step in report["steps"]] == list(ORDER)
-    assert ORDER[:3] == ("network", "time", "disk")
+    assert ORDER[:4] == ("network", "site", "time", "disk")
     assert all(step["ok"] for step in report["steps"]), report["steps"]
 
 
@@ -135,9 +147,12 @@ def test_an_isolated_appliance_declares_its_drift_and_its_airlock(tmp_path: Path
         ("management", "interface", "eth0 && rm"),
         ("admin", "username", "a b"),
         ("time", "ntp", "ntp.example; reboot"),
+        ("site", "data_interface", "data0; reboot"),
+        ("site", "sources", ["10.20.0.8 && rm"]),
+        ("site", "size", "XL"),
     ],
 )
-def test_a_value_that_is_not_what_it_says_is_refused(section: str, key: str, value: str) -> None:
+def test_a_value_that_is_not_what_it_says_is_refused(section: str, key: str, value: Any) -> None:
     config = json.loads(json.dumps(CONFIG))
     config[section][key] = value
     with pytest.raises(ValueError):
@@ -177,3 +192,19 @@ def test_the_command_line_dry_run_prints_the_plan(
     assert '["netplan", "apply"]' in printed
     assert "nothing was changed" in printed
     assert not (tmp_path / "state").exists()
+
+
+def test_a_room_that_does_not_give_stops_the_installation_and_says_why(tmp_path: Path) -> None:
+    hot = (SITE / "ipmitool_sensor_list_hot_single_psu.txt").read_text(encoding="utf-8")
+
+    class HotRoom(Commands):
+        def __call__(self, args: list[str], stdin: str | None = None) -> Completed:
+            done = super().__call__(args, stdin)
+            return Completed(done.returncode, hot) if args[0] == "ipmitool" else done
+
+    report = _installer(tmp_path, HotRoom()).run()
+    assert not report["completed"]
+    [site] = [step for step in report["steps"] if step["key"] == "site"]
+    assert not site["ok"]
+    assert "unfit" in site["detail"] and "31" in site["detail"]
+    assert [step["key"] for step in report["steps"]][-1] == "site"
