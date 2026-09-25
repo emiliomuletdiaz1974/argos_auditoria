@@ -4,7 +4,7 @@ kind: phase
 title: Fase 10 · Operación y despliegue
 phase: "10"
 version: 0.1.0-alpha
-commit: pendiente
+commit: 4667e31
 date: 2026-09-25
 status: current
 confidentiality: client
@@ -75,6 +75,8 @@ Además:
 - **Pruebas:** `tests/e2e/test_phase10_acceptance.py`, más `make check`, `make console-e2e`, `make selfcheck`, `make restore-test` y `make sbom`.
 
 **Resultado, 2026-09-25:** todos los criterios en verde en el entorno de desarrollo.
+
+**`make check` completo:** 3459 pasados y 4 fallos (`exit=2`), todos por el mismo corte del daemon de Docker a las 15:19 (`error waiting for container: unexpected EOF`): la conmutación de la M, el servicio de ejemplo de la Fase 01, y la restauración y la actualización de la Fase 09. Repetidos aislados con el entorno en pie, pasan los cuatro. `make console-e2e`, `make selfcheck`, `make backup` con `make restore-test` (copia con el esquema 44) y `make sbom` terminan con `exit=0`.
 
 1. **Autoverificación:** la campaña `self-*` se sella con solo el reto trampa como hallazgo y la puerta pasa; con el diario roto en una base desechable, la puerta bloquea.
 2. **Alertas:** las críticas (diario, WORM, disco y restauración) existen y cada runbook citado existe. Cada una se dispara sobre su causa: series de prueba con promtool y un diario roto que el servicio de salud lee como no íntegro. Una alerta de Alertmanager llega a la API con su runbook para la consola.
