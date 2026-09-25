@@ -25,6 +25,7 @@ members = [
     "argos-evidence",
     "argos-example",
     "argos-health",
+    "argos-installer",
     "argos-inventory",
     "argos-ontology",
     "argos-platform",
@@ -441,6 +442,25 @@ requires-dist = [
 ]
 
 [[package]]
+name = "argos-installer"
+version = "0.1.0a0"
+source = { editable = "services/installer" }
+dependencies = [
+    { name = "argos-common" },
+    { name = "cryptography" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "argos-common", editable = "libs/common" },
+    { name = "cryptography", specifier = ">=43" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pyyaml", specifier = ">=6.0" },
+]
+
+[[package]]
 name = "argos-inventory"
 version = "0.1.0a0"
 source = { editable = "services/inventory" }
@@ -524,6 +544,7 @@ dependencies = [
     { name = "argos-evidence" },
     { name = "argos-example" },
     { name = "argos-health" },
+    { name = "argos-installer" },
     { name = "argos-inventory" },
     { name = "argos-ontology" },
     { name = "argos-support" },
@@ -574,6 +595,7 @@ requires-dist = [
     { name = "argos-evidence", editable = "services/evidence" },
     { name = "argos-example", editable = "services/example" },
     { name = "argos-health", editable = "services/health" },
+    { name = "argos-installer", editable = "services/installer" },
     { name = "argos-inventory", editable = "services/inventory" },
     { name = "argos-ontology", editable = "services/ontology" },
     { name = "argos-support", editable = "services/support" },

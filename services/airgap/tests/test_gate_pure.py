@@ -54,7 +54,9 @@ def _tar(folder: Path, into: Path) -> None:
 
 
 def test_the_list_of_exports_is_a_closed_constant() -> None:
-    assert frozenset({"tsq", "diagnostics", "dossier", "credential"}) == EXPORT_KINDS
+    # F10-10 (ARG-096): the signed report of the installation, for the implementation file.
+    kinds = {"tsq", "diagnostics", "dossier", "credential", "installation"}
+    assert frozenset(kinds) == EXPORT_KINDS
     assert isinstance(EXPORT_KINDS, frozenset)
 
 

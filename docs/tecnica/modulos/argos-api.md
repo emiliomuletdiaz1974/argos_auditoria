@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.37.0-alpha
+version: 0.38.0-alpha
 commit: c5dcf5a
 date: 2026-09-25
 status: current
@@ -207,3 +207,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.35.0-alpha | 2026-09-24 | `argos_log_records_dropped_total` en `/metrics` | F10-05 (ARG-093) |
 | 0.36.0-alpha | 2026-09-25 | Pantalla de operación: `/operations/status`, `/operations/runbooks/{id}` y el receptor de Alertmanager (migración 0043) | F10-07 (ARG-092/099) |
 | 0.37.0-alpha | 2026-09-25 | `POST /systems` dentro de la talla, límite de campañas en paralelo e informe `/operations/capacity` (migración 0044) | F10-08 (ARG-098) |
+| 0.38.0-alpha | 2026-09-25 | La esclusa exporta el informe de instalación (`ARGOS_INSTALL_DIR`) | F10-10 (ARG-096) |

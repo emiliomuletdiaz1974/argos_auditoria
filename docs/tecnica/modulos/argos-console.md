@@ -4,7 +4,7 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.15.0-alpha
+version: 0.16.0-alpha
 commit: c5dcf5a
 date: 2026-09-25
 status: current
@@ -126,3 +126,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | 0.13.0-alpha | 2026-09-24 | Sección «Esclusa»: entrada verificada y salida de lista cerrada | F09-13 (ARG-090) |
 | 0.14.0-alpha | 2026-09-25 | Sección «Operación»: semáforos, alertas activas y runbook | F10-07 (ARG-092/099) |
 | 0.15.0-alpha | 2026-09-25 | Franjas de capacidad en la pantalla de operación | F10-08 (ARG-098) |
+| 0.16.0-alpha | 2026-09-25 | La esclusa ofrece el informe de instalación firmado | F10-10 (ARG-096) |

@@ -34,7 +34,7 @@ describe("AirgapView", () => {
     const kinds = within(screen.getByRole("combobox", { name: /qué sale/i }))
       .getAllByRole("option")
       .map((option) => (option as HTMLOptionElement).value);
-    expect(kinds.sort()).toEqual(["credential", "diagnostics", "dossier", "tsq"]);
+    expect(kinds.sort()).toEqual(["credential", "diagnostics", "dossier", "installation", "tsq"]);
   });
 
   it("exports a dossier of a campaign and lists what was written", async () => {

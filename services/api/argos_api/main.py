@@ -22,6 +22,7 @@ from argos_airgap.exporters import (
     credential_exporter,
     diagnostics_exporter,
     dossier_exporter,
+    installation_exporter,
     tsq_exporter,
 )
 from argos_airgap.importers import content_importer, tsr_importer, update_importer
@@ -203,6 +204,8 @@ def _airgap(
         exporters["tsq"] = tsq_exporter(dsn, evidence.store)
         exporters["dossier"] = dossier_exporter(dsn, evidence.store)
         exporters["credential"] = credential_exporter(dsn, evidence.store)
+    if cfg.INSTALL_DIR:
+        exporters["installation"] = installation_exporter(Path(cfg.INSTALL_DIR))
     if diagnostics is not None:
         exporters["diagnostics"] = diagnostics_exporter(diagnostics.store, diagnostics.recipient)
     return Gate(base / "in", base / "out", base / "work", importers, exporters, recorder(dsn))

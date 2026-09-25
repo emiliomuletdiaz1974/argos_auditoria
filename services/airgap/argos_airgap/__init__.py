@@ -10,7 +10,8 @@ formal door, on removable media:
   handed to the importer of its kind, which verifies **its own** signature before applying
   anything. The work zone is emptied after every file.
 - **Out** (`Gate.export`): time stamp queries (`.tsq`), the diagnostic package (ARG-088), dossiers
-  and credentials. That list is a constant, `EXPORT_KINDS`: any other kind is a `PermissionError`,
+  and credentials, and the signed report of the installation (F10-10). That list is a constant,
+  `EXPORT_KINDS`: any other kind is a `PermissionError`,
   and a gate cannot even be built with an exporter outside it.
 
 Every file and every export, accepted or not, goes to the journal and to the security log with
@@ -29,7 +30,9 @@ from pathlib import Path
 from typing import Any
 
 # The closed list of what may leave the appliance. A constant on purpose: not configuration.
-EXPORT_KINDS: frozenset[str] = frozenset({"tsq", "diagnostics", "dossier", "credential"})
+EXPORT_KINDS: frozenset[str] = frozenset(
+    {"tsq", "diagnostics", "dossier", "credential", "installation"}
+)
 
 
 @dataclass(frozen=True, slots=True)

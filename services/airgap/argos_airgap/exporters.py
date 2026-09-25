@@ -6,7 +6,9 @@
   checked against the hash it was recorded with;
 - `credential`: the verifiable credential of a campaign, checked the same way;
 - `diagnostics`: the diagnostic package the operator reviewed (ARG-088), encrypted for support,
-  only for the index the operator approved.
+  only for the index the operator approved;
+- `installation`: the report of the installation of week 1 and its signature (ARG-096), the
+  first document of the implementation file of the Pliego (P-26).
 """
 
 import hashlib
@@ -93,5 +95,20 @@ def diagnostics_exporter(store: DiagnosticsStore, recipient: str) -> Exporter:
         preview = store.load(ident)
         package = build_package(preview, params.get("approved_index_sha256", ""), recipient)
         (folder / f"argos-diagnostics-{ident}.tar.gz.age").write_bytes(package)
+
+    return export
+
+
+def installation_exporter(state_dir: Path) -> Exporter:
+    """The signed report the installer left beside its state: both files, or nothing."""
+
+    def export(folder: Path, params: Mapping[str, str]) -> None:
+        report = state_dir / "installation-report.json"
+        signature = state_dir / "installation-report.json.sig"
+        if not (report.is_file() and signature.is_file()):
+            raise ValueError("there is no signed report of the installation to export")
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / report.name).write_bytes(report.read_bytes())
+        (folder / signature.name).write_bytes(signature.read_bytes())
 
     return export

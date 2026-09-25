@@ -4,9 +4,9 @@ kind: module
 title: Esclusa de soportes (argos-airgap)
 module: argos-airgap
 phases: ["09"]
-version: 0.1.0-alpha
+version: 0.2.0-alpha
 commit: 02046fd
-date: 2026-09-24
+date: 2026-09-25
 status: current
 confidentiality: client
 ---
@@ -146,3 +146,4 @@ Implementa ARG-090 (tarea F09-13; Pliego P-02; nota de desviación ARG-081-090).
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-24 | Esclusa con importadores verificados (actualización, contenido, sellos), exportación de lista cerrada (peticiones de sello, diagnóstico, expediente, credencial), registro de cada operación, API y consola | F09-13 (ARG-090) |
+| 0.2.0-alpha | 2026-09-25 | Tipo de exportación `installation`: el informe de instalación firmado | F10-10 (ARG-096) |

@@ -1,0 +1,18 @@
+# ARG-096 · the configuration of the installer of week 1 (F10-10). The organisation reviews and
+# signs this file off before the installation; every value is validated before any command runs.
+management:
+  interface: mgmt0          # the management interface of the appliance
+  address: 10.10.0.21
+  prefix: 24
+  gateway: 10.10.0.1
+  bastion: 10.10.0.5        # the bastion of the organisation, the only way in
+time:
+  ntp: ntp.organismo.example   # or null, with declared_drift_seconds, for an isolated appliance
+  declared_drift_seconds: 0
+disk:
+  device: /dev/disk/by-partlabel/argos-data
+admin:
+  username: admin.organismo  # asked for a TOTP and a new password at the first sign-in
+idp: null                    # or {alias: corporativo, url: https://idp.organismo.example/realms/x}
+tsa:
+  url: https://tsa.organismo.example   # or airgapped: true

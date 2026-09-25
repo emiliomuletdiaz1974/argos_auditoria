@@ -79,6 +79,9 @@ class ArgosConfig(BaseSettings):
     # nothing is limited and the capacity report says the size is not configured.
     SIZE: str | None = None
     SIZES_FILE: str | None = None
+    # F10-10 (ARG-096): where the installer left its state and its signed report; the airlock
+    # exports the report from there. Unset: there is no report to export.
+    INSTALL_DIR: str | None = None
     NATS_URL: str = "nats://127.0.0.1:4222"
     # Each service connects with its own NATS user: the server decides what it may publish.
     NATS_USER: str | None = None

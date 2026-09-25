@@ -24,6 +24,8 @@ THIRD_PARTY: dict[str, str] = {
     "postgres": "PostgreSQL with AGE and pgvector: the database engine runs as its own user",
     "nats": "NATS server image",
     "temporal-db": "PostgreSQL of Temporal",
+    "ha-node-a": "PostgreSQL of the size M pair (profile ha, F10-09): the engine runs as its user",
+    "ha-node-b": "PostgreSQL of the size M pair (profile ha, F10-09): the engine runs as its user",
     "temporal": "Temporal auto-setup image, development only",
     "keycloak": "Keycloak image",
     "vault": "Vault in development mode",

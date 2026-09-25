@@ -10,6 +10,7 @@ const KINDS = [
   { value: "dossier", label: "Expediente de una campaña" },
   { value: "credential", label: "Credencial de una campaña" },
   { value: "diagnostics", label: "Paquete de diagnóstico revisado" },
+  { value: "installation", label: "Informe de instalación firmado" },
 ] as const;
 
 interface ImportResult {

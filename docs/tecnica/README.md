@@ -42,6 +42,7 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | `argos-evidence` | [argos-evidence.md](modulos/argos-evidence.md) | 07 |
 | `argos-example` | [argos-example.md](modulos/argos-example.md) | 01 (interno) |
 | `argos-health` | [argos-health.md](modulos/argos-health.md) | 10 |
+| `argos-installer` | [argos-installer.md](modulos/argos-installer.md) | 10 |
 | `argos-inventory` | [argos-inventory.md](modulos/argos-inventory.md) | 03, 04 |
 | `argos-ontology` | [argos-ontology.md](modulos/argos-ontology.md) | 04 |
 | `argos-support` | [argos-support.md](modulos/argos-support.md) | 09 |
