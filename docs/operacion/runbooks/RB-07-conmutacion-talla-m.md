@@ -14,14 +14,28 @@ El nodo principal de una talla M no responde y no va a volver pronto (avería de
 
 1. Confirma que el principal está caído de verdad y no solo aislado de la red. Un principal vivo y otro promovido serían dos verdades, y en un almacén de evidencia eso es peor que la parada.
 2. Mira el retraso de la réplica: lo que no llegó a replicarse se pierde.
-3. Decide con el responsable del organismo si se conmuta o se espera. El script de conmutación de F10-09 (`platform/ha/size-m/failover.sh`) hace estas comprobaciones en su modo de simulacro.
+3. Decide con el responsable del organismo si se conmuta o se espera. El script de conmutación (`platform/ha/size-m/failover.py`) hace estas comprobaciones en su modo de simulacro.
 
 ## Acción
 
-1. Ejecuta el script de conmutación en modo simulacro y lee su informe.
-2. Si el informe lo permite, ejecútalo con confirmación: promueve la réplica, verifica el diario en el promovido y lo deja en el diario (`ha.failover`).
+1. Ejecuta el script en modo simulacro. Comprueba que el principal no responde, que la réplica es una réplica y cuánto retraso lleva; no cambia nada:
+
+```bash
+uv run python platform/ha/size-m/failover.py --primary-dsn <principal> --replica-dsn <réplica>
+```
+
+2. Si el informe lo permite y el responsable lo decide, ejecútalo con confirmación. Promueve la réplica, verifica el diario en el promovido y deja `ha.failover` en el diario. Si el principal responde, se niega:
+
+```bash
+uv run python platform/ha/size-m/failover.py --primary-dsn <principal> --replica-dsn <réplica> --confirm
+```
+
 3. Redirige el acceso de los usuarios al nuevo principal.
-4. Cuando el antiguo principal vuelva, reincorpóralo como réplica con el script de reincorporación. Nunca lo arranques como principal.
+4. Cuando el antiguo principal vuelva, reincorpóralo como réplica: se vacía y se clona del nuevo principal, y queda `ha.rejoin` en el diario. Nunca lo arranques como principal.
+
+```bash
+uv run python platform/ha/size-m/rejoin.py --node <antiguo> --node-dsn <antiguo> --primary <nuevo> --primary-dsn <nuevo> --compose-file deploy/dev/compose.yaml
+```
 
 ## Verificación
 

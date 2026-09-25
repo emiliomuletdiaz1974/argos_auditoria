@@ -238,6 +238,40 @@ services:
       interval: 5s
       retries: 30
 
+  # ── F10-09 (ARG-095): the size M pair for the assisted failover, only with --profile ha. Two
+  # PostgreSQL of the image of ARGOS on a network of their own: node a primary, node b its physical
+  # replica with a slot. Stopping them stops nothing of the environment. ──
+  ha-node-a:
+    image: argos-dev/postgres:16-age-vector
+    profiles: ["ha"]
+    entrypoint: ["sh", "/ha/node.sh"]
+    environment: &ha_node
+      POSTGRES_USER: argos
+      POSTGRES_DB: argos
+      POSTGRES_PASSWORD: dev-only-ha
+      REPLICATION_PASSWORD: dev-only-ha-replication
+      NODE_NAME: ha_node_a
+      PRIMARY_HOST: ${HA_A_PRIMARY:-}   # empty: a primary; rejoin.py sets it to come back as a replica
+    volumes: ["ha-a-data:/var/lib/postgresql/data", "../../platform/ha/size-m/dev/node.sh:/ha/node.sh:ro",
+              "../../platform/ha/size-m/dev/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro",
+              "../../platform/ha/size-m/dev/replicator.sql:/docker-entrypoint-initdb.d/10-replicator.sql:ro"]
+    networks: [ha]
+    ports: ["127.0.0.1:55441:5432"]
+
+  ha-node-b:
+    image: argos-dev/postgres:16-age-vector
+    profiles: ["ha"]
+    entrypoint: ["sh", "/ha/node.sh"]
+    environment:
+      <<: *ha_node
+      NODE_NAME: ha_node_b
+      PRIMARY_HOST: ${HA_B_PRIMARY:-ha-node-a}
+    volumes: ["ha-b-data:/var/lib/postgresql/data", "../../platform/ha/size-m/dev/node.sh:/ha/node.sh:ro",
+              "../../platform/ha/size-m/dev/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro",
+              "../../platform/ha/size-m/dev/replicator.sql:/docker-entrypoint-initdb.d/10-replicator.sql:ro"]
+    networks: [ha]
+    ports: ["127.0.0.1:55442:5432"]
+
   # ── Campaign engine (F05-17): one image, the worker and the API as two entry points. ──
   challenge-worker:
     <<: *argos-posture
@@ -742,6 +776,7 @@ networks:
   ai-data:
   evidence:
   verifier:
+  ha:   # F10-09: the size M pair, apart from everything
 
 volumes:
   pg-data:
@@ -759,6 +794,8 @@ volumes:
   tls-example:
   tls-health:
   loki-data:
+  ha-a-data:
+  ha-b-data:
     driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
   tls-postgres:
     driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}

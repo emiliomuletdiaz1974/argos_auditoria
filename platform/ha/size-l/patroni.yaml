@@ -1,0 +1,70 @@
+# ARG-095 · the size L: three nodes with quorum (F10-09, ADR-0015 point 8). Written and validated
+# statically (tests/platform/test_ha_size_l.py); F10-92 applies it on the three nodes of k3s.
+#
+# The consensus is the etcd of k3s, on the three nodes: a node alone never promotes itself. Here, and
+# only here, the failover is automatic. The replication is synchronous: the evidence acknowledged
+# to a campaign is on two nodes before it is acknowledged.
+scope: argos
+namespace: /argos/
+name: ${PATRONI_NAME}
+
+restapi:
+  listen: 0.0.0.0:8008
+  connect_address: ${PATRONI_NAME}:8008
+  certfile: /run/tls/tls.crt
+  keyfile: /run/tls/tls.key
+  cafile: /run/tls/ca.crt
+  verify_client: required
+
+etcd3:
+  hosts:
+    - argos-l-1:2379
+    - argos-l-2:2379
+    - argos-l-3:2379
+  protocol: https
+  cacert: /run/tls/ca.crt
+  cert: /run/tls/tls.crt
+  key: /run/tls/tls.key
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    synchronous_mode: true
+    synchronous_mode_strict: true
+    failsafe_mode: true
+    postgresql:
+      use_pg_rewind: true
+      parameters:
+        shared_preload_libraries: age
+        wal_level: replica
+        max_wal_senders: 10
+        max_replication_slots: 10
+        hot_standby: "on"
+        ssl: "on"
+        ssl_min_protocol_version: TLSv1.3
+        ssl_cert_file: /run/tls/tls.crt
+        ssl_key_file: /run/tls/tls.key
+
+postgresql:
+  listen: 0.0.0.0:5432
+  connect_address: ${PATRONI_NAME}:5432
+  data_dir: /var/lib/postgresql/data
+  authentication:
+    superuser:
+      username: postgres
+    replication:
+      username: replicator
+  # Every connection over the network is TLS with a password; no `trust` outside the socket.
+  pg_hba:
+    - local all all peer
+    - hostssl replication replicator all scram-sha-256
+    - hostssl all all all scram-sha-256
+    - hostnossl all all all reject
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false

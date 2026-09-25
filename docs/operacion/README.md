@@ -20,3 +20,5 @@ Los runbooks del appliance (ARG-099). Cada alerta de `platform/observability/obj
 Las pruebas de `tests/docs/test_runbooks.py` comprueban que ninguna alerta se queda sin runbook, que cada runbook tiene las cinco secciones y que cada orden que pide ejecutar existe en el repositorio.
 
 Los comandos de los runbooks usan el entorno de desarrollo (`docker compose -f deploy/dev/compose.yaml …`). En el appliance, las mismas acciones se hacen sobre k3s; esa adaptación llega con el hardware (F10-90).
+
+La alta disponibilidad de cada talla está en [alta-disponibilidad.md](alta-disponibilidad.md).
