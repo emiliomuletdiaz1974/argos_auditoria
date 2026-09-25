@@ -5,7 +5,7 @@ title: Esclusa de soportes (argos-airgap)
 module: argos-airgap
 phases: ["09"]
 version: 0.2.0-alpha
-commit: 02046fd
+commit: 96b3236
 date: 2026-09-25
 status: current
 confidentiality: client

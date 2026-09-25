@@ -5,7 +5,7 @@ title: Instalador de la semana 1 (argos-installer)
 module: argos-installer
 phases: ["10"]
 version: 0.1.0-alpha
-commit: pendiente
+commit: 96b3236
 date: 2026-09-25
 status: current
 confidentiality: client
