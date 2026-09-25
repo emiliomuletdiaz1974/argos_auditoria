@@ -1,8 +1,8 @@
 """ARG-098 · where the appliance stands against its size, and the local series (F10-08).
 
 The four dimensions are measured on the database: registered systems, nodes of the latest inventory
-snapshot, campaigns running or waiting at a live gate and AI tokens of the last 24 hours. A snapshot a day keeps
-thirteen months of history, which never leaves the appliance.
+snapshot, campaigns running or waiting at a live gate and AI tokens of the last 24 hours. A snapshot
+a day keeps thirteen months of history, which never leaves the appliance.
 """
 
 import json
