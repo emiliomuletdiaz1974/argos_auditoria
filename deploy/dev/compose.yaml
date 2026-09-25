@@ -146,7 +146,8 @@ services:
     image: prom/alertmanager:v0.27.0
     # Its silences and notification log live in /alertmanager; in development they may be lost.
     tmpfs: ["/tmp:size=64m", "/alertmanager:size=64m,uid=10001,gid=10001"]
-    volumes: ["./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"]
+    volumes: ["./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro",
+              "./alertmanager/webhook-token:/etc/alertmanager/webhook-token:ro"]
     ports: ["127.0.0.1:9093:9093"]
 
   loki:
@@ -308,7 +309,8 @@ services:
       dockerfile: services/api/Dockerfile
     image: argos-api:dev
     volumes: ["./secrets/approle-api:/run/secrets/approle:ro", "tls-api:/run/tls:ro", "./update:/var/lib/argos/update", "./support:/var/lib/argos/support",
-              "./airgap:/var/lib/argos/airgap", "./airgap/in:/var/lib/argos/airgap/in:ro"]
+              "./airgap:/var/lib/argos/airgap", "./airgap/in:/var/lib/argos/airgap/in:ro",
+              "./alertmanager/webhook-token:/run/secrets/alertmanager-token:ro"]
     command: ["/app/.venv/bin/python", "-m", "argos_api.main"]
     environment: &api_env
       ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
@@ -337,6 +339,11 @@ services:
       # F09-13 (ARG-090): the airlock. in/ is read-only, as the medium of the appliance.
       ARGOS_AIRGAP_DIR: /var/lib/argos/airgap
       ARGOS_CONTENT_PUBLIC_KEY_FILE: /var/lib/argos/airgap/content.pub
+      # F10-07 (ARG-092/099): the operation screen. Its lights come from Prometheus; its runbooks
+      # are the book of operation copied into the image; Alertmanager delivers with a token.
+      ARGOS_PROMETHEUS_URL: http://prometheus:9090
+      ARGOS_RUNBOOKS_DIR: /app/docs/operacion/runbooks
+      ARGOS_ALERTMANAGER_TOKEN_FILE: /run/secrets/alertmanager-token
       ARGOS_EVIDENCE_ISSUER_DID: did:web:127.0.0.1%3A8008
       ARGOS_EVIDENCE_STATUS_BASE_URL: http://127.0.0.1:8008/status
       ARGOS_EVIDENCE_CREDENTIAL_BASE_URL: http://127.0.0.1:8008/credentials

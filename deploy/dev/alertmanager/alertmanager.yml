@@ -2,8 +2,8 @@
 # always the console, and the webhook of the organisation when it configures one.
 #
 # Critical alerts wake somebody up and repeat every hour; the rest wait for the next working day
-# and repeat every day. The console receives them on the API (F10-07 adds the route and its
-# authentication); until then the delivery is attempted and logged by Alertmanager.
+# and repeat every day. The console receives them on the API, outside the contract of people, with
+# the token of webhook-token as a bearer (F10-07).
 route:
   receiver: console
   group_by: [alertname, objective]
@@ -19,8 +19,11 @@ route:
 receivers:
   - name: console
     webhook_configs:
-      - url: http://api:8000/api/v1/operations/alerts
+      - url: http://api:8000/internal/alertmanager
         send_resolved: true
+        http_config:
+          authorization:
+            credentials_file: /etc/alertmanager/webhook-token
   # The organisation's own channel, when it has one (installer, F10-10). Uncomment and add it as a
   # second receiver of both routes with `continue: true`:
   #

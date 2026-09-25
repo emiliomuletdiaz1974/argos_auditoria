@@ -4,9 +4,9 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.35.0-alpha
+version: 0.36.0-alpha
 commit: cbea282
-date: 2026-09-24
+date: 2026-09-25
 status: current
 confidentiality: client
 ---
@@ -88,6 +88,12 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 - **Sesiones cerradas** (F09-32, SEC-060): al cerrar sesión (`POST /api/v1/auth/logout`), si el realm aceptó revocar ese refresco, la API apunta su sesión (`sid`) en `argos.closed_sessions` durante 15 minutos, más que cualquier token de acceso. El guardián de cada réplica rechaza con `401` un token de una sesión cerrada y lo registra (`auth.session_closed`). Cada réplica guarda las respuestas 5 segundos. Una cookie que el realm rechaza no cierra nada: nadie puede cerrar la sesión de otra persona con un `sid` copiado.
 - **Mismo origen en las mutaciones** (F09-15, SEC-058): un `POST`, `PUT`, `PATCH` o `DELETE` con una cabecera `Origin` de otro origen (o `null`) recibe `403` problem+json antes de llegar a la ruta, y queda en el registro de seguridad (`http.origin_refused`). La consola vive en el mismo origen (ADR-0013); un cliente sin navegador no envía `Origin` y se juzga solo por su token.
 - **Esclusa** (F09-13, ARG-090): `POST /api/v1/airgap/imports` y `POST /api/v1/airgap/exports` (`airgap.import` y `airgap.export`, solo `platform_admin` con segundo factor). La API construye la esclusa (`argos-airgap`) con los importadores y exportadores de los servicios que tiene configurados; un tipo de exportación fuera de la lista cerrada responde `403` y queda registrado. Desde la migración 0038, `svc_api` puede insertar las cuádruplas de una versión de contenido que `load_bundle` ya verificó.
+- **Operación** (F10-07, ARG-092/099):
+  - `GET /api/v1/operations/status` devuelve los ocho semáforos del panel de operación, preguntados a Prometheus (`ARGOS_PROMETHEUS_URL`) en el momento, y las alertas activas, cada una con su runbook. Un semáforo sin medida sale `unknown`, nunca verde;
+  - `GET /api/v1/operations/runbooks/{runbook_id}` devuelve el Markdown de un runbook del libro de operación (`ARGOS_RUNBOOKS_DIR`, copiado en la imagen). Solo acepta identificadores `RB-NN-nombre`;
+  - las dos rutas piden `operations.read` (`platform_admin` y `read_only_auditor`);
+  - Alertmanager entrega en `POST /internal/alertmanager`, fuera del contrato de las personas, con el token de `ARGOS_ALERTMANAGER_TOKEN_FILE` como portador. Sin token configurado, el receptor responde `503`;
+  - las alertas se guardan en `argos.operation_alerts` (migración 0043), una fila por huella, que solo escribe `svc_api`.
 - **Pruebas de restauración** (F09-12, ARG-089): `/metrics` publica `argos_backup_last_restore_test_timestamp_seconds` (cuándo pasó la última prueba; 0 si nunca) y `argos_backup_last_restore_test_success` (si la última pasó), leídas de `argos.restore_tests`. Las alertas `BackupRestoreTestStale` y `BackupRestoreTestFailed` las usan (ver `docs/seguridad/backup-restauracion.md`).
 - **Paquete de diagnóstico** (F09-11, ARG-088): `POST /api/v1/support/diagnostics` encola la petición para el recolector; `GET /api/v1/support/diagnostics/{id}` muestra la vista previa en claro (índice y cada fichero), y `POST …/{id}/package` la cifra para la clave del soporte (`ARGOS_SUPPORT_RECIPIENT_FILE`) solo si la huella del índice es la que el operador aprobó y ningún fichero cambió. Pedir y leer exige `support.diagnose`; cifrar, `support.package` con segundo factor. Solo `platform_admin`. La API no recoge nada: lo hace `argos-support` junto al orquestador (ver `argos-support.md`).
 - **Petición de actualización** (F09-10, ARG-086): `POST /api/v1/system/updates` (`system.update`, solo `platform_admin` con segundo factor) verifica el paquete de la bandeja con la clave de release fijada (`ARGOS_RELEASE_PUBLIC_KEY_FILE`) y lo encola en `ARGOS_UPDATE_DIR/queue`. No aplica nada: lo hace el actualizador (`argos-updater`). Un nombre de paquete que saldría de la bandeja se rechaza.
@@ -194,3 +200,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.33.0-alpha | 2026-09-24 | Rechazo de mutaciones de otro origen (SEC-058) | F09-15 |
 | 0.34.0-alpha | 2026-09-24 | Sesiones cerradas compartidas entre réplicas (SEC-060, migración 0039) | F09-32 (SEC-060) |
 | 0.35.0-alpha | 2026-09-24 | `argos_log_records_dropped_total` en `/metrics` | F10-05 (ARG-093) |
+| 0.36.0-alpha | 2026-09-25 | Pantalla de operación: `/operations/status`, `/operations/runbooks/{id}` y el receptor de Alertmanager (migración 0043) | F10-07 (ARG-092/099) |

@@ -4,9 +4,9 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.13.0-alpha
+version: 0.14.0-alpha
 commit: 02046fd
-date: 2026-09-24
+date: 2026-09-25
 status: current
 confidentiality: client
 ---
@@ -65,6 +65,7 @@ Los nombres del documento de fase (`--sev-critica`, `--verdict`…) pasan a ingl
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Operación** (F10-07, ARG-092/099): la sección «Operación» muestra los ocho semáforos con su estado en palabras (correcto, fallo, sin medir) y no solo en color, las alertas activas y, al pulsar una, el runbook que dice qué hacer. El runbook se pinta con un renderizador propio de Markdown que solo crea elementos: una etiqueta del texto se muestra como texto, nunca como HTML.
 - **Esclusa** (F09-13, ARG-090): la sección «Esclusa» muestra el resultado de cada fichero que entra (importado o rechazado, motivo y SHA-256; «sin leer» cuando se rechazó sin abrirlo) y ofrece para la salida solo los tipos de la lista cerrada.
 - **Soporte** (F09-11, ARG-088): la sección «Soporte» pide el paquete de diagnóstico y muestra la nota, el índice con la huella y cada fichero tal como saldrá. La descarga exige marcar que se ha leído, y envía la huella del índice mostrado: la API solo cifra ese índice.
 - **Segundo factor bajo demanda** (F09-07):
@@ -122,3 +123,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | 0.11.0-alpha | 2026-09-23 | Vuelta a iniciar sesión con segundo factor cuando la API lo pide | F09-07 (ARG-072) |
 | 0.12.0-alpha | 2026-09-24 | Sección «Soporte»: revisión del paquete de diagnóstico antes de descargarlo | F09-11 (ARG-088) |
 | 0.13.0-alpha | 2026-09-24 | Sección «Esclusa»: entrada verificada y salida de lista cerrada | F09-13 (ARG-090) |
+| 0.14.0-alpha | 2026-09-25 | Sección «Operación»: semáforos, alertas activas y runbook | F10-07 (ARG-092/099) |

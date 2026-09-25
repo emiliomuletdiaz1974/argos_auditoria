@@ -1,0 +1,44 @@
+/* ARG-092 · the lights of the operation screen: colour and words, never colour alone. */
+.lights {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+}
+
+.light {
+  border-radius: var(--radius);
+  border: 2px solid var(--line);
+  background: var(--panel);
+  padding: 0.6rem 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.light-green {
+  border-color: var(--sev-low);
+}
+
+.light-red {
+  border-color: var(--sev-critical);
+  font-weight: 600;
+}
+
+.light-unknown {
+  border-color: var(--sev-medium);
+  border-style: dashed;
+}
+
+.light-title {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.runbook pre {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  padding: 0.6rem;
+  overflow-x: auto;
+}

@@ -24,6 +24,7 @@ from argos_api.assistant import AssistantClient
 from argos_api.authz import require_perm
 from argos_api.core import MUTATIONS, IdempotencyStore
 from argos_api.http import ERRORS, PROBLEM_MEDIA_TYPE, ProblemResponse, problem_response
+from argos_api.operations import Alerts, Metrics, PostgresAlerts
 from argos_api.routers import (
     airgap,
     approvals,
@@ -33,6 +34,7 @@ from argos_api.routers import (
     evidence,
     findings,
     inventory,
+    operations,
     security,
     session,
     support,
@@ -70,6 +72,7 @@ AUTHENTICATED = (
     system.router,
     support.router,
     airgap.router,
+    operations.router,
 )
 DESCRIPTION = (
     "Campaigns, inventory, findings and evidence of the ARGOS appliance. "
@@ -119,6 +122,10 @@ def create_app(
     support: support.SupportDiagnostics | None = None,
     airgap: Gate | None = None,
     closed_sessions: SessionClosures | None = None,
+    operations_metrics: Metrics | None = None,
+    operations_alerts: Alerts | None = None,
+    runbooks_dir: Path | None = None,
+    alertmanager_token: str | None = None,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
     still answer, and the tests that do not touch the database do not need one.
@@ -140,6 +147,11 @@ def create_app(
     app.state.updates = updates
     app.state.support = support
     app.state.airgap = airgap
+    # F10-07: the operation screen and the receiver of Alertmanager.
+    app.state.operations_metrics = operations_metrics
+    app.state.operations_alerts = operations_alerts or (PostgresAlerts(dsn) if dsn else None)
+    app.state.runbooks_dir = runbooks_dir
+    app.state.alertmanager_token = alertmanager_token
     # F09-32: the sessions closed before their tokens expire, shared by every replica.
     app.state.closed_sessions = closed_sessions or (ClosedSessions(dsn) if dsn else None)
     app.state.refresher = refresher
@@ -234,6 +246,7 @@ def create_app(
     for router in AUTHENTICATED:
         app.include_router(router, prefix=API_PREFIX, responses=ERRORS)
     app.include_router(session.router, prefix=API_PREFIX, responses=ERRORS)
+    app.include_router(operations.internal)
     if dsn:
         app.include_router(
             _graph_router(dsn),

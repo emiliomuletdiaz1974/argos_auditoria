@@ -69,6 +69,12 @@ class ArgosConfig(BaseSettings):
     # to verify normative bundles that come in through it. Unset: no airlock.
     AIRGAP_DIR: str | None = None
     CONTENT_PUBLIC_KEY_FILE: str | None = None
+    # F10-07 (ARG-092/099): the operation screen reads its lights from Prometheus and shows the
+    # runbooks of RUNBOOKS_DIR; Alertmanager delivers its alerts with the token of the file.
+    # Unset: no lights, no runbooks, and the receiver of alerts stays closed.
+    PROMETHEUS_URL: str | None = None
+    RUNBOOKS_DIR: str | None = None
+    ALERTMANAGER_TOKEN_FILE: str | None = None
     NATS_URL: str = "nats://127.0.0.1:4222"
     # Each service connects with its own NATS user: the server decides what it may publish.
     NATS_USER: str | None = None

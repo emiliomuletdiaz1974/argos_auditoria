@@ -29,6 +29,7 @@ from argos_api import SERVICE_NAME
 from argos_api.app import create_app
 from argos_api.assistant import AssistantClient
 from argos_api.keycloak import Keycloak
+from argos_api.operations import PrometheusMetrics
 from argos_api.routers import support, system
 from argos_api.webhooks.worker import allowed_targets
 from argos_auth import JwtValidator
@@ -129,7 +130,18 @@ def build_app(cfg: ArgosConfig) -> Any:
         updates=updates,
         support=diagnostics,
         airgap=_airgap(cfg, evidence, updates, diagnostics),
+        operations_metrics=PrometheusMetrics(cfg.PROMETHEUS_URL) if cfg.PROMETHEUS_URL else None,
+        runbooks_dir=Path(cfg.RUNBOOKS_DIR) if cfg.RUNBOOKS_DIR else None,
+        alertmanager_token=_alertmanager_token(cfg),
     )
+
+
+def _alertmanager_token(cfg: ArgosConfig) -> str | None:
+    """The bearer Alertmanager delivers with, read from a file, never from a variable."""
+    if not cfg.ALERTMANAGER_TOKEN_FILE:
+        return None
+    token = Path(cfg.ALERTMANAGER_TOKEN_FILE).read_text(encoding="utf-8").strip()
+    return token or None
 
 
 def _updates(cfg: ArgosConfig) -> system.UpdateRequests | None:

@@ -84,3 +84,7 @@ support.package: [platform_admin]
 # out leaves it: the administrator, with the second factor.
 airgap.import: [platform_admin]
 airgap.export: [platform_admin]
+
+# F10-07 (ARG-092/099): the operation screen, its lights, alerts and runbooks. Read by who operates
+# the appliance and by who audits it.
+operations.read: [platform_admin, read_only_auditor]

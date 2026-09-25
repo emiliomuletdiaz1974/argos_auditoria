@@ -74,3 +74,8 @@ cases:
   # --- PUBLIC gets nothing -----------------------------------------------------------------
   - [PUBLIC, audit_journal, SELECT, false]
   - [PUBLIC, findings, SELECT, false]
+  # --- F10-07: the alerts of Alertmanager, written only by the API ---------------------------
+  - [svc_api, operation_alerts, INSERT, true]
+  - [svc_api, operation_alerts, DELETE, false]
+  - [svc_health, operation_alerts, SELECT, false]
+  - [svc_challenge, operation_alerts, INSERT, false]

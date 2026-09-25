@@ -19,6 +19,8 @@ COPY services ./services
 RUN uv sync --locked --no-dev --package argos-api
 # The challenge library and the ontology are read at runtime, never baked as data.
 COPY library ./library
+# F10-07: the book of operation, which the operation screen shows next to each alert.
+COPY docs/operacion ./docs/operacion
 COPY --from=console /console/dist ./console
 # ARG-084: no extra shell in the final image (sh stays: it is the base of the system).
 RUN rm -f /bin/bash /usr/bin/bash
