@@ -20,7 +20,7 @@ from typing import Any
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 
-from argos_common.logs import get_logger
+from argos_common.logs import get_logger, loki_dropped
 
 from .measures import (
     Observation,
@@ -184,6 +184,14 @@ class Monitor:
         with self._lock:
             found = [o for group in self._groups.values() for o in group]
             ran = dict(self._ran)
+        found.append(
+            Observation(
+                "argos_log_records_dropped_total",
+                float(loki_dropped()),
+                {"service": "argos-health"},
+                help="Log lines this process dropped instead of sending them to Loki.",
+            )
+        )
         found.append(
             Observation(
                 "argos_build_info",

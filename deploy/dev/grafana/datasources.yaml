@@ -7,6 +7,14 @@ datasources:
     url: http://prometheus:9090
     isDefault: true
   - name: Loki
+    uid: loki
     type: loki
     access: proxy
     url: http://loki:3100
+    jsonData:
+      # F10-05 (ARG-093): from a log line to every other line of the same journal entry.
+      derivedFields:
+        - name: journal_seq
+          matcherRegex: '"journal_seq": (\d+)'
+          datasourceUid: loki
+          url: '{service=~"argos-.+"} |= `"journal_seq": ${__value.raw}`'

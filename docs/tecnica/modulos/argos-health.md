@@ -4,7 +4,7 @@ kind: module
 title: Servicio de salud del dominio (argos-health)
 module: argos-health
 phases: ["10"]
-version: 0.3.0-alpha
+version: 0.4.0-alpha
 commit: 8fa9076
 date: 2026-09-24
 status: current
@@ -87,7 +87,8 @@ Métricas:
   - `argos_findings_remediation_hours`: mediana de horas hasta la subsanación verificada en 90 días;
   - `argos_inventory_coverage_ratio{system}`;
   - `argos_ai_tokens_24h`, `argos_ai_requests_24h`, `argos_ai_latency_p95_ms` y `argos_ai_quota_used_ratio`, por servicio;
-  - `argos_ai_calibration_age_hours{category}`.
+  - `argos_ai_calibration_age_hours{category}`;
+- `argos_log_records_dropped_total{service}`: líneas de log que el servicio no pudo enviar a Loki (F10-05).
 
 ## 5. Configuración
 
@@ -142,3 +143,4 @@ Métricas:
 | 0.1.0-alpha | 2026-09-24 | Primera versión | F10-02 (ARG-094) |
 | 0.2.0-alpha | 2026-09-24 | Duración de la última exploración por sistema, para la alerta `ScanTooSlow` | F10-03 (ARG-091) |
 | 0.3.0-alpha | 2026-09-24 | Versión, campañas, hallazgos, cobertura e IA para los paneles (migración 0042) | F10-04 (ARG-092) |
+| 0.4.0-alpha | 2026-09-24 | Líneas de log descartadas antes de llegar a Loki | F10-05 (ARG-093) |

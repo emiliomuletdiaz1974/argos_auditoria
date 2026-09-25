@@ -1,0 +1,48 @@
+# F10-05 (ARG-093): Loki of the development environment. The services push their own JSON lines
+# (argos_common.logs.LokiHandler) with two labels, service and level; 30 days of retention.
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+# The write-ahead log and the flush on shutdown live in the volume: a restart keeps the lines.
+ingester:
+  wal:
+    dir: /loki/wal
+    flush_on_shutdown: true
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+limits_config:
+  retention_period: 720h
+  # Loki 3 would add a `service_name` label copied from `service`: two labels are enough.
+  discover_service_name: []
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
+
+# Nothing leaves the appliance: the image reports anonymous usage to Grafana Labs unless told not to.
+analytics:
+  reporting_enabled: false

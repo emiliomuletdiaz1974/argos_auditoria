@@ -151,7 +151,11 @@ services:
 
   loki:
     image: grafana/loki:3.1.1
-    command: ["-config.file=/etc/loki/local-config.yaml"]
+    # F10-05 (ARG-093): the services push their own logs; 30 days of retention. It is on the `ai`
+    # network too, only so that the AI gateway can push: Loki reaches nothing there.
+    command: ["-config.file=/etc/loki/argos.yaml"]
+    volumes: ["./loki/loki.yaml:/etc/loki/argos.yaml:ro", "loki-data:/loki"]   # 30 days survive a restart
+    networks: [default, ai]
     ports: ["127.0.0.1:3100:3100"]
 
   grafana:
@@ -159,6 +163,10 @@ services:
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # Nothing leaves the appliance: no usage reports and no update checks (F10-05).
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
     # F10-04: the dashboards of platform/observability/dashboards, provisioned read-only.
     volumes: ["./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/argos.yaml:ro", "./grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/argos.yaml:ro", "../../platform/observability/dashboards:/var/lib/grafana/argos-dashboards:ro"]
     ports: ["127.0.0.1:3000:3000"]
@@ -179,6 +187,7 @@ services:
       ARGOS_TLS_DIR: /run/tls
       ARGOS_VAULT_ADDR: http://vault:8200
       ARGOS_LOG_LEVEL: INFO
+      ARGOS_LOKI_URL: http://loki:3100/loki/api/v1/push   # F10-05: its logs, pushed by itself
     volumes: ["./secrets/approle-example:/run/secrets/approle:ro", "tls-example:/run/tls:ro"]
     depends_on:
       postgres:
@@ -205,6 +214,7 @@ services:
       ARGOS_TLS_DIR: /run/tls
       ARGOS_VAULT_ADDR: http://vault:8200
       ARGOS_LOG_LEVEL: INFO
+      ARGOS_LOKI_URL: http://loki:3100/loki/api/v1/push   # F10-05: its logs, pushed by itself
       ARGOS_HEALTH_S3_ENDPOINT: http://evidence-store:7070
       ARGOS_HEALTH_S3_ACCESS_KEY: dev-only-evidence
       ARGOS_HEALTH_S3_SECRET_KEY: dev-only-evidence-secret
@@ -255,6 +265,7 @@ services:
       ARGOS_OIDC_ISSUER: http://keycloak:8080/realms/argos
       ARGOS_OIDC_AUDIENCE: argos-api
       ARGOS_LOG_LEVEL: INFO
+      ARGOS_LOKI_URL: http://loki:3100/loki/api/v1/push   # F10-05: its logs, pushed by itself
     depends_on:
       postgres:
         condition: service_healthy
@@ -337,6 +348,7 @@ services:
       ARGOS_EVIDENCE_TSA_URL: http://tsa:3180
       ARGOS_EVIDENCE_TSA_ROOTS_URL: http://tsa:3180/ca.pem
       ARGOS_LOG_LEVEL: INFO
+      ARGOS_LOKI_URL: http://loki:3100/loki/api/v1/push   # F10-05: its logs, pushed by itself
       ARGOS_API_BIND: 0.0.0.0   # published below on 127.0.0.1 only
     # `ai` gives it the gateway; the campaign worker is not on that network and never will be.
     networks: [default, ai, evidence]
@@ -433,6 +445,7 @@ services:
       ARGOS_VAULT_ADDR: http://vault:8200
       ARGOS_VAULT_TOKEN: root   # development Vault started with -dev-root-token-id=root
       ARGOS_LOG_LEVEL: INFO
+      ARGOS_LOKI_URL: http://loki:3100/loki/api/v1/push   # F10-05: its logs, pushed by itself
       ARGOS_EVIDENCE_ISSUER_DID: did:web:127.0.0.1%3A8008
       ARGOS_EVIDENCE_STATUS_BASE_URL: http://127.0.0.1:8008/status
       ARGOS_EVIDENCE_CREDENTIAL_BASE_URL: http://127.0.0.1:8008/credentials
@@ -532,6 +545,7 @@ services:
       PGSERVICEFILE: /run/argos-db/pg_service.conf
       ARGOS_VAULT_ADDR: http://vault:8200
       ARGOS_LOG_LEVEL: INFO
+      ARGOS_LOKI_URL: http://loki:3100/loki/api/v1/push   # F10-05: its logs, pushed by itself
     volumes: ["./secrets/approle-ai-gateway:/run/secrets/approle:ro", "ai-db-credentials:/run/argos-db"]
     depends_on:
       vault:
@@ -564,6 +578,7 @@ services:
       ARGOS_LLM_MODEL: argos-llm
       ARGOS_API_BIND: 0.0.0.0   # published below on 127.0.0.1 only
       ARGOS_LOG_LEVEL: INFO
+      ARGOS_LOKI_URL: http://loki:3100/loki/api/v1/push   # F10-05: its logs, pushed by itself
     networks: [ai, ai-data]
     depends_on:
       postgres:
@@ -731,6 +746,7 @@ volumes:
     driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
   tls-example:
   tls-health:
+  loki-data:
     driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}
   tls-postgres:
     driver_opts: {type: tmpfs, device: tmpfs, o: "uid=10001,gid=10001,mode=0700"}

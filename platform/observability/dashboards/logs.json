@@ -1,0 +1,123 @@
+{
+  "uid": "argos-logs",
+  "title": "ARGOS · Logs",
+  "description": "Las líneas JSON que cada servicio envía a Loki (sin recolector). Etiquetas: service y level; el resto va dentro de la línea. Un journal_seq enlaza con las demás líneas del mismo asiento (ARG-093).",
+  "editable": false,
+  "tags": [
+    "argos"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "panels": [
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Errores por servicio",
+      "description": "Líneas ERROR por servicio y cinco minutos.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "refId": "A",
+          "legendFormat": "{{service}}",
+          "expr": "sum by (service) (count_over_time({level=\"ERROR\"}[5m]))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 25,
+      "type": "logs",
+      "title": "Historia de una campaña",
+      "description": "Todo lo que los servicios dijeron de la campaña del campo de arriba.",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service=~\"argos-.+\"} | json | campaign_id = \"$campaign\"",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    },
+    {
+      "id": 26,
+      "type": "logs",
+      "title": "Rechazos de la esclusa",
+      "description": "Lo que la esclusa rechazó o no pudo leer (ARG-090).",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service=\"argos-api\"} | json | logger =~ \".*airgap.*\" | level =~ \"WARNING|ERROR\"",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending"
+      }
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "campaign",
+        "label": "Campaña",
+        "type": "textbox",
+        "query": ""
+      }
+    ]
+  }
+}

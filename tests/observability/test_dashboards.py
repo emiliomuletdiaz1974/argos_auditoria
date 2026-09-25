@@ -17,7 +17,11 @@ from .test_alert_rules import STANDARD, _published
 REPO = Path(__file__).resolve().parents[2]
 DASHBOARDS = REPO / "platform" / "observability" / "dashboards"
 EXPECTED = {"operation.json": "argos-operation", "compliance.json": "argos-compliance",
-            "ai-platform.json": "argos-ai-platform"}  # fmt: skip
+            "ai-platform.json": "argos-ai-platform", "logs.json": "argos-logs"}  # fmt: skip
+PROMETHEUS = {"type": "prometheus", "uid": "prometheus"}
+LOKI = {"type": "loki", "uid": "loki"}
+# F10-05 (ARG-093): the saved queries of the logs, as panels of their own dashboard.
+SAVED_QUERIES = {"Errores por servicio", "Historia de una campaña", "Rechazos de la esclusa"}
 LIGHTS = [
     "Diario",
     "Almacén WORM",
@@ -62,6 +66,8 @@ def test_the_operation_dashboard_opens_with_the_eight_lights() -> None:
 def test_every_expression_uses_a_published_metric(name: str) -> None:
     published = _published() | STANDARD
     for panel in _panels(_load(name)):
+        if panel["datasource"] == LOKI:
+            continue
         for target in panel["targets"]:
             used = set(re.findall(r"\b(argos_[a-z0-9_]+|up)\b", target["expr"]))
             assert used, (name, panel["title"])
@@ -69,6 +75,17 @@ def test_every_expression_uses_a_published_metric(name: str) -> None:
 
 
 @pytest.mark.parametrize("name", sorted(EXPECTED))
-def test_every_panel_reads_the_provisioned_prometheus(name: str) -> None:
+def test_every_panel_reads_a_provisioned_datasource(name: str) -> None:
+    expected = LOKI if name == "logs.json" else PROMETHEUS
     for panel in _panels(_load(name)):
-        assert panel["datasource"] == {"type": "prometheus", "uid": "prometheus"}, panel["title"]
+        assert panel["datasource"] == expected, panel["title"]
+
+
+def test_the_logs_dashboard_holds_the_saved_queries_on_two_labels_only() -> None:
+    panels = _panels(_load("logs.json"))
+    assert {p["title"] for p in panels} >= SAVED_QUERIES
+    for panel in panels:
+        for target in panel["targets"]:
+            selectors = re.findall(r"\{([^}]*)\}", target["expr"].split("|")[0])
+            labels = {m.split("=")[0].strip().rstrip("!~") for s in selectors for m in s.split(",")}
+            assert labels <= {"service", "level"}, (panel["title"], labels)

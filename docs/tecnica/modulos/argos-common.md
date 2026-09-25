@@ -4,7 +4,7 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.12.0-alpha
+version: 0.13.0-alpha
 commit: 02046fd
 date: 2026-09-24
 status: current
@@ -29,7 +29,7 @@ Base compartida por todos los servicios de ARGOS: configuración validada al arr
 |---|---|
 | `config` | `ArgosConfig`: configuración tipada desde variables `ARGOS_*` o `.env`; un servicio mal configurado no arranca |
 | `errors` | Jerarquía `ArgosError` con código y detalles serializables |
-| `logs` | Registro JSON con campos obligatorios |
+| `logs` | Registro JSON con campos obligatorios; con `ARGOS_LOKI_URL`, el propio servicio lo envía a Loki (`LokiHandler`, F10-05) |
 | `health` | Rutas uniformes `/health/live` y `/health` para servicios HTTP |
 | `ids` | Identificadores UUID v7 ordenables en el tiempo |
 | `journal` | Diario encadenado v1: canonicalización, hash y verificación independientes de la base de datos |
@@ -48,6 +48,8 @@ Dependencias externas: PostgreSQL 16 (esquema `argos`), HashiCorp Vault (kv-v2 y
 |---|---|---|
 | Función | `load_config()`, `get_config()` | Construyen y validan la configuración; los errores nunca incluyen los valores recibidos |
 | Función | `configure_logging(service, level, stream)`, `get_logger(name, component)` | Registro JSON con `timestamp`, `level`, `service`, `component`, `logger` y `message`; opcionales `journal_seq`, `trace_id` y `campaign_id` |
+| Clase | `LokiHandler(service, url, *, sender, batch_size=200, flush_seconds=2, max_queue=10000)`, `dropped` | Envía por lotes a `POST /loki/api/v1/push` las mismas líneas de la salida estándar, con dos etiquetas (`service` y `level`). Cola acotada: si se llena o Loki no responde, descarta y cuenta. Nunca bloquea al servicio |
+| Función | `loki_dropped()`, `http_sender(url)` | Líneas que el proceso descartó; el envío HTTP por defecto |
 | Función | `mount_health(app, service, version, checks, timeout)` | `GET /health/live` (proceso) y `GET /health` (dependencias: 200 u 503 con `status` `ok` o `degraded`) |
 | Función | `uuid7()` | Identificador UUID v7 (RFC 9562) |
 | Clase | `PostgresJournal(dsn)` | `append(actor, action, payload, conn=None)`, `read(from_seq, to_seq)`, `verify(from_seq, to_seq)`, `head()` |
@@ -153,3 +155,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.10.0-alpha | 2026-09-24 | `UPDATE_DIR` y `RELEASE_PUBLIC_KEY_FILE` para las peticiones de actualización | F09-10 (ARG-086) |
 | 0.11.0-alpha | 2026-09-24 | `SUPPORT_DIR` y `SUPPORT_RECIPIENT_FILE` para el paquete de diagnóstico | F09-11 (ARG-088) |
 | 0.12.0-alpha | 2026-09-24 | `AIRGAP_DIR` y `CONTENT_PUBLIC_KEY_FILE` para la esclusa | F09-13 (ARG-090) |
+| 0.13.0-alpha | 2026-09-24 | El servicio envía sus propios logs a Loki (`LokiHandler`, `ARGOS_LOKI_URL`), sin recolector (DP-16) | F10-05 (ARG-093) |

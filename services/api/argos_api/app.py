@@ -43,7 +43,7 @@ from argos_api.routers import (
 )
 from argos_api.routers.session import CodeExchanger, SessionRevoker
 from argos_api.runner import CampaignRunner
-from argos_api.security_events import backup_metrics, security_event, security_metrics
+from argos_api.security_events import backup_metrics, log_metrics, security_event, security_metrics
 from argos_api.sessions import ClosedSessions, SessionClosures
 from argos_api.webhooks.destination import Resolver, resolve_host
 from argos_api.webhooks.store import SecretWriter
@@ -227,7 +227,7 @@ def create_app(
         """What Prometheus scrapes on the internal network: the security log (F09-08)."""
         if not dsn:
             return PlainTextResponse("", status_code=503)
-        text = security_metrics(dsn) + backup_metrics(dsn)
+        text = security_metrics(dsn) + backup_metrics(dsn) + log_metrics()
         return PlainTextResponse(text, media_type="text/plain; version=0.0.4")
 
     # Each route declares its permission (ARG-072); the guard resolves the identity on its way.

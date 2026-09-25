@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.34.0-alpha
+version: 0.35.0-alpha
 commit: a2436af
 date: 2026-09-24
 status: current
@@ -96,7 +96,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
   - los permisos denegados, los roles incompatibles y el segundo factor exigido;
   - cada uso permitido de un permiso de `platform_admin` que cambia algo.
 
-  Guarda la plantilla de la ruta y no la ruta concreta, que puede llevar datos del cliente. Se consulta en `GET /api/v1/security/events` (`security.read`: `platform_admin` y `read_only_auditor`), paginado por cursor. `GET /metrics` publica `argos_security_events_total{kind,outcome}` y `argos_security_chain_ok` para Prometheus, fuera del contrato v1.
+  Guarda la plantilla de la ruta y no la ruta concreta, que puede llevar datos del cliente. Se consulta en `GET /api/v1/security/events` (`security.read`: `platform_admin` y `read_only_auditor`), paginado por cursor. `GET /metrics` publica `argos_security_events_total{kind,outcome}` y `argos_security_chain_ok` para Prometheus, fuera del contrato v1. Desde F10-05 publica también `argos_log_records_dropped_total{service}`: las líneas de log que la API no pudo enviar a Loki.
 - **Segundo factor para lo que decide** (F09-07, ARG-072):
   - Qué permisos lo exigen: `permissions.yaml` los declara en `_second_factor`. Son aprobar compuertas, mover hallazgos (aceptar un riesgo incluido), emitir y revocar credenciales, autorizar un punto de inyección, decidir sobre una columna en revisión y crear integraciones.
   - Qué responde la API sin él: con un token sin `otp` en `amr`, `401` con `WWW-Authenticate: Bearer error="insufficient_user_authentication"` (RFC 9470), solo después de comprobar el rol y sin nombrar el permiso.
@@ -193,3 +193,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.32.0-alpha | 2026-09-24 | Rutas `/airgap/imports` y `/airgap/exports`, e inserción de cuádruplas de contenido verificado | F09-13 (ARG-090) |
 | 0.33.0-alpha | 2026-09-24 | Rechazo de mutaciones de otro origen (SEC-058) | F09-15 |
 | 0.34.0-alpha | 2026-09-24 | Sesiones cerradas compartidas entre réplicas (SEC-060, migración 0039) | F09-32 (SEC-060) |
+| 0.35.0-alpha | 2026-09-24 | `argos_log_records_dropped_total` en `/metrics` | F10-05 (ARG-093) |

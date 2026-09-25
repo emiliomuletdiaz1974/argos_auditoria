@@ -15,6 +15,7 @@ import psycopg
 from fastapi import Request
 
 from argos_common import security_log
+from argos_common.logs import loki_dropped
 
 SOURCE = "argos-api"
 _log = logging.getLogger(__name__)
@@ -127,3 +128,12 @@ def list_events(dsn: str, limit: int, after: tuple[str, str] | None = None) -> l
         }
         for row in rows
     ]
+
+
+def log_metrics() -> str:
+    """F10-05 (ARG-093): the log lines the API dropped instead of sending them to Loki."""
+    return (
+        "# HELP argos_log_records_dropped_total Log lines dropped instead of sent to Loki.\n"
+        "# TYPE argos_log_records_dropped_total counter\n"
+        f'argos_log_records_dropped_total{{service="argos-api"}} {loki_dropped()}\n'
+    )
