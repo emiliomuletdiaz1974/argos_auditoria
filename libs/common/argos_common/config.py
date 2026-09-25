@@ -75,6 +75,10 @@ class ArgosConfig(BaseSettings):
     PROMETHEUS_URL: str | None = None
     RUNBOOKS_DIR: str | None = None
     ALERTMANAGER_TOKEN_FILE: str | None = None
+    # F10-08 (ARG-098): the size of the appliance (S, M or L) and the file of the sizes. Unset:
+    # nothing is limited and the capacity report says the size is not configured.
+    SIZE: str | None = None
+    SIZES_FILE: str | None = None
     NATS_URL: str = "nats://127.0.0.1:4222"
     # Each service connects with its own NATS user: the server decides what it may publish.
     NATS_USER: str | None = None

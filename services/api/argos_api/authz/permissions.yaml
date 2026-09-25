@@ -36,6 +36,7 @@ _second_factor:
   - support.package
   - airgap.import
   - airgap.export
+  - systems.create
 
 systems.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]
 
@@ -88,3 +89,7 @@ airgap.export: [platform_admin]
 # F10-07 (ARG-092/099): the operation screen, its lights, alerts and runbooks. Read by who operates
 # the appliance and by who audits it.
 operations.read: [platform_admin, read_only_auditor]
+
+# F10-08 (ARG-098): registering a system decides what ARGOS will read. The administrator, with the
+# second factor, within the size of the appliance.
+systems.create: [platform_admin]

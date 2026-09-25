@@ -1,0 +1,24 @@
+# ARG-098 (F10-08): what each size of the appliance promises to hold (Especificación §3.10, ADR-0015
+# point 6, figures confirmed by the user in F10-00, DP-16). The console shows the position of the
+# appliance against them, and ARGOS refuses honestly what would exceed them.
+#
+#   systems              registered systems
+#   assets               nodes of the latest inventory snapshot
+#   parallel_campaigns   campaigns pinned or running at the same time
+#   ai_tokens_per_day    tokens of the AI gateway in the last 24 hours
+sizes:
+  S:
+    systems: 40
+    assets: 250000
+    parallel_campaigns: 2
+    ai_tokens_per_day: 4000000
+  M:
+    systems: 150
+    assets: 1000000
+    parallel_campaigns: 4
+    ai_tokens_per_day: 12000000
+  L:
+    systems: 500
+    assets: 5000000
+    parallel_campaigns: 10
+    ai_tokens_per_day: 40000000

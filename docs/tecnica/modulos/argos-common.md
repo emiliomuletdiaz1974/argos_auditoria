@@ -4,9 +4,9 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.13.0-alpha
+version: 0.14.0-alpha
 commit: cbea282
-date: 2026-09-24
+date: 2026-09-25
 status: current
 confidentiality: client
 ---
@@ -29,6 +29,7 @@ Base compartida por todos los servicios de ARGOS: configuración validada al arr
 |---|---|
 | `config` | `ArgosConfig`: configuración tipada desde variables `ARGOS_*` o `.env`; un servicio mal configurado no arranca |
 | `errors` | Jerarquía `ArgosError` con código y detalles serializables |
+| `capacity` | Límites de cada talla (S, M y L), medida de las cuatro dimensiones, franjas y rechazo honesto; serie diaria de 13 meses (F10-08) |
 | `logs` | Registro JSON con campos obligatorios; con `ARGOS_LOKI_URL`, el propio servicio lo envía a Loki (`LokiHandler`, F10-05) |
 | `health` | Rutas uniformes `/health/live` y `/health` para servicios HTTP |
 | `ids` | Identificadores UUID v7 ordenables en el tiempo |
@@ -156,3 +157,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.11.0-alpha | 2026-09-24 | `SUPPORT_DIR` y `SUPPORT_RECIPIENT_FILE` para el paquete de diagnóstico | F09-11 (ARG-088) |
 | 0.12.0-alpha | 2026-09-24 | `AIRGAP_DIR` y `CONTENT_PUBLIC_KEY_FILE` para la esclusa | F09-13 (ARG-090) |
 | 0.13.0-alpha | 2026-09-24 | El servicio envía sus propios logs a Loki (`LokiHandler`, `ARGOS_LOKI_URL`), sin recolector (DP-16) | F10-05 (ARG-093) |
+| 0.14.0-alpha | 2026-09-25 | `capacity`: `load_sizes`, `limits_of`, `band`, `check`, `measure`, `usage`, `enforce`, `take_snapshot`, `history`, `CapacityExceededError` | F10-08 (ARG-098) |

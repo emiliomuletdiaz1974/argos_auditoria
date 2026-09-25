@@ -7,6 +7,8 @@ COPY pyproject.toml uv.lock VERSION ./
 COPY libs ./libs
 COPY connectors ./connectors
 COPY services ./services
+# F10-08: the limits of each size of the appliance.
+COPY platform/operation ./platform/operation
 RUN uv sync --locked --no-dev --package argos-health
 # ARG-084: no extra shell in the final image (sh stays: it is the base of the system).
 RUN rm -f /bin/bash /usr/bin/bash

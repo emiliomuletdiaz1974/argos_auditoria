@@ -4,9 +4,9 @@ kind: module
 title: Servicio de salud del dominio (argos-health)
 module: argos-health
 phases: ["10"]
-version: 0.4.0-alpha
+version: 0.5.0-alpha
 commit: cbea282
-date: 2026-09-24
+date: 2026-09-25
 status: current
 confidentiality: client
 ---
@@ -90,6 +90,8 @@ Métricas:
   - `argos_ai_calibration_age_hours{category}`;
 - `argos_log_records_dropped_total{service}`: líneas de log que el servicio no pudo enviar a Loki (F10-05).
 
+Además, una vez al día toma la foto de la capacidad frente a la talla (`argos.capacity_snapshots`, F10-08) y borra lo que tenga más de 13 meses.
+
 ## 5. Configuración
 
 | Variable | Qué es | Por defecto |
@@ -144,3 +146,4 @@ Métricas:
 | 0.2.0-alpha | 2026-09-24 | Duración de la última exploración por sistema, para la alerta `ScanTooSlow` | F10-03 (ARG-091) |
 | 0.3.0-alpha | 2026-09-24 | Versión, campañas, hallazgos, cobertura e IA para los paneles (migración 0042) | F10-04 (ARG-092) |
 | 0.4.0-alpha | 2026-09-24 | Líneas de log descartadas antes de llegar a Loki | F10-05 (ARG-093) |
+| 0.5.0-alpha | 2026-09-25 | Foto diaria de la capacidad frente a la talla | F10-08 (ARG-098) |

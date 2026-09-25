@@ -33,6 +33,7 @@ from argos_api.operations import PrometheusMetrics
 from argos_api.routers import support, system
 from argos_api.webhooks.worker import allowed_targets
 from argos_auth import JwtValidator
+from argos_common.capacity import limits_of
 from argos_common.config import ArgosConfig, Environment, get_config
 from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging
@@ -133,7 +134,15 @@ def build_app(cfg: ArgosConfig) -> Any:
         operations_metrics=PrometheusMetrics(cfg.PROMETHEUS_URL) if cfg.PROMETHEUS_URL else None,
         runbooks_dir=Path(cfg.RUNBOOKS_DIR) if cfg.RUNBOOKS_DIR else None,
         alertmanager_token=_alertmanager_token(cfg),
+        size_limits=_size(cfg),
     )
+
+
+def _size(cfg: ArgosConfig) -> tuple[str, dict[str, int]] | None:
+    """The size of this appliance and its limits; an unknown size stops the start."""
+    if not cfg.SIZE or not cfg.SIZES_FILE:
+        return None
+    return cfg.SIZE, limits_of(Path(cfg.SIZES_FILE), cfg.SIZE)
 
 
 def _alertmanager_token(cfg: ArgosConfig) -> str | None:

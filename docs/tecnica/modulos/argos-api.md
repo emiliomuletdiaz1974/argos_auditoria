@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.36.0-alpha
+version: 0.37.0-alpha
 commit: a1649aa
 date: 2026-09-25
 status: current
@@ -94,6 +94,11 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
   - las dos rutas piden `operations.read` (`platform_admin` y `read_only_auditor`);
   - Alertmanager entrega en `POST /internal/alertmanager`, fuera del contrato de las personas, con el token de `ARGOS_ALERTMANAGER_TOKEN_FILE` como portador. Sin token configurado, el receptor responde `503`;
   - las alertas se guardan en `argos.operation_alerts` (migración 0043), una fila por huella, que solo escribe `svc_api`.
+- **Talla del appliance** (F10-08, ARG-098):
+  - `POST /api/v1/systems` (`systems.create`, `platform_admin` con segundo factor) registra un sistema con un conector conocido. La credencial no pasa por la API: el sistema apunta a su secreto `connectors/<id>` en Vault, y queda un asiento `system.create`;
+  - si la talla (`ARGOS_SIZE`, `ARGOS_SIZES_FILE`) ya está llena, responde `409` con las cifras y las opciones: reducir la carga, ampliar la talla o leer el informe;
+  - el arranque de una campaña se rechaza igual cuando las campañas en paralelo están en su límite;
+  - `GET /api/v1/operations/capacity` (`operations.read`) devuelve la posición en franjas y la serie de 13 meses. Desde la migración 0044, `svc_api` puede insertar sistemas y leer lo que mide.
 - **Pruebas de restauración** (F09-12, ARG-089): `/metrics` publica `argos_backup_last_restore_test_timestamp_seconds` (cuándo pasó la última prueba; 0 si nunca) y `argos_backup_last_restore_test_success` (si la última pasó), leídas de `argos.restore_tests`. Las alertas `BackupRestoreTestStale` y `BackupRestoreTestFailed` las usan (ver `docs/seguridad/backup-restauracion.md`).
 - **Paquete de diagnóstico** (F09-11, ARG-088): `POST /api/v1/support/diagnostics` encola la petición para el recolector; `GET /api/v1/support/diagnostics/{id}` muestra la vista previa en claro (índice y cada fichero), y `POST …/{id}/package` la cifra para la clave del soporte (`ARGOS_SUPPORT_RECIPIENT_FILE`) solo si la huella del índice es la que el operador aprobó y ningún fichero cambió. Pedir y leer exige `support.diagnose`; cifrar, `support.package` con segundo factor. Solo `platform_admin`. La API no recoge nada: lo hace `argos-support` junto al orquestador (ver `argos-support.md`).
 - **Petición de actualización** (F09-10, ARG-086): `POST /api/v1/system/updates` (`system.update`, solo `platform_admin` con segundo factor) verifica el paquete de la bandeja con la clave de release fijada (`ARGOS_RELEASE_PUBLIC_KEY_FILE`) y lo encola en `ARGOS_UPDATE_DIR/queue`. No aplica nada: lo hace el actualizador (`argos-updater`). Un nombre de paquete que saldría de la bandeja se rechaza.
@@ -201,3 +206,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.34.0-alpha | 2026-09-24 | Sesiones cerradas compartidas entre réplicas (SEC-060, migración 0039) | F09-32 (SEC-060) |
 | 0.35.0-alpha | 2026-09-24 | `argos_log_records_dropped_total` en `/metrics` | F10-05 (ARG-093) |
 | 0.36.0-alpha | 2026-09-25 | Pantalla de operación: `/operations/status`, `/operations/runbooks/{id}` y el receptor de Alertmanager (migración 0043) | F10-07 (ARG-092/099) |
+| 0.37.0-alpha | 2026-09-25 | `POST /systems` dentro de la talla, límite de campañas en paralelo e informe `/operations/capacity` (migración 0044) | F10-08 (ARG-098) |

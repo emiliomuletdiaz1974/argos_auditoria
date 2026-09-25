@@ -21,6 +21,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from argos_common.capacity import limits_of
 from argos_common.config import ArgosConfig, get_config
 from argos_common.dynamic_db import approle_login, start_from_config
 from argos_common.health import mount_health
@@ -47,6 +48,7 @@ class HealthSettings(BaseSettings):
     CANARY_SECONDS: int = 30
     DOMAIN_SECONDS: int = 30
     CERTIFICATES_SECONDS: int = 3_600
+    CAPACITY_SECONDS: int = 86_400
     VERSION_FILE: Path = Path("VERSION")  # the release, copied into the image beside the code
 
 
@@ -72,6 +74,9 @@ def build_monitor(dsn: str, settings: HealthSettings, config: ArgosConfig | None
         if settings.VERSION_FILE.is_file()
         else "unknown"
     )
+    size = None
+    if config is not None and config.SIZE and config.SIZES_FILE:
+        size = (config.SIZE, limits_of(Path(config.SIZES_FILE), config.SIZE))
     return Monitor(
         dsn,
         store,
@@ -79,6 +84,7 @@ def build_monitor(dsn: str, settings: HealthSettings, config: ArgosConfig | None
         settings.EVIDENCE_PATH,
         settings.JOURNAL_TAIL,
         release=release,
+        size=size,
     )
 
 
@@ -118,6 +124,7 @@ def create_app(monitor: Monitor | None = None, settings: HealthSettings | None =
                 (chosen.DOMAIN_SECONDS, current.check_domain),
                 (chosen.CERTIFICATES_SECONDS, current.check_certificates),
                 (chosen.DOMAIN_SECONDS, current.check_volume),
+                (chosen.CAPACITY_SECONDS, current.check_capacity),
             ]
             tasks = [asyncio.create_task(_every(s, c, current)) for s, c in cadence]
             get_logger(__name__, "ARG-094").info("health service started")

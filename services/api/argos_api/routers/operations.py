@@ -12,7 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
+from argos_api.http import database
 from argos_api.operations import Alerts, Metrics, lights, runbook_text
+from argos_api.sizing import size_limits
+from argos_common.capacity import history, usage
 
 router = APIRouter(prefix="/operations", tags=["operations"], route_class=CoreRoute)
 internal = APIRouter()
@@ -51,6 +54,19 @@ def operation_runbook(request: Request, runbook_id: str) -> dict[str, str]:
     if text is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no such runbook")
     return {"id": runbook_id, "markdown": text}
+
+
+@router.get(
+    "/capacity",
+    summary="Where the appliance stands against its size, and the series of the last 13 months",
+    dependencies=[Depends(require_perm("operations.read"))],
+)
+def operation_capacity(request: Request) -> dict[str, Any]:
+    limits = size_limits(request)
+    if limits is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "the size is not configured")
+    dsn = database(request)
+    return {"size": limits[0], "usage": usage(dsn, limits[0], limits[1]), "history": history(dsn)}
 
 
 @internal.post("/internal/alertmanager", include_in_schema=False, status_code=204)

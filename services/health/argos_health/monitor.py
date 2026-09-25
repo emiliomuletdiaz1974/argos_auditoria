@@ -20,6 +20,7 @@ from typing import Any
 from cryptography import x509
 from cryptography.x509.oid import NameOID
 
+from argos_common.capacity import take_snapshot
 from argos_common.logs import get_logger, loki_dropped
 
 from .measures import (
@@ -53,8 +54,10 @@ class Monitor:
         journal_tail: int = 10_000,
         clock: Callable[[], dt.datetime] = _now,
         release: str = "unknown",
+        size: tuple[str, dict[str, int]] | None = None,
     ) -> None:
         self._release = release
+        self._size = size
         self._dsn = dsn
         self._store = store
         self._certificates = certificates
@@ -169,6 +172,20 @@ class Monitor:
             ],
         )
 
+    def check_capacity(self) -> None:
+        """Today's position against the size, once a day (F10-08); nothing without a size."""
+        if self._size is None:
+            return
+        try:
+            take_snapshot(self._dsn, self._size[0], self._size[1], at=self._clock())
+        except Exception as exc:
+            _log.warning(
+                "health check failed", extra={"check": "capacity", "error": str(exc)[:200]}
+            )
+            return
+        with self._lock:
+            self._ran["capacity"] = self._clock()
+
     def run_all(self) -> None:
         """Every check once: at start, and in the tests."""
         self.check_journal(full=False)
@@ -177,6 +194,7 @@ class Monitor:
         self.check_domain()
         self.check_certificates()
         self.check_volume()
+        self.check_capacity()
 
     # ---------- what it gives ----------
 

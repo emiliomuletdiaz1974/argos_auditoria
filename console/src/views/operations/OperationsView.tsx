@@ -95,8 +95,60 @@ export function OperationsView() {
           </table>
         )}
       </section>
+      <Capacity />
       {runbook ? <Runbook id={runbook} /> : null}
     </div>
+  );
+}
+
+interface Usage {
+  dimension: string;
+  used: number;
+  limit: number;
+  ratio: number;
+  band: "green" | "amber" | "red";
+}
+
+const DIMENSION_WORDS: Record<string, string> = {
+  systems: "Sistemas registrados",
+  assets: "Activos del inventario",
+  parallel_campaigns: "Campañas en paralelo",
+  ai_tokens_per_day: "Tokens de IA en 24 h",
+};
+const BAND_WORDS: Record<Usage["band"], string> = {
+  green: "Holgado",
+  amber: "Cerca del límite",
+  red: "En el límite",
+};
+
+// ARG-098 · where the appliance stands against its size: the same bands the API refuses with.
+function Capacity() {
+  const { data } = useResource<{ size: string; usage: Usage[] }>("/api/v1/operations/capacity");
+  if (!data) {
+    return null;
+  }
+  return (
+    <section className="panel" aria-label="Capacidad">
+      <h2>Capacidad (talla {data.size})</h2>
+      <table aria-label="Capacidad">
+        <thead>
+          <tr>
+            <th>Dimensión</th>
+            <th>Uso</th>
+            <th>Franja</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.usage.map((row) => (
+            <tr key={row.dimension} className={`band-${row.band}`}>
+              <td>{DIMENSION_WORDS[row.dimension] ?? row.dimension}</td>
+              <td>{`${row.used.toLocaleString("es-ES")} de ${row.limit.toLocaleString("es-ES")}`}</td>
+              <td>{BAND_WORDS[row.band]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

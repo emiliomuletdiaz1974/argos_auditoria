@@ -126,6 +126,7 @@ def create_app(
     operations_alerts: Alerts | None = None,
     runbooks_dir: Path | None = None,
     alertmanager_token: str | None = None,
+    size_limits: tuple[str, dict[str, int]] | None = None,
 ) -> FastAPI:
     """The application. Without `dsn` there is no idempotency store and no journal: the routes
     still answer, and the tests that do not touch the database do not need one.
@@ -152,6 +153,8 @@ def create_app(
     app.state.operations_alerts = operations_alerts or (PostgresAlerts(dsn) if dsn else None)
     app.state.runbooks_dir = runbooks_dir
     app.state.alertmanager_token = alertmanager_token
+    # F10-08: the size of the appliance and its limits (argos_common.capacity).
+    app.state.size_limits = size_limits
     # F09-32: the sessions closed before their tokens expire, shared by every replica.
     app.state.closed_sessions = closed_sessions or (ClosedSessions(dsn) if dsn else None)
     app.state.refresher = refresher

@@ -79,3 +79,9 @@ cases:
   - [svc_api, operation_alerts, DELETE, false]
   - [svc_health, operation_alerts, SELECT, false]
   - [svc_challenge, operation_alerts, INSERT, false]
+  # --- F10-08: registering systems within the size, and the series of the capacity ------------
+  - [svc_api, systems, INSERT, true]
+  - [svc_api, systems, DELETE, false]
+  - [svc_api, systems, UPDATE, false]
+  - [svc_api, capacity_snapshots, INSERT, false]
+  - [svc_health, capacity_snapshots, INSERT, true]

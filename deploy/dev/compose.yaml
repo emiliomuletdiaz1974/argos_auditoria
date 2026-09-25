@@ -221,6 +221,8 @@ services:
       ARGOS_HEALTH_S3_SECRET_KEY: dev-only-evidence-secret
       ARGOS_HEALTH_PKI_URL: http://vault:8200/v1/pki_int
       ARGOS_HEALTH_EVIDENCE_PATH: /evidence
+      ARGOS_SIZE: M   # F10-08: the daily snapshot of the capacity
+      ARGOS_SIZES_FILE: /app/platform/operation/sizes.yaml
     volumes: ["./secrets/approle-health:/run/secrets/approle:ro", "tls-health:/run/tls:ro", "evidence-data:/evidence:ro"]
     networks: [default, evidence]   # the WORM canary talks to the evidence store
     depends_on:
@@ -344,6 +346,9 @@ services:
       ARGOS_PROMETHEUS_URL: http://prometheus:9090
       ARGOS_RUNBOOKS_DIR: /app/docs/operacion/runbooks
       ARGOS_ALERTMANAGER_TOKEN_FILE: /run/secrets/alertmanager-token
+      # F10-08 (ARG-098): the development environment is sized as an M.
+      ARGOS_SIZE: M
+      ARGOS_SIZES_FILE: /app/platform/operation/sizes.yaml
       ARGOS_EVIDENCE_ISSUER_DID: did:web:127.0.0.1%3A8008
       ARGOS_EVIDENCE_STATUS_BASE_URL: http://127.0.0.1:8008/status
       ARGOS_EVIDENCE_CREDENTIAL_BASE_URL: http://127.0.0.1:8008/credentials

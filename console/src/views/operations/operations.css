@@ -42,3 +42,13 @@
   padding: 0.6rem;
   overflow-x: auto;
 }
+
+.band-amber td:last-child {
+  color: var(--sev-medium);
+  font-weight: 600;
+}
+
+.band-red td:last-child {
+  color: var(--sev-critical);
+  font-weight: 600;
+}

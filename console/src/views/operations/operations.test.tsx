@@ -69,3 +69,29 @@ describe("Markdown", () => {
     expect(screen.getByText("<script>alert(1)</script>")).toBeTruthy();
   });
 });
+
+describe("Capacity", () => {
+  it("shows each dimension against the size, with its band in words", async () => {
+    renderWithApi(<OperationsView />, {
+      [STATUS]: { lights: LIGHTS, alerts: [], measured: true },
+      "/api/v1/operations/capacity": {
+        size: "M",
+        usage: [
+          { dimension: "systems", used: 130, limit: 150, ratio: 0.8667, band: "amber", size: "M" },
+          { dimension: "assets", used: 1000, limit: 1000000, ratio: 0.001, band: "green", size: "M" },
+          { dimension: "parallel_campaigns", used: 4, limit: 4, ratio: 1, band: "red", size: "M" },
+          { dimension: "ai_tokens_per_day", used: 0, limit: 12000000, ratio: 0, band: "green", size: "M" },
+        ],
+        history: [],
+      },
+    });
+    const table = await screen.findByRole("table", { name: /capacidad/i });
+    const rows = within(table).getAllByRole("row");
+    expect(rows).toHaveLength(5);
+    expect(within(rows[1]!).getByText(/sistemas/i)).toBeTruthy();
+    expect(within(rows[1]!).getByText("130 de 150")).toBeTruthy();
+    expect(within(rows[1]!).getByText(/cerca del límite/i)).toBeTruthy();
+    expect(within(rows[3]!).getByText(/en el límite/i)).toBeTruthy();
+    expect(screen.getByText(/talla M/)).toBeTruthy();
+  });
+});

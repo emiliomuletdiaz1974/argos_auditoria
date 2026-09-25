@@ -16,6 +16,8 @@ COPY pyproject.toml uv.lock ./
 COPY libs ./libs
 COPY connectors ./connectors
 COPY services ./services
+# F10-08: the limits of each size of the appliance.
+COPY platform/operation ./platform/operation
 RUN uv sync --locked --no-dev --package argos-api
 # The challenge library and the ontology are read at runtime, never baked as data.
 COPY library ./library

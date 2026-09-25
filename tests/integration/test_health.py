@@ -210,7 +210,8 @@ def test_the_health_role_reads_what_it_measures_and_writes_only_its_facts(
             " FROM information_schema.role_table_grants WHERE grantee = 'svc_health'"
         ).fetchall()
     writes = sorted({table for table, privilege in grants if privilege != "SELECT"})
-    assert writes == ["argos.health_facts"]
+    # Its facts, and since F10-08 the daily series of the capacity.
+    assert writes == ["argos.capacity_snapshots", "argos.health_facts"]
     assert ("argos.audit_journal", "SELECT") in grants
     assert ("security.events", "SELECT") in grants
     # F10-04: the dashboards read findings and AI use as aggregates.
@@ -220,3 +221,17 @@ def test_the_health_role_reads_what_it_measures_and_writes_only_its_facts(
         conn.execute("SET ROLE svc_health")
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             conn.execute("UPDATE argos.campaigns SET status = 'failed'")
+
+
+def test_the_daily_snapshot_of_the_capacity_is_taken(migrated_db: str, tmp_path: Path) -> None:
+    # F10-08 (ARG-098): the health service keeps the local series of the size.
+    limits = {"systems": 150, "assets": 1_000_000, "parallel_campaigns": 4,
+              "ai_tokens_per_day": 12_000_000}  # fmt: skip
+    monitor = Monitor(migrated_db, _Store(), _certificates, tmp_path, size=("M", limits))
+    monitor.check_capacity()
+    with psycopg.connect(migrated_db) as conn:
+        rows = conn.execute(
+            "SELECT dimension, capacity, size FROM argos.capacity_snapshots ORDER BY dimension"
+        ).fetchall()
+    assert [r[0] for r in rows] == sorted(limits)
+    assert {r[2] for r in rows} == {"M"}
