@@ -33,7 +33,7 @@ Una fila por control del Anexo A. Los títulos siguen la versión española de l
 | 5.23 | Seguridad en el uso de servicios en la nube | op.nub.1 | responsabilidad del organismo | — | El producto no usa servicios en la nube |
 | 5.24 | Planificación y preparación de la gestión de incidentes | op.exp.7 | responsabilidad del organismo | — | — |
 | 5.25 | Evaluación y decisión sobre eventos de seguridad | op.exp.7, op.mon.3 | implementada en desarrollo | `deploy/dev/prometheus/rules/security.yml`, `tests/integration/test_security_log.py` | Las alertas las decide el producto; la respuesta, el organismo |
-| 5.26 | Respuesta a incidentes | op.exp.7 | responsabilidad del organismo | — | El producto aporta el paquete de diagnóstico: `services/support/argos_support/__init__.py` |
+| 5.26 | Respuesta a incidentes | op.exp.7 | responsabilidad del organismo | — | El producto aporta el paquete de diagnóstico (`services/support/argos_support/__init__.py`) y un runbook por alerta (`docs/operacion/runbooks/`) |
 | 5.27 | Aprendizaje de los incidentes | op.exp.9 | responsabilidad del organismo | — | — |
 | 5.28 | Recopilación de evidencias | op.exp.8 | implementada | `libs/common/argos_common/journal.py`, `libs/common/argos_common/security_log.py`, `tests/integration/test_journal_pg.py` | Diario y registro encadenados, verificables fuera de ARGOS |
 | 5.29 | Seguridad durante una interrupción | op.cont.2 | responsabilidad del organismo | — | — |
@@ -87,7 +87,7 @@ Una fila por control del Anexo A. Los títulos siguen la versión española de l
 | 8.3 | Restricción del acceso a la información | op.acc.2 | implementada | `services/api/argos_api/authz/permissions.yaml`, `tests/contract/test_api_authz.py` | — |
 | 8.4 | Acceso al código fuente | mp.sw.1 | responsabilidad del organismo | — | Repositorio del fabricante; el organismo recibe releases firmadas |
 | 8.5 | Autenticación segura | op.acc.5, op.acc.6 | implementada en desarrollo | `tests/integration/test_keycloak_mfa.py`, `services/api/argos_api/sessions.py`, `tests/security/test_access_battery.py` | — |
-| 8.6 | Gestión de capacidades | op.pl.4 | implementada en desarrollo | `tests/integration/test_inventory_benchmark.py`, `connectors/sdk/argos_connector/budget.py` | — |
+| 8.6 | Gestión de capacidades | op.pl.4 | implementada en desarrollo | `tests/integration/test_inventory_benchmark.py`, `connectors/sdk/argos_connector/budget.py`, `platform/operation/sizes.yaml`, `tests/integration/test_api_capacity.py` | Medición en hardware: F10-91 |
 | 8.7 | Protección contra el malware | op.exp.6 | pendiente de hardware | `libs/common/argos_common/release.py` | F09-90 (sistema operativo) y F09-92 (firma de imágenes en k3s) |
 | 8.8 | Gestión de las vulnerabilidades técnicas | op.exp.4 | implementada | `tools/vuln_gate.py`, `platform/security/vex.yaml`, `tests/tools/test_vuln_gate.py` | — |
 | 8.9 | Gestión de la configuración | op.exp.2, op.exp.3 | pendiente de hardware | `platform/image/harden.sh`, `tools/cis_gate.py` | F09-90 |
@@ -97,7 +97,7 @@ Una fila por control del Anexo A. Los títulos siguen la versión española de l
 | 8.13 | Copias de seguridad de la información | mp.info.6 | implementada en desarrollo | `platform/backup/backup.py`, `tests/integration/test_backup_restore.py` | — |
 | 8.14 | Redundancia de las instalaciones de tratamiento | op.cont.4 | responsabilidad del organismo | — | — |
 | 8.15 | Registro de eventos | op.exp.8 | implementada | `libs/common/argos_common/security_log.py`, `tests/integration/test_security_log.py` | — |
-| 8.16 | Actividades de supervisión | op.mon.2, op.mon.3 | implementada en desarrollo | `deploy/dev/prometheus/rules/security.yml`, `services/api/argos_api/security_events.py` | — |
+| 8.16 | Actividades de supervisión | op.mon.2, op.mon.3 | implementada en desarrollo | `deploy/dev/prometheus/rules/security.yml`, `services/api/argos_api/security_events.py`, `platform/observability/rules/argos.rules.yml`, `services/health/argos_health/monitor.py` | — |
 | 8.17 | Sincronización del reloj | op.exp.8 | pendiente de hardware | `platform/image/audit/argos.rules` | La hora del appliance (y la auditoría de sus cambios) es de F09-90 |
 | 8.18 | Uso de programas de utilidad privilegiados | op.acc.4 | pendiente de hardware | `platform/image/audit/argos.rules` | auditd registra toda ejecución como root: F09-90 |
 | 8.19 | Instalación de software en sistemas en producción | op.exp.5 | implementada en desarrollo | `services/updater/argos_updater/__init__.py`, `tests/integration/test_updater.py` | Solo software firmado, por el actualizador |

@@ -1,6 +1,6 @@
 # Medidas del ENS (Real Decreto 311/2022, Anexo II) · categoría media
 
-**Versión:** 1.0 · **Fecha:** 2026-09-24 · **Dossier de seguridad v1** · **Confidencialidad:** `client`
+**Versión:** 1.1 · **Fecha:** 2026-09-25 · **Dossier de seguridad v1** · **Confidencialidad:** `client`
 
 Una fila por medida del Anexo II. Los estados se explican en el [índice del dossier](README.md). Las rutas de la columna *Evidencia* son del repositorio del producto, y `tests/docs/test_security_dossier.py` comprueba que existen.
 
@@ -23,7 +23,7 @@ Una fila por medida del Anexo II. Los estados se explican en el [índice del dos
 | op.pl.1 | Análisis de riesgos | implementada | `docs/seguridad/modelo-amenazas.md`, `docs/seguridad/revision-f01-f08.md`, `tests/docs/test_threat_model.py` | STRIDE por superficie; el análisis del organismo sobre su sistema es suyo |
 | op.pl.2 | Arquitectura de seguridad | implementada | `docs/adr/0014-seguridad-de-plataforma.md`, `docs/seguridad/dossier/00-descripcion-sistema.md` | — |
 | op.pl.3 | Adquisición de nuevos componentes | implementada | `uv.lock`, `console/package-lock.json`, `tools/vuln_gate.py`, `platform/security/vex.yaml` | Dependencias fijadas y puerta de vulnerabilidades en cada release |
-| op.pl.4 | Dimensionamiento / gestión de la capacidad | implementada en desarrollo | `tests/integration/test_inventory_benchmark.py`, `connectors/sdk/argos_connector/budget.py` | La medición en el hardware real es F06-98 |
+| op.pl.4 | Dimensionamiento / gestión de la capacidad | implementada en desarrollo | `tests/integration/test_inventory_benchmark.py`, `connectors/sdk/argos_connector/budget.py`, `platform/operation/sizes.yaml`, `libs/common/argos_common/capacity.py`, `tests/integration/test_api_capacity.py`, `services/installer/argos_installer/site_check.py` | Límites por talla con rechazo honesto y foto diaria de 13 meses (F10-08); comprobación de sala en la instalación (F10-11). La medición en el hardware real es F06-98 y F10-91 |
 | op.pl.5 | Componentes certificados | responsabilidad del organismo | — | La certificación del producto sigue el itinerario de F09-97 |
 | op.acc.1 | Identificación | implementada en desarrollo | `deploy/dev/keycloak/realm-argos.json`, `libs/auth/argos_auth/__init__.py`, `tests/integration/test_keycloak.py` | Identidad única por persona en Keycloak; el actor del diario es su `sub` |
 | op.acc.2 | Requisitos de acceso | implementada | `services/api/argos_api/authz/permissions.yaml`, `tests/contract/test_api_authz.py`, `tests/security/test_access_battery.py` | Denegación por defecto; matriz rol × permiso versionada |
@@ -37,7 +37,7 @@ Una fila por medida del Anexo II. Los estados se explican en el [índice del dos
 | op.exp.4 | Mantenimiento y actualizaciones de seguridad | implementada en desarrollo | `services/updater/argos_updater/__init__.py`, `tests/integration/test_updater.py`, `tools/vuln_gate.py` | Actualizador firmado y transaccional con vuelta atrás |
 | op.exp.5 | Gestión de cambios | implementada | `.github/workflows/ci.yml`, `docs/decisiones/README.md`, `docs/desviaciones/ARG-086.md` | Cada cambio con prueba, registro de decisiones y notas de desviación |
 | op.exp.6 | Protección frente a código dañino | pendiente de hardware | `libs/common/argos_common/release.py`, `services/updater/argos_updater/__init__.py` | Solo se ejecuta software firmado y verificado; la protección del sistema operativo es de F09-90 y la firma de imágenes en k3s de F09-92 |
-| op.exp.7 | Gestión de incidentes | responsabilidad del organismo | — | El producto alerta: `deploy/dev/prometheus/rules/security.yml` |
+| op.exp.7 | Gestión de incidentes | responsabilidad del organismo | — | El producto alerta (`deploy/dev/prometheus/rules/security.yml`, `platform/observability/rules/argos.rules.yml`) y aporta el libro de operación con un runbook por alerta (`docs/operacion/runbooks/`) |
 | op.exp.8 | Registro de la actividad | implementada | `libs/common/argos_common/security_log.py`, `services/api/migrations/0036_security_log.sql`, `tests/integration/test_security_log.py`, `libs/common/argos_common/journal.py` | Diario encadenado de toda acción y registro de seguridad aparte, con su cadena |
 | op.exp.9 | Registro de la gestión de incidentes | responsabilidad del organismo | — | — |
 | op.exp.10 | Protección de claves criptográficas | pendiente de hardware | `services/evidence/argos_evidence/signing.py`, `tests/integration/test_signing.py` | Hoy, Vault transit con claves no exportables; en el appliance, TPM: F07-15 y F09-91 |
@@ -48,11 +48,11 @@ Una fila por medida del Anexo II. Los estados se explican en el [índice del dos
 | op.nub.1 | Protección de servicios en la nube | responsabilidad del organismo | — | El producto no usa servicios en la nube: se ejecuta en las instalaciones |
 | op.cont.1 | Análisis de impacto | responsabilidad del organismo | — | — |
 | op.cont.2 | Plan de continuidad | responsabilidad del organismo | — | El producto aporta el backup: `docs/seguridad/backup-restauracion.md` |
-| op.cont.3 | Pruebas periódicas | implementada en desarrollo | `platform/backup/restore_test.py`, `tests/integration/test_backup_restore.py`, `deploy/dev/prometheus/rules/backup.yml` | Prueba de restauración fechada, con alerta si caduca; temporizadores en el nodo con F09-92 |
+| op.cont.3 | Pruebas periódicas | implementada en desarrollo | `platform/backup/restore_test.py`, `tests/integration/test_backup_restore.py`, `deploy/dev/prometheus/rules/backup.yml`, `tools/drill.py`, `docs/operacion/README.md` | Prueba de restauración fechada, con alerta si caduca; simulacro de runbooks asentado en el diario (F10-06); temporizadores en el nodo con F09-92 |
 | op.cont.4 | Medios alternativos | responsabilidad del organismo | — | — |
 | op.mon.1 | Detección de intrusión | pendiente de hardware | `platform/image/audit/argos.rules`, `platform/k8s/security/mtls.yaml` | auditd y políticas de red en el appliance: F09-90 y F09-92 |
-| op.mon.2 | Sistema de métricas | implementada en desarrollo | `services/api/argos_api/security_events.py`, `deploy/dev/prometheus/rules/security.yml`, `deploy/dev/prometheus/rules/backup.yml` | Métricas del registro de seguridad y de las pruebas de restauración |
-| op.mon.3 | Vigilancia | implementada en desarrollo | `deploy/dev/prometheus/rules/security.yml`, `tests/security/test_access_battery.py` | Alertas de ráfagas de rechazos, cadena rota y firmas rechazadas |
+| op.mon.2 | Sistema de métricas | implementada en desarrollo | `services/api/argos_api/security_events.py`, `deploy/dev/prometheus/rules/security.yml`, `deploy/dev/prometheus/rules/backup.yml`, `services/health/argos_health/measures.py`, `platform/observability/dashboards/operation.json` | Métricas del registro de seguridad y de las pruebas de restauración; métricas del dominio del servicio de salud y paneles aprovisionados (F10-02, F10-04) |
+| op.mon.3 | Vigilancia | implementada en desarrollo | `deploy/dev/prometheus/rules/security.yml`, `tests/security/test_access_battery.py`, `platform/observability/rules/argos.rules.yml`, `tests/observability/test_alert_rules_promtool.py`, `services/api/argos_api/operations.py` | Alertas de ráfagas de rechazos, cadena rota y firmas rechazadas; reglas del dominio desde los objetivos de la especificación y pantalla de operación con semáforos y runbook (F10-03, F10-07) |
 
 ## Medidas de protección
 

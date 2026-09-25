@@ -115,3 +115,14 @@ def test_every_document_of_the_dossier_says_its_confidentiality() -> None:
     for path in sorted(DOSSIER.rglob("*.md")):
         head = path.read_text(encoding="utf-8")[:600]
         assert re.search(r"\*\*Confidencialidad:\*\* `(client|internal)`", head), path.name
+
+
+PHASE_10 = ("platform/observability/", "docs/operacion/", "platform/operation/", "services/health/")
+
+
+@pytest.mark.parametrize("measure", ["op.pl.4", "op.exp.7", "op.cont.3", "op.mon.2", "op.mon.3"])
+def test_the_measures_of_phase_10_cite_their_operation_evidence(measure: str) -> None:
+    """F10-12: monitoring, capacity, runbooks and drills moved the state of these measures."""
+    [cells] = [c for c in _rows("ens-medidas.md") if c[0] == measure]
+    cited = " ".join(cells[3:])
+    assert any(prefix in cited for prefix in PHASE_10), (measure, cited)

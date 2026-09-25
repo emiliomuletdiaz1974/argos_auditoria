@@ -1,7 +1,7 @@
 # Modelo de amenazas del appliance ARGOS
 
-**Versión:** 1.23 · **Fecha:** 2026-09-23 · **Base:** `main` tras la Fase 08 · **Confidencialidad:** `client`
-**Componentes:** ARG-081…090 y lo construido en las Fases 01–08 · **Decisión de referencia:** ADR-0014
+**Versión:** 1.24 · **Fecha:** 2026-09-25 · **Base:** `main` tras F10-11 · **Confidencialidad:** `client`
+**Componentes:** ARG-081…090, lo construido en las Fases 01–08 y las superficies de operación de la Fase 10 (ARG-091…098) · **Decisión de referencia:** ADR-0014
 
 ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala en su sala y la administra su personal. Este documento dice **qué protegemos, frente a quién, por dónde podrían entrar y qué lo impide**. Es la base del dossier para ENS categoría media e ISO/IEC 27001, y cada control de la Fase 09 responde a una amenaza escrita aquí.
 
@@ -59,6 +59,11 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | Actualizador y esclusa de soportes | A3, A5 | Lo que entra desde fuera |
 | Disco, arranque y consola física | A3, A4 | Hardware del appliance |
 | Canal de soporte | A6 | No hay canal remoto: solo paquetes de diagnóstico |
+| Servicio de salud (`argos-health`, `/metrics` y `/facts`) | A1, A2 | Lee el diario, el registro de seguridad y el almacén de evidencia; publica solo agregados (Fase 10) |
+| Receptor de Alertmanager (`POST /internal/alertmanager`) | A1, A2 | Fuera del contrato v1; guarda alertas para la pantalla de operación |
+| Alta de sistemas (`POST /api/v1/systems`) | A1, A8 | Decide qué sistemas del cliente va a leer ARGOS |
+| Envío de logs a Loki | A2, A3 | Cada servicio empuja sus líneas por HTTP; sin recolector con acceso al socket de Docker (ADR-0015) |
+| Instalador (`argos-install`) y su configuración | A3 | Se ejecuta con privilegios en la semana 1, desde un YAML que escribe el organismo |
 
 ## 5. Mitigaciones
 
@@ -103,6 +108,12 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | M-37 | R: actividad maliciosa que nadie ve | Toda la plataforma | A1, A3, A8 | Registro de seguridad separado y encadenado con alertas: autenticación, denegaciones, segundo factor, administración y firmas rechazadas (hecho en F09-08); actualizaciones, esclusa, diagnóstico y copias los añaden F09-10…F09-13 | ARG-005, ARG-072 | F09-08, F09-10…F09-13 | en desarrollo | — |
 | M-38 | D/T: consultas abusivas a la API del grafo | API GraphQL | A1, A8 | Etiquetas en lista blanca, prefijos acotados, paginación y profundidad máxima 4 | ARG-029 | F03-12 | implementada | `services/inventory/argos_inventory/api/schema.py`, `services/inventory/tests/test_api_http.py` |
 | M-39 | I/T: tráfico en claro hacia los sistemas del cliente | Conectores | A1 | Transporte cifrado y verificado obligatorio en SQL, ficheros, LDAPS, REST, FHIR y DICOM, salvo declaración explícita por sistema (auditoría del 2026-09-18, integrada en F09-17); SQL Server solo cuenta como cifrado con ODBC Driver 18 verificando | ARG-014, ARG-017, ARG-018, ARG-019, ARG-020 | F09-17, F09-31 | implementada | `connectors/sdk/tests/test_sdk_tls.py`, `connectors/sql/tests/test_sql_generic.py`, `connectors/rest/tests/test_rest_connector.py` |
+| M-41 | I/E: el servicio de salud se usa para leer o alterar lo que mide | Servicio de salud | A1, A2 | Rol propio `svc_health`: solo lectura de lo que mide y escritura únicamente en `argos.health_facts`; el volumen de evidencia se monta de solo lectura; publica agregados, nunca filas | ARG-094 | F10-02 | implementada | `services/api/migrations/0041_health.sql`, `tests/integration/test_health.py` |
+| M-42 | S/T: alertas falsas para ocultar una real o sembrar ruido | Receptor de Alertmanager | A1, A2 | Token portador leído de un fichero; sin token configurado responde `503`; el receptor solo guarda la alerta y enlaza su runbook, no ejecuta nada | ARG-091, ARG-092 | F10-07 | implementada | `services/api/argos_api/routers/operations.py`, `tests/integration/test_operation_alerts.py` |
+| M-43 | E/T: dar de alta un sistema para que ARGOS lea lo que no debe | Alta de sistemas | A1, A8 | `systems.create` solo para `platform_admin` con segundo factor; la credencial no pasa por la API (referencia a Vault); asiento `system.create`; rechazo `409` si excede la talla | ARG-098, ARG-072 | F10-08 | implementada | `services/api/argos_api/routers/systems.py`, `tests/integration/test_api_capacity.py` |
+| M-44 | D/I: los logs tumban un servicio o salen de la red interna | Envío de logs a Loki | A2, A3 | Cola acotada que descarta y cuenta (`argos_log_records_dropped_total`): un Loki caído no detiene ningún servicio; Loki en la red interna, sin analítica y con retención fija de 30 días | ARG-093 | F10-05 | implementada | `libs/common/argos_common/logs.py`, `libs/common/tests/test_logs_loki.py` |
+| M-45 | R/D: un fallo silencioso (diario roto, WORM que no escribe, backup caducado) pasa inadvertido | Servicio de salud y reglas de alerta | A2, A3 | Reglas generadas desde los objetivos de la especificación, cada una con su runbook y probada con promtool; alerta si el propio servicio de salud cae | ARG-091, ARG-094 | F10-03 | implementada | `platform/observability/rules/argos.rules.yml`, `tests/observability/test_alert_rules_promtool.py` |
+| M-46 | E/T: una configuración de instalación con órdenes inyectadas | Instalador | A3 | Cada valor se valida por lo que dice ser antes de llegar a una orden; las órdenes son listas de argumentos, sin shell (un test lo comprueba); informe firmado; la sala que no da detiene la instalación | ARG-096, ARG-097 | F10-10, F10-11 | implementada | `services/installer/tests/test_installer_pure.py`, `services/installer/tests/test_site_check.py` |
 | M-40 | I: el material público revela algo que no debe | `evidence-api` y comprobador | A1 | Solo sirven material público; la credencial no lleva datos personales (lo comprueba un test con los validadores de ARG-024) | ARG-068, ARG-069 | F07-10 | implementada | `tests/integration/test_credential.py` |
 
 ## 6. Qué cambia al pasar al appliance
@@ -111,6 +122,7 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 - La **admisión** pasa de un test sobre el compose a Kyverno en k3s (`F09-92`).
 - La **identidad de servicio** en Vault pasa de AppRole a cuentas de servicio de Kubernetes (`F09-92`).
 - El **sello de tiempo** pasa de la TSA de desarrollo a una TSA cualificada (`F07-16`).
+- Los **puertos de operación** (`/metrics` del servicio de salud, Loki y Alertmanager) solo se publican en `127.0.0.1` en desarrollo; en el appliance, las políticas de red de k3s los dejan en la red interna (`F09-92`).
 
 ## 7. Riesgos residuales
 
@@ -150,3 +162,4 @@ ARGOS es una caja que ve los metadatos más sensibles de su cliente, se instala 
 | 1.21 | 2026-09-24 | M-30 pasa a «implementada» con el paquete de diagnóstico revisable de F09-11 |
 | 1.22 | 2026-09-24 | M-31 pasa a «implementada» con el backup y la prueba de restauración de F09-12 |
 | 1.23 | 2026-09-24 | M-32 pasa a «implementada» con la esclusa de soportes de F09-13 |
+| 1.24 | 2026-09-25 | Superficies de la Fase 10 (salud, Alertmanager, alta de sistemas, Loki e instalador) y mitigaciones M-41 a M-46 (F10-12) |

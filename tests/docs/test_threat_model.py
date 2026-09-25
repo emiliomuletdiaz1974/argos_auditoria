@@ -86,3 +86,14 @@ def test_implemented_mitigations_point_to_existing_evidence(mitigations: Mitigat
         assert paths, f"{m['id']}: implemented without evidence"
         for p in paths:
             assert (ROOT / p).exists(), f"{m['id']}: evidence {p} does not exist"
+
+
+def test_the_surfaces_of_phase_10_are_modelled(mitigations: Mitigations) -> None:
+    """F10-12: the health service, the Alertmanager receiver, the registration of systems and
+    the shipping of logs to Loki are surfaces with their threats, not only features."""
+    text = MODEL.read_text(encoding="utf-8")
+    surfaces = text.split("## 4. Superficies", 1)[1].split("## 5.", 1)[0]
+    for surface in ("servicio de salud", "Alertmanager", "POST /api/v1/systems", "Loki"):
+        assert surface.lower() in surfaces.lower(), surface
+    cited = {c for m in mitigations for c in COMPONENT.findall(m["component"])}
+    assert {"ARG-091", "ARG-093", "ARG-094", "ARG-096", "ARG-098"} <= cited
