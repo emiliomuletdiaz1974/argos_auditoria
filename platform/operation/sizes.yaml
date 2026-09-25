@@ -4,7 +4,7 @@
 #
 #   systems              registered systems
 #   assets               nodes of the latest inventory snapshot
-#   parallel_campaigns   campaigns pinned or running at the same time
+#   parallel_campaigns   campaigns running, or waiting at a gate that has not expired (72 h)
 #   ai_tokens_per_day    tokens of the AI gateway in the last 24 hours
 #
 # `site` holds what the room must give each size (ARG-097, F10-11; Especificación §5): inlet

@@ -1,7 +1,7 @@
 """ARG-098 · where the appliance stands against its size, and the local series (F10-08).
 
 The four dimensions are measured on the database: registered systems, nodes of the latest inventory
-snapshot, campaigns pinned or running and AI tokens of the last 24 hours. A snapshot a day keeps
+snapshot, campaigns running or waiting at a live gate and AI tokens of the last 24 hours. A snapshot a day keeps
 thirteen months of history, which never leaves the appliance.
 """
 
@@ -80,3 +80,30 @@ def test_the_services_that_measure_can_measure_with_their_own_role(
     # A missing grant would refuse every registration, or leave the series empty.
     measured = measure(f"{migrated_db}?options=-c%20role%3D{role}")
     assert set(measured) == {"systems", "assets", "parallel_campaigns", "ai_tokens_per_day"}
+
+
+def test_only_launched_campaigns_whose_gate_has_not_expired_take_a_place(migrated_db: str) -> None:
+    """A campaign takes a place while it runs or waits at a gate that has not expired (72 h).
+    Compiled and pinned but never launched, or abandoned at a gate, it takes none."""
+    with psycopg.connect(migrated_db) as conn:
+
+        def campaign(status: str, requested_hours_ago: float | None) -> None:
+            cid = str(uuid.uuid4())
+            conn.execute(
+                "INSERT INTO argos.campaigns (id, name, status, scope, created_by)"
+                " VALUES (%s, 'c', %s, '{}', 'test')",
+                (cid, status),
+            )
+            if requested_hours_ago is not None:
+                conn.execute(
+                    "INSERT INTO argos.approval_requests (campaign_id, gate, payload, requested_at)"
+                    " VALUES (%s, 'start', '{}', now() - make_interval(secs => %s))",
+                    (cid, requested_hours_ago * 3600),
+                )
+
+        campaign("running", 5)
+        campaign("pinned", 1)  # waiting at its start gate
+        campaign("pinned", None)  # compiled, never launched
+        campaign("pinned", 80)  # abandoned: its gate expired
+        campaign("sealed", 200)
+    assert measure(migrated_db)["parallel_campaigns"] == 2

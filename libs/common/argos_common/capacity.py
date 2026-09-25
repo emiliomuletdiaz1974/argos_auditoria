@@ -32,8 +32,12 @@ _MEASURES = {
     "systems": "SELECT count(*) FROM argos.systems",
     "assets": "SELECT coalesce((SELECT node_count FROM argos.inventory_snapshots"
     " ORDER BY taken_at DESC LIMIT 1), 0)",
-    "parallel_campaigns": "SELECT count(*) FROM argos.campaigns"
-    " WHERE status IN ('pinned', 'running')",
+    # A campaign takes a place while it runs, or while it waits at a gate that has not expired
+    # (the 72 hours of GATE_TIMEOUT). Pinned but never launched, or abandoned at a gate, it
+    # takes none: it puts no load on the sources.
+    "parallel_campaigns": "SELECT count(*) FROM argos.campaigns c WHERE c.status = 'running'"
+    " OR (c.status = 'pinned' AND EXISTS (SELECT 1 FROM argos.approval_requests r"
+    " WHERE r.campaign_id = c.id AND r.requested_at > now() - interval '72 hours'))",
     "ai_tokens_per_day": "SELECT coalesce(sum(tokens_in + tokens_out), 0) FROM argos.ai_usage"
     " WHERE created_at > now() - interval '24 hours'",
 }
