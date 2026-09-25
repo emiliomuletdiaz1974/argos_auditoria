@@ -170,6 +170,34 @@ _SCANS = (
     " WHERE r.status = 'completed' AND r.finished_at IS NOT NULL"
     " ORDER BY r.system_id, r.finished_at DESC"
 )
+# F10-04 (ARG-092): what the compliance and AI dashboards show.
+SEVERITIES = ("critical", "high", "medium", "low")
+CAMPAIGN_STATUSES = ("planned", "pinned", "running", "sealed", "failed")
+_FINDINGS_OPEN = (
+    "SELECT severity, count(*) FROM argos.findings"
+    " WHERE status IN ('open', 'in_remediation', 'pending_verification', 'reopened')"
+    " GROUP BY severity"
+)
+# How long a finding took to be verified as remedied, over the last 90 days (median, hours).
+_REMEDIATION = (
+    "SELECT percentile_cont(0.5) WITHIN GROUP"
+    " (ORDER BY extract(epoch FROM updated_at - created_at) / 3600)"
+    "  FROM argos.findings"
+    " WHERE status = 'closed_compliant' AND updated_at > now() - interval '90 days'"
+)
+_CAMPAIGNS = "SELECT status, count(*) FROM argos.campaigns GROUP BY status"
+_COVERAGE = "SELECT system_name, coverage_pct / 100.0 FROM argos.catalog_coverage"
+_AI_USAGE = (
+    "SELECT u.service, sum(u.tokens_in + u.tokens_out), count(*),"
+    "       percentile_disc(0.95) WITHIN GROUP (ORDER BY u.duration_ms),"
+    "       max(q.daily_tokens)"
+    "  FROM argos.ai_usage u LEFT JOIN argos.ai_quotas q ON q.service = u.service"
+    " WHERE u.created_at > now() - interval '24 hours'"
+    " GROUP BY u.service"
+)
+_CALIBRATION = (
+    "SELECT category, extract(epoch FROM now() - fitted_at) / 3600 FROM argos.ai_calibration"
+)
 _JOBS = {
     "backup": "SELECT max(at) FROM argos.audit_journal WHERE action = 'backup.completed'",
     "restore_test": "SELECT max(tested_at) FROM argos.restore_tests WHERE result = 'passed'",
@@ -224,7 +252,96 @@ def domain_observations(dsn: str) -> tuple[list[Observation], int]:
                     help="When a periodic job last succeeded (0: never).",
                 )
             )
+        found += _compliance(conn) + _ai(conn)
     return found, int(stalled_row[0] if stalled_row else 0)
+
+
+def _compliance(conn: psycopg.Connection[Any]) -> list[Observation]:
+    found: list[Observation] = []
+    open_by = {str(s): int(n) for s, n in conn.execute(_FINDINGS_OPEN).fetchall()}
+    # Every severity, even at zero: a dashboard that reads "no data" hides a healthy state.
+    for severity in SEVERITIES:
+        found.append(
+            Observation(
+                "argos_findings_open",
+                float(open_by.get(severity, 0)),
+                {"severity": severity},
+                help="Findings not yet closed, by severity.",
+            )
+        )
+    row = conn.execute(_REMEDIATION).fetchone()
+    if row is not None and row[0] is not None:
+        found.append(
+            Observation(
+                "argos_findings_remediation_hours",
+                round(float(row[0]), 1),
+                help="Median hours from a finding to its verified remediation (last 90 days).",
+            )
+        )
+    by_status = {str(s): int(n) for s, n in conn.execute(_CAMPAIGNS).fetchall()}
+    for status in CAMPAIGN_STATUSES:
+        found.append(
+            Observation(
+                "argos_campaigns_total",
+                float(by_status.get(status, 0)),
+                {"status": status},
+                help="Campaigns by status.",
+            )
+        )
+    for system, ratio in conn.execute(_COVERAGE).fetchall():
+        if ratio is None:
+            continue
+        found.append(
+            Observation(
+                "argos_inventory_coverage_ratio",
+                round(float(ratio), 4),
+                {"system": str(system)},
+                help="Share of the columns of a system with a category (0 to 1).",
+            )
+        )
+    return found
+
+
+def _ai(conn: psycopg.Connection[Any]) -> list[Observation]:
+    found: list[Observation] = []
+    for service, tokens, requests, p95, quota in conn.execute(_AI_USAGE).fetchall():
+        labels = {"service": str(service)}
+        found += [
+            Observation(
+                "argos_ai_tokens_24h", float(tokens), labels, help="AI tokens in the last 24 hours."
+            ),
+            Observation(
+                "argos_ai_requests_24h",
+                float(requests),
+                labels,
+                help="AI requests in the last 24 hours.",
+            ),
+            Observation(
+                "argos_ai_latency_p95_ms",
+                float(p95),
+                labels,
+                help="95th percentile of the AI request duration in the last 24 hours.",
+            ),
+        ]
+        if quota:
+            found.append(
+                Observation(
+                    "argos_ai_quota_used_ratio",
+                    round(float(tokens) / float(quota), 4),
+                    labels,
+                    help="Share of the daily token quota used in the last 24 hours.",
+                )
+            )
+    for category, hours in conn.execute(_CALIBRATION).fetchall():
+        found.append(
+            Observation(
+                "argos_ai_calibration_age_hours",
+                round(float(hours), 1),
+                {"category": str(category)},
+                help="Hours since the confidence curve of a category was fitted.",
+            )
+        )
+    return found
 
 
 def publish_facts(dsn: str, facts: Mapping[str, str], at: dt.datetime) -> None:

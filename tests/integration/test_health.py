@@ -14,7 +14,7 @@ import pytest
 from psycopg import sql
 
 from argos_common.journal_pg import PostgresJournal
-from argos_health.measures import render_metrics
+from argos_health.measures import domain_observations, render_metrics
 from argos_health.monitor import Monitor
 
 pytestmark = pytest.mark.integration
@@ -33,6 +33,15 @@ EXPECTED = {
     "argos_certs_expiring_7d",
     "argos_job_last_success_timestamp_seconds",
     "argos_scan_last_duration_seconds",
+    # F10-04: what the compliance and AI dashboards show.
+    "argos_build_info",
+    "argos_campaigns_total",
+    "argos_findings_open",
+    "argos_ai_tokens_24h",
+    "argos_ai_requests_24h",
+    "argos_ai_latency_p95_ms",
+    "argos_ai_quota_used_ratio",
+    "argos_ai_calibration_age_hours",
     "argos_health_check_timestamp_seconds",
 }
 
@@ -93,9 +102,37 @@ def _with_a_gate_and_a_circuit(dsn: str) -> None:
         )
 
 
+def _with_ai_usage(dsn: str) -> None:
+    with psycopg.connect(dsn) as conn:
+        for ms in (100, 200, 300, 400, 5000):
+            conn.execute(
+                "INSERT INTO argos.ai_usage (service, model, prompt_sha256, tokens_in, tokens_out,"
+                " duration_ms) VALUES ('assistant', 'test-model', repeat('a', 64), 100, 50, %s)",
+                (ms,),
+            )
+        conn.execute(
+            "INSERT INTO argos.ai_quotas (service, daily_tokens) VALUES ('assistant', 1000)"
+            " ON CONFLICT (service) DO UPDATE SET daily_tokens = 1000"
+        )
+        conn.execute(
+            "INSERT INTO argos.ai_calibration (category, pairs, curve, fitted_at)"
+            " VALUES ('personal_data', 40, '[]', now() - interval '48 hours')"
+        )
+
+
+def test_the_health_role_can_measure_everything(migrated_db: str, tmp_path: Path) -> None:
+    # Measured as the service measures, with its own role: a missing grant would empty a panel.
+    _with_ai_usage(migrated_db)
+    role = f"{migrated_db}?options=-c%20role%3Dsvc_health"
+    observations, _ = domain_observations(role)
+    names = {o.name for o in observations}
+    assert {"argos_findings_open", "argos_ai_tokens_24h", "argos_campaigns_total"} <= names
+
+
 def test_every_measure_is_published(migrated_db: str, tmp_path: Path) -> None:
     PostgresJournal(migrated_db).append("user:tester", "test.health", {"n": 1})
     _with_a_gate_and_a_circuit(migrated_db)
+    _with_ai_usage(migrated_db)
     monitor = _monitor(migrated_db, tmp_path)
     monitor.run_all()
     monitor.check_journal(full=True)
@@ -112,6 +149,15 @@ def test_every_measure_is_published(migrated_db: str, tmp_path: Path) -> None:
     assert "argos_certs_expiring_7d 0" in text
     # F10-03: the rescan objective of the specification (under 2 hours) is watched per system.
     assert 'argos_scan_last_duration_seconds{system="health-test"} 9000' in text
+    # F10-04: every severity is present, even at zero, so the dashboards never read "no data".
+    for severity in ("critical", "high", "medium", "low"):
+        assert f'argos_findings_open{{severity="{severity}"}} 0' in text
+    assert 'argos_ai_tokens_24h{service="assistant"} 750' in text
+    assert 'argos_ai_requests_24h{service="assistant"} 5' in text
+    assert 'argos_ai_quota_used_ratio{service="assistant"} 0.75' in text
+    assert 'argos_ai_latency_p95_ms{service="assistant"} 5000' in text
+    [age] = [o for o in monitor.observations() if o.name == "argos_ai_calibration_age_hours"]
+    assert age.labels == {"category": "personal_data"} and 47.9 < age.value < 48.5
 
 
 def test_a_broken_journal_reads_as_not_intact(migrated_db: str, tmp_path: Path) -> None:
@@ -167,6 +213,9 @@ def test_the_health_role_reads_what_it_measures_and_writes_only_its_facts(
     assert writes == ["argos.health_facts"]
     assert ("argos.audit_journal", "SELECT") in grants
     assert ("security.events", "SELECT") in grants
+    # F10-04: the dashboards read findings and AI use as aggregates.
+    assert ("argos.findings", "SELECT") in grants
+    assert ("argos.ai_usage", "SELECT") in grants
     with psycopg.connect(migrated_db) as conn:
         conn.execute("SET ROLE svc_health")
         with pytest.raises(psycopg.errors.InsufficientPrivilege):

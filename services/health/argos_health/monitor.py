@@ -52,7 +52,9 @@ class Monitor:
         evidence_path: Path | None,
         journal_tail: int = 10_000,
         clock: Callable[[], dt.datetime] = _now,
+        release: str = "unknown",
     ) -> None:
+        self._release = release
         self._dsn = dsn
         self._store = store
         self._certificates = certificates
@@ -182,6 +184,14 @@ class Monitor:
         with self._lock:
             found = [o for group in self._groups.values() for o in group]
             ran = dict(self._ran)
+        found.append(
+            Observation(
+                "argos_build_info",
+                1.0,
+                {"version": self._release},
+                help="The release the appliance runs.",
+            )
+        )
         found += [
             Observation(
                 "argos_health_check_timestamp_seconds",

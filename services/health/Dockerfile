@@ -3,7 +3,7 @@
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /bin/uv
 WORKDIR /app
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock VERSION ./
 COPY libs ./libs
 COPY connectors ./connectors
 COPY services ./services

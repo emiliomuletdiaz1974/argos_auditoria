@@ -1,0 +1,11 @@
+# F10-04 (ARG-092): the dashboards come from platform/observability/dashboards, read-only. A change
+# is made in the repository, never in the interface.
+apiVersion: 1
+providers:
+  - name: argos
+    folder: ARGOS
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/argos-dashboards

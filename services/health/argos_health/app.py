@@ -47,6 +47,7 @@ class HealthSettings(BaseSettings):
     CANARY_SECONDS: int = 30
     DOMAIN_SECONDS: int = 30
     CERTIFICATES_SECONDS: int = 3_600
+    VERSION_FILE: Path = Path("VERSION")  # the release, copied into the image beside the code
 
 
 def build_monitor(dsn: str, settings: HealthSettings, config: ArgosConfig | None = None) -> Monitor:
@@ -66,7 +67,19 @@ def build_monitor(dsn: str, settings: HealthSettings, config: ArgosConfig | None
         if config is not None and config.VAULT_APPROLE_DIR:
             token = approle_login(config.VAULT_ADDR, Path(config.VAULT_APPROLE_DIR))
         certificates = vault_certificates(settings.PKI_URL, token)
-    return Monitor(dsn, store, certificates, settings.EVIDENCE_PATH, settings.JOURNAL_TAIL)
+    release = (
+        settings.VERSION_FILE.read_text(encoding="utf-8").strip()
+        if settings.VERSION_FILE.is_file()
+        else "unknown"
+    )
+    return Monitor(
+        dsn,
+        store,
+        certificates,
+        settings.EVIDENCE_PATH,
+        settings.JOURNAL_TAIL,
+        release=release,
+    )
 
 
 async def _every(seconds: int, check: Callable[[], None], monitor: Monitor) -> None:

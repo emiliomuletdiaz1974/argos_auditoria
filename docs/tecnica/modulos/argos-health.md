@@ -4,7 +4,7 @@ kind: module
 title: Servicio de salud del dominio (argos-health)
 module: argos-health
 phases: ["10"]
-version: 0.2.0-alpha
+version: 0.3.0-alpha
 commit: 7155f79
 date: 2026-09-24
 status: current
@@ -80,7 +80,14 @@ Métricas:
 - `argos_certs_expiring_7d` (-1 si no se pudo medir);
 - `argos_job_last_success_timestamp_seconds{job}` (0 si nunca);
 - `argos_scan_last_duration_seconds{system}`: cuánto duró la última exploración completada de cada sistema (objetivo de reexploración por debajo de 2 horas, §3.10);
-- `argos_health_check_timestamp_seconds{check}`.
+- `argos_health_check_timestamp_seconds{check}`;
+- para los paneles de F10-04, siempre como agregados:
+  - `argos_build_info{version}`: la release, leída del fichero `VERSION` de la imagen;
+  - `argos_campaigns_total{status}` y `argos_findings_open{severity}`, con todos los estados y severidades aunque valgan 0;
+  - `argos_findings_remediation_hours`: mediana de horas hasta la subsanación verificada en 90 días;
+  - `argos_inventory_coverage_ratio{system}`;
+  - `argos_ai_tokens_24h`, `argos_ai_requests_24h`, `argos_ai_latency_p95_ms` y `argos_ai_quota_used_ratio`, por servicio;
+  - `argos_ai_calibration_age_hours{category}`.
 
 ## 5. Configuración
 
@@ -95,7 +102,7 @@ Métricas:
 
 ## 6. Seguridad y tratamiento de datos
 
-- **Base de datos:** el rol `svc_health` solo lee las tablas que mide y solo escribe en `argos.health_facts`. No puede escribir en el diario ni leer veredictos (matriz `db_access_matrix.yaml`).
+- **Base de datos:** el rol `svc_health` solo lee las tablas que mide (desde la migración 0042, también hallazgos, cobertura y uso de la IA) y solo escribe en `argos.health_facts`. De la IA solo cuenta tokens, peticiones y duraciones: nunca lee un prompt ni su huella. No puede escribir en el diario ni leer veredictos (matriz `db_access_matrix.yaml`).
 - **Vault:** su AppRole lee su credencial de base de datos, lista `pki_int/certs` y lee `pki_int/cert/*`. Los certificados son públicos, pero Vault pide un token para listarlos.
 - **Contenedor:** tiene la postura de F09-03 y su propio certificado del emisor interno. Monta el volumen de evidencia en **solo lectura**, y solo para medir su ocupación.
 - **Canario:** son objetos de pocos bytes sin datos, en `health/canary/`, con retención de un día.
@@ -134,3 +141,4 @@ Métricas:
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-24 | Primera versión | F10-02 (ARG-094) |
 | 0.2.0-alpha | 2026-09-24 | Duración de la última exploración por sistema, para la alerta `ScanTooSlow` | F10-03 (ARG-091) |
+| 0.3.0-alpha | 2026-09-24 | Versión, campañas, hallazgos, cobertura e IA para los paneles (migración 0042) | F10-04 (ARG-092) |

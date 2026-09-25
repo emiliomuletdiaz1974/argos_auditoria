@@ -66,6 +66,10 @@ cases:
   - [svc_health, campaigns, UPDATE, false]
   - [svc_health, health_facts, INSERT, true]
   - [svc_health, verdicts, SELECT, false]
+  - [svc_health, findings, SELECT, true]
+  - [svc_health, findings, UPDATE, false]
+  - [svc_health, ai_usage, SELECT, true]
+  - [svc_health, ai_usage, INSERT, false]
   - [svc_health, "journal_append()", EXECUTE, false]
   # --- PUBLIC gets nothing -----------------------------------------------------------------
   - [PUBLIC, audit_journal, SELECT, false]

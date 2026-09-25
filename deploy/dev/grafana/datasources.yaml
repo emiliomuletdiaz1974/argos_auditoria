@@ -1,6 +1,7 @@
 apiVersion: 1
 datasources:
   - name: Prometheus
+    uid: prometheus   # the dashboards of F10-04 name it by uid
     type: prometheus
     access: proxy
     url: http://prometheus:9090

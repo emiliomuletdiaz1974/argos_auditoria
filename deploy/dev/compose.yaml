@@ -159,7 +159,8 @@ services:
     environment:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
-    volumes: ["./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/argos.yaml:ro"]
+    # F10-04: the dashboards of platform/observability/dashboards, provisioned read-only.
+    volumes: ["./grafana/datasources.yaml:/etc/grafana/provisioning/datasources/argos.yaml:ro", "./grafana/dashboards.yaml:/etc/grafana/provisioning/dashboards/argos.yaml:ro", "../../platform/observability/dashboards:/var/lib/grafana/argos-dashboards:ro"]
     ports: ["127.0.0.1:3000:3000"]
 
   example:
