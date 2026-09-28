@@ -4,8 +4,8 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.18.0-alpha
-commit: e1610ef
+version: 0.18.1-alpha
+commit: 7363e55
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -65,6 +65,7 @@ Los nombres del documento de fase (`--sev-critica`, `--verdict`…) pasan a ingl
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Visor de runbooks sin bucles (QA-062):** una línea que empieza por `#` y no es título (`##### x`, `#etiqueta`, `#`) es texto; antes no la tomaba ningún bloque y el visor se quedaba sin memoria.
 - **Cada cita con lo suyo (QA-069, QA-070):** solo una cita de la búsqueda normativa se despliega a su fragmento, y por referencia exacta; un rechazo de los guardarraíles (422) tiene su propio mensaje.
 - **La cola de revisión envía la categoría vista (QA-041):** «Confirmar» manda la categoría propuesta que se mostró; la API rechaza la aceptación si la propuesta cambió.
 - **Operación** (F10-07, ARG-092/099): la sección «Operación» muestra los ocho semáforos con su estado en palabras (correcto, fallo, sin medir) y no solo en color, las alertas activas y, al pulsar una, el runbook que dice qué hacer. El runbook se pinta con un renderizador propio de Markdown que solo crea elementos: una etiqueta del texto se muestra como texto, nunca como HTML.
@@ -131,3 +132,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | 0.16.0-alpha | 2026-09-25 | La esclusa ofrece el informe de instalación firmado | F10-10 (ARG-096) |
 | 0.17.0-alpha | 2026-09-28 | «Confirmar» envía la categoría propuesta que se mostró | QA-27 (QA-041) |
 | 0.18.0-alpha | 2026-09-28 | Citas del estado sin fragmento normativo y mensaje propio para el 422 | QA-30 (QA-069, 070) |
+| 0.18.1-alpha | 2026-09-28 | El visor de runbooks trata como texto lo que no es título | QA-32 (QA-062) |

@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.41.0-alpha
-commit: bdbf0f0
+version: 0.42.0-alpha
+commit: 7363e55
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -85,6 +85,8 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Capacidad en un solo paso (QA-006, QA-061):** medir y ocupar la plaza van bajo un candado por dimensión (`pg_advisory_xact_lock`) que dura hasta que el alta o el lanzamiento se confirman; dos peticiones a la vez no ven las dos la última plaza. Una campaña cuenta desde su lanzamiento (`campaigns.launched_at`, migración `0048_campaign_launched_at.sql`), y relanzar una que ya tiene su plaza responde «already running», no «talla llena».
+- **Receptor de Alertmanager robusto (QA-060, QA-066):** un cuerpo que no es una notificación da `400`; una alerta malformada se salta sin perder el resto del lote; el nombre del runbook solo admite dígitos ASCII y nada tras él. Una alerta que vuelve a saltar trae su nuevo inicio, y un `firing` tardío de un episodio ya resuelto no lo revive.
 - **Idempotencia con ficheros (QA-057):** una respuesta que no es JSON (el paquete de soporte) se guarda tal cual, bytes y tipo, y el reintento con la misma clave recibe el mismo fichero; antes fallaba después del efecto y la clave quedaba «en curso» para siempre (migración `0047_idempotency_files.sql`).
 - **Temporal con sus motivos (QA-063):** relanzar una campaña que corre o pedir una segunda verificación mientras la primera sigue responde `409`; el progreso de una campaña nunca lanzada, `409` «not running», no `500`.
 - **Cursor ilegible (QA-065):** un valor que la base de datos no puede leer (un cursor con una fecha imposible) es un `400`, no un `503`.
@@ -218,3 +220,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.39.0-alpha | 2026-09-28 | La aceptación de una revisión lleva la categoría vista (contrato v1) | QA-27 (QA-041) |
 | 0.40.0-alpha | 2026-09-28 | `/assistant/ask`: 422 del gateway sin traducir y pregunta sin campos ignorados (contrato v1) | QA-30 (QA-070) |
 | 0.41.0-alpha | 2026-09-28 | Idempotencia con ficheros, errores reales de Temporal, cursores ilegibles y nota del DPO | QA-31 (QA-057, 063, 065, 067) |
+| 0.42.0-alpha | 2026-09-28 | Capacidad sin carreras, campañas que cuentan desde el lanzamiento y receptor de alertas robusto | QA-32 (QA-006, 060, 061, 066) |

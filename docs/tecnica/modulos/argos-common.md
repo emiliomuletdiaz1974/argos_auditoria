@@ -4,9 +4,9 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.14.1-alpha
-commit: c5dcf5a
-date: 2026-09-25
+version: 0.14.2-alpha
+commit: 7363e55
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -90,6 +90,7 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Campañas en paralelo desde el lanzamiento (QA-006):** `parallel_campaigns` cuenta también las campañas lanzadas en las últimas 72 horas aunque aún no hayan pedido su primera compuerta; `LOCK_SQL` y `lock_key()` dan el candado por dimensión.
 - **Registro de seguridad** (F09-08, ADR-0014, ENS op.exp.8):
   - vive en el esquema `security`, con su propia cadena (génesis `ARGOS-SECURITY-GENESIS`);
   - solo se escribe con `security.append`, que ejecutan los miembros de `svc_security_writer` (API, worker de campañas, ontología y evidencia);
@@ -159,3 +160,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.13.0-alpha | 2026-09-24 | El servicio envía sus propios logs a Loki (`LokiHandler`, `ARGOS_LOKI_URL`), sin recolector (DP-16) | F10-05 (ARG-093) |
 | 0.14.0-alpha | 2026-09-25 | `capacity`: `load_sizes`, `limits_of`, `band`, `check`, `measure`, `usage`, `enforce`, `take_snapshot`, `history`, `CapacityExceededError` | F10-08 (ARG-098) |
 | 0.14.1-alpha | 2026-09-25 | Las campañas fijadas y nunca lanzadas, o abandonadas en una compuerta caducada, dejan de contar como campañas en paralelo | F10-99 (ARG-098) |
+| 0.14.2-alpha | 2026-09-28 | Recuento de campañas desde el lanzamiento y candado por dimensión | QA-32 (QA-006) |
