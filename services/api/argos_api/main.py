@@ -15,6 +15,7 @@ from typing import Any
 
 import uvicorn
 from temporalio.client import Client
+from temporalio.exceptions import WorkflowAlreadyStartedError
 from temporalio.service import RPCError, RPCStatusCode
 
 from argos_airgap import Gate, recorder
@@ -32,6 +33,7 @@ from argos_api.assistant import AssistantClient
 from argos_api.keycloak import Keycloak
 from argos_api.operations import PrometheusMetrics
 from argos_api.routers import support, system
+from argos_api.runner import AlreadyRunningError
 from argos_api.webhooks.worker import allowed_targets
 from argos_auth import JwtValidator
 from argos_common.capacity import limits_of
@@ -63,12 +65,16 @@ class TemporalCampaigns:
         from argos_challenges.workflows import CampaignWorkflow
 
         client = await self._client()
-        handle = await client.start_workflow(
-            CampaignWorkflow.run,
-            campaign_id,
-            id=f"campaign-{campaign_id}",
-            task_queue=self._queue,
-        )
+        try:
+            handle = await client.start_workflow(
+                CampaignWorkflow.run,
+                campaign_id,
+                id=f"campaign-{campaign_id}",
+                task_queue=self._queue,
+            )
+        except WorkflowAlreadyStartedError:
+            # What Temporal really answers, as a reason the route can give (QA-063).
+            raise AlreadyRunningError(f"the campaign {campaign_id} is already running") from None
         return str(handle.id)
 
     async def signal(self, campaign_id: str, name: str, argument: str) -> None:
@@ -83,19 +89,25 @@ class TemporalCampaigns:
     async def progress(self, campaign_id: str) -> dict[str, Any]:
         client = await self._client()
         handle = client.get_workflow_handle(f"campaign-{campaign_id}")
-        answer: dict[str, Any] = await handle.query("progress")
+        try:
+            answer: dict[str, Any] = await handle.query("progress")
+        except RPCError as missing:
+            if missing.status == RPCStatusCode.NOT_FOUND:
+                raise LookupError(f"the campaign {campaign_id} has no workflow") from None
+            raise
         return answer
 
     async def remediate(self, scope: dict[str, Any]) -> str:
         from argos_challenges.workflows import RemediationRun
 
         client = await self._client()
-        handle = await client.start_workflow(
-            RemediationRun.run,
-            scope,
-            id=f"remediation-{scope.get('finding_id', scope.get('campaign_id', 'all'))}",
-            task_queue=self._queue,
-        )
+        target = scope.get("finding_id", scope.get("campaign_id", "all"))
+        try:
+            handle = await client.start_workflow(
+                RemediationRun.run, scope, id=f"remediation-{target}", task_queue=self._queue
+            )
+        except WorkflowAlreadyStartedError:
+            raise AlreadyRunningError(f"the re-run of {target} is still going") from None
         return str(handle.id)
 
 

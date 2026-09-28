@@ -51,10 +51,14 @@ def request_fingerprint(method: str, path: str, body: bytes) -> str:
     return digest.hexdigest()
 
 
+JSON = "application/json"
+
+
 @dataclass(frozen=True, slots=True)
 class StoredResponse:
     status_code: int
     body: bytes
+    media_type: str = JSON
 
 
 class IdempotencyConflictError(Exception):
@@ -84,25 +88,36 @@ class IdempotencyStore:
             if taken is not None:
                 return None
             row = conn.execute(
-                "SELECT request_sha256, status_code, response FROM argos.api_idempotency"
-                " WHERE actor = %s AND key = %s",
+                "SELECT request_sha256, status_code, response, response_body,"
+                " response_media_type FROM argos.api_idempotency WHERE actor = %s AND key = %s",
                 (actor, key),
             ).fetchone()
         if row is None:  # freed between the two statements: the other request failed
             raise IdempotencyInProgressError(key)
-        stored_fingerprint, status_code, response = row
+        stored_fingerprint, status_code, response, body, media_type = row
         if str(stored_fingerprint) != fingerprint:
             raise IdempotencyConflictError(key)
         if status_code is None:
             raise IdempotencyInProgressError(key)
+        if media_type is not None:  # a file, kept as it was given (QA-057)
+            return StoredResponse(int(status_code), bytes(body or b""), str(media_type))
         return StoredResponse(int(status_code), json.dumps(response).encode())
 
     def complete(self, actor: str, key: str, answer: StoredResponse) -> None:
         with psycopg.connect(self._dsn) as conn:
+            if answer.media_type == JSON:
+                conn.execute(
+                    "UPDATE argos.api_idempotency SET status_code = %s, response = %s"
+                    " WHERE actor = %s AND key = %s",
+                    (answer.status_code, Jsonb(json.loads(answer.body or b"null")), actor, key),
+                )
+                return
+            # Anything else is kept as bytes: parsing it as JSON failed after the effect and left
+            # the key running for ever (quality review QA-057).
             conn.execute(
-                "UPDATE argos.api_idempotency SET status_code = %s, response = %s"
-                " WHERE actor = %s AND key = %s",
-                (answer.status_code, Jsonb(json.loads(answer.body or b"null")), actor, key),
+                "UPDATE argos.api_idempotency SET status_code = %s, response_body = %s,"
+                " response_media_type = %s WHERE actor = %s AND key = %s",
+                (answer.status_code, answer.body, answer.media_type, actor, key),
             )
 
     def release(self, actor: str, key: str) -> None:
@@ -200,7 +215,7 @@ class CoreRoute(APIRoute):
                 return Response(
                     content=replay.answer.body,
                     status_code=replay.answer.status_code,
-                    media_type="application/json",
+                    media_type=replay.answer.media_type,
                     headers={REPLAY_HEADER: "true"},
                 )
             except BaseException:
@@ -226,7 +241,8 @@ class CoreRoute(APIRoute):
                 )
             reservation: _Reservation | None = getattr(request.state, "reservation", None)
             if reservation is not None and store is not None:
-                answer = StoredResponse(response.status_code, bytes(response.body))
+                media_type = response.headers.get("content-type", JSON).split(";")[0].strip()
+                answer = StoredResponse(response.status_code, bytes(response.body), media_type)
                 await asyncio.to_thread(store.complete, reservation.actor, reservation.key, answer)
             return response
 

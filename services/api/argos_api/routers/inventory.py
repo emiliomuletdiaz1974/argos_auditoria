@@ -128,6 +128,7 @@ def review(request: Request, node_key: str, body: ReviewDecision) -> dict[str, A
             caller(request).actor,
             corrected_to=body.category if body.decision == "correct" else None,
             expected_category=body.category if body.decision == "accept" else None,
+            note=body.note,
         )
     except LookupError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"no review for {node_key}") from None

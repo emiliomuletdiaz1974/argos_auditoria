@@ -262,23 +262,23 @@ def person_transitions(status: str) -> list[str]:
 
 
 # Worst first as text, so a cursor can point at a place in the order. Written out in full, and a
-# pure test keeps it in step with SEVERITY_RANK.
+# pure test keeps it in step with SEVERITY_RANK. The occurrences are not in the key: they grow while
+# a person reads the pages, and a key that moves loses or repeats findings (quality review QA-064).
 ORDER_KEY_SQL = (
     "(CASE f.severity WHEN 'low' THEN 1 WHEN 'medium' THEN 2 WHEN 'high' THEN 3 "
-    "WHEN 'critical' THEN 4 END)::text || '-' || lpad(f.occurrences::text, 6, '0')"
+    "WHEN 'critical' THEN 4 END)::text"
 )
 _LIST = (
     "SELECT f.id::text, f.challenge_id, f.obligation, f.system_id::text, f.node_key, f.severity,"
     " f.status, f.occurrences, f.campaign_id::text, f.risk_expiry, f.updated_at,"
     " (CASE f.severity WHEN 'low' THEN 1 WHEN 'medium' THEN 2 WHEN 'high' THEN 3 "
-    "WHEN 'critical' THEN 4 END)::text || '-' || lpad(f.occurrences::text, 6, '0') AS order_key"
+    "WHEN 'critical' THEN 4 END)::text AS order_key"
     " FROM argos.findings f"
     " WHERE (%(status)s::text IS NULL OR f.status = %(status)s)"
     " AND (%(severity)s::text IS NULL OR f.severity = %(severity)s)"
     " AND (%(campaign)s::uuid IS NULL OR f.campaign_id = %(campaign)s::uuid)"
     " AND (%(key)s::text IS NULL OR ((CASE f.severity WHEN 'low' THEN 1 WHEN 'medium' THEN 2 "
-    "WHEN 'high' THEN 3 WHEN 'critical' THEN 4 END)::text || '-' || "
-    "lpad(f.occurrences::text, 6, '0'), f.id::text) < (%(key)s, %(id)s))"
+    "WHEN 'high' THEN 3 WHEN 'critical' THEN 4 END)::text, f.id::text) < (%(key)s, %(id)s))"
     " ORDER BY order_key DESC, f.id DESC LIMIT %(limit)s"
 )
 _DETAIL = (
@@ -304,7 +304,8 @@ def list_findings(
     severity: str | None = None,
     campaign_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    """The findings, worst first: severity, then how often they came back, then id.
+    """The findings, worst first: severity, then the newest (id). Not by occurrences: they grow
+    between two pages, and the cursor would lose or repeat findings (QA-064).
 
     `order_key` carries that order as text so a cursor can point at a place in it.
     """

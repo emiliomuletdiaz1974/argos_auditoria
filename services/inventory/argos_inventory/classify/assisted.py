@@ -322,8 +322,10 @@ def decide_review(
     now: Callable[[], datetime] = _utc_now,
     corrected_to: str | None = None,
     expected_category: str | None = None,
+    note: str = "",
 ) -> str:
     """Accept or reject what the model proposed; rejecting may also say what the column is.
+    The reviewer's `note`, when there is one, goes with the decision into the journal (QA-067).
 
     A correction is a rejection for the calibration —the model was wrong, and that is the label it
     learns from— and a human classification with the category the person chose.
@@ -361,6 +363,8 @@ def decide_review(
         payload = {"node_key": node_key, "category": category, "status": status}
         if corrected_to is not None:
             payload["corrected_to"] = corrected_to
+        if note.strip():
+            payload["note"] = note.strip()
         journal.append(reviewer, "inventory.review", payload, conn=conn)
     return status
 

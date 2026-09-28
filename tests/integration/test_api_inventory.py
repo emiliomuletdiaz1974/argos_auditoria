@@ -297,3 +297,22 @@ def test_a_node_carries_its_timeline_of_deltas(
     )
     assert [delta["kind"] for delta in body["deltas"]] == ["appeared"]
     assert body["deltas"][0]["at"]
+
+
+def test_the_note_of_the_reviewer_reaches_the_journal(
+    inventory: tuple[str, str], migrated_db: str
+) -> None:
+    """QA-067: the note the DPO writes with a decision is kept, not validated and dropped."""
+    _, node_key = inventory
+    answer = _client(migrated_db, "dpo_reviewer").post(
+        f"{API_PREFIX}/inventory/review-queue/{node_key}",
+        json={"decision": "reject", "note": "Es un código interno, no un dato de salud."},
+        headers=BEARER,
+    )
+    assert answer.status_code == 200
+    with psycopg.connect(migrated_db) as conn:
+        entry = conn.execute(
+            "SELECT payload_canon FROM argos.audit_journal WHERE action = 'inventory.review'"
+            " ORDER BY seq DESC LIMIT 1"
+        ).fetchone()
+    assert entry is not None and "código interno" in str(entry[0])

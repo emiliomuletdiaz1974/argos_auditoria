@@ -313,3 +313,44 @@ def test_a_failed_call_frees_its_key(migrated_db: str) -> None:
     assert client.post(f"{API_PREFIX}/flaky", headers={**BEARER, **key}).status_code == 503
     assert client.post(f"{API_PREFIX}/flaky", headers={**BEARER, **key}).status_code == 201
     assert len(attempts) == 2
+
+
+# --- Quality review QA-01: QA-057, QA-065 ---------------------------------------------------------
+
+
+def test_a_file_answer_with_a_key_is_replayed_as_the_same_file(migrated_db: str) -> None:
+    """QA-057: an answer that is not JSON (the support package) is stored and replayed as it was;
+    it neither fails after the effect nor leaves its key "running" for ever."""
+    from fastapi import Response
+
+    app = create_app(_validator("campaign_manager"), dsn=migrated_db)
+    probe = APIRouter(route_class=CoreRoute)
+    built: list[int] = []
+
+    @probe.post("/package", dependencies=[Depends(require_perm("campaigns.create"))])
+    def package() -> Response:
+        built.append(1)
+        return Response(b"\x00\x01age-encrypted\xff", media_type="application/octet-stream")
+
+    app.include_router(probe, prefix=API_PREFIX)
+    client = TestClient(app, raise_server_exceptions=False)
+    key = _key()
+    first = client.post(f"{API_PREFIX}/package", headers={**BEARER, **key})
+    again = client.post(f"{API_PREFIX}/package", headers={**BEARER, **key})
+    assert first.status_code == 200, first.text
+    assert again.status_code == 200, again.text
+    assert again.content == first.content == b"\x00\x01age-encrypted\xff"
+    assert again.headers["content-type"] == "application/octet-stream"
+    assert again.headers["Idempotent-Replay"] == "true"
+    assert built == [1]
+
+
+def test_a_cursor_with_an_impossible_date_is_a_bad_request(migrated_db: str) -> None:
+    """QA-065: a cursor that decodes but carries an impossible instant is the caller's mistake
+    (400), not a store that is down (503)."""
+    from argos_api.paging import cursor_for
+
+    client = TestClient(create_app(_validator("read_only_auditor"), dsn=migrated_db))
+    cursor = cursor_for("2026-13-45T99:00:00+00:00", "00000000-0000-4000-8000-000000000001")
+    answer = client.get(f"{API_PREFIX}/campaigns", params={"cursor": cursor}, headers=BEARER)
+    assert answer.status_code == 400, answer.text

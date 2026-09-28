@@ -221,6 +221,18 @@ def create_app(
             "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()),
         )
 
+    @app.exception_handler(psycopg.DataError)
+    def _unreadable_value(request: Request, exc: psycopg.DataError) -> ProblemResponse:
+        # The store answered: a value of the request (a cursor with an impossible instant, for
+        # one) is not one it can read. That is the caller's mistake, not an outage (QA-065).
+        _log.info("unreadable value", extra={"error": type(exc).__name__})
+        return problem_response(
+            request,
+            status.HTTP_400_BAD_REQUEST,
+            _title(status.HTTP_400_BAD_REQUEST),
+            "a value of the request is not valid",
+        )
+
     @app.exception_handler(psycopg.Error)
     def _store_unavailable(request: Request, exc: psycopg.Error) -> ProblemResponse:
         # The driver's message names the host, the SQL or the constraint: it stays in the log, as

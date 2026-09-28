@@ -280,3 +280,36 @@ def test_reading_findings_leaves_no_entry(api: TestClient, migrated_db: str) -> 
     with psycopg.connect(migrated_db) as conn:
         after = conn.execute("SELECT count(*) FROM argos.audit_journal").fetchone()
     assert before == after
+
+
+def test_the_pages_neither_lose_nor_repeat_a_finding_that_recurs_meanwhile(
+    api: TestClient, migrated_db: str
+) -> None:
+    """QA-064: the order of the pages must not move while a person reads them. A finding that
+    comes back between two pages (its occurrences grow) was lost or repeated."""
+    created = [_finding(migrated_db, f"k-page-{n:04d}") for n in range(3)]
+    ids = {f["id"] for f in created}
+    campaigns = {f["campaign_id"] for f in created}
+    seen: list[str] = []
+    cursor: str | None = None
+    for turn in range(10):
+        params: dict[str, Any] = {"limit": 1, "severity": "high", "status": "open"}
+        if cursor:
+            params["cursor"] = cursor
+        page = api.get(f"{API_PREFIX}/findings", params=params, headers=_as("read_only_auditor"))
+        assert page.status_code == 200
+        body = page.json()
+        seen += [item["id"] for item in body["items"] if item["id"] in ids]
+        if turn == 0:
+            # Every finding not yet read comes back meanwhile, far more often than the first.
+            with psycopg.connect(migrated_db) as conn:
+                conn.execute(
+                    "UPDATE argos.findings SET occurrences = 1234567 WHERE id = ANY(%s::uuid[])"
+                    " AND NOT id = ANY(%s::uuid[])",
+                    (list(ids), seen or ["00000000-0000-4000-8000-000000000000"]),
+                )
+        cursor = body["next"]
+        if cursor is None:
+            break
+    assert len(campaigns) == 3
+    assert sorted(seen) == sorted(ids), seen

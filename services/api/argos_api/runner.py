@@ -7,9 +7,13 @@ wired where the process starts, and the tests hand in one that keeps everything 
 from typing import Any, Protocol
 
 
+class AlreadyRunningError(Exception):
+    """The workflow asked for is already running: launching or verifying twice is a conflict."""
+
+
 class CampaignRunner(Protocol):
     async def start(self, campaign_id: str) -> str:
-        """Start the campaign workflow; returns its workflow id."""
+        """Start the campaign workflow; its id, or `AlreadyRunningError`."""
         ...
 
     async def signal(self, campaign_id: str, name: str, argument: str) -> None:
@@ -21,5 +25,6 @@ class CampaignRunner(Protocol):
         ...
 
     async def remediate(self, scope: dict[str, Any]) -> str:
-        """Start the re-run of ARG-049 over `scope` (a finding or a campaign); its workflow id."""
+        """Start the re-run of ARG-049 over `scope` (a finding or a campaign); its workflow id, or
+        `AlreadyRunningError` while the same re-run is still going."""
         ...

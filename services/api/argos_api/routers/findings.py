@@ -18,7 +18,7 @@ from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
 from argos_api.http import caller, database
 from argos_api.paging import Page, Paging, paginate
-from argos_api.runner import CampaignRunner
+from argos_api.runner import AlreadyRunningError, CampaignRunner
 from argos_challenges.findings import (
     SEVERITIES,
     STATUSES,
@@ -152,5 +152,8 @@ async def verify(request: Request, finding_id: UUID) -> dict[str, Any]:
             f"only a finding awaiting verification is re-run; this one is {found['status']}",
         )
     scope = {"finding_id": str(finding_id), "requested_by": caller(request).actor}
-    workflow_id = await runner.remediate(scope)
+    try:
+        workflow_id = await runner.remediate(scope)
+    except AlreadyRunningError as running:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(running)) from None
     return {"finding_id": str(finding_id), "workflow_id": workflow_id}

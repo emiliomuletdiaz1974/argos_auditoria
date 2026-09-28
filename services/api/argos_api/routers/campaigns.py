@@ -17,7 +17,7 @@ from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
 from argos_api.http import IdempotencyKey, caller, database
 from argos_api.paging import Page, Paging, paginate
-from argos_api.runner import CampaignRunner
+from argos_api.runner import AlreadyRunningError, CampaignRunner
 from argos_api.sizing import refuse_beyond
 from argos_challenges.seal import verify_seal
 from argos_challenges.store import (
@@ -117,7 +117,10 @@ async def launch(request: Request, campaign_id: UUID) -> dict[str, Any]:
     await asyncio.to_thread(_record, dsn, str(campaign_id))
     # F10-08 (ARG-098): the size of the appliance holds so many campaigns at once.
     await asyncio.to_thread(refuse_beyond, request, dsn, "parallel_campaigns")
-    workflow_id = await runner.start(str(campaign_id))
+    try:
+        workflow_id = await runner.start(str(campaign_id))
+    except AlreadyRunningError as running:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(running)) from None
     # Who launched which campaign, and not only that a mutation happened (SEC-030).
     await asyncio.to_thread(
         PostgresJournal(dsn).append,
@@ -263,4 +266,7 @@ async def remediation(request: Request, campaign_id: UUID) -> dict[str, str]:
     runner = _runner(request)
     await asyncio.to_thread(_record, database(request), str(campaign_id))
     scope = {"campaign_id": str(campaign_id), "requested_by": caller(request).actor}
-    return {"workflow_id": await runner.remediate(scope)}
+    try:
+        return {"workflow_id": await runner.remediate(scope)}
+    except AlreadyRunningError as running:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(running)) from None
