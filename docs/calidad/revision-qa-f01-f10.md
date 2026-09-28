@@ -190,7 +190,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | Hallazgo | Estado | Tarea | Commit | Fecha |
 |---|---|---|---|---|
 | QA-073, QA-074, QA-084, QA-085 | Corregido (QA-084 y QA-085, que eran `S`, reproducidos por su test antes de corregir) | QA-20 | `8942fd1` | 2026-09-28 |
-| QA-072, QA-075, QA-076, QA-077, QA-081, QA-083, QA-087 | Corregido (QA-081, que era `S`, lo reprodujo el propio test del instalador con la salida real de `kcadm.sh`) | QA-21 | pendiente | 2026-09-28 |
+| QA-072, QA-075, QA-076, QA-077, QA-081, QA-083, QA-087 | Corregido (QA-081, que era `S`, lo reprodujo el propio test del instalador con la salida real de `kcadm.sh`) | QA-21 | `6c030a9` | 2026-09-28 |
 
 ## 7. Historial
 
