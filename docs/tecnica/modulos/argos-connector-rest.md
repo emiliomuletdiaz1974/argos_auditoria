@@ -4,8 +4,8 @@ kind: module
 title: Conector REST declarativo (argos-connector-rest)
 module: argos-connector-rest
 phases: ["02"]
-version: 0.2.1-alpha
-commit: fdb87ac
+version: 0.2.2-alpha
+commit: pendiente
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -43,6 +43,7 @@ Sondas del SDK `count`, `sample` y `check_config` sobre las rutas declaradas.
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Solo se revisa la ruta (QA-022):** los caracteres codificados sospechosos (`%2F`, `%2E`, `..`) se buscan en la ruta, no en la consulta. El cursor opaco de un enlace `next` puede llevarlos, y antes abortaba el recuento.
 - **El tamaño de la muestra (QA-027)** es un entero positivo: `k=-1` ya no devolvía todo menos el último elemento.
 **Permisos que necesita la cuenta del cliente:** un token de **solo lectura** limitado a las rutas que se van a consultar.
 
@@ -76,3 +77,4 @@ Solo admite token Bearer estático desde Vault. El flujo OAuth2 *client credenti
 | 0.1.0-alpha | 2026-09-18 | Tope de páginas por sonda (`max_pages`) | Auditoría de seguridad (M11) |
 | 0.2.0-alpha | 2026-09-23 | Páginas siguientes registradas y pagadas | F09-22 |
 | 0.2.1-alpha | 2026-09-28 | `sample_size` | QA-23 (QA-027) |
+| 0.2.2-alpha | 2026-09-28 | La consulta de un enlace `next` no se toma por un ataque | QA-24 (QA-022) |

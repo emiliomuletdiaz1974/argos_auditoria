@@ -10,9 +10,17 @@ from collections.abc import Callable, Iterable, Mapping
 DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
 MAX_PATTERN_LENGTH = 200
 _NIE_PREFIX = {"X": "0", "Y": "1", "Z": "2"}
-_DNI = re.compile(r"(\d{8})([A-Z])")
-_NIE = re.compile(r"([XYZ])(\d{7})([A-Z])")
-_IBAN_ES = re.compile(r"ES\d{22}")
+# ASCII digits only: `\d` would take digits of other scripts, which no register writes (QA-017).
+_DNI = re.compile(r"([0-9]{7,8})([A-Z])")
+_NIE = re.compile(r"([XYZ])([0-9]{7})([A-Z])")
+_IBAN_ES = re.compile(r"ES[0-9]{22}")
+# Separators people and old systems write inside an identifier: `12.345.678-Z`, `X-1234567-L`.
+_SEPARATORS = re.compile(r"[\s.\-]")
+
+
+def _compact(value: str) -> str:
+    return _SEPARATORS.sub("", value).upper()
+
 
 Validator = Callable[[object], bool]
 
@@ -20,7 +28,8 @@ Validator = Callable[[object], bool]
 def is_valid_dni(value: object) -> bool:
     if not isinstance(value, str):
         return False
-    match = _DNI.fullmatch(value.strip().upper())
+    # Seven digits: a number column that lost its leading zero (`01234567L` → `1234567L`).
+    match = _DNI.fullmatch(_compact(value))
     if match is None:
         return False
     return DNI_LETTERS[int(match[1]) % 23] == match[2]
@@ -29,7 +38,7 @@ def is_valid_dni(value: object) -> bool:
 def is_valid_nie(value: object) -> bool:
     if not isinstance(value, str):
         return False
-    match = _NIE.fullmatch(value.strip().upper())
+    match = _NIE.fullmatch(_compact(value))
     if not match:
         return False
     number = int(_NIE_PREFIX[match[1]] + match[2])
@@ -45,8 +54,8 @@ def is_valid_nuss(value: object) -> bool:
     """
     if not isinstance(value, str):
         return False
-    digits = re.sub(r"[\s/-]", "", value)
-    if not re.fullmatch(r"\d{12}", digits):
+    digits = re.sub(r"[\s/.-]", "", value)
+    if not re.fullmatch(r"[0-9]{12}", digits):
         return False
     province, number, control = int(digits[:2]), int(digits[2:10]), int(digits[10:])
     candidates = {int(digits[:10]) % 97}
@@ -128,7 +137,12 @@ def resolve_validators(
 def acceptance_rates(
     values: Iterable[object], validators: Mapping[str, Validator]
 ) -> tuple[dict[str, float], int]:
-    present = [value for value in values if value is not None]
+    # A blank is a value nobody filled in, not a wrong identifier: it does not count (QA-017).
+    present = [
+        value
+        for value in values
+        if value is not None and not (isinstance(value, str) and not value.strip())
+    ]
     if not present:
         return {name: 0.0 for name in validators}, 0
     rates = {

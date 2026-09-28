@@ -141,10 +141,16 @@ class RestConnector(Connector):
     def route_for(self, path: str) -> Route:
         if not path.startswith("/") or path.startswith("//") or "://" in path:
             raise ReadOnlyViolationError(f"path must be relative to the API base: {path!r}")
-        lowered = path.lower()
-        if ".." in path or "\\" in path or any(c in lowered for c in ("%2e", "%2f", "%5c")):
-            raise ReadOnlyViolationError(f"suspicious path: {path!r}")
+        # Only the path can climb out of the API: the query of a next link is the server's
+        # (an opaque cursor often carries %2F), and checking it aborted counts (QA-022).
         path_only = path.split("?", 1)[0]
+        lowered = path_only.lower()
+        if (
+            ".." in path_only
+            or "\\" in path_only
+            or any(c in lowered for c in ("%2e", "%2f", "%5c"))
+        ):
+            raise ReadOnlyViolationError(f"suspicious path: {path!r}")
         for route in self._routes:
             if route.pattern.match(path_only):
                 return route

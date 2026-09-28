@@ -4,8 +4,8 @@ kind: module
 title: SDK de conectores de solo lectura (argos-connector-sdk)
 module: argos-connector-sdk
 phases: ["02", "03"]
-version: 0.7.0-alpha
-commit: fdb87ac
+version: 0.8.0-alpha
+commit: pendiente
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -68,6 +68,9 @@ Otras piezas:
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Validadores en sus bordes (QA-017):** un valor en blanco no cuenta como identificador mal escrito. DNI, NIE, NUSS e IBAN aceptan separadores (`12.345.678-Z`, `X-1234567-L`), y el DNI también sin el cero inicial (`1234567L`), porque la letra de control sigue decidiendo. Solo cuentan dígitos ASCII.
+- **Ventanas nocturnas (QA-018):** una ventana cuyo fin es anterior a su inicio (22:00–06:00) cruza la medianoche. Las horas después de medianoche pertenecen a la ventana del día en que empezó (`window_open`).
+- **El validador de solo lectura en sus bordes (QA-019, 023):** una sentencia que ni siquiera se tokeniza (una comilla sin cerrar) es una violación de solo lectura, con su asiento de rechazo. En MySQL y PostgreSQL se rechaza cualquier barra invertida: según el modo del servidor escapa o no, y el validador y el motor podrían leer dos sentencias distintas.
 - **`check_config` solo lee catálogo (QA-015).** Una tabla con esquema pasa solo si el esquema es de catálogo del dialecto, se llame como se llame (`public.pg_x` o `clinica.all_x` son tablas del cliente). Ninguna comprobación lee el texto SQL de otras sesiones (`query`, `sql_text`, `text`…), que lleva literales del cliente. Sin esquema, el prefijo de catálogo sigue bastando: en PostgreSQL `pg_catalog` se busca primero, y en Oracle un nombre propio del esquema que tape una vista `ALL_`/`DBA_` queda como riesgo aceptado.
 - **El tamaño de una muestra (QA-027):** `sample_size` exige un entero positivo y lo limita al presupuesto; todos los conectores lo usan.
 - **Depuración de identificadores** (F09-11): `validators.scrub_identifiers(text, identifiers)` sustituye por marcadores estables lo que valida como DNI, NIE, NUSS o IBAN, con la tabla de los guardarraíles (`library/prompts/guardrails.yaml`). La usan el gateway de IA (`scrub_input`) y el paquete de diagnóstico; vive aquí para que quien depura no importe la capa de IA (ADR-0012).
@@ -116,3 +119,4 @@ El presupuesto de carga vive en la memoria de cada proceso; con varias réplicas
 | 0.5.0-alpha | 2026-09-24 | `scrub_identifiers`: el depurador de ARG-060, compartido con el paquete de diagnóstico | F09-11 (ARG-088) |
 | 0.6.0-alpha | 2026-09-24 | `argos_facts` es fuente de configuración en PostgreSQL: los hechos del propio appliance | F10-01 (ARG-100) |
 | 0.7.0-alpha | 2026-09-28 | `check_config` solo con esquemas de catálogo y sin texto SQL de otras sesiones; `sample_size` | QA-23 (QA-015, 027) |
+| 0.8.0-alpha | 2026-09-28 | Validadores con separadores, sin cero inicial y solo ASCII; blancos fuera de la tasa; ventanas nocturnas; `TokenError` y barra invertida como violaciones | QA-24 (QA-017, 018, 019, 023) |

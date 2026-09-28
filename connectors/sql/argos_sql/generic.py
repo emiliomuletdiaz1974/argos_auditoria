@@ -166,6 +166,7 @@ class SqlConnector(Connector):
         self._engine: Engine | None = None
         self._compile_dialect: Dialect | None = None
         self._dialect_name = ""
+        self._driver_name = ""
 
     @property
     def engine(self) -> Engine:
@@ -196,6 +197,7 @@ class SqlConnector(Connector):
             options["isolation_level"] = self.config["isolation_level"]
         engine = create_engine(url, **options)
         self._dialect_name = engine.dialect.name
+        self._driver_name = engine.dialect.driver
         event.listen(engine, "connect", self._on_connect)
         if self._dialect_name == "oracle":
             event.listen(engine, "begin", self._on_begin)
@@ -228,6 +230,9 @@ class SqlConnector(Connector):
         dbapi_connection.commit()  # PostgreSQL SET is transactional: survive the pool rollback
         if self._dialect_name == "oracle":
             dbapi_connection.call_timeout = self.statement_timeout_ms
+        if self._dialect_name == "mssql" and self._driver_name == "pyodbc":
+            # The `timeout` of pyodbc.connect is the login's; each query takes this one (QA-020).
+            dbapi_connection.timeout = max(1, round(self.statement_timeout_ms / 1000))
 
     def _session_statements(self, cursor: Any) -> list[str]:
         timeout = self.statement_timeout_ms

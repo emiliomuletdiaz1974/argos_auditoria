@@ -4,8 +4,8 @@ kind: module
 title: Conectores de bases de datos (argos-connector-sql)
 module: argos-connector-sql
 phases: ["02", "03"]
-version: 0.5.0-alpha
-commit: fdb87ac
+version: 0.5.1-alpha
+commit: pendiente
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -57,6 +57,7 @@ Sondas `scan_schema`, `count`, `sample` (con `validators`) y `check_config`, a t
 
 ## 6. Seguridad y tratamiento de datos
 
+- **SQL Server por ODBC con plazo por consulta (QA-020):** el `timeout` de `pyodbc.connect` es el del login; cada conexión fija además su atributo `timeout`, en segundos, con el plazo de sentencia del conector.
 - **Oracle se ciñe a lo pedido (QA-024):** la exploración respeta `params.schemas`, como el resto de conectores, con nombres de esquema validados antes de entrar en la sentencia. Solo mira columnas de tablas, no de vistas, y de usuarios que Oracle no mantiene (`oracle_maintained = 'N'`).
 - **`check_config` sin datos de negocio** (F09-31, SEC-022): una sentencia declarada pasa, tras el validador de solo lectura, por `check_config_sources`: una tabla del cliente se rechaza antes del diario. Las filas salen minimizadas (columnas de ajuste en claro, el resto como digest) y con tope de filas.
 - **Nombres del cliente entre comillas** (F09-31, SEC-024): los identificadores los entrecomilla SQLAlchemy según el dialecto (`año-2024`, `Pacientes.2024`); solo se rechazan los vacíos, los de más de 128 caracteres y los que llevan caracteres de control. El objetivo `esquema.tabla` se parte por el primer punto.
@@ -106,3 +107,4 @@ La integración real con Oracle y SQL Server está escrita pero **no se ha ejecu
 | 0.3.0-alpha | 2026-09-23 | Exploración con `COLUMNS_SQL` y `CATALOG_SQL` literales en lugar del inspector | F09-22 |
 | 0.4.0-alpha | 2026-09-23 | `check_config` limitado a catálogo y minimizado, identificadores entre comillas, SQL Server verificado solo con ODBC 18 y privilegios por oid | F09-31 |
 | 0.5.0-alpha | 2026-09-28 | Oracle: filtro de esquemas, solo tablas y solo usuarios no mantenidos por Oracle; `sample_size` | QA-23 (QA-024, 027) |
+| 0.5.1-alpha | 2026-09-28 | Plazo por consulta en SQL Server con pyodbc | QA-24 (QA-020) |

@@ -17,7 +17,7 @@ from typing import Any
 
 import sqlglot
 from sqlglot import exp
-from sqlglot.errors import ParseError
+from sqlglot.errors import SqlglotError
 
 from argos_connector.minimize import ValueHasher
 
@@ -88,7 +88,7 @@ def check_config_sources(statement: str, dialect: str) -> None:
     """Nothing if every source of the statement is catalogue or configuration; else ValueError."""
     try:
         trees = [tree for tree in sqlglot.parse(statement, read=dialect) if tree is not None]
-    except ParseError as exc:
+    except SqlglotError as exc:  # TokenError too: a literal that never closes (QA-019)
         raise ValueError(f"a configuration check that does not parse: {exc}") from exc
     ctes = {cte.alias_or_name.lower() for tree in trees for cte in tree.find_all(exp.CTE)}
     offending: list[str] = []

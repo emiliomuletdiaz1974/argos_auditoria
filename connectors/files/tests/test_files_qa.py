@@ -128,4 +128,6 @@ def test_the_s3_prefix_is_a_folder_not_a_name_start() -> None:
     backend._bucket = "b"
     entries = list(backend.walk("pacientes/", limit=10))
     assert listed == ["pacientes/"], "a sibling pacientes_2019/ must not be listed"
-    assert [getattr(e, "path", None) for e in entries] == ["pacientes/a.pdf"], "a marker is not a file"
+    assert [getattr(e, "path", None) for e in entries] == ["pacientes/a.pdf"], (
+        "a marker is not a file"
+    )

@@ -61,3 +61,28 @@ def test_oracle_scan_keeps_to_the_schemas_asked_and_to_tables() -> None:
     assert "all_tables" in sql.lower(), "columns of views are not columns of tables"
     assert "'CLINICA'" in sql
     validate_read_only_sql(sql, "oracle")
+
+
+def test_sql_server_over_odbc_has_a_query_deadline() -> None:
+    """QA-020: the `timeout` pyodbc takes when connecting is the login's; each query needs the
+    connection's own `timeout` attribute, in seconds."""
+    from argos_sql.mssql import MssqlConnector
+
+    class Cursor:
+        def execute(self, statement: str) -> None: ...
+
+        def close(self) -> None: ...
+
+    class OdbcConnection:
+        timeout = 0
+
+        def cursor(self) -> Cursor:
+            return Cursor()
+
+        def commit(self) -> None: ...
+
+    connector = MssqlConnector(SYSTEM_ID, {"statement_timeout_ms": 30_000}, make_context())
+    connector._dialect_name, connector._driver_name = "mssql", "pyodbc"
+    odbc = OdbcConnection()
+    connector._on_connect(odbc, None)
+    assert odbc.timeout == 30

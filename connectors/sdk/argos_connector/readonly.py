@@ -15,7 +15,7 @@ import re
 
 import sqlglot
 from sqlglot import exp
-from sqlglot.errors import ParseError
+from sqlglot.errors import SqlglotError
 
 from argos_common.errors import ReadOnlyViolationError
 
@@ -221,14 +221,22 @@ def _is_allowed_anonymous(name: str) -> bool:
     return function in ALLOWED_ANONYMOUS
 
 
+_BACKSLASH_DIALECTS = frozenset({"mysql", "postgres"})
+
+
 def validate_read_only_sql(statement: str, dialect: str) -> None:
     if not statement.strip():
         raise ReadOnlyViolationError("empty statement")
     if _EXECUTABLE_COMMENT.search(statement):
         raise ReadOnlyViolationError("comment an engine would execute (/*! */, /*+ */ or --x)")
+    if dialect in _BACKSLASH_DIALECTS and "\\" in statement:
+        # Whether a backslash escapes depends on the server (NO_BACKSLASH_ESCAPES in MySQL,
+        # standard_conforming_strings in PostgreSQL): the validator and the engine could read two
+        # different statements (quality review QA-023). No check the library needs uses one.
+        raise ReadOnlyViolationError("a backslash reads differently in different server modes")
     try:
         trees = [tree for tree in sqlglot.parse(statement, read=dialect) if tree is not None]
-    except ParseError:
+    except SqlglotError:  # ParseError, and TokenError for a literal that never closes (QA-019)
         raise ReadOnlyViolationError("statement is not parseable as read-only SQL") from None
     if len(trees) != 1:
         raise ReadOnlyViolationError(f"exactly one statement is allowed, got {len(trees)}")

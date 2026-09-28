@@ -68,6 +68,24 @@ def _hhmm(value: str) -> clock_time:
     return clock_time.fromisoformat(value)
 
 
+def window_open(windows: tuple[Window, ...], now: datetime) -> bool:
+    """Whether `now` (in the timezone of the system) falls inside one of the windows.
+
+    A window whose end is before its start runs overnight (22:00 to 06:00, the usual one of a
+    hospital): the hours after midnight belong to the window of the day it started (QA-018).
+    """
+    minute = now.time().replace(second=0, microsecond=0)
+    today = now.weekday()
+    yesterday = (today - 1) % 7
+    for w in windows:
+        if w.start <= w.end:
+            if today in w.days and w.start <= minute <= w.end:
+                return True
+        elif (today in w.days and minute >= w.start) or (yesterday in w.days and minute <= w.end):
+            return True
+    return False
+
+
 def parse_windows(raw: object) -> tuple[Window, ...]:
     if not isinstance(raw, list) or not raw:
         raise ValueError("windows must be a non-empty list")
@@ -153,9 +171,7 @@ class LoadBudget:
 
     # ---------- windows ----------
     def in_window(self) -> bool:
-        now = self._now().astimezone(self._tz)
-        minute = now.time().replace(second=0, microsecond=0)
-        return any(now.weekday() in w.days and w.start <= minute <= w.end for w in self._windows)
+        return window_open(self._windows, self._now().astimezone(self._tz))
 
     # ---------- token bucket + circuit gate ----------
     def acquire(self) -> None:

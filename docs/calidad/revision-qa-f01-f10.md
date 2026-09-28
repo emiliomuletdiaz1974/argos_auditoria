@@ -1,6 +1,6 @@
 # Revisión de calidad de las Fases 01 a 10
 
-**Versión:** 1.4 · **Fecha:** 2026-09-28 · **Base:** `main` en `d74ba47` (tag `fase-10`) · **Confidencialidad:** `internal`
+**Versión:** 1.5 · **Fecha:** 2026-09-28 · **Base:** `main` en `d74ba47` (tag `fase-10`) · **Confidencialidad:** `internal`
 **Tarea:** QA-01 · **Relacionado:** [revisión de seguridad de F1–F8](../seguridad/revision-f01-f08.md), [modelo de amenazas](../seguridad/modelo-amenazas.md)
 
 Revisamos todo lo construido en `argos/` buscando errores de funcionamiento y casos borde, no estilo. Tratamos los hallazgos como los de un cliente, igual que en F09-02: cada uno queda **registrado** aquí, se **corrige** en una tarea `QA-2N` con un test que lo reproduce primero, y la corrección queda **evidenciada** en el commit y en este registro.
@@ -193,6 +193,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | QA-072, QA-075, QA-076, QA-077, QA-081, QA-083, QA-087 | Corregido (QA-081, que era `S`, lo reprodujo el propio test del instalador con la salida real de `kcadm.sh`) | QA-21 | `6c030a9` | 2026-09-28 |
 | QA-013, QA-078, QA-079, QA-088 | Corregido (los cuatro eran `S`; sus tests los reprodujeron antes de corregir) | QA-22 | `081851e` | 2026-09-28 |
 | QA-015, QA-016, QA-021, QA-024, QA-025, QA-026, QA-027, QA-028 | Corregido (los `S` —QA-024 a 028— reproducidos por su test antes de corregir; QA-024 probado contra el Oracle simulado) | QA-23 | `fdb87ac` | 2026-09-28 |
+| QA-017, QA-018, QA-019, QA-020, QA-022, QA-023 | Corregido (QA-020, que era `S`, reproducido con un doble de la conexión ODBC) | QA-24 | pendiente | 2026-09-28 |
 
 ## 7. Historial
 
@@ -203,3 +204,4 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | 1.2 | 2026-09-28 | Corregidos QA-072, 075, 076, 077, 081, 083 y 087 (QA-21) |
 | 1.3 | 2026-09-28 | Corregidos QA-013, 078, 079 y 088 (QA-22) |
 | 1.4 | 2026-09-28 | Corregidos QA-015, 016, 021, 024, 025, 026, 027 y 028 (QA-23) |
+| 1.5 | 2026-09-28 | Corregidos QA-017, 018, 019, 020, 022 y 023 (QA-24) |

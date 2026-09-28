@@ -216,3 +216,12 @@ def test_every_page_beyond_the_first_is_paid_and_journaled() -> None:
     assert budget.acquired == 3
     assert len(journal.emitted) == 3
     assert all(r.outcome is not None and r.outcome["ok"] for r in journal.emitted)
+
+
+def test_a_cursor_with_encoded_characters_is_not_an_attack() -> None:
+    """QA-022: the query of a next link is the server's business; only its path is checked."""
+    connector, _, _ = _connector()
+    route = connector.route_for("/documents?cursor=eyJpZCI6MTB9%2F%2F")
+    assert route is not None
+    with pytest.raises(ReadOnlyViolationError):
+        connector.route_for("/documents/%2e%2e/admin?x=1")
