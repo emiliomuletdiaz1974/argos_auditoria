@@ -4,9 +4,9 @@ kind: module
 title: Servicio de salud del dominio (argos-health)
 module: argos-health
 phases: ["10"]
-version: 0.5.0-alpha
-commit: c5dcf5a
-date: 2026-09-25
+version: 0.6.0-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -89,6 +89,8 @@ Métricas:
   - `argos_ai_tokens_24h`, `argos_ai_requests_24h`, `argos_ai_latency_p95_ms` y `argos_ai_quota_used_ratio`, por servicio;
   - `argos_ai_calibration_age_hours{category}`;
 - `argos_log_records_dropped_total{service}`: líneas de log que el servicio no pudo enviar a Loki (F10-05).
+- `argos_health_check_ok{check}`: 1 si la última pasada de una comprobación pudo medir y 0 si no (fallo de la consulta, PKI o volumen sin configurar, almacén WORM ausente). La vigila `HealthCheckFailing`: una comprobación que no mide deja sus alertas mudas (QA-079).
+- **Hechos con su propia hora (QA-078):** cada hecho se publica en `argos.health_facts` con la hora de la comprobación que lo observó, no con la de la publicación. Si una comprobación se cuelga, su hecho envejece y `argos_facts.fresh` deja de fiarse de él a los 15 minutos.
 
 Además, una vez al día toma la foto de la capacidad frente a la talla (`argos.capacity_snapshots`, F10-08) y borra lo que tenga más de 13 meses.
 
@@ -99,6 +101,7 @@ Además, una vez al día toma la foto de la capacidad frente a la talla (`argos.
 | `ARGOS_DATABASE_URL`, `ARGOS_DATABASE_VAULT_ROLE`, `ARGOS_VAULT_APPROLE_DIR` | Base de datos con usuario dinámico `svc-health` (F09-05) | — |
 | `ARGOS_HEALTH_S3_ENDPOINT`, `_S3_ACCESS_KEY`, `_S3_SECRET_KEY` | Almacén WORM del canario; sin endpoint, el canario da 0 | — |
 | `ARGOS_HEALTH_PKI_URL` | PKI intermedia de Vault (`…/v1/pki_int`); sin ella, los certificados dan -1 | — |
+| `ARGOS_HEALTH_TLS_SERVICES` | Los servicios que renueva el emisor de certificados, con el mismo formato que su `ARGOS_TLS_SERVICES`; solo cuentan sus certificados, y uno que falte cuenta como a punto de caducar (QA-088). Un test comprueba que el compose da a los dos el mismo valor | vacío: cuentan todos |
 | `ARGOS_HEALTH_EVIDENCE_PATH` | Volumen de evidencia montado en solo lectura; sin él no hay métrica de ocupación | — |
 | `ARGOS_HEALTH_JOURNAL_TAIL` | Asientos del tramo | 10 000 |
 | `ARGOS_HEALTH_*_SECONDS` | Cadencias | las de la tabla del punto 3 |
@@ -147,3 +150,4 @@ Además, una vez al día toma la foto de la capacidad frente a la talla (`argos.
 | 0.3.0-alpha | 2026-09-24 | Versión, campañas, hallazgos, cobertura e IA para los paneles (migración 0042) | F10-04 (ARG-092) |
 | 0.4.0-alpha | 2026-09-24 | Líneas de log descartadas antes de llegar a Loki | F10-05 (ARG-093) |
 | 0.5.0-alpha | 2026-09-25 | Foto diaria de la capacidad frente a la talla | F10-08 (ARG-098) |
+| 0.6.0-alpha | 2026-09-28 | `argos_health_check_ok` y su alerta, hechos con la hora de su comprobación, y certificados solo de los servicios esperados | QA-22 (QA-078, 079, 088) |

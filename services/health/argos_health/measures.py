@@ -11,7 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import shutil
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -76,19 +76,29 @@ def journal_tail_start(head: int, tail: int) -> int:
 
 
 def certificates_expiring(
-    certificates: Iterable[Mapping[str, Any]], now: dt.datetime, window: dt.timedelta = CERT_WINDOW
+    certificates: Iterable[Mapping[str, Any]],
+    now: dt.datetime,
+    window: dt.timedelta = CERT_WINDOW,
+    expected: Collection[str] | None = None,
 ) -> list[str]:
     """The names whose newest certificate expires within the window.
 
     The issuer renews at two thirds of the life of a certificate, so the old one still exists and
     expires soon after the service already uses the new one: only the newest of each name counts.
+    With `expected` (the services the issuer renews), a retired name no longer counts, and an
+    expected service without any certificate does (quality review QA-088).
     """
     newest: dict[str, dt.datetime] = {}
     for certificate in certificates:
         name, not_after = str(certificate["common_name"]), certificate["not_after"]
+        if expected is not None and name not in expected:
+            continue
         if name not in newest or not_after > newest[name]:
             newest[name] = not_after
-    return sorted(name for name, not_after in newest.items() if not_after - now < window)
+    expiring = {name for name, not_after in newest.items() if not_after - now < window}
+    if expected is not None:
+        expiring |= set(expected) - set(newest)
+    return sorted(expiring)
 
 
 def worm_canary(store: WormLike, now: dt.datetime) -> bool:
@@ -344,10 +354,14 @@ def _ai(conn: psycopg.Connection[Any]) -> list[Observation]:
     return found
 
 
-def publish_facts(dsn: str, facts: Mapping[str, str], at: dt.datetime) -> None:
-    """What the self-* challenges read through `argos_facts.facts` (F10-01)."""
+def publish_facts(dsn: str, facts: Mapping[str, tuple[str, dt.datetime]]) -> None:
+    """What the self-* challenges read through `argos_facts.facts` (F10-01).
+
+    Each fact carries the time of the check that observed it: a check that hangs leaves its fact
+    growing old, and `argos_facts.fresh` stops trusting it (quality review QA-078).
+    """
     with psycopg.connect(dsn) as conn:
-        for fact, setting in sorted(facts.items()):
+        for fact, (setting, at) in sorted(facts.items()):
             conn.execute(
                 "INSERT INTO argos.health_facts (fact, setting, observed_at) VALUES (%s, %s, %s)"
                 " ON CONFLICT (fact) DO UPDATE SET setting = EXCLUDED.setting,"

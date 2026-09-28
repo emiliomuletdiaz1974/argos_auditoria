@@ -40,6 +40,16 @@ Certificates = Callable[[], list[dict[str, Any]]]
 _log = get_logger(__name__, "ARG-094")
 
 
+# The checks behind each fact: a fact is as old as the oldest check it depends on.
+_FACT_CHECKS = {
+    "journal_intact": ("journal_tail",),
+    "security_log_intact": ("security_log",),
+    "worm_healthy": ("worm",),
+    "certs_expiring_7d": ("certificates",),
+    "queues_stalled": ("domain",),
+}
+
+
 def _now() -> dt.datetime:
     return dt.datetime.now(dt.UTC)
 
@@ -55,7 +65,9 @@ class Monitor:
         clock: Callable[[], dt.datetime] = _now,
         release: str = "unknown",
         size: tuple[str, dict[str, int]] | None = None,
+        expected_certificates: frozenset[str] | None = None,
     ) -> None:
+        self._expected_certificates = expected_certificates
         self._release = release
         self._size = size
         self._dsn = dsn
@@ -68,24 +80,29 @@ class Monitor:
         self._groups: dict[str, list[Observation]] = {}
         self._stalled = -1
         self._ran: dict[str, dt.datetime] = {}
+        self._ok: dict[str, bool] = {}
 
     # ---------- the checks ----------
 
-    def _keep(self, group: str, observations: list[Observation]) -> None:
+    def _keep(self, group: str, observations: list[Observation], measured: bool = True) -> None:
+        """Replace the observations of a check; `measured` is False when it could not measure,
+        which `argos_health_check_ok` says and an alert watches (quality review QA-079)."""
         with self._lock:
             self._groups[group] = observations
             self._ran[group] = self._clock()
+            self._ok[group] = measured
 
-    def _safely(self, group: str, measure: Callable[[], bool]) -> bool:
+    def _safely(self, group: str, measure: Callable[[], bool]) -> tuple[bool, bool]:
+        """(the value, whether the check could measure at all)."""
         try:
-            return measure()
+            return measure(), True
         except Exception as exc:  # the gauge says 0; the log says why
             _log.warning("health check failed", extra={"check": group, "error": str(exc)[:200]})
-            return False
+            return False, False
 
     def check_journal(self, full: bool = False) -> None:
         scope = "full" if full else "tail"
-        ok = self._safely(
+        ok, measured = self._safely(
             f"journal_{scope}", lambda: journal_ok(self._dsn, None if full else self._tail)
         )
         self._keep(
@@ -98,10 +115,11 @@ class Monitor:
                     help="Whether the chained journal verifies (tail every 5 min, full daily).",
                 )
             ],
+            measured,
         )
 
     def check_security_log(self) -> None:
-        ok = self._safely("security_log", lambda: security_log_ok(self._dsn))
+        ok, measured = self._safely("security_log", lambda: security_log_ok(self._dsn))
         self._keep(
             "security_log",
             [
@@ -111,6 +129,7 @@ class Monitor:
                     help="Whether the security log verifies its chain (every 5 min).",
                 )
             ],
+            measured,
         )
 
     def check_worm(self) -> None:
@@ -124,23 +143,27 @@ class Monitor:
                     help="Whether the WORM store kept and gave back the last canary.",
                 )
             ],
+            self._store is not None,
         )
 
     def check_domain(self) -> None:
+        measured = True
         try:
             observations, stalled = domain_observations(self._dsn)
         except Exception as exc:
             _log.warning("health check failed", extra={"check": "domain", "error": str(exc)[:200]})
-            observations, stalled = [], -1
+            observations, stalled, measured = [], -1, False
         with self._lock:
             self._stalled = stalled
-        self._keep("domain", observations)
+        self._keep("domain", observations, measured)
 
     def check_certificates(self) -> None:
         expiring: list[str] | None = None
         if self._certificates is not None:
             try:
-                expiring = certificates_expiring(self._certificates(), self._clock())
+                expiring = certificates_expiring(
+                    self._certificates(), self._clock(), expected=self._expected_certificates
+                )
             except Exception as exc:
                 _log.warning(
                     "health check failed", extra={"check": "certificates", "error": str(exc)[:200]}
@@ -155,6 +178,7 @@ class Monitor:
                     help="Services whose newest certificate expires within 7 days (-1: unknown).",
                 )
             ],
+            expiring is not None,
         )
 
     def check_volume(self) -> None:
@@ -170,6 +194,7 @@ class Monitor:
                     help="How full the evidence volume is (0 to 1).",
                 )
             ],
+            ratio is not None,
         )
 
     def check_capacity(self) -> None:
@@ -202,6 +227,16 @@ class Monitor:
         with self._lock:
             found = [o for group in self._groups.values() for o in group]
             ran = dict(self._ran)
+            measured = dict(self._ok)
+        found += [
+            Observation(
+                "argos_health_check_ok",
+                float(ok),
+                {"check": check},
+                help="1 when the last run of a health check could measure; 0 when it could not.",
+            )
+            for check, ok in sorted(measured.items())
+        ]
         found.append(
             Observation(
                 "argos_log_records_dropped_total",
@@ -234,8 +269,20 @@ class Monitor:
             stalled = self._stalled
         return as_facts(self.observations(), stalled)
 
+    def timed_facts(self) -> dict[str, tuple[str, dt.datetime]]:
+        """The facts with the time of the check behind each; a fact never checked is left out."""
+        facts = self.facts()
+        with self._lock:
+            ran = dict(self._ran)
+        timed: dict[str, tuple[str, dt.datetime]] = {}
+        for fact, groups in _FACT_CHECKS.items():
+            times = [ran[g] for g in groups if g in ran]
+            if times:
+                timed[fact] = (facts[fact], min(times))
+        return timed
+
     def publish(self) -> None:
-        publish_facts(self._dsn, self.facts(), self._clock())
+        publish_facts(self._dsn, self.timed_facts())
 
 
 # ---------- the internal certificates, from the PKI of Vault ----------

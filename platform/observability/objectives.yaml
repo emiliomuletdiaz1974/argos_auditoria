@@ -134,6 +134,15 @@ objectives:
     summary: "The domain health service is not answering"
     description: "Without it the journal, the WORM store and the queues go unwatched."
     runbook: docs/operacion/runbooks/RB-06-plataforma.md
+  - id: health-measuring
+    source: "ADR-0015 punto 2 y revisión de calidad QA-079: una medida que falta no es una medida sana"
+    alert: HealthCheckFailing
+    expr: min by (check) (argos_health_check_ok) == 0
+    for: 15m
+    severity: warning
+    summary: "A health check cannot measure: its alerts cannot fire"
+    description: "The check named in the label failed or has nothing to measure; see the log of argos-health."
+    runbook: docs/operacion/runbooks/RB-06-plataforma.md
 
   # ---------- objectives with no alert yet ----------
   - id: first-token

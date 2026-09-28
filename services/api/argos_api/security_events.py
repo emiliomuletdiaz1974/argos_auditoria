@@ -9,6 +9,8 @@ for as many as they folded) and whether the chain still verifies.
 """
 
 import logging
+import threading
+import time
 from typing import Any
 
 import psycopg
@@ -55,6 +57,30 @@ _COUNTS = (
 )
 
 
+# Walking the whole chain grows with the log: once every five minutes, the last answer in between
+# (quality review QA-013). The health service verifies the same chain on its own schedule.
+CHAIN_INTERVAL = 300.0
+_monotonic = time.monotonic
+_chain_lock = threading.Lock()
+_chain: dict[str, tuple[float, bool]] = {}
+
+
+def reset_chain_cache() -> None:
+    with _chain_lock:
+        _chain.clear()
+
+
+def chain_intact(dsn: str) -> bool:
+    with _chain_lock:
+        known = _chain.get(dsn)
+        if known is not None and _monotonic() - known[0] < CHAIN_INTERVAL:
+            return known[1]
+    intact = bool(security_log.verify_chain(dsn).intact)
+    with _chain_lock:
+        _chain[dsn] = (_monotonic(), intact)
+    return intact
+
+
 def security_metrics(dsn: str) -> str:
     """Prometheus text format: `argos_security_events_total` and `argos_security_chain_ok`."""
     with psycopg.connect(dsn) as conn:
@@ -67,7 +93,7 @@ def security_metrics(dsn: str) -> str:
         f'argos_security_events_total{{kind="{kind}",outcome="{outcome}"}} {int(total)}'
         for kind, outcome, total in rows
     ]
-    intact = security_log.verify_chain(dsn).intact
+    intact = chain_intact(dsn)
     lines += [
         "# HELP argos_security_chain_ok 1 while the chain of the security log verifies.",
         "# TYPE argos_security_chain_ok gauge",

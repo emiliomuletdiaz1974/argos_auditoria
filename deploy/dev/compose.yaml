@@ -221,6 +221,7 @@ services:
       ARGOS_HEALTH_S3_SECRET_KEY: dev-only-evidence-secret
       ARGOS_HEALTH_PKI_URL: http://vault:8200/v1/pki_int
       ARGOS_HEALTH_EVIDENCE_PATH: /evidence
+      ARGOS_HEALTH_TLS_SERVICES: "api=api;webhook=webhook;challenge=challenge;evidence=evidence;ai-gateway=ai-gateway;example=example;health=health;postgres=postgres;nats=nats;vault=vault"
       ARGOS_SIZE: M   # F10-08: the daily snapshot of the capacity
       ARGOS_SIZES_FILE: /app/platform/operation/sizes.yaml
     volumes: ["./secrets/approle-health:/run/secrets/approle:ro", "tls-health:/run/tls:ro", "evidence-data:/evidence:ro"]

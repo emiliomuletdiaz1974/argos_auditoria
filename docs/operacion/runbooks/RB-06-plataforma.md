@@ -1,7 +1,7 @@
 ---
 id: RB-06
 title: "La plataforma: certificados y servicio de salud"
-alerts: [CertificatesExpiring, HealthServiceDown]
+alerts: [CertificatesExpiring, HealthServiceDown, HealthCheckFailing]
 confidentiality: client
 ---
 # RB-06 · La plataforma: certificados y servicio de salud
@@ -10,6 +10,7 @@ confidentiality: client
 
 - `CertificatesExpiring`: algún servicio tiene su certificado interno a menos de 7 días de caducar. La rotación automática no lo ha renovado.
 - `HealthServiceDown` (crítica): el servicio de salud no responde. Mientras dura, las alertas del diario, del WORM y del disco no pueden dispararse.
+- `HealthCheckFailing` (aviso): una comprobación del servicio de salud no puede medir (la etiqueta `check` dice cuál). Sus métricas faltan y sus alertas no pueden dispararse: el log de `argos-health` dice por qué.
 
 ## Diagnóstico
 

@@ -253,3 +253,30 @@ tests:
   - eval_time: 8m
     alertname: HealthServiceDown
     exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: argos_health_check_ok{check="domain",job="argos-health"}
+    values: 0x20
+  - series: argos_health_check_ok{check="worm",job="argos-health"}
+    values: 1x20
+  alert_rule_test:
+  - eval_time: 18m
+    alertname: HealthCheckFailing
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        objective: health-measuring
+        check: domain
+      exp_annotations:
+        summary: 'A health check cannot measure: its alerts cannot fire'
+        description: The check named in the label failed or has nothing to measure; see the log of argos-health.
+        runbook_url: docs/operacion/runbooks/RB-06-plataforma.md
+        source: 'ADR-0015 punto 2 y revisión de calidad QA-079: una medida que falta no es una medida sana'
+- interval: 1m
+  input_series:
+  - series: argos_health_check_ok{check="domain",job="argos-health"}
+    values: 1x20
+  alert_rule_test:
+  - eval_time: 18m
+    alertname: HealthCheckFailing
+    exp_alerts: []

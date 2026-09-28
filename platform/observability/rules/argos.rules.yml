@@ -113,3 +113,14 @@ groups:
       description: Without it the journal, the WORM store and the queues go unwatched.
       runbook_url: docs/operacion/runbooks/RB-06-plataforma.md
       source: 'ADR-0015 punto 2: sin el servicio de salud, las alertas de dominio no pueden dispararse'
+  - alert: HealthCheckFailing
+    expr: min by (check) (argos_health_check_ok) == 0
+    for: 15m
+    labels:
+      severity: warning
+      objective: health-measuring
+    annotations:
+      summary: 'A health check cannot measure: its alerts cannot fire'
+      description: The check named in the label failed or has nothing to measure; see the log of argos-health.
+      runbook_url: docs/operacion/runbooks/RB-06-plataforma.md
+      source: 'ADR-0015 punto 2 y revisión de calidad QA-079: una medida que falta no es una medida sana'

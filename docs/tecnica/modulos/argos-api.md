@@ -4,9 +4,9 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.38.0-alpha
-commit: 96b3236
-date: 2026-09-25
+version: 0.38.1-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -107,7 +107,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
   - los permisos denegados, los roles incompatibles y el segundo factor exigido;
   - cada uso permitido de un permiso de `platform_admin` que cambia algo.
 
-  Guarda la plantilla de la ruta y no la ruta concreta, que puede llevar datos del cliente. Se consulta en `GET /api/v1/security/events` (`security.read`: `platform_admin` y `read_only_auditor`), paginado por cursor. `GET /metrics` publica `argos_security_events_total{kind,outcome}` y `argos_security_chain_ok` para Prometheus, fuera del contrato v1. Desde F10-05 publica también `argos_log_records_dropped_total{service}`: las líneas de log que la API no pudo enviar a Loki.
+  Guarda la plantilla de la ruta y no la ruta concreta, que puede llevar datos del cliente. Se consulta en `GET /api/v1/security/events` (`security.read`: `platform_admin` y `read_only_auditor`), paginado por cursor. `GET /metrics` publica `argos_security_events_total{kind,outcome}` y `argos_security_chain_ok` para Prometheus, fuera del contrato v1. La cadena se verifica como mucho una vez cada cinco minutos y entre medias se sirve la última respuesta, para que el *scrape* no crezca con el registro (QA-013). Desde F10-05 publica también `argos_log_records_dropped_total{service}`: las líneas de log que la API no pudo enviar a Loki.
 - **Segundo factor para lo que decide** (F09-07, ARG-072):
   - Qué permisos lo exigen: `permissions.yaml` los declara en `_second_factor`. Son aprobar compuertas, mover hallazgos (aceptar un riesgo incluido), emitir y revocar credenciales, autorizar un punto de inyección, decidir sobre una columna en revisión y crear integraciones.
   - Qué responde la API sin él: con un token sin `otp` en `amr`, `401` con `WWW-Authenticate: Bearer error="insufficient_user_authentication"` (RFC 9470), solo después de comprobar el rol y sin nombrar el permiso.
@@ -208,3 +208,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.36.0-alpha | 2026-09-25 | Pantalla de operación: `/operations/status`, `/operations/runbooks/{id}` y el receptor de Alertmanager (migración 0043) | F10-07 (ARG-092/099) |
 | 0.37.0-alpha | 2026-09-25 | `POST /systems` dentro de la talla, límite de campañas en paralelo e informe `/operations/capacity` (migración 0044) | F10-08 (ARG-098) |
 | 0.38.0-alpha | 2026-09-25 | La esclusa exporta el informe de instalación (`ARGOS_INSTALL_DIR`) | F10-10 (ARG-096) |
+| 0.38.1-alpha | 2026-09-28 | La verificación de la cadena del registro de seguridad en `/metrics`, una vez cada cinco minutos | QA-22 (QA-013) |

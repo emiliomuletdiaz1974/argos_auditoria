@@ -49,6 +49,9 @@ class HealthSettings(BaseSettings):
     DOMAIN_SECONDS: int = 30
     CERTIFICATES_SECONDS: int = 3_600
     CAPACITY_SECONDS: int = 86_400
+    # The services the certificate issuer renews (its ARGOS_TLS_SERVICES), `folder=cn,alt;…`:
+    # only their certificates count, and one of them without a certificate counts (QA-088).
+    TLS_SERVICES: str = ""
     VERSION_FILE: Path = Path("VERSION")  # the release, copied into the image beside the code
 
 
@@ -77,6 +80,11 @@ def build_monitor(dsn: str, settings: HealthSettings, config: ArgosConfig | None
     size = None
     if config is not None and config.SIZE and config.SIZES_FILE:
         size = (config.SIZE, limits_of(Path(config.SIZES_FILE), config.SIZE))
+    expected = frozenset(
+        names.split("=", 1)[1].split(",")[0]
+        for names in settings.TLS_SERVICES.split(";")
+        if "=" in names
+    )
     return Monitor(
         dsn,
         store,
@@ -85,6 +93,7 @@ def build_monitor(dsn: str, settings: HealthSettings, config: ArgosConfig | None
         settings.JOURNAL_TAIL,
         release=release,
         size=size,
+        expected_certificates=expected or None,
     )
 
 
