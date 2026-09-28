@@ -4,9 +4,9 @@ kind: module
 title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
-version: 0.6.0-alpha
-commit: 2ef59ef
-date: 2026-09-24
+version: 0.7.0-alpha
+commit: 8eb3e4f
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -79,6 +79,13 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Deltas una sola vez y completos (QA-029, 030).** Los deltas de una pasada esperan a que el consumidor de la ingesta no tenga mensajes pendientes, incluidas las reentregas. Se calculan en una sola transacción con sus marcas y su asiento, y la pasada queda sellada (`scan_runs.deltas_at`, migración 0046): un reintento devuelve el mismo informe sin perder desapariciones ni duplicar el asiento. Unos permisos que llegan antes que su tabla se vuelven a entregar en vez de perderse.
+- **Pasadas abandonadas (QA-031).** Una pasada que sigue `running` 4 horas después de empezar (el doble del plazo del workflow) se cierra como fallida y el sistema vuelve a planificarse.
+- **Accesos revocados y roles retirados (QA-032).** Un permiso que no vuelve a verse queda marcado `missing` en su arista `CAN_ACCESS`, con delta `disappeared`; los roles (`Identity`) desaparecen como el resto de nodos.
+- **Ingesta idempotente (QA-039).** Un `table_found` repetido no borra el tamaño anterior, que es el de la pasada anterior, y un evento viejo no hace retroceder `last_seen`.
+- **Tratamientos retirados (QA-033).** Un tratamiento que el nuevo fichero del RAT ya no trae pierde sus declaraciones y queda marcado; nunca se borra.
+- **Validación que no pudo hacerse (QA-043).** Las columnas de una sonda de validación fallida quedan marcadas y se validan en la pasada siguiente.
+- **Instantáneas cerradas (QA-040).** Los nodos de una instantánea solo se escriben en la transacción que la toma (trigger de la migración 0046).
 - **Rol de base propio** (F09-04, ARG-085): el inventario tiene el rol `svc_inventory`, el único que, con la API, escribe en el grafo; no lee la evidencia ni las credenciales. Las sesiones del grafo ya no ejecutan `LOAD 'age'`, que exige superusuario: AGE se carga al arrancar el servidor (`shared_preload_libraries`).
 - **Nombres del cliente que no rompen nada** (F09-31, SEC-024): la clave natural escapa el separador (`\x1f`) en lugar de rechazar el nombre, así que la tabla no desaparece del inventario. Una tabla que su conector no puede muestrear se registra y cuenta como fallo, y la clasificación sigue con el resto.
 - **Informe sin inyección** (F09-31, SEC-055): todo texto del cliente en el informe de inventario va en un *code span* de Markdown, donde ni Markdown ni HTML se interpretan (`<img src=…>` se ve, no se ejecuta).
@@ -138,3 +145,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.4.0-alpha | 2026-09-23 | Clave natural con separador escapado, clasificación que sigue tras una tabla fallida e informe con los nombres como código | F09-31 |
 | 0.5.0-alpha | 2026-09-23 | Rol `svc_inventory`; las sesiones del grafo sin `LOAD 'age'` | F09-04 (ARG-085) |
 | 0.6.0-alpha | 2026-09-24 | El nodo `System` guarda en la instantánea su propio id como sistema | F10-01 (ARG-100) |
+| 0.7.0-alpha | 2026-09-28 | Deltas atómicos y reintentables, espera a la ingesta, pasadas abandonadas, accesos revocados, ingesta idempotente, tratamientos retirados, validación pendiente e instantáneas cerradas (migración 0046) | QA-26 (QA-029, 030, 031, 032, 033, 039, 040, 043) |

@@ -4,9 +4,9 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.12.0-alpha
-commit: d4f31d0
-date: 2026-09-24
+version: 0.12.1-alpha
+commit: 8eb3e4f
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -230,6 +230,7 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Instantánea verificada antes de usarla (QA-040):** el resolutor comprueba que los nodos de la instantánea siguen dando su hash antes de que una campaña resuelva sobre ella; si no, `SnapshotAlteredError`.
 - **TLS hacia PostgreSQL y NATS** (F09-06, ARG-083): el contenedor monta su propio certificado en `/run/tls`, que no monta ningún otro servicio. libpq verifica PostgreSQL (`verify-full`) y NATS exige el certificado del servicio.
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
 - **Base de datos con mínimo privilegio** (F09-04, ARG-085): el servicio se conecta como `login_challenge`, miembro del rol `svc_challenge` (migración `0033`), y nunca como superusuario. El rol tiene solo las tablas y operaciones que usa su código; el diario se escribe únicamente con `argos.journal_append()`. Lo comprueban `tests/integration/test_service_roles.py` (la matriz `tests/fixtures/db_access_matrix.yaml` y el usuario de cada contenedor en marcha).
@@ -398,3 +399,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.10.0-alpha | 2026-09-23 | TLS verificado hacia PostgreSQL y NATS con su propio certificado | F09-06 (ARG-083) |
 | 0.11.0-alpha | 2026-09-24 | Familia `self` (autoverificación), vista `argos_facts.facts` y rol `svc_selfcheck` (migración 0040), y `tools/selfcheck.py` | F10-01 (ARG-100) |
 | 0.12.0-alpha | 2026-09-24 | Los hechos de las cadenas y los retos `self-010…012` los publica el servicio de salud (migración 0041) | F10-02 (ARG-094) |
+| 0.12.1-alpha | 2026-09-28 | El resolutor verifica la instantánea | QA-26 (QA-040) |

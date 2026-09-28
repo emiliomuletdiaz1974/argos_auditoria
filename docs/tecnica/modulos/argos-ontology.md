@@ -4,9 +4,9 @@ kind: module
 title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
-version: 0.6.0-alpha
-commit: d4f31d0
-date: 2026-09-24
+version: 0.6.1-alpha
+commit: 8eb3e4f
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -423,6 +423,7 @@ No es una norma jurídica: no pasa por la validación del perfil jurídico-técn
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Tratamientos retirados fuera de SHACL (QA-033):** las formas solo evalúan tratamientos vigentes; uno que el RAT ya no trae está marcado y no se valida.
 - **Rechazos en el registro de seguridad** (F09-08):
   - un bundle con firma o clave rechazada deja `content.signature_rejected`;
   - una vuelta atrás rechazada deja `content.rollback_refused`;
@@ -547,3 +548,4 @@ No es una norma jurídica: no pasa por la validación del perfil jurídico-técn
 | 0.4.0-alpha | 2026-09-23 | Los rechazos de contenido quedan en el registro de seguridad | F09-08 |
 | 0.5.0-alpha | 2026-09-24 | Norma `SELF` (la especificación del producto), seis obligaciones `OBL-SELF-*` y la clase `AC-argos-appliance` | F10-01 (ARG-100) |
 | 0.6.0-alpha | 2026-09-24 | Tres obligaciones `OBL-SELF-*` más, sobre lo que observa el servicio de salud (canario WORM, certificados y colas) | F10-02 (ARG-094) |
+| 0.6.1-alpha | 2026-09-28 | SHACL ignora los tratamientos retirados | QA-26 (QA-033) |
