@@ -40,6 +40,7 @@ SERVICES: dict[str, list[str]] = {
     "argos-evidence": ["evidence-worker", "evidence-api"],
     "argos-ai-gateway": ["ai-gateway"],
     "argos-example": ["example"],
+    "argos-health": ["health"],
     "argos-verifier": ["verifier"],
 }
 

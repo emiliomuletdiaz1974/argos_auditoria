@@ -109,6 +109,7 @@ build:
 	docker build -f services/api/Dockerfile --label org.argos.component=ARG-071 --label org.argos.version=$(VERSION) -t argos-api:$(VERSION) .
 	docker build -f services/evidence/Dockerfile --label org.argos.component=ARG-061 --label org.argos.version=$(VERSION) -t argos-evidence:$(VERSION) .
 	docker build -f services/verifier/Dockerfile --label org.argos.component=ARG-069 --label org.argos.version=$(VERSION) -t argos-verifier:$(VERSION) .
+	docker build -f services/health/Dockerfile --label org.argos.component=ARG-094 --label org.argos.version=$(VERSION) -t argos-health:$(VERSION) .
 
 # ARG-087: the SBOM of every image and of the console, grype over each, and the gate. It downloads
 # the grype database, so it is not part of `make check`.

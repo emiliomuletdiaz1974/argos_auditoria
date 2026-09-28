@@ -43,6 +43,20 @@ class Identity:
         return bool(self.amr & SECOND_FACTORS)
 
 
+LEEWAY_SECONDS = 30
+
+
+def _realm_roles(realm_access: Any) -> frozenset[str]:
+    """The roles of the realm, or none when the claim does not have the shape of Keycloak's: a
+    list gave a 500 and a string a set of its characters (quality review QA-009)."""
+    if not isinstance(realm_access, dict):
+        return frozenset()
+    roles = realm_access.get("roles")
+    if not isinstance(roles, list):
+        return frozenset()
+    return frozenset(role for role in roles if isinstance(role, str))
+
+
 class JwtValidator:
     def __init__(self, issuer: str, audience: str, keys: KeyProvider | None = None) -> None:
         self._issuer = issuer
@@ -61,10 +75,12 @@ class JwtValidator:
                 audience=self._audience,
                 issuer=self._issuer,
                 options={"require": ["exp", "iat", "iss", "aud", "sub"]},
+                # Two clocks never agree to the second (quality review QA-009).
+                leeway=LEEWAY_SECONDS,
             )
         except (jwt.PyJWTError, ValueError) as exc:
             raise AuthError(f"invalid token: {type(exc).__name__}") from None
-        roles = frozenset(claims.get("realm_access", {}).get("roles", []))
+        roles = _realm_roles(claims.get("realm_access"))
         if required_role is not None and required_role not in roles:
             raise AuthError(f"role {required_role} is required")
         methods = claims.get("amr")

@@ -30,6 +30,7 @@ IMAGES = (
     "argos-challenge-engine",
     "argos-evidence",
     "argos-example",
+    "argos-health",
     "argos-verifier",
 )
 CONSOLE = "console"

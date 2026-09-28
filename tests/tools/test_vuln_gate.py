@@ -161,3 +161,12 @@ def test_an_exception_without_its_reason_does_not_load(tmp_path: Path, missing: 
 def test_the_real_exceptions_of_the_repository_load() -> None:
     exceptions = gate.load_exceptions(REPO / "platform" / "security" / "vex.yaml")
     assert all(e.expires > TODAY for e in exceptions), "no exception is born expired"
+
+
+def test_a_fix_date_with_its_time_is_read_as_its_day(tmp_path: Path) -> None:
+    """QA-089: grype may give the first-seen instant with its time; the gate failed on it."""
+    old = _match("CVE-1", "High", "fixed", fixed_on="2026-01-02T10:00:00Z")
+    recent = _match("CVE-2", "High", "fixed", fixed_on="2026-09-20T08:30:00+00:00")
+    result = _run(tmp_path, _reports(tmp_path, old, recent))
+    assert [f.id for f in result.blocking] == ["CVE-1"]
+    assert [f.id for f in result.warnings] == ["CVE-2"]

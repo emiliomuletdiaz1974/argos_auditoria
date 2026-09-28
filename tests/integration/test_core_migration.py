@@ -106,3 +106,67 @@ def test_at_canon_has_canonical_format(empty_db: str) -> None:
         row = c.execute("SELECT at_canon FROM argos.audit_journal WHERE seq = 1").fetchone()
     assert row is not None
     assert len(row[0]) == 27 and row[0].endswith("Z") and row[0][10] == "T"
+
+
+# --- Quality review QA-01: QA-012, QA-014 -------------------------------------------------------
+
+
+def test_a_database_ahead_of_the_code_is_said(
+    empty_db: str, tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """QA-014: versions applied that this code does not have mean older code on a newer schema."""
+    apply_migrations(empty_db, MIGRATIONS_DIR)
+    older = tmp_path / "older"
+    older.mkdir()
+    first = list_migrations(MIGRATIONS_DIR)[0][1]
+    shutil.copy(first, older / first.name)
+    with caplog.at_level("WARNING", logger="argos_common.migrations"):
+        assert apply_migrations(empty_db, older) == []
+    assert "not in" in caplog.text and str(EXPECTED_VERSIONS[-1]) in caplog.text
+
+
+def test_the_error_of_a_migration_is_not_hidden_by_the_cleanup(
+    empty_db: str, tmp_path: Path
+) -> None:
+    """QA-014: a migration that loses its connection must raise its own error, not the one of
+    the rollback on a closed connection."""
+    apply_migrations(empty_db, MIGRATIONS_DIR)
+    broken = tmp_path / "broken"
+    broken.mkdir()
+    for _, path in list_migrations(MIGRATIONS_DIR):
+        shutil.copy(path, broken / path.name)
+    (broken / "9999_lost_connection.sql").write_text(
+        "SELECT pg_terminate_backend(pg_backend_pid());", encoding="utf-8"
+    )
+    with pytest.raises(psycopg.OperationalError) as lost:
+        apply_migrations(empty_db, broken)
+    assert "terminat" in str(lost.value).lower()
+
+
+def test_the_order_of_the_journal_by_time_is_the_order_by_sequence(empty_db: str) -> None:
+    """QA-012: the instant was taken before waiting for the lock, so an entry that waited got an
+    earlier `at` than the one that went before it."""
+    import threading
+    import time
+
+    apply_migrations(empty_db, MIGRATIONS_DIR)
+    append_sql = "SELECT argos.journal_append('system:migrator', 'schema.test', '{}')"
+    with psycopg.connect(empty_db) as holder:
+        holder.execute("SELECT pg_advisory_xact_lock(hashtext('argos.audit_journal'))")
+
+        def waiting() -> None:
+            with psycopg.connect(empty_db) as conn:
+                conn.execute(append_sql)
+
+        second = threading.Thread(target=waiting)
+        second.start()
+        time.sleep(1.0)  # the second has taken its instant and waits for the lock
+        holder.execute(append_sql)
+        holder.commit()
+        second.join(timeout=30)
+    with psycopg.connect(empty_db) as conn:
+        rows = conn.execute(
+            "SELECT seq, at FROM argos.audit_journal WHERE action = 'schema.test' ORDER BY seq"
+        ).fetchall()
+    assert len(rows) == 2
+    assert rows[0][1] <= rows[1][1], rows

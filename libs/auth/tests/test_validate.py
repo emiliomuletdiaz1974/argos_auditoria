@@ -66,7 +66,7 @@ def test_unknown_role_is_a_programming_error(validator: JwtValidator) -> None:
     [
         {"aud": "other-api"},
         {"iss": "http://attacker.example/realms/argos"},
-        {"exp": int(time.time()) - 10},
+        {"exp": int(time.time()) - 120},  # beyond the leeway of 30 s
         {"exp": None},
         {"sub": None},
     ],
@@ -103,3 +103,30 @@ def test_a_token_with_the_password_alone_has_no_second_factor(validator: JwtVali
 
 def test_an_amr_that_is_not_a_list_is_not_a_second_factor(validator: JwtValidator) -> None:
     assert not validator.validate(_token(amr="otp")).has_second_factor
+
+
+# Quality review QA-01 · QA-009
+
+
+def test_a_token_issued_a_second_ahead_of_our_clock_is_accepted(validator: JwtValidator) -> None:
+    """Two clocks never agree to the second: a small leeway, not a refusal."""
+    now = int(time.time())
+    identity = validator.validate(_token(iat=now + 1, exp=now + 300))
+    assert identity.sub == "u-123"
+
+
+def test_a_token_from_far_in_the_future_is_still_refused(validator: JwtValidator) -> None:
+    now = int(time.time())
+    with pytest.raises(AuthError):
+        validator.validate(_token(iat=now + 3600, exp=now + 7200))
+
+
+@pytest.mark.parametrize(
+    "realm_access",
+    [["dpo_reviewer"], "dpo_reviewer", {"roles": "dpo_reviewer"}, {"roles": [1, None]}],
+)
+def test_realm_roles_of_the_wrong_shape_give_no_role_and_no_500(
+    validator: JwtValidator, realm_access: object
+) -> None:
+    identity = validator.validate(_token(realm_access=realm_access))
+    assert identity.roles == frozenset()

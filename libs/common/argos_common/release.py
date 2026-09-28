@@ -22,8 +22,12 @@ def _sha256(path: Path) -> str:
 
 
 def _image_name(ref: str) -> str:
-    """`registry/argos-api:0.1.0@sha256:…` → `argos-api`: the name of its SBOM files."""
-    return ref.split("@", 1)[0].rsplit(":", 1)[0].rsplit("/", 1)[-1]
+    """`registry:5000/argos-api:0.1.0@sha256:…` → `argos-api`: the name of its SBOM files.
+
+    The tag is only what follows `:` in the last segment: the port of a registry is not one
+    (quality review QA-008).
+    """
+    return ref.split("@", 1)[0].rsplit("/", 1)[-1].split(":", 1)[0]
 
 
 def build_manifest(
@@ -41,7 +45,10 @@ def build_manifest(
             raise ValueError(f"every image must be pinned by digest (name:tag@sha256:…): {image}")
     sboms: list[dict[str, str]] = []
     listed: list[dict[str, str]] = [dict(image) for image in images]
-    if sbom_dir is not None and sbom_dir.is_dir():
+    if sbom_dir is not None and not sbom_dir.is_dir():
+        # A folder that is not there is a release without SBOM, not one that does not need it.
+        raise ValueError(f"no SBOM folder at {sbom_dir}")
+    if sbom_dir is not None:
         for path in sorted(sbom_dir.glob("*.json")):
             sboms.append({"file": path.name, "sha256": _sha256(path)})
         for image in listed:

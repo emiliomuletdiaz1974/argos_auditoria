@@ -1,10 +1,11 @@
 """Typed appliance configuration; a misconfigured service refuses to start (ARG-001)."""
 
+import ipaddress
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Self
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import parse_qs, quote, urlsplit, urlunsplit
 
 from pydantic import Field, SecretStr, ValidationError, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -33,7 +34,18 @@ class ApplianceSize(StrEnum):
     L = "L"
 
 
-_LOCAL_HOSTS = ("127.0.0.1", "localhost", "@localhost", "::1")
+def _is_local(host: str | None) -> bool:
+    """Whether a host is this machine: by its name or its address, not by a substring of the URL
+    (`pg.localhost-cluster.example` is not local; quality review QA-010)."""
+    if not host:
+        return True
+    name = host.lower().rstrip(".")
+    if name == "localhost" or name.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(name).is_loopback
+    except ValueError:
+        return False
 
 
 class ArgosConfig(BaseSettings):
@@ -129,8 +141,13 @@ class ArgosConfig(BaseSettings):
     def _production_rules(self) -> Self:
         if self.ENVIRONMENT is not Environment.PRODUCTION:
             return self
-        if any(h in self.DATABASE_URL for h in _LOCAL_HOSTS):
+        database = urlsplit(self.DATABASE_URL)
+        if _is_local(database.hostname):
             raise ValueError("production DATABASE_URL must not point to a local database")
+        # Credentials and verdicts cross this link: the server is verified, not only encrypted
+        # (quality review QA-010).
+        if parse_qs(database.query).get("sslmode") != ["verify-full"]:
+            raise ValueError("production DATABASE_URL must use sslmode=verify-full")
         path = self.WORM_STORAGE_PATH
         if not (PurePosixPath(path).is_absolute() or PureWindowsPath(path).is_absolute()):
             raise ValueError("WORM_STORAGE_PATH must be absolute in production")

@@ -1,6 +1,8 @@
 """Auditable migrator: numbered SQL, checksum and a journal entry per migration (ARG-005)."""
 
+import contextlib
 import hashlib
+import logging
 import re
 from pathlib import Path
 from typing import Any
@@ -10,6 +12,7 @@ import psycopg
 from .errors import IntegrityError
 from .journal import canonicalize
 
+_log = logging.getLogger(__name__)
 _NAME = re.compile(r"^(\d{4})_[a-z0-9_]+\.sql$")
 _LOCK = "SELECT pg_advisory_lock(hashtext('argos.migrations'))"
 _UNLOCK = "SELECT pg_advisory_unlock(hashtext('argos.migrations'))"
@@ -50,6 +53,13 @@ def apply_migrations(dsn: str, directory: Path) -> list[int]:
         try:
             already_applied = _applied(conn)
             conn.commit()
+            unknown = sorted(set(already_applied) - {version for version, _ in pending})
+            if unknown:
+                # The schema is newer than this code: said, so nobody runs old code on it unaware
+                # (quality review QA-014).
+                _log.warning(
+                    "the database has migrations that are not in %s: %s", directory, unknown
+                )
             for version, path in pending:
                 digest = checksum(path)
                 if version in already_applied:
@@ -74,8 +84,15 @@ def apply_migrations(dsn: str, directory: Path) -> list[int]:
                         ),
                     )
                 applied_now.append(version)
-        finally:
-            conn.rollback()
-            conn.execute(_UNLOCK)
-            conn.commit()
+        except BaseException:
+            # The cleanup of a broken connection must not hide why it broke (QA-014); closing it
+            # frees the lock anyway.
+            with contextlib.suppress(psycopg.Error):
+                conn.rollback()
+                conn.execute(_UNLOCK)
+                conn.commit()
+            raise
+        conn.rollback()
+        conn.execute(_UNLOCK)
+        conn.commit()
     return applied_now

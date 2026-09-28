@@ -66,7 +66,10 @@ def test_reads_env_file(tmp_path: Path) -> None:
 
 def _production(monkeypatch: pytest.MonkeyPatch, **extra: str) -> None:
     monkeypatch.setenv("ARGOS_ENVIRONMENT", "production")
-    monkeypatch.setenv("ARGOS_DATABASE_URL", "postgresql://svc_api@db.argos.internal:5432/argos")
+    monkeypatch.setenv(
+        "ARGOS_DATABASE_URL",
+        "postgresql://svc_api@db.argos.internal:5432/argos?sslmode=verify-full",
+    )
     monkeypatch.setenv("ARGOS_WORM_STORAGE_PATH", "/srv/argos/worm")
     monkeypatch.setenv("ARGOS_OIDC_ISSUER", "https://id.argos.internal/realms/argos")
     monkeypatch.setenv("ARGOS_VAULT_ADDR", "https://vault.argos.internal:8200")

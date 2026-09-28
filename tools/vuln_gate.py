@@ -84,7 +84,12 @@ def load_exceptions(path: Path) -> list[Exception_]:
 
 
 def _first_fix(fix: dict[str, Any]) -> dt.date | None:
-    dates = [dt.date.fromisoformat(a["date"]) for a in fix.get("available") or [] if a.get("date")]
+    # The day of the first sighting; grype may give it with its time (quality review QA-089).
+    dates = [
+        dt.date.fromisoformat(str(a["date"])[:10])
+        for a in fix.get("available") or []
+        if a.get("date")
+    ]
     return min(dates) if dates else None
 
 
