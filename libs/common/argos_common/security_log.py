@@ -69,14 +69,27 @@ class _Window:
     last: SecurityEvent | None = None
 
 
+def _start_timer(delay: float, action: Callable[[], None]) -> None:
+    timer = threading.Timer(delay, action)
+    timer.daemon = True
+    timer.start()
+
+
 @dataclass
 class Recorder:
-    """Folds bursts and hands the events to a sink (the database, or a list in the tests)."""
+    """Folds bursts and hands the events to a sink (the database, or a list in the tests).
+
+    The summary of a burst is written when its window ends, by a timer the first folded event
+    asks for; before, it waited for another event of the same key, and a short burst ending in
+    silence never reached the brute-force alert. Windows that ended leave memory then, or at the
+    next event, whichever comes first (quality review QA-002).
+    """
 
     sink: Callable[[SecurityEvent], None]
     clock: Callable[[], float] = time.monotonic
     per_window: int = PER_WINDOW
     window: float = WINDOW
+    timer: Callable[[float, Callable[[], None]], None] = _start_timer
     _windows: dict[tuple[str, str, str], _Window] = field(default_factory=dict)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -95,20 +108,21 @@ class Recorder:
         event = SecurityEvent(kind, actor, outcome, _checked_detail(detail), source)
         key = (kind, outcome, origin or actor)
         now = self.clock()
-        pending: list[SecurityEvent] = []
+        schedule = False
         with self._lock:
+            pending = self._expired(now)
             current = self._windows.get(key)
-            if current is not None and now - current.started >= self.window:
-                pending.extend(self._summary(current))
-                current = None
             if current is None:
                 current = self._windows[key] = _Window(started=now)
             write = current.written < self.per_window
             if write:
                 current.written += 1
             else:
+                schedule = current.suppressed == 0
                 current.suppressed += 1
                 current.last = event
+        if schedule:
+            self.timer(max(0.0, current.started + self.window - now), self.sweep)
         for summary in pending:
             self.sink(summary)
         if write:
@@ -126,6 +140,18 @@ class Recorder:
         }
         window.suppressed = 0
         return [SecurityEvent(last.kind, last.actor, last.outcome, detail, last.source)]
+
+    def _expired(self, now: float) -> list[SecurityEvent]:
+        """The summaries of the windows that ended, which leave memory. Under the lock."""
+        ended = [k for k, w in self._windows.items() if now - w.started >= self.window]
+        return [s for k in ended for s in self._summary(self._windows.pop(k))]
+
+    def sweep(self) -> None:
+        """Write the summaries of the windows that ended (the timer of each burst calls it)."""
+        with self._lock:
+            pending = self._expired(self.clock())
+        for summary in pending:
+            self.sink(summary)
 
     def flush(self) -> None:
         """Write the summaries still pending (on shutdown, and in the tests)."""

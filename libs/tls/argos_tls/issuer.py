@@ -24,6 +24,7 @@ from pathlib import Path
 
 import httpx
 from cryptography import x509
+from cryptography.hazmat.primitives import serialization
 
 from . import CA_FILE, CERT_FILE, KEY_FILE
 
@@ -64,6 +65,18 @@ def due(cert_file: Path, now: dt.datetime) -> bool:
         return True
     start, end = cert.not_valid_before_utc, cert.not_valid_after_utc
     return now >= start + (end - start) * RENEW_AT
+
+
+def paired(folder: Path) -> bool:
+    """Whether the key of the folder belongs to its certificate. A cut between the two writes
+    leaves them apart, and the service cannot start until they are issued again (QA-011)."""
+    try:
+        cert = x509.load_pem_x509_certificate((folder / CERT_FILE).read_bytes())
+        key = serialization.load_pem_private_key((folder / KEY_FILE).read_bytes(), password=None)
+    except (OSError, ValueError, TypeError):
+        return False
+    spki = serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    return bool(cert.public_key().public_bytes(*spki) == key.public_key().public_bytes(*spki))
 
 
 def _write(path: Path, data: str, mode: int) -> None:
@@ -137,22 +150,33 @@ def approle_token(addr: str, approle_dir: Path) -> Callable[[], str]:
 
 
 def renew(vault: Vault, root: Path, requests: list[Request], now: dt.datetime) -> list[str]:
-    """Issue what is due; the folders renewed."""
+    """Issue what is due; the folders renewed.
+
+    A service that cannot be issued is logged and the others go on: it stopped the renewal of
+    every service after it in the list (quality review QA-003).
+    """
     renewed = []
     current_root = vault.root()
     for request in requests:
         folder = root / request.folder
-        folder.mkdir(parents=True, exist_ok=True)
         try:
-            same_ca = current_root in (folder / CA_FILE).read_text(encoding="utf-8")
-        except OSError:
-            same_ca = False
-        if same_ca and not due(folder / CERT_FILE, now):
+            folder.mkdir(parents=True, exist_ok=True)
+            try:
+                same_ca = current_root in (folder / CA_FILE).read_text(encoding="utf-8")
+            except OSError:
+                same_ca = False
+            if same_ca and not due(folder / CERT_FILE, now) and paired(folder):
+                continue
+            cert, key, ca = vault.issue(request)
+            _write(folder / KEY_FILE, key, 0o600)
+            _write(folder / CERT_FILE, cert, 0o644)
+            _write(folder / CA_FILE, ca, 0o644)
+        except (httpx.HTTPError, OSError, KeyError) as exc:
+            logger.error(
+                "certificate not renewed",
+                extra={"service": request.folder, "error": type(exc).__name__},
+            )
             continue
-        cert, key, ca = vault.issue(request)
-        _write(folder / KEY_FILE, key, 0o600)
-        _write(folder / CERT_FILE, cert, 0o644)
-        _write(folder / CA_FILE, ca, 0o644)
         renewed.append(request.folder)
         logger.info("certificate issued", extra={"service": request.folder})
     return renewed

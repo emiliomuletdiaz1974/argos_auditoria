@@ -18,6 +18,14 @@ from datetime import UTC, datetime
 from typing import Any, TextIO
 
 OPTIONAL_FIELDS = ("journal_seq", "trace_id", "campaign_id")
+# What every LogRecord has: anything else on a record came in `extra`, and is context the call
+# wanted in the line (quality review QA-007: all but the three optional fields were dropped).
+_RECORD_FIELDS = frozenset(logging.LogRecord("", 0, "", 0, "", None, None).__dict__) | {
+    "message",
+    "asctime",
+    "taskName",
+    "component",
+}
 _MARKER = "_argos_handler"
 LOKI_URL_VARIABLE = "ARGOS_LOKI_URL"
 Sender = Callable[[dict[str, Any]], None]
@@ -44,6 +52,11 @@ class JsonFormatter(logging.Formatter):
             value = getattr(record, field, None)
             if value is not None:
                 entry[field] = value
+        for field, value in record.__dict__.items():
+            if field in _RECORD_FIELDS or field in OPTIONAL_FIELDS or field.startswith("_"):
+                continue
+            # A mandatory field is never overwritten by the call: its value keeps its own name.
+            entry[f"extra_{field}" if field in entry else field] = value
         if record.exc_info:
             entry["exception"] = self.formatException(record.exc_info)
         return json.dumps(entry, ensure_ascii=False, default=str)
