@@ -533,6 +533,11 @@ Formato: `tarea` — **qué decidimos** — por qué (y qué medimos, si consta)
 - `QA-28` — **con muestreo solo se deciden umbrales superiores** — una muestra acota los fallos por arriba; `>=` y `>` salen `inconclusive` con el motivo.
 - `QA-28` — **orden de los tests** — los puros y los cuatro de integración fallaron antes de corregir; el de la biblioteca se ajustó para cubrir `archive`, que estaba en otra función.
 
+- `QA-29` — **los intentos en línea no tocan lo exportado** — la cola ya guardaba `exported_at`. Descartamos guardar la petición entera para reutilizar su nonce: pedía una migración, y el constructor de peticiones solo genera nonces aleatorios. Una exportación nueva sigue sustituyendo a la anterior, como ya decía su test.
+- `QA-29` — **un plan vacío termina la campaña como fallida** — sellar una campaña sin nada verificado daba una evidencia imposible (no hay árbol de Merkle sin hojas). Sellar una campaña vacía sigue siendo posible como función, porque los tests de sellado y firma lo usan; lo que cambia es el workflow y la actividad de evidencia.
+- `QA-29` — **el verificador aislado lee el tamaño del sobre firmado** — la raíz no compromete el tamaño del árbol, así que el tamaño de la prueba no se puede creer. El comprobador público ya usaba `leaf_count` (SEC-039); el script autónomo pide ahora el sobre, y el test antiguo que decía lo contrario se renombró para decir lo que prueba.
+- `QA-29` — **orden de los tests** — todos fallaron antes de corregir. El del workflow sin unidades se quedaba colgado esperando la compuerta (el fallo mismo); lo paramos, lo dotamos de un plazo de 3 minutos y entonces falló.
+
 ### Fase 10
 - `F10-R` — **la autoverificación (ARG-100) va la primera** — el documento la pone al final. Adelantada, el resto de la fase se construye ya con la puerta de release activa, y cada tarea puede añadir su reto `self-*`.
 - `F10-R` — **una ruta `POST /api/v1/systems` nueva para los límites de talla** — hoy los sistemas se dan de alta con un script de desarrollo, y un límite que no tiene dónde aplicarse no limita nada.
