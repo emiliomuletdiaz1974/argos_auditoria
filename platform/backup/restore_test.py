@@ -131,19 +131,41 @@ class RestoreResult:
 # --------------------------------------------------------------------------- what is decided
 
 
-def compare_counts(production: Mapping[str, int], restored: Mapping[str, int]) -> list[str]:
+def compare_counts(
+    production: Mapping[str, int], restored: Mapping[str, int], exact: bool = False
+) -> list[str]:
     """A table of production missing from the copy, or empty there while production has rows.
 
     The copy is older than production, so fewer rows is normal; and tables that production empties
     on purpose (idempotency keys, queues) may have more rows in the copy. Neither is a problem.
+    With `exact`, the counts are the ones of the very snapshot the dump read, and any difference
+    is a copy that lost rows (quality review QA-086).
     """
     problems = []
     for table, rows in sorted(production.items()):
         if table not in restored:
             problems.append(f"{table} is missing from the copy")
+        elif exact and restored[table] != rows:
+            problems.append(
+                f"{table} has {restored[table]} rows in the copy and had {rows} in its dump"
+            )
         elif rows > 0 and restored[table] == 0:
             problems.append(f"{table} is empty in the copy and has {rows} rows in production")
     return problems
+
+
+def _recorded(folder: Path) -> dict[str, Any] | None:
+    path = folder / "staging" / "db" / "counts.json"
+    if not path.is_file():
+        return None
+    data: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
+    return data
+
+
+def exact_counts(folder: Path) -> bool:
+    """Whether the copy carries the counts of the snapshot its dump read."""
+    recorded = _recorded(folder)
+    return recorded is not None and "snapshot" in recorded and "tables" in recorded
 
 
 def baseline_counts(folder: Path, current: Mapping[str, int]) -> dict[str, int]:
@@ -153,10 +175,11 @@ def baseline_counts(folder: Path, current: Mapping[str, int]) -> dict[str, int]:
     is not a broken copy (seen in F09-99, a copy older than migration 0039). A copy without its
     counts, made before they were recorded, is compared with production as it is now.
     """
-    recorded = folder / "staging" / "db" / "counts.json"
-    if recorded.is_file():
-        return {str(k): int(v) for k, v in json.loads(recorded.read_text(encoding="utf-8")).items()}
-    return dict(current)
+    recorded = _recorded(folder)
+    if recorded is None:
+        return dict(current)
+    tables = recorded["tables"] if exact_counts(folder) else recorded
+    return {str(k): int(v) for k, v in tables.items()}
 
 
 def _entry(row: Mapping[str, Any], action_key: str) -> JournalEntry:
@@ -305,7 +328,7 @@ def _verify(
         }
         for table in sorted(set(current) | set(restored) | set(baseline))
     }
-    result.reasons += compare_counts(baseline, restored)
+    result.reasons += compare_counts(baseline, restored, exact=exact_counts(folder))
 
     # A different sample in each copy, chosen by the id of the snapshot. `psql -c` takes no
     # parameters: the id is checked to be hexadecimal before it goes into the query.
@@ -380,17 +403,34 @@ def restore_test(
 # --------------------------------------------------------------------------- production side
 
 
+def _counted(conn: psycopg.Connection[Any]) -> dict[str, int]:
+    row = conn.execute(COUNTS_SQL).fetchone()
+    graph = conn.execute(GRAPH_SQL).fetchone()
+    counts = {k: int(v) for k, v in (row[0] if row else {}).items()}
+    counts["graph:inventory"] = int(graph[0]) if graph and graph[0] is not None else 0
+    return counts
+
+
 class PostgresProduction:
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn
 
     def counts(self) -> dict[str, int]:
         with psycopg.connect(self._dsn) as conn:
-            row = conn.execute(COUNTS_SQL).fetchone()
-            graph = conn.execute(GRAPH_SQL).fetchone()
-        counts = {k: int(v) for k, v in (row[0] if row else {}).items()}
-        counts["graph:inventory"] = int(graph[0]) if graph and graph[0] is not None else 0
-        return counts
+            return _counted(conn)
+
+    @contextmanager
+    def snapshot(self) -> Iterator[tuple[str, dict[str, int]]]:
+        """A transaction that exports its snapshot and counts in it, open while the dump reads
+        the same snapshot (QA-086)."""
+        with psycopg.connect(self._dsn) as conn:
+            conn.isolation_level = psycopg.IsolationLevel.REPEATABLE_READ
+            conn.read_only = True
+            row = conn.execute("SELECT pg_export_snapshot()").fetchone()
+            if row is None:
+                raise RuntimeError("the database did not export its snapshot")
+            yield str(row[0]), _counted(conn)
+            conn.rollback()
 
     def journal_hash(self, seq: int) -> bytes | None:
         with psycopg.connect(self._dsn) as conn:

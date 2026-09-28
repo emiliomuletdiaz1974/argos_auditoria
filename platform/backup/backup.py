@@ -23,6 +23,7 @@ import json
 import os
 import sys
 from collections.abc import Callable
+from contextlib import AbstractContextManager
 from pathlib import Path
 from typing import Any
 
@@ -37,18 +38,30 @@ COMPOSE = REPO / "deploy" / "dev" / "compose.yaml"
 EVIDENCE_VOLUME = "argos-dev_evidence-data"
 # Verified TLS inside the container too: the internal CA it already has (F09-06).
 _CONNECT = "host=127.0.0.1 dbname=argos user=$0 sslmode=verify-full sslrootcert=/run/tls/ca.crt"
-_DUMP = f'PGPASSWORD="$(cat)"; export PGPASSWORD; exec pg_dump -Fc "{_CONNECT}"'
+# `$1`, when given, is the snapshot exported by the transaction that counted the rows.
+_DUMP = (
+    f'PGPASSWORD="$(cat)"; export PGPASSWORD; exec pg_dump -Fc ${{1:+--snapshot="$1"}} "{_CONNECT}"'
+)
 _ROLES = (
     'PGPASSWORD="$(cat)"; export PGPASSWORD; '
     f'exec pg_dumpall --roles-only --no-role-passwords -d "{_CONNECT}"'
 )
 
 
-def dump_database(run: common.Runner, compose: Path, user: str, password: str, into: Path) -> None:
-    """The dump and the roles, from inside the PostgreSQL container: the password goes on stdin."""
+def dump_database(
+    run: common.Runner,
+    compose: Path,
+    user: str,
+    password: str,
+    into: Path,
+    snapshot_id: str | None = None,
+) -> None:
+    """The dump and the roles, from inside the PostgreSQL container: the password goes on stdin.
+    With `snapshot_id`, the dump reads the database as that exported snapshot sees it."""
     into.mkdir(parents=True, exist_ok=True)
     base = ["docker", "compose", "-f", str(compose), "exec", "-T", "postgres", "sh", "-c"]
-    (into / "argos.dump").write_bytes(run([*base, _DUMP, user], password.encode()))
+    extra = [snapshot_id] if snapshot_id else []
+    (into / "argos.dump").write_bytes(run([*base, _DUMP, user, *extra], password.encode()))
     (into / "roles.sql").write_bytes(run([*base, _ROLES, user], password.encode()))
 
 
@@ -70,20 +83,26 @@ def backup(
     evidence_volume: str,
     user: str,
     password: str,
-    counts: Callable[[], dict[str, int]] | None = None,
+    snapshot: Callable[[], AbstractContextManager[tuple[str, dict[str, int]]]] | None = None,
 ) -> dict[str, str]:
     """The three sets; returns the snapshot of each.
 
-    `counts` gives the rows of every table at the moment of the dump: the restore test compares
-    the copy with them, not with production as it is later.
+    `snapshot` opens a transaction that exports its snapshot and counts the rows of every table in
+    it; the dump reads that same snapshot, so the restore test compares the copy with exactly what
+    it holds. Counted after the dump, rows written in between gave a false critical alert (quality
+    review QA-086).
     """
     restic.ensure()
     snapshots: dict[str, str] = {}
     with workspace() as staging:
-        dump_database(run, compose, user, password, staging / "db")
-        if counts is not None:
+        if snapshot is None:
+            dump_database(run, compose, user, password, staging / "db")
+        else:
+            with snapshot() as (snapshot_id, counted):
+                dump_database(run, compose, user, password, staging / "db", snapshot_id)
             (staging / "db" / "counts.json").write_text(
-                json.dumps(counts(), sort_keys=True), encoding="utf-8"
+                json.dumps({"snapshot": snapshot_id, "tables": counted}, sort_keys=True),
+                encoding="utf-8",
             )
         snapshots["db"] = restic.backup(["/staging/db"], "db", [(str(staging), "/staging", True)])
         snapshots["evidence"] = restic.backup(
@@ -133,7 +152,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.evidence_volume,
                 user,
                 password,
-                PostgresProduction(dsn).counts,
+                PostgresProduction(dsn).snapshot,
             )
         record(dsn, snapshots, "succeeded")
     except Exception as failure:

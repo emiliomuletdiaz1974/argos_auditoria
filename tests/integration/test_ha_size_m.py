@@ -133,7 +133,8 @@ def test_with_the_primary_down_the_replica_is_promoted_and_the_old_one_rejoins(p
     # The old primary comes back as a replica of the new one.
     code = rejoin.main(
         ["--node", "ha-node-a", "--node-dsn", NODE_A, "--primary", "ha-node-b",
-         "--primary-dsn", NODE_B, "--compose-file", str(REPO / "deploy" / "dev" / "compose.yaml")]
+         "--primary-dsn", NODE_B, "--compose-file", str(REPO / "deploy" / "dev" / "compose.yaml"),
+         "--confirm"]
     )  # fmt: skip
     assert code == 0
     assert _in_recovery(NODE_A) is True

@@ -7,9 +7,13 @@ it, and only when the checks pass, it promotes the replica. There is no automati
 size M: two primaries writing evidence would be two truths, worse than ten minutes of downtime.
 
 1. The primary must not answer. If it does, the script aborts: promoting would split the brain.
+   An answer that refuses us (a password, a database that is not there) is an answer: only a
+   primary that cannot be reached counts as down (quality review QA-080).
 2. The replica must be a standby. Its replay lag is shown; beyond --max-lag it warns that the last
-   transactions of the primary may be lost.
-3. It promotes the replica and waits for the promotion.
+   transactions of the primary may be lost. A replica that never replayed anything has an unknown
+   lag, said as such, not zero.
+3. It promotes the replica and waits for the promotion; a promotion that did not happen in time
+   stops the failover.
 4. It verifies the journal on the promoted node before anything else writes to it. A journal that
    does not verify stops the failover here: RB-01.
 5. It records `ha.failover` in the journal, with the node and the lag accepted.
@@ -30,24 +34,28 @@ TIMEOUT = 3
 
 
 def answers(dsn: str) -> bool:
+    """Whether the server answers. A refusal of the server itself (it carries a SQLSTATE: a
+    password, a missing database) is an answer; only a server that cannot be reached is not."""
     try:
         with psycopg.connect(dsn, connect_timeout=TIMEOUT) as conn:
             conn.execute("SELECT 1")
-    except psycopg.OperationalError:
-        return False
+    except psycopg.OperationalError as failure:
+        return failure.sqlstate is not None
     return True
 
 
-def standby_lag(dsn: str) -> tuple[bool, int]:
-    """Whether the node is a standby, and its replay lag in whole seconds."""
+def standby_lag(dsn: str) -> tuple[bool, int | None]:
+    """Whether the node is a standby, and its replay lag in whole seconds; None when it never
+    replayed a transaction, which is not a lag of zero."""
     with psycopg.connect(dsn, connect_timeout=TIMEOUT) as conn:
         row = conn.execute(
             "SELECT pg_is_in_recovery(),"
-            " coalesce(extract(epoch FROM now() - pg_last_xact_replay_timestamp()), 0)"
+            " extract(epoch FROM now() - pg_last_xact_replay_timestamp())"
         ).fetchone()
     if row is None:
         raise RuntimeError("the replica did not answer its state")
-    return bool(row[0]), int(round(float(row[1])))
+    lag = None if row[1] is None else int(round(float(row[1])))
+    return bool(row[0]), lag
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -70,16 +78,22 @@ def main(argv: list[str] | None = None) -> int:
     if not standby:
         print("ERROR: the replica is not a standby: it is already a primary.")
         return 2
-    print(f"      replay lag: {lag} s")
-    if lag > args.max_lag:
-        print(f"WARNING: lag above {args.max_lag} s: the last transactions may be lost.")
+    if lag is None:
+        print("WARNING: the replica never replayed a transaction: its lag is unknown.")
+    else:
+        print(f"      replay lag: {lag} s")
+        if lag > args.max_lag:
+            print(f"WARNING: lag above {args.max_lag} s: the last transactions may be lost.")
     if not args.confirm:
         print("Drill OK: nothing was changed. Run it again with --confirm to promote.")
         return 0
 
     print("[3/5] promoting the replica")
     with psycopg.connect(args.replica_dsn, autocommit=True) as conn:
-        conn.execute("SELECT pg_promote(true, 60)")
+        promoted = conn.execute("SELECT pg_promote(true, 60)").fetchone()
+    if not promoted or not promoted[0]:
+        print("ERROR: the replica was not promoted within 60 s. Nothing else was done: RB-07.")
+        return 3
     print("[4/5] verifying the journal on the promoted node")
     journal = PostgresJournal(args.replica_dsn)
     if not journal.verify().intact:
@@ -87,7 +101,8 @@ def main(argv: list[str] | None = None) -> int:
         return 3
     print("[5/5] recording the failover")
     host = urlparse(args.replica_dsn).hostname or "replica"
-    seq = journal.append(ACTOR, "ha.failover", {"promoted": host, "lag_seconds": lag})
+    accepted = "unknown" if lag is None else lag
+    seq = journal.append(ACTOR, "ha.failover", {"promoted": host, "lag_seconds": accepted})
     print(f"FAILOVER DONE (journal entry {seq}). Point the clients at the promoted node.")
     print("The old primary must not start its services: bring it back with rejoin.py.")
     return 0

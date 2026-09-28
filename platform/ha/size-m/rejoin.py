@@ -1,7 +1,10 @@
 """ARG-095 · bring an old primary back as a replica of the new one (F10-09, RB-07).
 
     python platform/ha/size-m/rejoin.py --node ha-node-a --node-dsn <dsn>
-        --primary ha-node-b --primary-dsn <dsn> --compose-file deploy/dev/compose.yaml
+        --primary ha-node-b --primary-dsn <dsn> --compose-file deploy/dev/compose.yaml [--confirm]
+
+Without --confirm it is a drill: it checks and says what it would empty, and changes nothing. The
+data of the node is deleted only with it (quality review QA-080).
 
 After a failover the old primary has transactions the new one never saw, and it must never start
 as a primary again. This clones it again from the new primary: its data is emptied and it starts
@@ -70,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--primary", required=True, help="the new primary, as the node reaches it")
     parser.add_argument("--primary-dsn", required=True)
     parser.add_argument("--compose-file", required=True)
+    parser.add_argument("--confirm", action="store_true", help="empty and clone; else a drill")
     args = parser.parse_args(argv)
 
     print("[1/4] the new primary must be a primary")
@@ -80,6 +84,12 @@ def main(argv: list[str] | None = None) -> int:
     if role_of(args.node_dsn) == "primary":
         print("ERROR: the old primary still runs as a primary. Stop it first: two primaries.")
         return 1
+    if not args.confirm:
+        print(
+            f"Drill OK: nothing was changed. With --confirm the data of {args.node} is deleted "
+            f"and cloned again from {args.primary}."
+        )
+        return 0
     print("[3/4] cloning the node again from the new primary")
     ComposeNodes(args.compose_file).reclone(args.node, args.primary)
     deadline = time.monotonic() + WAIT_SECONDS
