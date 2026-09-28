@@ -10,10 +10,18 @@ PATTERNS = ("ontology/**/*.ttl", "policies/**/*.rego", "challenges/**/*.yaml")
 
 
 def library_files(library_dir: Path = LIBRARY_DIR) -> list[Path]:
-    found: list[Path] = []
+    """The files of the library in the order of their POSIX paths, on every operating system.
+
+    `Path` orders case-insensitively on Windows and the glob there ignores case too: the hash in
+    the seal of a campaign must be the one anybody recomputes on Linux (QA-036).
+    """
+    found: set[Path] = set()
     for pattern in PATTERNS:
-        found.extend(path for path in library_dir.glob(pattern) if path.is_file())
-    return sorted(set(found))
+        suffix = pattern.rsplit("*", 1)[1]
+        found.update(
+            p for p in library_dir.glob(pattern) if p.is_file() and p.name.endswith(suffix)
+        )
+    return sorted(found, key=lambda p: p.relative_to(library_dir).as_posix())
 
 
 def library_fingerprint(library_dir: Path = LIBRARY_DIR) -> tuple[str, str]:

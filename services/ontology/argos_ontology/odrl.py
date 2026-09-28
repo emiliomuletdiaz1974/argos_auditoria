@@ -16,6 +16,9 @@ SUPPORTED_DUTIES = frozenset({"delete", "notify"})
 RULE_KINDS = (("permission", "permission"), ("prohibition", "prohibition"), ("obligation", "duty"))
 REDISTRIBUTION_ACTIONS = frozenset({"distribute", "share"})
 TEMPLATES = ("ds-asset-retention", "ds-usage-purpose", "ds-no-redistribution", "ds-unverifiable")
+# The operators whose meaning the templates keep: an allowed purpose, a maximum term (QA-037).
+PURPOSE_OPERATORS = frozenset({"eq", "isA", "isAnyOf", "isPartOf"})
+TERM_OPERATORS = frozenset({"lt", "lteq", "eq"})
 
 ISO_DURATION = re.compile(r"P(?:(\d+)Y)?(?:(\d+)M)?(?:(\d+)D)?")
 _LOCAL_NAME = re.compile(r"[^:/#]+$")
@@ -159,22 +162,37 @@ def _spec(
 def to_challenges(policy: Policy) -> list[dict[str, Any]]:
     """Challenge specifications for phase 05, in rule order; the unverifiable finding goes last."""
     out: list[dict[str, Any]] = []
+    # What is read but not verified goes to the unverifiable finding: never a challenge that
+    # checks the opposite (a purpose `neq`, a minimum term) and never silence (QA-037).
+    untranslated: list[str] = []
     for rule in policy.rules:
         if rule.kind == "permission":
-            purposes = [c.right for c in rule.constraints if c.left == "purpose"]
+            purposes = []
+            for c in rule.constraints:
+                if c.left == "purpose" and c.operator in PURPOSE_OPERATORS:
+                    purposes.append(c.right)
+                else:
+                    untranslated.append(f"permission:constraint:{c.left}:{c.operator}")
             if purposes:
                 out.append(_spec(policy, "ds-usage-purpose", {"allowed_purposes": purposes}))
-        elif rule.kind == "prohibition" and rule.action in REDISTRIBUTION_ACTIONS:
-            out.append(_spec(policy, "ds-no-redistribution", {}))
+        elif rule.kind == "prohibition":
+            if rule.action in REDISTRIBUTION_ACTIONS:
+                out.append(_spec(policy, "ds-no-redistribution", {}))
+            else:
+                untranslated.append(f"prohibition:action:{rule.action}")
         elif rule.kind == "duty" and rule.action == "delete":
-            terms = [duration_days(c.right) for c in rule.constraints if c.left == "elapsedTime"]
-            days = [term for term in terms if term is not None]
+            days = []
+            for c in rule.constraints:
+                term = duration_days(c.right) if c.left == "elapsedTime" else None
+                if term is not None and c.operator in TERM_OPERATORS:
+                    days.append(term)
+                else:
+                    untranslated.append(f"obligation:constraint:{c.left}:{c.operator}")
             if days:
                 out.append(_spec(policy, "ds-asset-retention", {"max_days": min(days)}))
-    if policy.unsupported:
-        out.append(
-            _spec(
-                policy, "ds-unverifiable", {"clauses": list(policy.unsupported)}, finding_only=True
-            )
-        )
+        elif rule.kind == "duty":
+            untranslated.append(f"obligation:action:{rule.action}")
+    clauses = [*policy.unsupported, *untranslated]
+    if clauses:
+        out.append(_spec(policy, "ds-unverifiable", {"clauses": clauses}, finding_only=True))
     return out

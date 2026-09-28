@@ -374,7 +374,7 @@
                 "type": "null"
               }
             ],
-            "description": "only when correcting",
+            "description": "when correcting, the category the column holds; when accepting, the proposed category the reviewer saw, so a proposal changed meanwhile is not accepted",
             "title": "Category"
           },
           "decision": {

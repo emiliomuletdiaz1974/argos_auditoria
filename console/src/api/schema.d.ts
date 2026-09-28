@@ -1074,7 +1074,7 @@ export interface components {
         ReviewDecision: {
             /**
              * Category
-             * @description only when correcting
+             * @description when correcting, the category the column holds; when accepting, the proposed category the reviewer saw, so a proposal changed meanwhile is not accepted
              */
             category?: string | null;
             /**

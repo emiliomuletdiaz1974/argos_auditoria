@@ -17,6 +17,8 @@ EXPECTED = {
     "AC-stored-personal-data",
     "AC-stored-identifier-data",
     "AC-stored-contact-data",
+    "AC-stored-location-data",
+    "AC-stored-technical-credential",
     "AC-stored-financial-data",
     "AC-stored-health-data",
     "AC-stored-special-category-data",
@@ -66,6 +68,8 @@ def test_categories_are_the_graph_ones_never_spanish() -> None:
                 "personal_data",
                 "official_identifier",
                 "contact_data",
+                "location_data",
+                "technical_credential",
                 "financial_data",
                 "special_category",
             }

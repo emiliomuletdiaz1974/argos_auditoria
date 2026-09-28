@@ -92,8 +92,10 @@ describe("ReviewQueue", () => {
     expect(sent[0]).toMatchObject({
       method: "POST",
       path: "/api/v1/inventory/review-queue/col%3Ahis%3Anotes%3Aobs_txt",
-      body: { decision: "accept" },
     });
+    // QA-041: the category the person saw travels with the decision, so a proposal that changed
+    // meanwhile is not accepted blind.
+    expect(sent[0]?.body).toEqual({ decision: "accept", category: QUEUE.items[0]!.proposed_category });
   });
 
   it("corrects it to another category, which also teaches the calibration", async () => {

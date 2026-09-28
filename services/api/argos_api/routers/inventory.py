@@ -16,7 +16,7 @@ from argos_api.http import caller, database
 from argos_api.paging import Page, Paging, paginate
 from argos_inventory.catalog.views import coverage as catalog_coverage
 from argos_inventory.catalog.views import freshness, pending_review_by_system
-from argos_inventory.classify.assisted import decide_review, pending_reviews
+from argos_inventory.classify.assisted import PROPOSAL_CHANGED, decide_review, pending_reviews
 from argos_inventory.graph.model import CATEGORIES
 from argos_inventory.graph.reads import node_detail
 from argos_inventory.graph.store import GraphStore
@@ -36,7 +36,13 @@ class ReviewDecision(BaseModel):
             "correct rejects the proposal and classifies the column as `category`"
         )
     )
-    category: str | None = Field(default=None, description="only when correcting")
+    category: str | None = Field(
+        default=None,
+        description=(
+            "when correcting, the category the column holds; when accepting, the proposed "
+            "category the reviewer saw, so a proposal changed meanwhile is not accepted"
+        ),
+    )
     note: str = Field(default="", max_length=2000)
 
     @model_validator(mode="after")
@@ -121,11 +127,12 @@ def review(request: Request, node_key: str, body: ReviewDecision) -> dict[str, A
             body.decision == "accept",
             caller(request).actor,
             corrected_to=body.category if body.decision == "correct" else None,
+            expected_category=body.category if body.decision == "accept" else None,
         )
     except LookupError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"no review for {node_key}") from None
     except ValueError as clash:
-        if ALREADY_DECIDED in str(clash):
+        if ALREADY_DECIDED in str(clash) or PROPOSAL_CHANGED in str(clash):
             raise HTTPException(status.HTTP_409_CONFLICT, str(clash)) from None
         raise
     answer: dict[str, Any] = {"node_key": node_key, "status": decided}

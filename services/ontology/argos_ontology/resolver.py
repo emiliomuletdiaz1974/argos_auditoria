@@ -131,8 +131,16 @@ def _selector_json(raw: object) -> dict[str, Any] | None:
 
 
 def _date(value: object) -> date | None:
+    """The date of a literal; nothing when there is none. A value that is not a date is an error:
+    reading it as «no date» made the obligation apply for ever (QA-038)."""
+    if value is None:
+        return None
     python = value.toPython() if hasattr(value, "toPython") else value
-    return python if isinstance(python, date) else None
+    if isinstance(python, datetime):
+        return python.date()
+    if isinstance(python, date):
+        return python
+    raise ValueError(f"not a date: {value!r}")
 
 
 def in_force(at: date | None, start: object, end: object) -> bool:

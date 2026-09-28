@@ -89,6 +89,11 @@ def jaccard(a: set[str] | frozenset[str], b: set[str] | frozenset[str]) -> float
     return round(len(a & b) / len(union), 4) if union else 0.0
 
 
+def signature_category(pair: str) -> str:
+    """The category of a `column|category` signature: a column name may itself hold a `|`."""
+    return pair.rsplit("|", 1)[1]
+
+
 def structural_candidates(
     signatures: Mapping[tuple[str, str], frozenset[str]],
 ) -> list[tuple[tuple[str, str], tuple[str, str], float]]:
@@ -102,7 +107,7 @@ def structural_candidates(
         if len(signature) < STRUCTURAL_MIN_PAIRS:
             continue
         for pair in signature:
-            category = pair.split("|", 1)[1]
+            category = signature_category(pair)
             if category.startswith("special_category."):
                 blocks.setdefault(category, []).append(table)
     seen: set[tuple[tuple[str, str], tuple[str, str]]] = set()
@@ -115,7 +120,9 @@ def structural_candidates(
             score = jaccard(signatures[a], signatures[b])
             if score >= STRUCTURAL_MIN_JACCARD:
                 candidates.append((a, b, score))
-    return candidates
+    # The best candidate first, and ties in a fixed order: which pair of tables stands for a flow
+    # must not depend on the order the graph returned its rows in (QA-042).
+    return sorted(candidates, key=lambda c: (-c[2], c[0], c[1]))
 
 
 def resolve_target(dsn: str, host: str | None, link_name: str) -> FlowTarget:

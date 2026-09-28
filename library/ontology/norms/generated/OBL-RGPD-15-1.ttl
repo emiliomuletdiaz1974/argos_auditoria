@@ -9,6 +9,7 @@ n:OBL-RGPD-15-1 a argos:Obligation ;
     argos:appliesTo n:AC-stored-contact-data,
         n:AC-stored-financial-data,
         n:AC-stored-identifier-data,
+        n:AC-stored-location-data,
         n:AC-stored-personal-data,
         n:AC-stored-special-category-data ;
     argos:derivesFrom n:RGPD-15 ;

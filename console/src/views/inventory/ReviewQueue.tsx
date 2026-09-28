@@ -19,7 +19,10 @@ interface Queue {
   next: string | null;
 }
 
-type Decision = { decision: "accept" } | { decision: "reject" } | { decision: "correct"; category: string };
+type Decision =
+  | { decision: "accept"; category: string }
+  | { decision: "reject" }
+  | { decision: "correct"; category: string };
 
 function Row({ item, onDecided }: { item: Pending; onDecided: () => void }) {
   const api = useApi();
@@ -53,7 +56,7 @@ function Row({ item, onDecided }: { item: Pending; onDecided: () => void }) {
         </p>
       </div>
       <div className="review-actions">
-        <button type="button" className="btn-primary" disabled={busy} onClick={() => void decide({ decision: "accept" })}>
+        <button type="button" className="btn-primary" disabled={busy} onClick={() => void decide({ decision: "accept", category: item.proposed_category })}>
           Confirmar
         </button>
         <label htmlFor={selectId}>Corregir a</label>

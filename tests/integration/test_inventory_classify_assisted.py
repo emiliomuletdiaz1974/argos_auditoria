@@ -182,3 +182,29 @@ def test_unknown_reviews_are_reported(migrated_db: str) -> None:
     _, store = _graph(migrated_db)
     with pytest.raises(LookupError):
         decide_review(store, migrated_db, "missing-key", True, REVIEWER)
+
+
+def test_a_rejected_column_is_not_classified_by_a_confident_model_afterwards(
+    migrated_db: str,
+) -> None:
+    """QA-041: what a person rejected, the model does not settle on its own later."""
+    system_id, store = _graph(migrated_db)
+    classify_grey_zone(store, migrated_db, FakeModel(ANSWERS), system_id)
+    key = _key(system_id, "obs_txt")
+    decide_review(store, migrated_db, key, False, REVIEWER)
+    confident = FakeModel({"obs_txt": ("contact_data", 0.99)})
+    classify_grey_zone(store, migrated_db, confident, system_id)
+    assert _edge(store, key) == []
+
+
+def test_accepting_a_proposal_that_changed_meanwhile_is_refused(migrated_db: str) -> None:
+    """QA-041: the category the person saw is the one accepted, or nothing is."""
+    system_id, store = _graph(migrated_db)
+    classify_grey_zone(store, migrated_db, FakeModel(ANSWERS), system_id)
+    key = _key(system_id, "obs_txt")
+    classify_grey_zone(store, migrated_db, FakeModel({"obs_txt": ("contact_data", 0.6)}), system_id)
+    with pytest.raises(ValueError, match="changed"):
+        decide_review(
+            store, migrated_db, key, True, REVIEWER, expected_category="special_category.health"
+        )
+    assert _edge(store, key) == []

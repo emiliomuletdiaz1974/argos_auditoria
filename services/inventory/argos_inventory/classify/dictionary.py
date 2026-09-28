@@ -5,6 +5,7 @@ column name, never as substrings: "lat" must not match "translation".
 """
 
 import re
+import unicodedata
 from collections.abc import Mapping
 
 NAME_DICTIONARY: Mapping[str, tuple[tuple[str, ...], ...]] = {
@@ -135,17 +136,40 @@ CLINICAL_INFERENCE_TABLES: tuple[tuple[str, ...], ...] = (
 )
 TABLE_CONTEXT_METHOD = "dict:table"
 _CAMEL = re.compile(r"([a-z0-9])([A-Z])")
+_ACRONYM = re.compile(r"([A-Z]+)([A-Z][a-z])")  # DNIPaciente -> DNI_Paciente
 _SEPARATORS = re.compile(r"[^a-z0-9]+")
 
 
+def _ascii(name: str) -> str:
+    """Accents and ñ folded to ASCII: `teléfono`, `teléfono` (NFD) and `telefono` are one name."""
+    decomposed = unicodedata.normalize("NFKD", name)
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
 def name_tokens(name: str) -> tuple[str, ...]:
-    spaced = _CAMEL.sub(r"\1_\2", name.strip())
+    spaced = _CAMEL.sub(r"\1_\2", _ACRONYM.sub(r"\1_\2", _ascii(name.strip())))
     return tuple(token for token in _SEPARATORS.split(spaced.lower()) if token)
+
+
+def _forms(token: str) -> frozenset[str]:
+    """A token and its singular: `emails` is read as `email`, `keys` as `key` (QA-034)."""
+    forms = {token}
+    if len(token) > 3 and token.endswith("es"):
+        forms.add(token[:-2])
+    if len(token) > 3 and token.endswith("s"):
+        forms.add(token[:-1])
+    return frozenset(forms)
 
 
 def _contains(tokens: tuple[str, ...], sequence: tuple[str, ...]) -> bool:
     size = len(sequence)
-    return any(tokens[i : i + size] == sequence for i in range(len(tokens) - size + 1))
+    return any(
+        all(
+            expected in _forms(token)
+            for token, expected in zip(tokens[i : i + size], sequence, strict=True)
+        )
+        for i in range(len(tokens) - size + 1)
+    )
 
 
 def match_column_name(name: str) -> str | None:

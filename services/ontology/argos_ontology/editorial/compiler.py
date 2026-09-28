@@ -7,7 +7,7 @@ the same template always yields the same bytes: diffs between releases stay read
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +76,8 @@ def parse_obligation(document: Mapping[str, Any]) -> ObligationSpec:
     if severity not in SEVERITIES:
         raise ValueError(f"invalid severity: {severity!r}")
     raw_date = document["in_force_from"]
+    if isinstance(raw_date, datetime):  # YAML reads 2018-05-25T10:00:00 as a datetime (QA-038)
+        raise ValueError(f"invalid in_force_from date: {raw_date!r} carries a time")
     try:
         in_force = raw_date if isinstance(raw_date, date) else date.fromisoformat(str(raw_date))
     except ValueError:

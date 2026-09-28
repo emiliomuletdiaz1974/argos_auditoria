@@ -66,6 +66,11 @@ _QUEUE_UPSERT = (
     "prompt_hash = EXCLUDED.prompt_hash, proposed_at = EXCLUDED.proposed_at "
     "WHERE argos.review_queue.status = 'pending'"
 )
+PROPOSAL_CHANGED = "the proposal changed since it was shown"
+_REJECTED_KEYS = (
+    "SELECT node_key FROM argos.review_queue WHERE system_id = %s AND status = 'rejected'"
+)
+# A column a person rejected keeps that decision: a new proposal of the model is ignored.
 _REVIEW_FOR_UPDATE = (
     "SELECT proposed_category, status FROM argos.review_queue WHERE node_key = %s FOR UPDATE"
 )
@@ -199,6 +204,7 @@ def triage(
     proposals: Sequence[Proposal],
     batch_keys: frozenset[str],
     hinted: frozenset[str] = frozenset(),
+    rejected: frozenset[str] = frozenset(),
 ) -> Triage:
     accepted: list[Proposal] = []
     review: list[Proposal] = []
@@ -220,13 +226,16 @@ def triage(
         # the column names that lead to it come from the client's system: a person confirms it.
         # And a column whose context says special category is not downgraded without a person.
         downgraded = proposal.key in hinted and not _special(proposal.category)
+        # What a person rejected, the model does not settle on its own afterwards (QA-041).
+        overruled = proposal.key in rejected
         if (
             proposal.confidence >= ACCEPT
             and proposal.category not in NEEDS_REVIEW
             and not downgraded
+            and not overruled
         ):
             accepted.append(proposal)
-        elif proposal.confidence >= REVIEW:
+        elif proposal.confidence >= REVIEW and not overruled:
             review.append(proposal)
         else:
             ignored.append(proposal)
@@ -262,10 +271,14 @@ def classify_grey_zone(
     moment = now().astimezone(UTC)
     at = moment.isoformat()
     columns = grey_zone_columns(store, system_id)
+    with psycopg.connect(dsn) as conn:
+        rejected = frozenset(
+            str(row[0]) for row in conn.execute(_REJECTED_KEYS, (system_id,)).fetchall()
+        )
     accepted = queued = ignored = invalid = 0
     for batch in table_batches(columns, batch_size):
         by_key = {c.key: c for c in batch}
-        result = triage(model.propose(batch), frozenset(by_key), special_hints(batch))
+        result = triage(model.propose(batch), frozenset(by_key), special_hints(batch), rejected)
         batch_hash = prompt_hash(batch)
         for proposal in result.accepted:
             params = {
@@ -308,6 +321,7 @@ def decide_review(
     reviewer: str,
     now: Callable[[], datetime] = _utc_now,
     corrected_to: str | None = None,
+    expected_category: str | None = None,
 ) -> str:
     """Accept or reject what the model proposed; rejecting may also say what the column is.
 
@@ -329,6 +343,11 @@ def decide_review(
         category, current = str(row[0]), str(row[1])
         if current != "pending":
             raise ValueError(f"review already decided: {current}")
+        if expected_category is not None and expected_category != category:
+            # Another pass changed the proposal while the person was reading it (QA-041).
+            raise ValueError(
+                f"{PROPOSAL_CHANGED}: it is now {category!r}, not {expected_category!r}"
+            )
         status = "accepted" if accepted else "rejected"
         conn.execute(_REVIEW_DECIDE, (status, moment, reviewer, node_key))
         if accepted or corrected_to is not None:

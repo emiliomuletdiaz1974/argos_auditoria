@@ -10,6 +10,7 @@ aplica_a:
   - AC-stored-personal-data
   - AC-stored-identifier-data
   - AC-stored-contact-data
+  - AC-stored-location-data
   - AC-stored-financial-data
   - AC-stored-special-category-data
 verificado_por:

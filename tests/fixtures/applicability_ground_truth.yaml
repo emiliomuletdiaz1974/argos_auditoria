@@ -47,6 +47,9 @@ asset_classes:
     - dev-source-postgres clinic.readmission_risk.predicted_at
     - dev-source-postgres clinic.staff_affiliations.joined_on
     - dev-source-postgres clinic.staff_affiliations.staff_id
+  # QA-27 (QA-035): the demo holds no location data nor technical credentials.
+  AC-stored-location-data: []
+  AC-stored-technical-credential: []
   # Confirmed by the synthetic DPO (demo_review.yaml, F04-23).
   AC-pending-ai-system: []
   AC-confirmed-ai-system:
@@ -58,6 +61,7 @@ asset_classes:
   - AC-stored-personal-data
   - AC-stored-identifier-data
   - AC-stored-contact-data
+  - AC-stored-location-data
   - AC-stored-financial-data
   - AC-stored-special-category-data
 

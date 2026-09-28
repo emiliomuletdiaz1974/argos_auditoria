@@ -27,6 +27,18 @@ n:AC-stored-contact-data a argos:AssetClass ;
   argos:dataCategory pd:Contact ;
   argos:selectorJson """{"label": "Column", "category": "contact_data", "min_confidence": 0.5, "missing": false}""" .
 
+n:AC-stored-location-data a argos:AssetClass ;
+  rdfs:label "Dato de ubicación almacenado"@es ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory pd:Location ;
+  argos:selectorJson """{"label": "Column", "category": "location_data", "min_confidence": 0.5, "missing": false}""" .
+
+n:AC-stored-technical-credential a argos:AssetClass ;
+  rdfs:label "Credencial técnica almacenada"@es ;
+  argos:graphLabel "Column" ;
+  argos:dataCategory pd:Password ;
+  argos:selectorJson """{"label": "Column", "category": "technical_credential", "min_confidence": 0.5, "missing": false}""" .
+
 n:AC-stored-financial-data a argos:AssetClass ;
   rdfs:label "Dato financiero almacenado"@es ;
   argos:graphLabel "Column" ;
