@@ -4,9 +4,9 @@ kind: module
 title: Conector REST declarativo (argos-connector-rest)
 module: argos-connector-rest
 phases: ["02"]
-version: 0.2.0-alpha
-commit: 4ed4faf
-date: 2026-09-23
+version: 0.2.1-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -43,6 +43,7 @@ Sondas del SDK `count`, `sample` y `check_config` sobre las rutas declaradas.
 
 ## 6. Seguridad y tratamiento de datos
 
+- **El tamaño de la muestra (QA-027)** es un entero positivo: `k=-1` ya no devolvía todo menos el último elemento.
 **Permisos que necesita la cuenta del cliente:** un token de **solo lectura** limitado a las rutas que se van a consultar.
 
 - Métodos de escritura rechazados por el SDK antes de salir.
@@ -74,3 +75,4 @@ Solo admite token Bearer estático desde Vault. El flujo OAuth2 *client credenti
 | 0.1.0-alpha | 2026-09-18 | Transporte cifrado obligatorio: `http://` solo con `allow_insecure: true` declarado | Auditoría de seguridad (M10) |
 | 0.1.0-alpha | 2026-09-18 | Tope de páginas por sonda (`max_pages`) | Auditoría de seguridad (M11) |
 | 0.2.0-alpha | 2026-09-23 | Páginas siguientes registradas y pagadas | F09-22 |
+| 0.2.1-alpha | 2026-09-28 | `sample_size` | QA-23 (QA-027) |

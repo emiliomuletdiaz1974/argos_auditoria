@@ -11,7 +11,7 @@ import httpx
 
 from argos_common.errors import ReadOnlyViolationError
 from argos_connector.base import Connector
-from argos_connector.probes import ProbeSpec
+from argos_connector.probes import ProbeSpec, sample_size
 from argos_connector.readonly import assert_safe_http_method
 from argos_connector.tls import require_tls
 
@@ -246,7 +246,7 @@ class RestConnector(Connector):
         fields = list(spec.params.get("fields") or [])
         if not fields:
             raise ValueError("sample needs at least one field")
-        limit = min(int(spec.params.get("k", 50)), self.context.budget.max_rows_per_probe)
+        limit = sample_size(spec.params, 50, self.context.budget.max_rows_per_probe)
         body = self._json(spec.target, spec.params.get("query", {}))
         items = (dig(body, route.items_field) or [])[:limit]
         hasher = self.context.hasher

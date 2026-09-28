@@ -7,10 +7,10 @@ from dataclasses import replace
 from typing import Any
 
 from argos_connector.base import Connector
-from argos_connector.probes import ProbeSpec
+from argos_connector.probes import ProbeSpec, sample_size
 from argos_connector.tls import require_tls
 
-from .backends import FileBackend, normalise_prefix
+from .backends import FileBackend, WalkIncomplete, normalise_prefix
 from .backends.local import LocalBackend
 
 MAGIC: tuple[tuple[bytes, str], ...] = (
@@ -101,14 +101,18 @@ class FilesConnector(Connector):
         return replace(spec, target=prefix, statement=f"{verb} /{prefix} limit={limit}{pattern}")
 
     def _sample_size(self, spec: ProbeSpec) -> int:
-        return min(int(spec.params.get("k", 50)), self.context.budget.max_rows_per_probe)
+        return sample_size(spec.params, 50, self.context.budget.max_rows_per_probe)
 
     def _do_scan_schema(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
         total, size = 0, 0
         by_ext: dict[str, int] = {}
         age_years: dict[str, int] = {}
         now = self._now()
+        incomplete = False
         for entry in self.backend.walk(spec.target, self.max_walk_entries):
+            if isinstance(entry, WalkIncomplete):
+                incomplete = True
+                continue
             total += 1
             size += entry.size
             name = entry.path.rsplit("/", 1)[-1]
@@ -121,7 +125,7 @@ class FilesConnector(Connector):
             "bytes": size,
             "by_ext": by_ext,
             "age_years": age_years,
-            "capped": total >= self.max_walk_entries,
+            "capped": incomplete or total >= self.max_walk_entries,
         }
         return summary, total
 
@@ -130,7 +134,11 @@ class FilesConnector(Connector):
         older = spec.params.get("older_than_years")
         now = self._now()
         walked = matched = 0
+        incomplete = False
         for entry in self.backend.walk(spec.target, self.max_walk_entries):
+            if isinstance(entry, WalkIncomplete):
+                incomplete = True
+                continue
             walked += 1
             if not fnmatch.fnmatchcase(entry.path.rsplit("/", 1)[-1], pattern):
                 continue
@@ -141,7 +149,7 @@ class FilesConnector(Connector):
             "count": matched,
             "glob": pattern,
             "older_than_years": older,
-            "capped": walked >= self.max_walk_entries,
+            "capped": incomplete or walked >= self.max_walk_entries,
         }
         return data, matched
 
@@ -149,6 +157,8 @@ class FilesConnector(Connector):
         hasher = self.context.hasher
         entries = []
         for entry in self.backend.walk(spec.target, self._sample_size(spec)):
+            if isinstance(entry, WalkIncomplete):
+                continue
             head = self.backend.read_head(entry.path, HEAD_BYTES)
             entries.append(
                 {

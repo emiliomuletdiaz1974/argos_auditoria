@@ -4,9 +4,9 @@ kind: module
 title: SDK de conectores de solo lectura (argos-connector-sdk)
 module: argos-connector-sdk
 phases: ["02", "03"]
-version: 0.6.0-alpha
-commit: 2ef59ef
-date: 2026-09-24
+version: 0.7.0-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -68,6 +68,8 @@ Otras piezas:
 
 ## 6. Seguridad y tratamiento de datos
 
+- **`check_config` solo lee catálogo (QA-015).** Una tabla con esquema pasa solo si el esquema es de catálogo del dialecto, se llame como se llame (`public.pg_x` o `clinica.all_x` son tablas del cliente). Ninguna comprobación lee el texto SQL de otras sesiones (`query`, `sql_text`, `text`…), que lleva literales del cliente. Sin esquema, el prefijo de catálogo sigue bastando: en PostgreSQL `pg_catalog` se busca primero, y en Oracle un nombre propio del esquema que tape una vista `ALL_`/`DBA_` queda como riesgo aceptado.
+- **El tamaño de una muestra (QA-027):** `sample_size` exige un entero positivo y lo limita al presupuesto; todos los conectores lo usan.
 - **Depuración de identificadores** (F09-11): `validators.scrub_identifiers(text, identifiers)` sustituye por marcadores estables lo que valida como DNI, NIE, NUSS o IBAN, con la tabla de los guardarraíles (`library/prompts/guardrails.yaml`). La usan el gateway de IA (`scrub_input`) y el paquete de diagnóstico; vive aquí para que quien depura no importe la capa de IA (ADR-0012).
 - **Qué lee y qué devuelve una comprobación de configuración** (F09-31, SEC-022): `config_sources.check_config_sources(statement, dialect)` solo admite vistas de catálogo y configuración de cada dialecto (`pg_*`, `information_schema`, `sys.*`, `dba_*`/`v$*`, `sqlite_*`…) y rechaza cualquier tabla del cliente. En PostgreSQL admite además el esquema `argos_facts`, donde el propio appliance publica sus hechos para los retos `self-*` (ARG-100); no abre ninguna tabla que esté detrás. `minimise_config_rows` devuelve en claro solo las columnas que nombran un ajuste o una identidad del sistema (`CLEAR_COLUMNS`); el resto sale como digest HMAC, y nunca más de `max_rows_per_probe` filas.
 - **Solo lectura en dos capas:** validación en ARGOS y cuenta de solo lectura en el sistema del cliente (ver los permisos en cada documento de conector).
@@ -113,3 +115,4 @@ El presupuesto de carga vive en la memoria de cada proceso; con varias réplicas
 | 0.4.0-alpha | 2026-09-23 | `config_sources`: fuentes permitidas de `check_config`, columnas en claro y minimización con tope de filas | F09-31 |
 | 0.5.0-alpha | 2026-09-24 | `scrub_identifiers`: el depurador de ARG-060, compartido con el paquete de diagnóstico | F09-11 (ARG-088) |
 | 0.6.0-alpha | 2026-09-24 | `argos_facts` es fuente de configuración en PostgreSQL: los hechos del propio appliance | F10-01 (ARG-100) |
+| 0.7.0-alpha | 2026-09-28 | `check_config` solo con esquemas de catálogo y sin texto SQL de otras sesiones; `sample_size` | QA-23 (QA-015, 027) |

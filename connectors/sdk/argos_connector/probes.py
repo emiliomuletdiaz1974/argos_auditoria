@@ -24,3 +24,15 @@ class ProbeResult:
     duration_ms: int
     rows_touched: int
     journal_seq: int  # journal entry written BEFORE the probe was sent
+
+
+def sample_size(params: Mapping[str, Any], default: int, max_rows: int) -> int:
+    """The `k` of a sample: a positive integer, never above the budget (quality review QA-027).
+
+    A negative `k` meant no limit in SQLite (`LIMIT -1`), all but the last item in REST and an
+    invalid `_count` in FHIR: anything that is not a positive integer is refused.
+    """
+    k = params.get("k", default)
+    if isinstance(k, bool) or not isinstance(k, int) or k < 1:
+        raise ValueError(f"the size of a sample must be a positive integer, not {k!r}")
+    return min(k, max_rows)

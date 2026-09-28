@@ -35,7 +35,7 @@ from sqlalchemy.types import NullType
 
 from argos_connector.base import Connector
 from argos_connector.config_sources import check_config_sources, minimise_config_rows
-from argos_connector.probes import ProbeSpec
+from argos_connector.probes import ProbeSpec, sample_size
 from argos_connector.tls import require_tls
 from argos_connector.validators import acceptance_rates, resolve_validators
 
@@ -351,7 +351,7 @@ class SqlConnector(Connector):
         if not columns:
             raise ValueError("sample needs at least one column")
         source = self._table(spec.target, columns)
-        limit = min(int(spec.params.get("k", 100)), self.context.budget.max_rows_per_probe)
+        limit = sample_size(spec.params, 100, self.context.budget.max_rows_per_probe)
         # Rendered inline as an integer: psycopg casts bound limits (":param_1::INTEGER"), which
         # text() would no longer recognise as a bind once the compiled string is executed.
         rendered_limit = literal(limit, type_=Integer, literal_execute=True)

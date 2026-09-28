@@ -4,9 +4,9 @@ kind: module
 title: Conector de ficheros SMB, NFS y S3 (argos-connector-files)
 module: argos-connector-files
 phases: ["02"]
-version: 0.2.0-alpha
-commit: 4ed4faf
-date: 2026-09-23
+version: 0.3.0-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -44,6 +44,7 @@ Sondas del SDK sobre metadatos: `scan_schema`, `count` y `sample`, esta con cabe
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Un recuento es completo o lo dice (QA-016, 021, 025).** Los recorridos avisan con `WalkIncomplete` cuando no lo ven todo, y el conector lo convierte en `capped`. SMB cuenta aparte ficheros y directorios, y los directorios no gastan el cupo de ficheros. El recorrido local salta y señala las carpetas que no puede leer, los ficheros que desaparecen, los enlaces rotos y los enlaces que salen del recurso. En S3 un prefijo es una carpeta (`pacientes/` no incluye `pacientes_2019/`), y los marcadores de carpeta no son ficheros.
 **Permisos que necesita la cuenta del cliente:**
 
 | Protocolo | Permisos |
@@ -77,3 +78,4 @@ Ninguna específica del conector.
 | 0.1.0-alpha | 2026-09-15 | Conector de ficheros con recorrido de metadatos y muestras minimizadas | Fase 02 (ARG-017) |
 | 0.1.0-alpha | 2026-09-18 | Cifrado SMB 3 exigido y S3 solo por `https://`, salvo `allow_insecure` declarado | Auditoría de seguridad (M10) |
 | 0.2.0-alpha | 2026-09-23 | Recorrido SMB con directorios contados y sin seguir enlaces | F09-22 |
+| 0.3.0-alpha | 2026-09-28 | Recorridos que avisan de lo que no ven; SMB, local y S3 sin recuentos incompletos disfrazados | QA-23 (QA-016, 021, 025) |

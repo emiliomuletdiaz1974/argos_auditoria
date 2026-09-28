@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
-from argos_connector.probes import ProbeSpec
+from argos_connector.probes import ProbeSpec, sample_size
 from argos_rest.connector import RestConnector
 
 SENSITIVE_RESOURCES = (
@@ -48,7 +48,7 @@ class FhirConnector(RestConnector):
         if spec.kind == "count":
             query["_summary"] = "count"
         elif spec.kind == "sample":
-            limit = min(int(spec.params.get("k", 50)), self.context.budget.max_rows_per_probe)
+            limit = sample_size(spec.params, 50, self.context.budget.max_rows_per_probe)
             query["_count"] = str(limit)
         return super().render(replace(spec, params={**spec.params, "query": query}))
 

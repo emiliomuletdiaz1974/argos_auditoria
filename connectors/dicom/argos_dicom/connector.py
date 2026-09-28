@@ -18,14 +18,15 @@ from pynetdicom.sop_class import (  # type: ignore[attr-defined]
 )
 
 from argos_connector.base import Connector
-from argos_connector.probes import ProbeSpec
+from argos_connector.probes import ProbeSpec, sample_size
 from argos_connector.tls import require_tls
 
 REQUESTED_CONTEXTS = (Verification, StudyRootQueryRetrieveInformationModelFind)
 ALLOWED_ABSTRACT_SYNTAXES = frozenset(str(uid) for uid in REQUESTED_CONTEXTS)
 _PENDING = (0xFF00, 0xFF01)
-_DATE_RANGE = re.compile(r"^(\d{8})?-?(\d{8})?$")
-_MODALITY = re.compile(r"^[A-Z]{0,4}$")
+# DATE, DATE-, -DATE or DATE-DATE, or nothing; `\Z` so a trailing newline is not accepted (QA-028).
+_DATE_RANGE = re.compile(r"\A(?:\d{8}(?:-(?:\d{8})?)?|-\d{8})?\Z")
+_MODALITY = re.compile(r"\A[A-Z]{0,4}\Z")
 
 
 class DicomConnector(Connector):
@@ -136,6 +137,7 @@ class DicomConnector(Connector):
                 if found >= cap:
                     association.abort()  # never release while a C-FIND is still pending
                     aborted = True
+                    self._capped = True  # a study beyond the cap exists: exactly the cap is not
                     return
                 found += 1
                 yield identifier
@@ -146,6 +148,7 @@ class DicomConnector(Connector):
     def _do_scan_schema(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
         studies = 0
         by_modality: dict[str, int] = {}
+        self._capped = False
         for identifier in self._find(self._study_query(spec), self.max_studies):
             studies += 1
             for modality in str(getattr(identifier, "ModalitiesInStudy", "")).split("\\"):
@@ -154,23 +157,24 @@ class DicomConnector(Connector):
         data = {
             "studies": studies,
             "by_modality": by_modality,
-            "capped": studies >= self.max_studies,
+            "capped": self._capped,
         }
         return data, studies
 
     def _do_count(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
         query = self._study_query(spec)
+        self._capped = False
         n = sum(1 for _ in self._find(query, self.max_studies))
         data = {
             "count": n,
             "dates": str(query.StudyDate),
             "modality": str(query.ModalitiesInStudy),
-            "capped": n >= self.max_studies,
+            "capped": self._capped,
         }
         return data, n
 
     def _do_sample(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
-        limit = min(int(spec.params.get("k", 50)), self.context.budget.max_rows_per_probe)
+        limit = sample_size(spec.params, 50, self.context.budget.max_rows_per_probe)
         hasher = self.context.hasher
         studies = [
             {

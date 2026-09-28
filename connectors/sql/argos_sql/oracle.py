@@ -1,5 +1,6 @@
 """Oracle connector: native catalogue and unified auditing checks (ARG-016)."""
 
+import re
 from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any, ClassVar
@@ -27,13 +28,30 @@ ORACLE_SYSTEM_SCHEMAS = (
     "OLAPSYS",
     "DBSFWUSER",
 )
-# The IN list comes from the fixed tuple above, never from input.
+# The IN list comes from the fixed tuple above, never from input. Columns of tables only (a view
+# is not where the data lives), of users Oracle does not maintain itself (QA-024).
 SCHEMA_SQL = (
-    "SELECT owner, table_name, column_name, data_type, nullable FROM all_tab_columns "  # noqa: S608
-    "WHERE owner NOT IN ("
+    "SELECT c.owner, c.table_name, c.column_name, c.data_type, c.nullable "  # noqa: S608
+    "FROM all_tab_columns c "
+    "JOIN all_tables t ON t.owner = c.owner AND t.table_name = c.table_name "
+    "JOIN all_users u ON u.username = c.owner AND u.oracle_maintained = 'N' "
+    "WHERE c.owner NOT IN ("
     + ", ".join(f"'{schema}'" for schema in ORACLE_SYSTEM_SCHEMAS)
-    + ") ORDER BY owner, table_name, column_id"
+    + ") ORDER BY c.owner, c.table_name, c.column_id"
 )
+# An Oracle schema name as the catalogue stores it: checked before it reaches the statement.
+_SCHEMA_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}\Z")
+
+
+def schema_sql(schemas: list[str]) -> str:
+    """The scan, narrowed to the schemas a campaign asked for, as the other connectors do."""
+    if not schemas:
+        return SCHEMA_SQL
+    for schema in schemas:
+        if not _SCHEMA_NAME.match(schema):
+            raise ValueError(f"not an Oracle schema name: {schema!r}")
+    wanted = ", ".join(f"'{schema}'" for schema in sorted(set(schemas)))
+    return SCHEMA_SQL.replace(" ORDER BY", f" AND c.owner IN ({wanted}) ORDER BY", 1)
 
 
 class OracleConnector(SqlConnector):
@@ -53,7 +71,7 @@ class OracleConnector(SqlConnector):
 
     def render(self, spec: ProbeSpec) -> ProbeSpec:
         if spec.kind == "scan_schema":
-            return replace(spec, statement=SCHEMA_SQL)
+            return replace(spec, statement=schema_sql(list(spec.params.get("schemas", []))))
         return super().render(spec)
 
     def _do_scan_schema(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:

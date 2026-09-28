@@ -8,7 +8,7 @@ from typing import Any
 
 from argos_common.errors import ReadOnlyViolationError
 
-from . import FileEntry, normalise_prefix
+from . import FileEntry, WalkIncomplete, normalise_prefix
 
 
 class LocalBackend:
@@ -21,18 +21,33 @@ class LocalBackend:
             raise ReadOnlyViolationError(f"path escapes the share root: {path!r}")
         return candidate
 
-    def walk(self, prefix: str, limit: int) -> Iterator[FileEntry]:
+    def walk(self, prefix: str, limit: int) -> Iterator[FileEntry | WalkIncomplete]:
+        """Files under `prefix`, at most `limit`. A folder it cannot read, a file that vanishes or
+        a broken link does not stop the walk: it is left out and the walk says it is incomplete
+        (QA-025). A link to a file outside the share is not a file of the share."""
         count = 0
-        for directory, subdirectories, files in os.walk(self._resolve(prefix)):
+        unreadable: list[OSError] = []
+        for directory, subdirectories, files in os.walk(
+            self._resolve(prefix), onerror=unreadable.append
+        ):
             subdirectories.sort()
             for name in sorted(files):
                 full = Path(directory) / name
-                info = full.stat()
+                try:
+                    if full.is_symlink():
+                        self._resolve(full.relative_to(self._root).as_posix())
+                    info = full.stat()
+                except (OSError, ReadOnlyViolationError) as skipped:
+                    yield WalkIncomplete(f"{name}: {type(skipped).__name__}")
+                    continue
+                if count >= limit:
+                    yield WalkIncomplete(f"more than {limit} files")
+                    return
                 relative = full.relative_to(self._root).as_posix()
                 yield FileEntry(relative, info.st_size, info.st_mtime)
                 count += 1
-                if count >= limit:
-                    return
+        for error in unreadable:
+            yield WalkIncomplete(f"unreadable folder: {type(error).__name__}")
 
     def read_head(self, path: str, nbytes: int) -> bytes:
         with self._resolve(path).open("rb") as handle:

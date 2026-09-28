@@ -6,7 +6,7 @@ from typing import Any
 
 import smbclient
 
-from . import FileEntry, normalise_prefix
+from . import FileEntry, WalkIncomplete, normalise_prefix
 
 
 class SmbBackend:
@@ -30,20 +30,24 @@ class SmbBackend:
         root = f"\\\\{self._server}\\{self._share}"
         return f"{root}\\{relative}" if relative else root
 
-    def walk(self, prefix: str, limit: int) -> Iterator[FileEntry]:
-        """Files under `prefix`, at most `limit` entries: files and directories listed both count.
+    def walk(self, prefix: str, limit: int) -> Iterator[FileEntry | WalkIncomplete]:
+        """Files under `prefix`: at most `limit` files, and at most `limit` directories listed.
 
         A tree of empty directories, or a loop of links, would otherwise be listing requests
-        without end under a single probe (SEC-053). Links are listed, never followed.
+        without end under a single probe (SEC-053). Links are listed, never followed. The
+        directories do not eat the count of files, and a walk cut short by either limit says so
+        (quality review QA-016).
         """
         count = 0
+        listed = 0
         pending = [normalise_prefix(prefix)]
         while pending:
-            if count >= limit:
+            if listed >= limit:
+                yield WalkIncomplete(f"more than {limit} directories")
                 return
             current = pending.pop()
             listing = smbclient.scandir(self._unc(current), port=self._port)
-            count += 1
+            listed += 1
             for entry in sorted(listing, key=lambda e: e.name):
                 relative = f"{current}/{entry.name}" if current else entry.name
                 if entry.is_dir(follow_symlinks=False):
@@ -57,10 +61,11 @@ class SmbBackend:
                 written = info.last_write_time
                 if written.tzinfo is None:
                     written = written.replace(tzinfo=UTC)
+                if count >= limit:
+                    yield WalkIncomplete(f"more than {limit} files")
+                    return
                 yield FileEntry(relative, int(info.end_of_file), written.timestamp())
                 count += 1
-                if count >= limit:
-                    return
 
     def read_head(self, path: str, nbytes: int) -> bytes:
         with smbclient.open_file(self._unc(path), mode="rb", port=self._port) as handle:

@@ -202,3 +202,17 @@ def test_with_its_ca_the_association_verifies_the_pacs(monkeypatch: pytest.Monke
     context, server_name = seen["tls_args"]
     assert isinstance(context, ssl.SSLContext) and context.verify_mode == ssl.CERT_REQUIRED
     assert context.check_hostname and server_name == "pacs.hospital.local"
+
+
+@pytest.mark.parametrize("dates", ["-", "2024010120240102", "20240101\n", "2024010"])
+def test_a_date_range_that_is_not_one_is_refused(pacs: Pacs, dates: str) -> None:
+    """QA-028: the DICOM date range is DATE, DATE-, -DATE or DATE-DATE, and nothing else."""
+    connector, _ = _connector(pacs.port)
+    with pytest.raises(ValueError):
+        connector.execute(ProbeSpec("count", "*", params={"dates": dates}))
+
+
+def test_exactly_the_cap_is_not_capped(pacs: Pacs) -> None:
+    connector, _ = _connector(pacs.port, max_studies=30)
+    result = connector.execute(ProbeSpec("count", "*"))
+    assert result.data["count"] == 30 and result.data["capped"] is False

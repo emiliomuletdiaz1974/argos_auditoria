@@ -4,9 +4,9 @@ kind: module
 title: Conector LDAP y Active Directory (argos-connector-ldap)
 module: argos-connector-ldap
 phases: ["02"]
-version: 0.1.0-alpha
-commit: 18bcd4a
-date: 2026-09-18
+version: 0.2.0-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -48,6 +48,7 @@ Sondas del SDK: `scan_schema`, `count` y `sample`.
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Recuento con techo (QA-026):** `count` se detiene en `max_entries` (por defecto 1 000 000) y marca `capped`.
 **Permisos que necesita la cuenta del cliente:** una cuenta de servicio con **lectura** sobre la base de búsqueda (usuarios, grupos y atributos de estado). No necesita permisos de escritura ni de administración.
 
 - Los filtros LDAP se validan antes de usarse, para evitar inyección.
@@ -76,3 +77,4 @@ Ninguna específica del conector.
 | 0.1.0-alpha | 2026-09-15 | Conector LDAP y Active Directory con membresía transitiva y conexión de solo lectura | Fase 02 (ARG-018) |
 | 0.1.0-alpha | 2026-09-18 | Sin seguimiento de referrals y con tiempos máximos de conexión y respuesta | Auditoría de seguridad (A2) |
 | 0.1.0-alpha | 2026-09-18 | Tope configurable de lecturas en la expansión de grupos (`max_group_reads`) | Auditoría de seguridad (M11) |
+| 0.2.0-alpha | 2026-09-28 | `count` con `max_entries` y `capped`; `sample_size` | QA-23 (QA-026, 027) |

@@ -27,6 +27,15 @@ def test_oracle_catalog_checks_and_read_only_transactions(migrated_db: str) -> N
     try:
         scan = connector.execute(ProbeSpec("scan_schema", "*"))
         assert "ENCOUNTERS" in scan.data["schemas"]["HIS_OWNER"]
+        # QA-024: a campaign narrowed to one schema sees only that schema, and no view.
+        narrowed = connector.execute(
+            ProbeSpec("scan_schema", "*", params={"schemas": ["HIS_OWNER"]})
+        )
+        assert set(narrowed.data["schemas"]) == {"HIS_OWNER"}
+        assert not any(
+            name.startswith(("ALL_", "USER_", "DBA_"))
+            for name in narrowed.data["schemas"]["HIS_OWNER"]
+        )
         for check in ("audit_status", "generic_accounts", "privileged_grants"):
             assert connector.execute(_check(check, "db")).ok
         count = connector.execute(ProbeSpec("count", "HIS_OWNER.ENCOUNTERS"))

@@ -193,3 +193,17 @@ def test_network_timeouts_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert kwargs["server"].connect_timeout == 3
     assert kwargs["receive_timeout"] == 5
+
+
+def test_a_count_stops_at_its_cap_and_says_so() -> None:
+    """QA-026: a directory walk has a ceiling, like files, DICOM and REST."""
+    journal = InMemoryJournal()
+    connector = MockLdap(
+        SYSTEM_ID, {"base_dn": BASE, "max_entries": 50}, make_context(journal=journal)
+    )
+    connector.mock = _mock_directory()
+    connector.open()
+    data = connector.execute(
+        ProbeSpec("count", BASE, params={"ldap_filter": "(objectClass=*)"})
+    ).data
+    assert data["count"] == 50 and data["capped"] is True

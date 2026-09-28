@@ -15,7 +15,7 @@ from ldap3.core.exceptions import LDAPInvalidFilterError, LDAPNoSuchObjectResult
 from ldap3.operation.search import parse_filter
 
 from argos_connector.base import Connector
-from argos_connector.probes import ProbeSpec
+from argos_connector.probes import ProbeSpec, sample_size
 
 UAC_DISABLED = 0x2
 UAC_DONT_EXPIRE_PASSWORD = 0x10000
@@ -176,13 +176,22 @@ class LdapConnector(Connector):
         summary["groups"] = sum(1 for _ in self._paged(self.group_filter, NO_ATTRIBUTES))
         return summary, summary["users"]
 
+    @property
+    def max_entries(self) -> int:
+        return int(self.config.get("max_entries", 1_000_000))
+
     def _do_count(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
+        """At most `max_entries` entries: a walk of the directory has a ceiling (QA-026)."""
         search_filter = str(spec.params["ldap_filter"])
-        n = sum(1 for _ in self._paged(search_filter, NO_ATTRIBUTES))
-        return {"count": n, "filter": search_filter}, n
+        n = 0
+        for _ in self._paged(search_filter, NO_ATTRIBUTES):
+            if n >= self.max_entries:
+                return {"count": n, "filter": search_filter, "capped": True}, n
+            n += 1
+        return {"count": n, "filter": search_filter, "capped": False}, n
 
     def _do_sample(self, spec: ProbeSpec) -> tuple[dict[str, Any], int]:
-        limit = min(int(spec.params.get("k", 100)), self.context.budget.max_rows_per_probe)
+        limit = sample_size(spec.params, 100, self.context.budget.max_rows_per_probe)
         hasher, now = self.context.hasher, datetime.now(UTC)
         entries: list[dict[str, Any]] = []
         for entry in self._paged(self.user_filter, _USER_AGES):

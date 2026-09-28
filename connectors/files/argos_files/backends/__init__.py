@@ -14,8 +14,16 @@ class FileEntry:
     mtime: float
 
 
+@dataclass(frozen=True, slots=True)
+class WalkIncomplete:
+    """Yielded by a walk that could not see everything: a limit reached before the end, a folder
+    it could not read, a file that vanished. The count that follows says it is capped (QA-016)."""
+
+    reason: str
+
+
 class FileBackend(Protocol):
-    def walk(self, prefix: str, limit: int) -> Iterator[FileEntry]: ...
+    def walk(self, prefix: str, limit: int) -> Iterator[FileEntry | WalkIncomplete]: ...
 
     def read_head(self, path: str, nbytes: int) -> bytes: ...
 

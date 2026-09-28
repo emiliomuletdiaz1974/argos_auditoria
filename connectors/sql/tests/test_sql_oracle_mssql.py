@@ -50,3 +50,14 @@ def test_sql_server_statements_have_a_deadline() -> None:
         "connect_args": {"timeout": 1, "login_timeout": 1}
     }
     assert driver_options(make_url("postgresql+psycopg://u@h/db"), 30_000) == {}
+
+
+def test_oracle_scan_keeps_to_the_schemas_asked_and_to_tables() -> None:
+    """QA-024: `params.schemas` narrows the scan as in the other connectors, and views are not
+    tables of the client."""
+    connector = OracleConnector(SYSTEM_ID, {}, make_context())
+    statement = connector.render(ProbeSpec("scan_schema", "*", params={"schemas": ["CLINICA"]}))
+    sql = statement.statement or ""
+    assert "all_tables" in sql.lower(), "columns of views are not columns of tables"
+    assert "'CLINICA'" in sql
+    validate_read_only_sql(sql, "oracle")

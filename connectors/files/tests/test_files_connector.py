@@ -200,7 +200,8 @@ def test_an_smb_directory_loop_ends_within_the_limit(monkeypatch: pytest.MonkeyP
     backend = SmbBackend(
         {"server": "fs", "share": "s", "username": "u", "password": "p"}, encrypt=True
     )
-    assert list(backend.walk("", limit=50)) == []
+    walked = list(backend.walk("", limit=50))
+    assert [type(e).__name__ for e in walked] == ["WalkIncomplete"], "cut short, and it says so"
     assert len(listings) <= 50
 
 

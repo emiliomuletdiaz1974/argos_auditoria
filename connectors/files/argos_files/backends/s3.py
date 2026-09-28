@@ -6,7 +6,7 @@ from typing import Any
 import boto3
 from botocore.config import Config
 
-from . import FileEntry, normalise_prefix
+from . import FileEntry, WalkIncomplete, normalise_prefix
 
 
 class S3Backend:
@@ -28,18 +28,27 @@ class S3Backend:
     def close(self) -> None:
         self._client.close()
 
-    def walk(self, prefix: str, limit: int) -> Iterator[FileEntry]:
+    def walk(self, prefix: str, limit: int) -> Iterator[FileEntry | WalkIncomplete]:
+        """Objects under the folder `prefix`: a prefix is a folder, so `pacientes` does not take
+        in `pacientes_2019/`, and a folder marker (a key ending in `/`) is not a file (QA-021)."""
         count = 0
+        folder = normalise_prefix(prefix)
         paginator = self._client.get_paginator("list_objects_v2")
-        for page in paginator.paginate(Bucket=self._bucket, Prefix=normalise_prefix(prefix)):
+        for page in paginator.paginate(Bucket=self._bucket, Prefix=f"{folder}/" if folder else ""):
             for item in page.get("Contents", []):
-                mtime = item["LastModified"].timestamp()
-                yield FileEntry(str(item["Key"]), int(item["Size"]), mtime)
-                count += 1
+                key = str(item["Key"])
+                if key.endswith("/"):
+                    continue
                 if count >= limit:
+                    yield WalkIncomplete(f"more than {limit} objects")
                     return
+                mtime = item["LastModified"].timestamp()
+                yield FileEntry(key, int(item["Size"]), mtime)
+                count += 1
 
     def read_head(self, path: str, nbytes: int) -> bytes:
+        if path.endswith("/"):
+            return b""
         response = self._client.get_object(
             Bucket=self._bucket, Key=normalise_prefix(path), Range=f"bytes=0-{nbytes - 1}"
         )

@@ -67,13 +67,20 @@ CLEAR_COLUMNS = frozenset(
 )
 
 
+# Columns that carry the SQL text of other sessions or statements: it holds literals of the
+# client (identifiers in a WHERE), so no configuration check may read them (QA-015).
+SESSION_TEXT_COLUMNS = frozenset(
+    {"query", "sql_text", "sql_fulltext", "text", "statement_text", "digest_text", "info"}
+)
+
+
 def _allowed(table: exp.Table, dialect: str) -> bool:
+    """A qualified table passes only if its schema is a catalogue one: `public.pg_x` or
+    `clinica.all_x` are tables of the client, whatever their name looks like (QA-015)."""
     name = table.name.lower()
     schema = (table.db or "").lower()
     if schema:
-        return schema in _SCHEMAS.get(dialect, frozenset()) or name.startswith(
-            _PREFIXES.get(dialect, ())
-        )
+        return schema in _SCHEMAS.get(dialect, frozenset())
     return name.startswith(_PREFIXES.get(dialect, ())) or name in _SCHEMAS.get(dialect, ())
 
 
@@ -97,6 +104,18 @@ def check_config_sources(statement: str, dialect: str) -> None:
         raise ValueError(
             f"a configuration check reads only catalogue and configuration sources, "
             f"not {sorted(set(offending))}"
+        )
+    texts = sorted(
+        {
+            column.name.lower()
+            for tree in trees
+            for column in tree.find_all(exp.Column)
+            if column.name.lower() in SESSION_TEXT_COLUMNS
+        }
+    )
+    if texts:
+        raise ValueError(
+            f"a configuration check does not read the SQL text of other sessions: {texts}"
         )
 
 

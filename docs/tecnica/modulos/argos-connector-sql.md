@@ -4,9 +4,9 @@ kind: module
 title: Conectores de bases de datos (argos-connector-sql)
 module: argos-connector-sql
 phases: ["02", "03"]
-version: 0.4.0-alpha
-commit: 7524569
-date: 2026-09-23
+version: 0.5.0-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -57,6 +57,7 @@ Sondas `scan_schema`, `count`, `sample` (con `validators`) y `check_config`, a t
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Oracle se ciñe a lo pedido (QA-024):** la exploración respeta `params.schemas`, como el resto de conectores, con nombres de esquema validados antes de entrar en la sentencia. Solo mira columnas de tablas, no de vistas, y de usuarios que Oracle no mantiene (`oracle_maintained = 'N'`).
 - **`check_config` sin datos de negocio** (F09-31, SEC-022): una sentencia declarada pasa, tras el validador de solo lectura, por `check_config_sources`: una tabla del cliente se rechaza antes del diario. Las filas salen minimizadas (columnas de ajuste en claro, el resto como digest) y con tope de filas.
 - **Nombres del cliente entre comillas** (F09-31, SEC-024): los identificadores los entrecomilla SQLAlchemy según el dialecto (`año-2024`, `Pacientes.2024`); solo se rechazan los vacíos, los de más de 128 caracteres y los que llevan caracteres de control. El objetivo `esquema.tabla` se parte por el primer punto.
 - **SQL Server con TLS verificado** (F09-31, SEC-027): cuenta como cifrado solo con `mssql+pyodbc` y ODBC Driver 18, con `Encrypt` activo (por defecto en el 18) y sin `TrustServerCertificate`. Con `pymssql`, que no verifica el certificado, hace falta `allow_insecure`.
@@ -104,3 +105,4 @@ La integración real con Oracle y SQL Server está escrita pero **no se ha ejecu
 | 0.2.0-alpha | 2026-09-23 | `driver_options`: tiempo máximo de sentencia en `pymssql` | F09-21 |
 | 0.3.0-alpha | 2026-09-23 | Exploración con `COLUMNS_SQL` y `CATALOG_SQL` literales en lugar del inspector | F09-22 |
 | 0.4.0-alpha | 2026-09-23 | `check_config` limitado a catálogo y minimizado, identificadores entre comillas, SQL Server verificado solo con ODBC 18 y privilegios por oid | F09-31 |
+| 0.5.0-alpha | 2026-09-28 | Oracle: filtro de esquemas, solo tablas y solo usuarios no mantenidos por Oracle; `sample_size` | QA-23 (QA-024, 027) |
