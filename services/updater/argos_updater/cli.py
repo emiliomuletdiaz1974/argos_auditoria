@@ -101,20 +101,32 @@ def build_updater() -> Updater:
     )
 
 
-def watch(updater: Updater, inbox: Path, queue: Path, interval: float) -> None:
+def watch_once(updater: Updater, inbox: Path, queue: Path) -> None:
     """Apply what the API queued (POST /api/v1/system/updates), oldest first, one at a time.
 
-    A request names a bundle of the inbox, never a path: the API sees its own folders.
+    A request names a bundle of the inbox, never a path: the API sees its own folders. A refused
+    update is recorded by the updater and its request removed; a request that cannot even be read,
+    or an unexpected failure, keeps its request as `.failed` for the operator and the watcher goes
+    on with the next one (quality review QA-084).
     """
-    while True:
-        for request in sorted(queue.glob("*.json")):
+    for request in sorted(queue.glob("*.json")):
+        try:
             wanted = json.loads(request.read_text(encoding="utf-8"))
+            bundle = inbox / Path(str(wanted["bundle"])).name
+            updater.apply(bundle, bool(wanted.get("allow_downgrade")))
+        except UpdateRejectedError as refused:
+            print(f"update refused: {refused}", file=sys.stderr)
             request.unlink()
-            try:
-                bundle = inbox / Path(str(wanted["bundle"])).name
-                updater.apply(bundle, bool(wanted.get("allow_downgrade")))
-            except UpdateRejectedError as refused:
-                print(f"update refused: {refused}", file=sys.stderr)
+        except Exception as broken:  # noqa: BLE001 - one bad request must not stop the watcher
+            print(f"update request {request.name} kept as failed: {broken}", file=sys.stderr)
+            request.replace(request.with_name(request.name + ".failed"))
+        else:
+            request.unlink()
+
+
+def watch(updater: Updater, inbox: Path, queue: Path, interval: float) -> None:
+    while True:
+        watch_once(updater, inbox, queue)
         time.sleep(interval)
 
 

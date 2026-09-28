@@ -88,6 +88,7 @@ def _image_id(archive: Path) -> str:
             index = json.loads(_member(tar, "manifest.json"))
             if not isinstance(index, list) or len(index) != 1:
                 raise UpdateRejectedError(f"{archive.name} must hold exactly one image")
+            _check_tags(archive, [str(tag) for tag in index[0].get("RepoTags") or []])
             config = _member(tar, str(index[0]["Config"]))
     except (tarfile.TarError, OSError, KeyError, ValueError) as broken:
         raise UpdateRejectedError(f"{archive.name} is not a readable image archive") from broken
@@ -107,10 +108,30 @@ def _oci_image_id(tar: tarfile.TarFile, name: str) -> str:
                 digest.update(chunk)
             if digest.hexdigest() != expected:
                 raise UpdateRejectedError(f"{name}: a blob is not what its digest says")
+    annotations = manifests[0].get("annotations") or {}
+    _check_tags(tar_path(tar), [str(v) for k, v in annotations.items() if k in _OCI_NAME_KEYS])
     top = str(manifests[0]["digest"])
     if f"blobs/sha256/{top.split(':', 1)[1]}" not in tar.getnames():
         raise UpdateRejectedError(f"{name}: the image it names is not in it")
     return top
+
+
+_OCI_NAME_KEYS = ("io.containerd.image.name", "org.opencontainers.image.ref.name")
+
+
+def tar_path(tar: tarfile.TarFile) -> Path:
+    return Path(str(tar.name))
+
+
+def _check_tags(archive: Path, tags: list[str]) -> None:
+    """`docker load` applies the tags of the archive: they must all name the image of the archive,
+    or a signed image could take the name of another service (quality review QA-073)."""
+    own = archive.stem
+    for tag in tags:
+        if "/" not in tag and ":" not in tag:
+            continue  # an OCI ref name that is only a tag (`0.2.0`), not a repository
+        if _image_name(tag) != own:
+            raise UpdateRejectedError(f"{archive.name} is tagged {tag}, not as {own}")
 
 
 def _member(tar: tarfile.TarFile, name: str) -> bytes:
@@ -160,6 +181,14 @@ def verify_bundle(
         if not archive.is_file() or _image_id(archive) != signed:
             raise UpdateRejectedError(f"the image {name} is not the one the manifest signed")
         images[name] = signed
+    folder = bundle / "images"
+    unsigned = sorted(
+        p.name for p in (folder.iterdir() if folder.is_dir() else []) if p.stem not in images
+    )
+    if unsigned:
+        raise UpdateRejectedError(
+            f"the bundle carries images the manifest does not sign: {unsigned}"
+        )
     try:
         verify_release_files(manifest, bundle / "sbom")
     except IntegrityError as changed:
@@ -247,7 +276,7 @@ class Updater:
 
     def _steps(self, verified: VerifiedBundle, plan: dict[str, Any]) -> list[Step]:
         bundle = verified.path
-        archives = sorted((bundle / "images").glob("*.tar"))
+        archives = [bundle / "images" / f"{name}.tar" for name in sorted(verified.images)]
         steps = [
             Step(
                 "images",
@@ -282,8 +311,9 @@ class Updater:
             self._orchestrator.deploy(service, image)
 
         def undo() -> None:
-            previous = next(d["previous"] for d in plan["done"] if d.get("service") == service)
-            self._orchestrator.deploy(service, previous)
+            previous = [d["previous"] for d in plan["done"] if d.get("service") == service]
+            if previous:  # nothing recorded: the service was never touched
+                self._orchestrator.deploy(service, previous[0])
 
         return Step(
             f"deploy:{service}",
@@ -304,8 +334,8 @@ class Updater:
         done: list[Step] = []
         for step in self._steps(verified, plan):
             try:
+                done.append(step)  # a step that fails midway may have changed something already
                 step.do()
-                done.append(step)
                 if not step.verify():
                     raise UpdateRejectedError(f"the step {step.name} did not verify")
             except Exception as failure:
@@ -320,8 +350,17 @@ class Updater:
         return verified.version
 
     def _roll_back(self, done: list[Step], plan: dict[str, Any], reason: str) -> None:
-        for step in reversed(done):
-            step.undo()
+        try:
+            for step in reversed(done):
+                step.undo()
+        except Exception as stuck:
+            # The plan stays on disk: `recover()` at the next start takes everything back.
+            self._record(
+                "update.roll_back_failed",
+                "failed",
+                {"to": plan["to"], "back_to": plan["from"], "reason": f"{reason}; {stuck}"[:200]},
+            )
+            return
         (self._state / PLAN).unlink(missing_ok=True)
         self._record(
             "update.rolled_back",

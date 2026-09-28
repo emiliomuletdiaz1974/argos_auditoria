@@ -21,6 +21,10 @@ from pathlib import Path
 
 from argos_updater import verify_bundle
 
+# The same ceiling the gate allows the archive itself (IMPORT_RULES, 16 GiB): a plain tar never
+# unpacks to more than it weighs (quality review QA-085).
+MAX_UNPACKED = 16 << 30
+
 __all__ = ["content_importer", "tsr_importer", "tsr_name", "update_importer", "verify_bundle"]
 
 
@@ -34,11 +38,22 @@ def update_importer(
     queue: Path,
     installed: Callable[[], str | None],
     release_key: bytes,
+    max_unpacked: int = MAX_UNPACKED,
 ) -> Callable[[Path, str], str]:
     def import_update(archive: Path, actor: str) -> str:
         unpacked = archive.parent / "bundle"
-        with tarfile.open(archive) as tar:
-            tar.extractall(unpacked, filter="data")  # refuses what would leave the folder
+        try:
+            with tarfile.open(archive, "r:") as tar:  # a plain tar only: never decompressed
+                total = sum(member.size for member in tar.getmembers() if member.isfile())
+                if total > max_unpacked:
+                    raise ValueError(
+                        f"the update archive would unpack {total} bytes, over its {max_unpacked}"
+                    )
+                tar.extractall(unpacked, filter="data")  # refuses what would leave the folder
+        except tarfile.ReadError as compressed:
+            raise ValueError(
+                "the update archive is compressed or not a plain tar: it is not unpacked"
+            ) from compressed
         verified = verify_bundle(unpacked, release_key, installed())
         target = inbox / f"bundle-{verified.version}"
         if target.exists():

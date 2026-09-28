@@ -213,3 +213,35 @@ def test_the_work_zone_is_empty_after_every_import(tmp_path: Path) -> None:
     assert result.result == "imported"
     assert list((tmp_path / "work").iterdir()) == []
     assert (tmp_path / "in" / tsr_name(OBJECT)).exists(), "the medium is read-only: never moved"
+
+
+# --- QA-085: nothing is unpacked beyond what a plain tar of its size can hold -----------------
+
+
+def test_a_compressed_update_archive_is_rejected_before_unpacking(tmp_path: Path) -> None:
+    bundle = signed_bundle(tmp_path / "made", "0.2.0", KEY, ["argos-example"])
+    importer, inbox, queue = _updates(tmp_path)
+    gate = _gate(tmp_path, {"update": importer})
+    with tarfile.open(tmp_path / "in" / "argos-update-0.2.0.tar", "w:gz") as tar:
+        for path in sorted(bundle.rglob("*")):
+            tar.add(path, arcname=path.relative_to(bundle).as_posix(), recursive=False)
+    [result] = gate.scan("user:admin")
+    assert result.result == "rejected"
+    assert "compressed" in result.reason
+    assert list(inbox.iterdir()) == [] and not queue.exists()
+
+
+def test_an_update_archive_that_unpacks_beyond_its_limit_is_rejected(tmp_path: Path) -> None:
+    inbox, queue = tmp_path / "update" / "inbox", tmp_path / "update" / "queue"
+    inbox.mkdir(parents=True)
+    importer = update_importer(inbox, queue, lambda: "0.1.0", public_key(KEY), max_unpacked=1000)
+    gate = _gate(tmp_path, {"update": importer})
+    with tarfile.open(tmp_path / "in" / "argos-update-0.2.0.tar", "w") as tar:
+        data = b"x" * 2000
+        info = tarfile.TarInfo("images/big.tar")
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+    [result] = gate.scan("user:admin")
+    assert result.result == "rejected"
+    assert "unpack" in result.reason
+    assert list(inbox.iterdir()) == []

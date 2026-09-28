@@ -4,9 +4,9 @@ kind: module
 title: Esclusa de soportes (argos-airgap)
 module: argos-airgap
 phases: ["09"]
-version: 0.2.0-alpha
-commit: 96b3236
-date: 2026-09-25
+version: 0.2.1-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -94,6 +94,7 @@ Implementa ARG-090 (tarea F09-13; Pliego P-02; nota de desviación ARG-081-090).
 ## 6. Seguridad y tratamiento de datos
 
 - **Nada se aplica sin verificar, y siempre con la verificación de su dominio.** El importador de actualización usa la misma función que el actualizador, y un test comprueba que es el mismo objeto. El actualizador vuelve a verificar al aplicar.
+- **Una actualización solo se desempaqueta si es un tar sin comprimir (QA-085)** y lo que va a desempaquetar no pasa de `MAX_UNPACKED` (16 GiB, el mismo techo que el archivo): un archivo comprimido no puede llenar el disco antes de verificar la firma.
 - **El soporte no se sigue:**
   - los enlaces, las carpetas y los dispositivos se rechazan sin abrirlos;
   - un archivo que intente escribir fuera de su carpeta se rechaza;
@@ -147,3 +148,4 @@ Implementa ARG-090 (tarea F09-13; Pliego P-02; nota de desviación ARG-081-090).
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-24 | Esclusa con importadores verificados (actualización, contenido, sellos), exportación de lista cerrada (peticiones de sello, diagnóstico, expediente, credencial), registro de cada operación, API y consola | F09-13 (ARG-090) |
 | 0.2.0-alpha | 2026-09-25 | Tipo de exportación `installation`: el informe de instalación firmado | F10-10 (ARG-096) |
+| 0.2.1-alpha | 2026-09-28 | La actualización que entra por la esclusa: solo tar sin comprimir y con tope al desempaquetar | QA-20 (QA-085) |

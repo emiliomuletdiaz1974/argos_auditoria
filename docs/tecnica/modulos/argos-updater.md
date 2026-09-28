@@ -4,9 +4,9 @@ kind: module
 title: Actualizador firmado transaccional (argos-updater)
 module: argos-updater
 phases: ["09"]
-version: 0.1.0-alpha
-commit: c5fd428
-date: 2026-09-24
+version: 0.1.1-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -81,6 +81,9 @@ Implementa ARG-086 (tarea F09-10; Pliego P-02 y P-23; ADR-0014; nota de desviaci
 ## 6. Seguridad y tratamiento de datos
 
 - **Nada se aplica sin verificar.** La API y la CLI llaman a `verify_bundle`, y `apply` verifica por su cuenta aunque la petición venga de la API.
+- **Solo se carga lo firmado (QA-073).** Un archivo de `images/` que el manifiesto no lista rechaza el paquete entero, y solo los archivos firmados llegan a `docker load`. Las etiquetas que lleva cada archivo (`RepoTags`, o el nombre de la anotación OCI) deben nombrar su propia imagen: si no, una imagen firmada podría tomar el nombre de otro servicio.
+- **El paso que falla también se deshace (QA-074).** El paso entra en la lista de hechos antes de ejecutarse, porque puede haber cambiado algo antes de fallar. Si la propia vuelta atrás falla, el plan inverso se queda en disco (asiento `update.roll_back_failed`) y `recover()` lo termina al siguiente arranque.
+- **El vigilante no se cae (QA-084).** `watch_once` procesa la cola: una actualización rechazada borra su petición; una petición que no se puede leer, o un fallo inesperado, se guarda como `.failed` para el operador y el vigilante sigue con la siguiente.
 - **La clave no viaja con lo que verifica.** Un paquete firmado con otra clave, aunque la incluya, se rechaza.
 - **Un paquete rechazado no deja rastro en el sistema.** Firma ausente o de otra clave, manifiesto alterado, imagen distinta de la firmada, SBOM cambiado o versión anterior: los tests comprueban que no hay ninguna llamada al orquestador.
 - **Una versión maliciosa no llega a ninguna orden.** Algo como `0.2.0;rm` no pasa el patrón.
@@ -120,3 +123,4 @@ Implementa ARG-086 (tarea F09-10; Pliego P-02 y P-23; ADR-0014; nota de desviaci
 | Versión | Fecha | Cambio | Tarea |
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-24 | Verificación completa previa, plan inverso en disco, pasos con deshacer, recuperación, orquestadores Compose y Kubernetes, CLI y petición por la API | F09-10 (ARG-086) |
+| 0.1.1-alpha | 2026-09-28 | Solo imágenes firmadas y con sus propias etiquetas, el paso que falla se deshace, el plan sobrevive a una vuelta atrás fallida y el vigilante no se cae | QA-20 (QA-073, 074, 084) |

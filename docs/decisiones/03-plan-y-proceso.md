@@ -475,6 +475,15 @@ Formato: `tarea` — **qué decidimos** — por qué (y qué medimos, si consta)
 - `F09-17` — **usuario de NATS propio de solo escucha para `webhook-worker`, y fuera NATS y OPA de la API y de `evidence-api`** — mínimo privilegio: la API y `evidence-api` no usan ninguno de los dos; `evidence-api` hereda por ancla YAML la identidad `evidence` de su servicio, que es de su misma familia.
 - `F09-01` — **cada riesgo residual lleva quién lo acepta** — el organismo (medidas físicas y de personal, talla elegida) o nosotros (texto del LLM, material de desarrollo marcado `non_production`, vulnerabilidades sin parche con excepción que caduca).
 
+### Revisión de calidad (QA)
+
+- `QA-20` — **un archivo de `images/` que el manifiesto no firma rechaza el paquete entero** — podríamos haberlo ignorado y cargar solo lo firmado, pero un paquete con algo de más no es el que se firmó: rechazarlo es más claro para quien lo revisa. Además, solo los archivos firmados llegan a `docker load`.
+- `QA-20` — **las etiquetas de cada archivo deben nombrar su propia imagen** — `docker load` aplica las etiquetas que trae el archivo, y el id firmado solo cubre la configuración de la imagen. Comprobamos que `tools/release.py` guarda las imágenes por id, sin etiquetas, así que un paquete legítimo no lleva ninguna y pasa. En OCI se miran las anotaciones de nombre; una que es solo una etiqueta (`0.2.0`) no nombra ningún repositorio y se acepta.
+- `QA-20` — **el paso entra en la lista de hechos antes de ejecutarse** — el orquestador puede mover la etiqueta y fallar después. Deshacer un despliegue que no llegó a registrarse no hace nada, y lo comprobamos. Si la vuelta atrás falla, el plan se queda en disco para `recover()`: borrarlo dejaba versiones mezcladas sin rastro.
+- `QA-20` — **una petición ilegible se guarda como `.failed`, no se borra** — el vigilante no puede decidir qué quería el operador. Borrarla perdía la petición y dejarla en la cola la reintentaba sin fin; renombrarla la deja a la vista sin bloquear las siguientes.
+- `QA-20` — **la esclusa solo desempaqueta un tar sin comprimir, con tope** — `tarfile.open` detectaba gzip o xz aunque la extensión fuera `.tar`, y el límite de 16 GiB se aplicaba al archivo comprimido. `tools/release.py` produce tar sin comprimir, así que no perdemos nada. El tope al desempaquetar es el mismo que el del archivo, porque un tar sin comprimir nunca desempaqueta más de lo que pesa.
+- `QA-20` — **orden de los tests** — los cinco del actualizador y los dos de la esclusa fallaron antes de corregir; el de «solo se cargan los archivos firmados» ya pasaba y se queda como guarda.
+
 ### Fase 10
 - `F10-R` — **la autoverificación (ARG-100) va la primera** — el documento la pone al final. Adelantada, el resto de la fase se construye ya con la puerta de release activa, y cada tarea puede añadir su reto `self-*`.
 - `F10-R` — **una ruta `POST /api/v1/systems` nueva para los límites de talla** — hoy los sistemas se dan de alta con un script de desarrollo, y un límite que no tiene dónde aplicarse no limita nada.
