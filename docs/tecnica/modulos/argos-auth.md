@@ -4,9 +4,9 @@ kind: module
 title: Validación de identidades (argos-auth)
 module: argos-auth
 phases: ["01"]
-version: 0.3.0-alpha
-commit: a2436af
-date: 2026-09-24
+version: 0.4.0-alpha
+commit: 328609d
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -47,6 +47,7 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Tokens en sus bordes (QA-009):** 30 s de margen de reloj (`LEEWAY_SECONDS`); `realm_access` o `roles` con otra forma dan un conjunto de roles vacío, no un 500 ni los caracteres de una cadena.
 - **Sesión del token** (F09-32): `Identity.sid` es la sesión del realm a la que pertenece el token (claim `sid`). La API la usa para rechazar los tokens de una sesión cerrada antes de que caduquen.
 - **Segundo factor** (F09-07, DP-14):
   - `platform_admin` y `dpo_reviewer` heredan el rol `mfa_required`, y el flujo de navegador del realm (`argos browser`) les pide TOTP después de la contraseña. Si aún no lo tienen, se lo hace configurar.
@@ -82,3 +83,4 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 | 0.1.0-alpha | 2026-09-14 | Realm con cuatro roles y validación común de JWT | Fase 01 (ARG-008) |
 | 0.2.0-alpha | 2026-09-23 | `amr` en la identidad y segundo factor TOTP en el realm para los roles que deciden | F09-07 (ARG-072) |
 | 0.3.0-alpha | 2026-09-24 | `Identity.sid`: la sesión del realm del token | F09-32 (SEC-060) |
+| 0.4.0-alpha | 2026-09-28 | Margen de reloj y roles del realm con forma inesperada | QA-34 (QA-009) |

@@ -4,8 +4,8 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.15.0-alpha
-commit: c5d1639
+version: 0.16.0-alpha
+commit: 328609d
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -90,6 +90,10 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Release sin huecos (QA-008):** una carpeta de SBOM que no existe es un error, no un manifiesto sin SBOM; el nombre de una imagen ignora el puerto de su registro.
+- **Producción verificada (QA-010):** `DATABASE_URL` exige `sslmode=verify-full`, y la base local se reconoce por su host (nombre `localhost` o dirección de bucle), no por una subcadena.
+- **Migrador (QA-014):** avisa cuando la base tiene migraciones que el código no trae, y la limpieza de una conexión rota no tapa el error que la rompió.
+- **Hora del diario (QA-012):** `journal_append` y `security.append` toman la hora con el cerrojo de su cadena ya tomado (migración `0049_journal_instant_after_lock.sql`): el orden por hora es el orden por secuencia.
 - **Ráfagas resumidas a su hora (QA-002):** el resumen de una ráfaga del registro de seguridad se escribe cuando termina su ventana, con un temporizador que pide el primer evento plegado (`Recorder.timer`, `sweep()`); antes esperaba a otro evento de la misma clave. Las ventanas terminadas salen de memoria.
 - **Logs con su contexto (QA-007):** el formateador JSON incluye todo lo que la llamada pasa en `extra`; si coincide con un campo obligatorio va como `extra_<campo>`.
 - **Campañas en paralelo desde el lanzamiento (QA-006):** `parallel_campaigns` cuenta también las campañas lanzadas en las últimas 72 horas aunque aún no hayan pedido su primera compuerta; `LOCK_SQL` y `lock_key()` dan el candado por dimensión.
@@ -164,3 +168,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.14.1-alpha | 2026-09-25 | Las campañas fijadas y nunca lanzadas, o abandonadas en una compuerta caducada, dejan de contar como campañas en paralelo | F10-99 (ARG-098) |
 | 0.14.2-alpha | 2026-09-28 | Recuento de campañas desde el lanzamiento y candado por dimensión | QA-32 (QA-006) |
 | 0.15.0-alpha | 2026-09-28 | Resumen de ráfagas por temporizador y todo el contexto de `extra` en los logs | QA-33 (QA-002, 007) |
+| 0.16.0-alpha | 2026-09-28 | SBOM obligatorio, verify-full en producción, migrador que avisa y hora del diario tras el cerrojo | QA-34 (QA-008, 010, 012, 014) |

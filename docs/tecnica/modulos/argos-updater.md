@@ -4,8 +4,8 @@ kind: module
 title: Actualizador firmado transaccional (argos-updater)
 module: argos-updater
 phases: ["09"]
-version: 0.1.1-alpha
-commit: 8942fd1
+version: 0.2.0-alpha
+commit: 328609d
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -80,6 +80,7 @@ Implementa ARG-086 (tarea F09-10; Pliego P-02 y P-23; ADR-0014; nota de desviaci
 
 ## 6. Seguridad y tratamiento de datos
 
+- **`argos-health` en la release (QA-082):** el actualizador sabe qué servicio corre la imagen de salud; `make build` la construye y `tools/sbom.py` le hace su SBOM y su informe de vulnerabilidades, que la puerta lee con las fechas de grype con o sin hora (QA-089).
 - **Nada se aplica sin verificar.** La API y la CLI llaman a `verify_bundle`, y `apply` verifica por su cuenta aunque la petición venga de la API.
 - **Solo se carga lo firmado (QA-073).** Un archivo de `images/` que el manifiesto no lista rechaza el paquete entero, y solo los archivos firmados llegan a `docker load`. Las etiquetas que lleva cada archivo (`RepoTags`, o el nombre de la anotación OCI) deben nombrar su propia imagen: si no, una imagen firmada podría tomar el nombre de otro servicio.
 - **El paso que falla también se deshace (QA-074).** El paso entra en la lista de hechos antes de ejecutarse, porque puede haber cambiado algo antes de fallar. Si la propia vuelta atrás falla, el plan inverso se queda en disco (asiento `update.roll_back_failed`) y `recover()` lo termina al siguiente arranque.
@@ -124,3 +125,4 @@ Implementa ARG-086 (tarea F09-10; Pliego P-02 y P-23; ADR-0014; nota de desviaci
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-24 | Verificación completa previa, plan inverso en disco, pasos con deshacer, recuperación, orquestadores Compose y Kubernetes, CLI y petición por la API | F09-10 (ARG-086) |
 | 0.1.1-alpha | 2026-09-28 | Solo imágenes firmadas y con sus propias etiquetas, el paso que falla se deshace, el plan sobrevive a una vuelta atrás fallida y el vigilante no se cae | QA-20 (QA-073, 074, 084) |
+| 0.2.0-alpha | 2026-09-28 | `argos-health` en la release, el SBOM y el actualizador | QA-34 (QA-082, 089) |

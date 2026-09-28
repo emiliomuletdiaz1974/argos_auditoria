@@ -562,6 +562,14 @@ Formato: `tarea` — **qué decidimos** — por qué (y qué medimos, si consta)
 - `QA-33` — **el emisor sigue con el siguiente servicio** — y registra el que falló. Para el par desparejado comparamos la clave pública del certificado con la de la clave; si no coinciden, se emite de nuevo. Descartamos escribir clave y certificado en un solo archivo: los servicios los leen por separado.
 - `QA-33` — **orden de los tests** — los cinco fallaron antes de corregir.
 
+- `QA-34` — **una carpeta de SBOM ausente es un error** — el manifiesto se firmaba sin SBOM si la ruta no existía; ahora solo se firma sin SBOM cuando no se pide ninguno.
+- `QA-34` — **30 s de margen de reloj en los tokens** — lo habitual entre Keycloak y los servicios; un token caducado hace dos minutos sigue rechazado (el test de caducado pasó de 10 a 120 s porque 10 caen dentro del margen). Unos roles del realm con otra forma dan un conjunto vacío: sin rol no hay permiso, que es la respuesta segura.
+- `QA-34` — **producción exige `sslmode=verify-full`** — los demás enlaces ya exigían transporte cifrado; este llevaba credenciales y veredictos sin verificar al servidor. La base local se reconoce por su host y no por una subcadena de la URL.
+- `QA-34` — **la hora del diario se toma con el cerrojo** — migración 0049, que redefine las dos funciones de asiento sin cambiar nada más; conservan dueño y permisos. Lo reprodujimos reteniendo el cerrojo desde otra sesión.
+- `QA-34` — **el migrador avisa, no se niega** — una base con migraciones que el código no trae es código viejo sobre un esquema nuevo; lo registramos como aviso en lugar de parar, porque volver atrás una versión (el actualizador) pasa justo por ese estado.
+- `QA-34` — **argos-health entra en la release** — construcción, SBOM, puerta y actualizador; un test compara las cuatro listas con lo que corre en el compose para que no vuelva a quedarse fuera ninguna imagen.
+- `QA-34` — **orden de los tests** — todos fallaron antes de corregir. El de `sslmode` pasaba al principio por otro motivo (faltaba un punto de acceso cifrado en su configuración); lo corregimos para que fallara por lo suyo.
+
 ### Fase 10
 - `F10-R` — **la autoverificación (ARG-100) va la primera** — el documento la pone al final. Adelantada, el resto de la fase se construye ya con la puerta de release activa, y cada tarea puede añadir su reto `self-*`.
 - `F10-R` — **una ruta `POST /api/v1/systems` nueva para los límites de talla** — hoy los sistemas se dan de alta con un script de desarrollo, y un límite que no tiene dónde aplicarse no limita nada.
