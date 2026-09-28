@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.40.0-alpha
-commit: e1610ef
+version: 0.41.0-alpha
+commit: bdbf0f0
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -85,6 +85,10 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Idempotencia con ficheros (QA-057):** una respuesta que no es JSON (el paquete de soporte) se guarda tal cual, bytes y tipo, y el reintento con la misma clave recibe el mismo fichero; antes fallaba después del efecto y la clave quedaba «en curso» para siempre (migración `0047_idempotency_files.sql`).
+- **Temporal con sus motivos (QA-063):** relanzar una campaña que corre o pedir una segunda verificación mientras la primera sigue responde `409`; el progreso de una campaña nunca lanzada, `409` «not running», no `500`.
+- **Cursor ilegible (QA-065):** un valor que la base de datos no puede leer (un cursor con una fecha imposible) es un `400`, no un `503`.
+- **La nota del DPO se guarda (QA-067):** la nota de una revisión de columna llega al asiento `inventory.review`.
 - **El rechazo de los guardarraíles se distingue (QA-070):** `POST /assistant/ask` responde `422` con el motivo (`veredicto_no_citado`, `escritura_sobre_objetivo`) en vez de `502`; la pregunta ya no admite `campaign_id`, que se ignoraba, ni campos desconocidos.
 - **Aceptar lo que se vio (QA-041):** `POST /inventory/review-queue/{node_key}` con `accept` admite la categoría que vio el revisor; si la propuesta cambió entretanto, responde `409`.
 - **Sesiones cerradas** (F09-32, SEC-060): al cerrar sesión (`POST /api/v1/auth/logout`), si el realm aceptó revocar ese refresco, la API apunta su sesión (`sid`) en `argos.closed_sessions` durante 15 minutos, más que cualquier token de acceso. El guardián de cada réplica rechaza con `401` un token de una sesión cerrada y lo registra (`auth.session_closed`). Cada réplica guarda las respuestas 5 segundos. Una cookie que el realm rechaza no cierra nada: nadie puede cerrar la sesión de otra persona con un `sid` copiado.
@@ -213,3 +217,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.38.1-alpha | 2026-09-28 | La verificación de la cadena del registro de seguridad en `/metrics`, una vez cada cinco minutos | QA-22 (QA-013) |
 | 0.39.0-alpha | 2026-09-28 | La aceptación de una revisión lleva la categoría vista (contrato v1) | QA-27 (QA-041) |
 | 0.40.0-alpha | 2026-09-28 | `/assistant/ask`: 422 del gateway sin traducir y pregunta sin campos ignorados (contrato v1) | QA-30 (QA-070) |
+| 0.41.0-alpha | 2026-09-28 | Idempotencia con ficheros, errores reales de Temporal, cursores ilegibles y nota del DPO | QA-31 (QA-057, 063, 065, 067) |

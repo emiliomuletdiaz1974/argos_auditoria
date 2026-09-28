@@ -4,8 +4,8 @@ kind: module
 title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
-version: 0.8.0-alpha
-commit: 6f0ca12
+version: 0.8.1-alpha
+commit: bdbf0f0
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -79,6 +79,7 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Nota del revisor (QA-067):** `decide_review(note=)` deja la nota en el asiento de la decisión.
 - **Nombres en castellano, plurales y siglas (QA-034):** el diccionario quita tildes y ñ (NFKD), separa las siglas pegadas (`DNIPaciente`) y lee el singular de un plural (`emails`, `api_keys`).
 - **Revisión que se respeta (QA-041):** una columna que el DPO rechazó no la vuelve a clasificar el modelo por su cuenta, y aceptar exige que la propuesta sea la que la persona vio.
 - **Flujos estructurales estables (QA-042):** el mejor candidato va primero, sea cual sea el orden en que el grafo devuelve las filas; un nombre de columna con `|` no rompe su firma.
@@ -150,3 +151,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.6.0-alpha | 2026-09-24 | El nodo `System` guarda en la instantánea su propio id como sistema | F10-01 (ARG-100) |
 | 0.7.0-alpha | 2026-09-28 | Deltas atómicos y reintentables, espera a la ingesta, pasadas abandonadas, accesos revocados, ingesta idempotente, tratamientos retirados, validación pendiente e instantáneas cerradas (migración 0046) | QA-26 (QA-029, 030, 031, 032, 033, 039, 040, 043) |
 | 0.8.0-alpha | 2026-09-28 | Diccionario con tildes, siglas y plurales; revisiones del DPO respetadas; flujos estructurales estables | QA-27 (QA-034, 041, 042) |
+| 0.8.1-alpha | 2026-09-28 | `decide_review(note=)` | QA-31 (QA-067) |

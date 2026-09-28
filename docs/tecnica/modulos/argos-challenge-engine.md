@@ -4,8 +4,8 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.13.1-alpha
-commit: 50fc114
+version: 0.13.2-alpha
+commit: bdbf0f0
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -230,6 +230,7 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Páginas estables (QA-064):** los hallazgos se listan por severidad y, dentro de ella, del más nuevo al más antiguo; las ocurrencias ya no forman parte de la clave del cursor, porque crecen mientras alguien lee las páginas.
 - **Un plan vacío no se sella (QA-050):** una campaña sin unidades termina `failed` nada más prepararse, sin pedir compuertas y con el motivo.
 - **Escalado una vez (QA-044):** la severidad sube un nivel desde la del reto a partir de tres campañas, no un nivel más en cada avistamiento.
 - **Reintentos sin efectos dobles (QA-048, 049, 051):** una evaluación reintentada no escribe otro `finding.recur`; el sello reintentado devuelve el sello guardado; una preparación reintentada reutiliza lo fijado y no toma otra instantánea. Los anuncios llevan un id fijo (`finding-opened-…`, `campaign-sealed-…`) que el bus deduplica.
@@ -407,3 +408,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.12.1-alpha | 2026-09-28 | El resolutor verifica la instantánea | QA-26 (QA-040) |
 | 0.13.0-alpha | 2026-09-28 | Escalado una vez, reintentos idempotentes con anuncios deduplicables, evaluador en sus bordes y biblioteca independiente de la ruta | QA-28 (QA-044, 046, 047, 048, 049, 051, 053, 054, 056) |
 | 0.13.1-alpha | 2026-09-28 | Una campaña sin unidades termina fallida | QA-29 (QA-050) |
+| 0.13.2-alpha | 2026-09-28 | Listado de hallazgos sin ocurrencias en la clave del cursor | QA-31 (QA-064) |
