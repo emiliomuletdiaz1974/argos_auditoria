@@ -189,7 +189,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 
 | Hallazgo | Estado | Tarea | Commit | Fecha |
 |---|---|---|---|---|
-| QA-073, QA-074, QA-084, QA-085 | Corregido (QA-084 y QA-085, que eran `S`, reproducidos por su test antes de corregir) | QA-20 | pendiente | 2026-09-28 |
+| QA-073, QA-074, QA-084, QA-085 | Corregido (QA-084 y QA-085, que eran `S`, reproducidos por su test antes de corregir) | QA-20 | `8942fd1` | 2026-09-28 |
 
 ## 7. Historial
 
