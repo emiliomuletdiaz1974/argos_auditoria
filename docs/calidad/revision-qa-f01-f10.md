@@ -191,7 +191,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 |---|---|---|---|---|
 | QA-073, QA-074, QA-084, QA-085 | Corregido (QA-084 y QA-085, que eran `S`, reproducidos por su test antes de corregir) | QA-20 | `8942fd1` | 2026-09-28 |
 | QA-072, QA-075, QA-076, QA-077, QA-081, QA-083, QA-087 | Corregido (QA-081, que era `S`, lo reprodujo el propio test del instalador con la salida real de `kcadm.sh`) | QA-21 | `6c030a9` | 2026-09-28 |
-| QA-013, QA-078, QA-079, QA-088 | Corregido (los cuatro eran `S`; sus tests los reprodujeron antes de corregir) | QA-22 | pendiente | 2026-09-28 |
+| QA-013, QA-078, QA-079, QA-088 | Corregido (los cuatro eran `S`; sus tests los reprodujeron antes de corregir) | QA-22 | `081851e` | 2026-09-28 |
 
 ## 7. Historial
 
