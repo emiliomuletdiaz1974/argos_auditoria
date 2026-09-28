@@ -4,9 +4,9 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.16.0-alpha
-commit: 96b3236
-date: 2026-09-25
+version: 0.17.0-alpha
+commit: 6f0ca12
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -65,6 +65,7 @@ Los nombres del documento de fase (`--sev-critica`, `--verdict`…) pasan a ingl
 
 ## 6. Seguridad y tratamiento de datos
 
+- **La cola de revisión envía la categoría vista (QA-041):** «Confirmar» manda la categoría propuesta que se mostró; la API rechaza la aceptación si la propuesta cambió.
 - **Operación** (F10-07, ARG-092/099): la sección «Operación» muestra los ocho semáforos con su estado en palabras (correcto, fallo, sin medir) y no solo en color, las alertas activas y, al pulsar una, el runbook que dice qué hacer. El runbook se pinta con un renderizador propio de Markdown que solo crea elementos: una etiqueta del texto se muestra como texto, nunca como HTML.
 - **Capacidad** (F10-08, ARG-098): la pantalla de operación muestra cada dimensión de la talla con su uso y su franja en palabras (holgado, cerca del límite, en el límite).
 - **Esclusa** (F09-13, ARG-090): la sección «Esclusa» muestra el resultado de cada fichero que entra (importado o rechazado, motivo y SHA-256; «sin leer» cuando se rechazó sin abrirlo) y ofrece para la salida solo los tipos de la lista cerrada.
@@ -127,3 +128,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | 0.14.0-alpha | 2026-09-25 | Sección «Operación»: semáforos, alertas activas y runbook | F10-07 (ARG-092/099) |
 | 0.15.0-alpha | 2026-09-25 | Franjas de capacidad en la pantalla de operación | F10-08 (ARG-098) |
 | 0.16.0-alpha | 2026-09-25 | La esclusa ofrece el informe de instalación firmado | F10-10 (ARG-096) |
+| 0.17.0-alpha | 2026-09-28 | «Confirmar» envía la categoría propuesta que se mostró | QA-27 (QA-041) |

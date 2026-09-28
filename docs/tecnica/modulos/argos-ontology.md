@@ -4,8 +4,8 @@ kind: module
 title: Ontología normativa (argos-ontology)
 module: argos-ontology
 phases: ["04"]
-version: 0.6.1-alpha
-commit: 8eb3e4f
+version: 0.7.0-alpha
+commit: 6f0ca12
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -423,6 +423,10 @@ No es una norma jurídica: no pasa por la validación del perfil jurídico-técn
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Huella de la biblioteca estable (QA-036):** los ficheros se ordenan por su ruta POSIX y la extensión se compara distinguiendo mayúsculas: el SHA-256 del sello es el mismo en Windows y en Linux.
+- **ODRL fiel (QA-037):** solo se traducen a retos los operadores cuyo sentido conservan las plantillas (propósito `eq`/`isA`/`isAnyOf`/`isPartOf`, plazo `lt`/`lteq`/`eq`); lo demás, y toda cláusula leída pero no verificada (espacio, fecha, `notify`, otras prohibiciones), va al hallazgo `ds-unverifiable`.
+- **Fechas de vigencia (QA-038):** una fecha con hora se rechaza al compilar, y un literal de fecha que no se puede leer es un error, no una obligación siempre vigente.
+- **Clases de ubicación y credenciales (QA-035):** `AC-stored-location-data` entra en las siete obligaciones que ya enumeraban los datos de contacto (contenido provisional, pendiente de validación jurídica); `AC-stored-technical-credential` existe pero ninguna obligación la usa todavía.
 - **Tratamientos retirados fuera de SHACL (QA-033):** las formas solo evalúan tratamientos vigentes; uno que el RAT ya no trae está marcado y no se valida.
 - **Rechazos en el registro de seguridad** (F09-08):
   - un bundle con firma o clave rechazada deja `content.signature_rejected`;
@@ -549,3 +553,4 @@ No es una norma jurídica: no pasa por la validación del perfil jurídico-técn
 | 0.5.0-alpha | 2026-09-24 | Norma `SELF` (la especificación del producto), seis obligaciones `OBL-SELF-*` y la clase `AC-argos-appliance` | F10-01 (ARG-100) |
 | 0.6.0-alpha | 2026-09-24 | Tres obligaciones `OBL-SELF-*` más, sobre lo que observa el servicio de salud (canario WORM, certificados y colas) | F10-02 (ARG-094) |
 | 0.6.1-alpha | 2026-09-28 | SHACL ignora los tratamientos retirados | QA-26 (QA-033) |
+| 0.7.0-alpha | 2026-09-28 | Huella estable, ODRL fiel, fechas estrictas y clases de ubicación y credenciales | QA-27 (QA-035, 036, 037, 038) |

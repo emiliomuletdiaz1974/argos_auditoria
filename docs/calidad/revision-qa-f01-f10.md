@@ -1,6 +1,6 @@
 # Revisión de calidad de las Fases 01 a 10
 
-**Versión:** 1.7 · **Fecha:** 2026-09-28 · **Base:** `main` en `d74ba47` (tag `fase-10`) · **Confidencialidad:** `internal`
+**Versión:** 1.8 · **Fecha:** 2026-09-28 · **Base:** `main` en `d74ba47` (tag `fase-10`) · **Confidencialidad:** `internal`
 **Tarea:** QA-01 · **Relacionado:** [revisión de seguridad de F1–F8](../seguridad/revision-f01-f08.md), [modelo de amenazas](../seguridad/modelo-amenazas.md)
 
 Revisamos todo lo construido en `argos/` buscando errores de funcionamiento y casos borde, no estilo. Tratamos los hallazgos como los de un cliente, igual que en F09-02: cada uno queda **registrado** aquí, se **corrige** en una tarea `QA-2N` con un test que lo reproduce primero, y la corrección queda **evidenciada** en el commit y en este registro.
@@ -196,6 +196,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | QA-017, QA-018, QA-019, QA-020, QA-022, QA-023 | Corregido (QA-020, que era `S`, reproducido con un doble de la conexión ODBC) | QA-24 | `c9c270b` | 2026-09-28 |
 | QA-001, QA-004, QA-005 | Corregido (QA-004 y QA-005, que eran `S`, reproducidos por sus tests antes de corregir). Queda pendiente la herramienta para reprocesar los eventos agotados | QA-25 | `614dfaf` | 2026-09-28 |
 | QA-029, QA-030, QA-031, QA-032, QA-033, QA-039, QA-040, QA-043 | Corregido (los `S` —QA-029, 033, 039, 040, 043— reproducidos por sus tests; los de integración, vistos fallar contra el código anterior en un worktree aparte) | QA-26 | `8eb3e4f` | 2026-09-28 |
+| QA-034, QA-035, QA-036, QA-037, QA-038, QA-041, QA-042 | Corregido (QA-041 y QA-042, que eran `S`, reproducidos por sus tests; los de integración, vistos fallar contra el código anterior) | QA-27 | `6f0ca12` | 2026-09-28 |
 
 ## 7. Historial
 
@@ -209,3 +210,4 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | 1.5 | 2026-09-28 | Corregidos QA-017, 018, 019, 020, 022 y 023 (QA-24) |
 | 1.6 | 2026-09-28 | Corregidos QA-001, 004 y 005 (QA-25) |
 | 1.7 | 2026-09-28 | Corregidos QA-029, 030, 031, 032, 033, 039, 040 y 043 (QA-26) |
+| 1.8 | 2026-09-28 | Corregidos QA-034, 035, 036, 037, 038, 041 y 042 (QA-27) |

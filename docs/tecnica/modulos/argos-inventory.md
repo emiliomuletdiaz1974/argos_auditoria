@@ -4,8 +4,8 @@ kind: module
 title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
-version: 0.7.0-alpha
-commit: 8eb3e4f
+version: 0.8.0-alpha
+commit: 6f0ca12
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -79,6 +79,9 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Nombres en castellano, plurales y siglas (QA-034):** el diccionario quita tildes y ñ (NFKD), separa las siglas pegadas (`DNIPaciente`) y lee el singular de un plural (`emails`, `api_keys`).
+- **Revisión que se respeta (QA-041):** una columna que el DPO rechazó no la vuelve a clasificar el modelo por su cuenta, y aceptar exige que la propuesta sea la que la persona vio.
+- **Flujos estructurales estables (QA-042):** el mejor candidato va primero, sea cual sea el orden en que el grafo devuelve las filas; un nombre de columna con `|` no rompe su firma.
 - **Deltas una sola vez y completos (QA-029, 030).** Los deltas de una pasada esperan a que el consumidor de la ingesta no tenga mensajes pendientes, incluidas las reentregas. Se calculan en una sola transacción con sus marcas y su asiento, y la pasada queda sellada (`scan_runs.deltas_at`, migración 0046): un reintento devuelve el mismo informe sin perder desapariciones ni duplicar el asiento. Unos permisos que llegan antes que su tabla se vuelven a entregar en vez de perderse.
 - **Pasadas abandonadas (QA-031).** Una pasada que sigue `running` 4 horas después de empezar (el doble del plazo del workflow) se cierra como fallida y el sistema vuelve a planificarse.
 - **Accesos revocados y roles retirados (QA-032).** Un permiso que no vuelve a verse queda marcado `missing` en su arista `CAN_ACCESS`, con delta `disappeared`; los roles (`Identity`) desaparecen como el resto de nodos.
@@ -146,3 +149,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.5.0-alpha | 2026-09-23 | Rol `svc_inventory`; las sesiones del grafo sin `LOAD 'age'` | F09-04 (ARG-085) |
 | 0.6.0-alpha | 2026-09-24 | El nodo `System` guarda en la instantánea su propio id como sistema | F10-01 (ARG-100) |
 | 0.7.0-alpha | 2026-09-28 | Deltas atómicos y reintentables, espera a la ingesta, pasadas abandonadas, accesos revocados, ingesta idempotente, tratamientos retirados, validación pendiente e instantáneas cerradas (migración 0046) | QA-26 (QA-029, 030, 031, 032, 033, 039, 040, 043) |
+| 0.8.0-alpha | 2026-09-28 | Diccionario con tildes, siglas y plurales; revisiones del DPO respetadas; flujos estructurales estables | QA-27 (QA-034, 041, 042) |

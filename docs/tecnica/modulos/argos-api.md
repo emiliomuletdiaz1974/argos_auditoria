@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.38.1-alpha
-commit: 081851e
+version: 0.39.0-alpha
+commit: 6f0ca12
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -85,6 +85,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Aceptar lo que se vio (QA-041):** `POST /inventory/review-queue/{node_key}` con `accept` admite la categoría que vio el revisor; si la propuesta cambió entretanto, responde `409`.
 - **Sesiones cerradas** (F09-32, SEC-060): al cerrar sesión (`POST /api/v1/auth/logout`), si el realm aceptó revocar ese refresco, la API apunta su sesión (`sid`) en `argos.closed_sessions` durante 15 minutos, más que cualquier token de acceso. El guardián de cada réplica rechaza con `401` un token de una sesión cerrada y lo registra (`auth.session_closed`). Cada réplica guarda las respuestas 5 segundos. Una cookie que el realm rechaza no cierra nada: nadie puede cerrar la sesión de otra persona con un `sid` copiado.
 - **Mismo origen en las mutaciones** (F09-15, SEC-058): un `POST`, `PUT`, `PATCH` o `DELETE` con una cabecera `Origin` de otro origen (o `null`) recibe `403` problem+json antes de llegar a la ruta, y queda en el registro de seguridad (`http.origin_refused`). La consola vive en el mismo origen (ADR-0013); un cliente sin navegador no envía `Origin` y se juzga solo por su token.
 - **Esclusa** (F09-13, ARG-090): `POST /api/v1/airgap/imports` y `POST /api/v1/airgap/exports` (`airgap.import` y `airgap.export`, solo `platform_admin` con segundo factor). La API construye la esclusa (`argos-airgap`) con los importadores y exportadores de los servicios que tiene configurados; un tipo de exportación fuera de la lista cerrada responde `403` y queda registrado. Desde la migración 0038, `svc_api` puede insertar las cuádruplas de una versión de contenido que `load_bundle` ya verificó.
@@ -209,3 +210,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.37.0-alpha | 2026-09-25 | `POST /systems` dentro de la talla, límite de campañas en paralelo e informe `/operations/capacity` (migración 0044) | F10-08 (ARG-098) |
 | 0.38.0-alpha | 2026-09-25 | La esclusa exporta el informe de instalación (`ARGOS_INSTALL_DIR`) | F10-10 (ARG-096) |
 | 0.38.1-alpha | 2026-09-28 | La verificación de la cadena del registro de seguridad en `/metrics`, una vez cada cinco minutos | QA-22 (QA-013) |
+| 0.39.0-alpha | 2026-09-28 | La aceptación de una revisión lleva la categoría vista (contrato v1) | QA-27 (QA-041) |
