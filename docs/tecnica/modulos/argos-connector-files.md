@@ -5,7 +5,7 @@ title: Conector de ficheros SMB, NFS y S3 (argos-connector-files)
 module: argos-connector-files
 phases: ["02"]
 version: 0.3.0-alpha
-commit: pendiente
+commit: fdb87ac
 date: 2026-09-28
 status: current
 confidentiality: client

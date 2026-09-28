@@ -5,7 +5,7 @@ title: Conector FHIR R4 (argos-connector-fhir)
 module: argos-connector-fhir
 phases: ["02"]
 version: 0.1.1-alpha
-commit: pendiente
+commit: fdb87ac
 date: 2026-09-28
 status: current
 confidentiality: client

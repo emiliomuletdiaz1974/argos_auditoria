@@ -5,7 +5,7 @@ title: Conector LDAP y Active Directory (argos-connector-ldap)
 module: argos-connector-ldap
 phases: ["02"]
 version: 0.2.0-alpha
-commit: pendiente
+commit: fdb87ac
 date: 2026-09-28
 status: current
 confidentiality: client
