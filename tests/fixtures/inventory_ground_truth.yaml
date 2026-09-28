@@ -101,4 +101,6 @@ expected_deltas:
   - {system: dev-source-postgres, kind: disappeared, label: Column, qualified_name: clinic.readmission_risk.patient_id}
   - {system: dev-source-postgres, kind: disappeared, label: Column, qualified_name: clinic.readmission_risk.risk_score}
   - {system: dev-source-postgres, kind: disappeared, label: Column, qualified_name: clinic.readmission_risk.predicted_at}
+  # Its access goes with it: a revoked access is a delta too (QA-26).
+  - {system: dev-source-postgres, kind: disappeared, label: CAN_ACCESS, qualified_name: clinic.readmission_risk}
   - {system: dev-source-postgres, kind: anomalous_growth, label: Table, qualified_name: clinic.appointments}
