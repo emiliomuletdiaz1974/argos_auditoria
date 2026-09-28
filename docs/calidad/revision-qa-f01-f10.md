@@ -193,7 +193,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | QA-072, QA-075, QA-076, QA-077, QA-081, QA-083, QA-087 | Corregido (QA-081, que era `S`, lo reprodujo el propio test del instalador con la salida real de `kcadm.sh`) | QA-21 | `6c030a9` | 2026-09-28 |
 | QA-013, QA-078, QA-079, QA-088 | Corregido (los cuatro eran `S`; sus tests los reprodujeron antes de corregir) | QA-22 | `081851e` | 2026-09-28 |
 | QA-015, QA-016, QA-021, QA-024, QA-025, QA-026, QA-027, QA-028 | Corregido (los `S` —QA-024 a 028— reproducidos por su test antes de corregir; QA-024 probado contra el Oracle simulado) | QA-23 | `fdb87ac` | 2026-09-28 |
-| QA-017, QA-018, QA-019, QA-020, QA-022, QA-023 | Corregido (QA-020, que era `S`, reproducido con un doble de la conexión ODBC) | QA-24 | pendiente | 2026-09-28 |
+| QA-017, QA-018, QA-019, QA-020, QA-022, QA-023 | Corregido (QA-020, que era `S`, reproducido con un doble de la conexión ODBC) | QA-24 | `c9c270b` | 2026-09-28 |
 
 ## 7. Historial
 
