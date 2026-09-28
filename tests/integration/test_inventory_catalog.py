@@ -204,3 +204,22 @@ def test_invalid_imports_write_nothing(
     with pytest.raises(ValueError, match=message):
         import_treatments(store, migrated_db, content, actor)
     assert store.query("MATCH (t:Treatment) RETURN t.key", columns=("key",)) == []
+
+
+def test_a_treatment_removed_from_the_file_is_removed(migrated_db: str) -> None:
+    """QA-033: what the docstring of the import promised: declarations that disappear from the
+    file go, and the treatment is marked, never deleted."""
+    postgres, _, store = _setup(migrated_db)
+    import_treatments(store, migrated_db, CSV, DPO)
+    only_first = b"\n".join(CSV.split(b"\n")[:2]) + b"\n"
+    summary = import_treatments(store, migrated_db, only_first, DPO)
+    assert summary.treatments == 1
+    rows = store.query(
+        "MATCH (t:Treatment) RETURN t.id, coalesce(t.missing, false)",
+        columns=("id", "missing"),
+    )
+    assert {r["id"]: r["missing"] for r in rows} == {"T-001": False, "T-002": True}
+    declared = store.query(
+        "MATCH (s:System)-[:DECLARED_IN]->(t:Treatment) RETURN t.id", columns=("id",)
+    )
+    assert declared == [{"id": "T-001"}]

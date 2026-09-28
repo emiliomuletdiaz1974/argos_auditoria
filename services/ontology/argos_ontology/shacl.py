@@ -26,7 +26,10 @@ N = Namespace("urn:argos:node:")
 SH = Namespace("http://www.w3.org/ns/shacl#")
 SHAPES_DIR = LIBRARY_DIR / "ontology" / "shapes"
 
-_TREATMENTS = "MATCH (t:Treatment) RETURN t.key, t.legal_basis, t.retention"
+_TREATMENTS = (
+    "MATCH (t:Treatment) WHERE coalesce(t.missing, false) = false "
+    "RETURN t.key, t.legal_basis, t.retention"
+)
 _DECLARED = "MATCH (s:System)-[:DECLARED_IN]->(t:Treatment) RETURN s.key, t.key"
 _HEALTH_SYSTEMS = (
     "MATCH (t:Table)-[:CONTAINS]->(c:Column)-[:CLASSIFIED_AS]->(k:Category) "

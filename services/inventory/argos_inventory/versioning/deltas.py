@@ -24,7 +24,9 @@ JOURNAL_ACTOR = "system:inventory"
 # Labels a System reaches through CONTAINS; every one stores system_id. The deltas ask per label
 # with an indexed property map instead of walking CONTAINS*1..3 from the System, which AGE 1.5.0
 # plans as a scan of the whole graph (1.5 s per system with 10 200 columns; task F03-15).
-CONTAINED_LABELS = ("Schema", "Table", "Column", "FileArea")
+# Identities are the roles of the system: a revoked role no longer shows up in a scan and
+# disappears like a table does (QA-032).
+CONTAINED_LABELS = ("Schema", "Table", "Column", "FileArea", "Identity")
 APPEARED_BY_LABEL = {
     label: (
         f"MATCH (n:{label} {{system_id: $sid}}) WHERE n.first_seen >= $t0 "
@@ -47,6 +49,17 @@ MARK_MISSING_BY_LABEL = {
     )
     for label in CONTAINED_LABELS
 }
+# A grant not seen again is a revoked access: it is marked, like everything else (QA-032).
+REVOKED_ACCESS = (
+    "MATCH (i:Identity {system_id: $sid})-[a:CAN_ACCESS]->(t:Table) "
+    "WHERE a.last_seen < $t0 AND coalesce(a.missing, false) = false "
+    "RETURN i.key, i.name, t.qualified_name, t.key"
+)
+MARK_ACCESS_REVOKED = (
+    "UNWIND $pairs AS p "
+    "MATCH (i:Identity {key: p.identity})-[a:CAN_ACCESS]->(t:Table {key: p.table}) "
+    "SET a.missing = true SET a.missing_since = $t0"
+)
 GROWTH = (
     "MATCH (t:Table {system_id: $sid}) "
     "WHERE t.last_seen >= $t0 AND t.est_rows_prev IS NOT NULL "
@@ -97,16 +110,37 @@ def _load_run(dsn: str, system_id: str, run_id: str) -> tuple[str, datetime, str
     return str(row[0]), row[1], row[2]
 
 
-def _record(dsn: str, report: DeltaReport) -> None:
+def _record(dsn: str, report: DeltaReport, conn: Any) -> None:
+    """The deltas, their journal entry and the mark of the run, in the caller's transaction."""
     journal = PostgresJournal(dsn)
+    for delta in report.deltas:
+        conn.execute(
+            _INSERT_DELTA,
+            (report.run_id, delta.kind, delta.label, delta.node_key, json.dumps(delta.detail)),
+        )
+    payload = {"system_id": report.system_id, "run_id": report.run_id, "counts": report.counts}
+    journal.append(JOURNAL_ACTOR, "inventory.delta", payload, conn=conn)
+    conn.execute("UPDATE argos.scan_runs SET deltas_at = now() WHERE id = %s", (report.run_id,))
+
+
+def _recorded(dsn: str, system_id: str, run_id: str) -> DeltaReport | None:
+    """The report of a run whose deltas were already computed: a retry gives it back (QA-030)."""
     with psycopg.connect(dsn) as conn:
-        for delta in report.deltas:
-            conn.execute(
-                _INSERT_DELTA,
-                (report.run_id, delta.kind, delta.label, delta.node_key, json.dumps(delta.detail)),
-            )
-        payload = {"system_id": report.system_id, "run_id": report.run_id, "counts": report.counts}
-        journal.append(JOURNAL_ACTOR, "inventory.delta", payload, conn=conn)
+        row = conn.execute(
+            "SELECT deltas_at FROM argos.scan_runs WHERE id = %s", (run_id,)
+        ).fetchone()
+        if row is None or row[0] is None:
+            return None
+        rows = conn.execute(
+            "SELECT kind, node_label, node_key, detail FROM argos.inventory_deltas"
+            " WHERE run_id = %s ORDER BY id",
+            (run_id,),
+        ).fetchall()
+    deltas = tuple(
+        Delta(str(k), str(label), str(key), dict(detail)) for k, label, key, detail in rows
+    )
+    counts = {kind: sum(1 for d in deltas if d.kind == kind) for kind in DELTA_KINDS}
+    return DeltaReport(run_id, system_id, False, counts, deltas)
 
 
 def _node_delta(kind: str, label: str, row: dict[str, Any]) -> Delta:
@@ -128,6 +162,10 @@ def compute_deltas(
     if prev_run is None:
         empty = {kind: 0 for kind in DELTA_KINDS}
         return DeltaReport(run_id, system_id, True, empty, ())
+    done = _recorded(dsn, system_id, run_id)
+    if done is not None:
+        _announce(bus, done)  # the retry announces what the first attempt may not have
+        return done
     t0 = iso_utc(started_at)
     params = {"sid": system_id, "t0": t0}
     deltas: list[Delta] = []
@@ -144,23 +182,49 @@ def compute_deltas(
                 keys = {"keys": [d.node_key for d in found], "t0": t0}
                 store.execute(MARK_MISSING_BY_LABEL[label], keys, conn)
             gone += found
+        revoked = store.query(
+            REVOKED_ACCESS, params, ("identity", "grantee", "table_name", "table"), conn
+        )
+        if revoked:
+            pairs = [{"identity": r["identity"], "table": r["table"]} for r in revoked]
+            store.execute(MARK_ACCESS_REVOKED, {"pairs": pairs, "t0": t0}, conn)
+            gone += [
+                Delta(
+                    "disappeared",
+                    "CAN_ACCESS",
+                    f"{r['identity']}->{r['table']}",
+                    {"name": str(r["grantee"]), "qualified_name": str(r["table_name"])},
+                )
+                for r in revoked
+            ]
         growth = store.query(GROWTH, params, growth_columns, conn)
-    deltas += gone
-    for row in growth:
-        if is_anomalous_growth(row["before"], int(row["now"]), growth_factor):
-            detail = {
-                "name": row["name"],
-                "qualified_name": row["qualified_name"],
-                "before": row["before"],
-                "now": row["now"],
-            }
-            deltas.append(Delta("anomalous_growth", "Table", str(row["key"]), detail))
-    counts = {kind: sum(1 for d in deltas if d.kind == kind) for kind in DELTA_KINDS}
-    report = DeltaReport(run_id, system_id, False, counts, tuple(deltas))
-    _record(dsn, report)
-    ready = {"system_id": system_id, "run_id": run_id, "counts": counts}
-    asyncio.run(bus.publish("argos.discovery.delta_ready", "discovery.delta_ready.v1", ready))
+        deltas += gone
+        for row in growth:
+            if is_anomalous_growth(row["before"], int(row["now"]), growth_factor):
+                detail = {
+                    "name": row["name"],
+                    "qualified_name": row["qualified_name"],
+                    "before": row["before"],
+                    "now": row["now"],
+                }
+                deltas.append(Delta("anomalous_growth", "Table", str(row["key"]), detail))
+        counts = {kind: sum(1 for d in deltas if d.kind == kind) for kind in DELTA_KINDS}
+        report = DeltaReport(run_id, system_id, False, counts, tuple(deltas))
+        # The marks, the deltas and the journal entry commit together, or none does (QA-030).
+        _record(dsn, report, conn)
+    _announce(bus, report)
     return report
+
+
+def _announce(bus: EventPublisher, report: DeltaReport) -> None:
+    ready = {"system_id": report.system_id, "run_id": report.run_id, "counts": report.counts}
+    asyncio.run(
+        bus.publish(
+            "argos.discovery.delta_ready",
+            "discovery.delta_ready.v1",
+            ready,
+        )
+    )
 
 
 def node_deltas(dsn: str, node_key: str, limit: int = 50) -> list[dict[str, Any]]:

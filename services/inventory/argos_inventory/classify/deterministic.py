@@ -44,6 +44,18 @@ CLASSIFY_CREATE = (
     "CREATE (c)-[:CLASSIFIED_AS {method: r.method, confidence: r.confidence, at: $at, "
     "rate: r.rate, validated: r.validated}]->(k)"
 )
+# A column whose validation probe could not run keeps a mark and is validated on the next pass,
+# instead of staying with the confidence of its name for ever (QA-043).
+PENDING_VALIDATION = (
+    "MATCH (t:Table {system_id: $sid})-[:CONTAINS]->(c:Column) "
+    "WHERE c.validation_pending = true AND coalesce(c.missing, false) = false "
+    "RETURN c.key, c.name, t.qualified_name"
+)
+MARK_VALIDATION = "UNWIND $keys AS k MATCH (c:Column {key: k}) SET c.validation_pending = $pending"
+EXISTING_EDGES = (
+    "UNWIND $keys AS k MATCH (c:Column {key: k})-[:CLASSIFIED_AS]->(g:Category) "
+    "RETURN c.key, g.name"
+)
 CLASSIFY_UPDATE = (
     "UNWIND $rows AS r "
     "MATCH (c:Column {key: r.key})-[x:CLASSIFIED_AS]->(k:Category {name: r.category}) "
@@ -123,6 +135,13 @@ def _write_edges(
     written.update({r["key"]: r["category"] for r in rows})
 
 
+def _mark_validation(
+    store: GraphStore, candidates: list[tuple[ColumnRef, tuple[str, ...]]], pending: bool
+) -> None:
+    keys = [column.key for column, _ in candidates]
+    store.execute(MARK_VALIDATION, {"keys": keys, "pending": pending})
+
+
 def classify_new_columns(
     store: GraphStore,
     runner: ProbeRunner,
@@ -151,9 +170,17 @@ def classify_new_columns(
         _write_edges(store, dictionary_rows, written, at)
     dictionary = len(dictionary_rows)
 
-    # Phase B: one validation probe per table for the columns whose name hints a validator.
+    # Phase B: one validation probe per table for the columns whose name hints a validator,
+    # the new ones and the ones whose validation could not run last time.
+    pending_rows = store.query(PENDING_VALIDATION, {"sid": system_id}, ("key", "name", "table"))
+    pending = [ColumnRef(str(r["key"]), str(r["name"]), str(r["table"])) for r in pending_rows]
+    if pending:
+        existing = store.query(
+            EXISTING_EDGES, {"keys": [c.key for c in pending]}, ("key", "category")
+        )
+        written.update({str(r["key"]): str(r["category"]) for r in existing})
     by_table: dict[str, list[tuple[ColumnRef, tuple[str, ...]]]] = {}
-    for column in columns:
+    for column in [*columns, *pending]:
         hints = validator_hints(column.name, available)
         if hints:
             by_table.setdefault(column.table, []).append((column, hints))
@@ -173,10 +200,13 @@ def classify_new_columns(
                 "table not sampled", extra={"table": table, "error": type(refused).__name__}
             )
             failures += 1
+            _mark_validation(store, candidates, pending=True)
             continue
         if not result.ok:
             failures += 1
+            _mark_validation(store, candidates, pending=True)
             continue
+        _mark_validation(store, candidates, pending=False)
         # The probe runs outside any transaction; its accepted columns are written together.
         accepted_rows = []
         for column, hints in candidates:

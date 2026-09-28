@@ -41,9 +41,15 @@ TABLE_UPSERT = (
     "MATCH (h:Schema {key: $schema_key}) "
     "MERGE (t:Table {key: $table_key}) SET t.name = $table SET t.qualified_name = $qualified_name "
     "SET t.system_id = $system_id "
-    "SET t.est_rows_prev = coalesce(t.est_rows, $est_rows) SET t.est_rows = $est_rows "
+    # The previous size is the one of the previous run: a redelivered event of the same run
+    # leaves it alone, and an old event never moves last_seen back (QA-039).
+    "SET t.est_rows_prev = CASE WHEN t.est_rows_run = $run_id THEN t.est_rows_prev "
+    "ELSE coalesce(t.est_rows, $est_rows) END "
+    "SET t.est_rows = $est_rows SET t.est_rows_run = $run_id "
     "SET t.bytes = $bytes SET t.comment = $comment "
-    "SET t.first_seen = coalesce(t.first_seen, $at) SET t.last_seen = $at "
+    "SET t.first_seen = coalesce(t.first_seen, $at) "
+    "SET t.last_seen = CASE WHEN t.last_seen IS NULL OR t.last_seen < $at THEN $at "
+    "ELSE t.last_seen END "
     "SET t.missing = false SET t.missing_since = null "
     "SET t.source_connector = $source_connector SET t.probe_id = $probe_id "
     "SET t.journal_seq = $journal_seq "
@@ -70,15 +76,18 @@ COLUMN_EDGES_CREATE = (
     "UNWIND $columns AS c MATCH (t:Table {key: $table_key}) MATCH (col:Column {key: c.key}) "
     "CREATE (t)-[:CONTAINS]->(col)"
 )
+TABLE_KNOWN = "MATCH (t:Table {key: $table_key}) RETURN t.key"
 IDENTITIES_UPSERT = (
     "UNWIND $grants AS g "
     "MERGE (i:Identity {key: g.key}) SET i.name = g.grantee SET i.kind = 'database_role' "
     "SET i.system_id = $system_id "
-    "SET i.first_seen = coalesce(i.first_seen, $at) SET i.last_seen = $at"
+    "SET i.first_seen = coalesce(i.first_seen, $at) SET i.last_seen = $at "
+    "SET i.missing = false SET i.missing_since = null"
 )
 ACCESS_EDGES_UPSERT = (
     "UNWIND $grants AS g MATCH (t:Table {key: $table_key}) MATCH (i:Identity {key: g.key}) "
     "MERGE (i)-[a:CAN_ACCESS]->(t) SET a.privileges = g.privileges SET a.last_seen = $at "
+    "SET a.missing = false "
     "SET a.probe_id = $probe_id"
 )
 FILE_AREA_UPSERT = (
@@ -154,6 +163,10 @@ def ingest_access_found(
 ) -> None:
     params = access_parameters(data)
     with store.connection() as conn:
+        if not store.query(TABLE_KNOWN, {"table_key": params["table_key"]}, ("key",), conn):
+            # The grants of a table not yet ingested would match nothing and vanish: the event is
+            # delivered again once its table_found has been ingested (QA-029).
+            raise LookupError(f"table {params['table_key']} is not ingested yet")
         store.execute(IDENTITIES_UPSERT, params, conn)
         store.execute(ACCESS_EDGES_UPSERT, params, conn)
 

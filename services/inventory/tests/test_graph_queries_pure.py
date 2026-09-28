@@ -39,7 +39,7 @@ def test_inventory_queries_have_no_variable_length_paths() -> None:
 
 
 def test_deltas_cover_every_label_a_system_contains() -> None:
-    expected = {"Schema", "Table", "Column", "FileArea"}
+    expected = {"Schema", "Table", "Column", "FileArea", "Identity"}  # a revoked role too (QA-032)
     assert set(deltas.APPEARED_BY_LABEL) == expected
     assert set(deltas.DISAPPEARED_BY_LABEL) == expected
     assert set(deltas.MARK_MISSING_BY_LABEL) == expected

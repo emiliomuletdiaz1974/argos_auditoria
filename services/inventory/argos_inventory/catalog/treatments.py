@@ -20,8 +20,20 @@ TREATMENT_HEADERS = ("id", "name", "legal_basis", "retention", "systems")
 
 _TREATMENT_UPSERT = (
     "MERGE (tr:Treatment {key: $key}) SET tr.id = $id SET tr.name = $name "
-    "SET tr.legal_basis = $legal_basis SET tr.retention = $retention SET tr.imported_at = $at"
+    "SET tr.legal_basis = $legal_basis SET tr.retention = $retention SET tr.imported_at = $at "
+    "SET tr.missing = false SET tr.missing_since = null"
 )
+# A treatment the new file no longer lists: its declarations go and it is marked, never deleted
+# (QA-033: the docstring of the import promised it; only changed systems were reconciled).
+_ABSENT_TREATMENTS = (
+    "MATCH (tr:Treatment) WHERE NOT tr.id IN $ids AND coalesce(tr.missing, false) = false "
+    "RETURN tr.key"
+)
+_RETIRE_TREATMENT = (
+    "MATCH (tr:Treatment {key: $key}) SET tr.missing = true SET tr.missing_since = $at "
+    "WITH tr MATCH (:System)-[d:DECLARED_IN]->(tr) DELETE d"
+)
+_DECLARATIONS_OF = "MATCH (:System)-[d:DECLARED_IN]->(:Treatment {key: $key}) RETURN count(d)"
 _STALE_DECLARATIONS = (
     "MATCH (s:System)-[d:DECLARED_IN]->(tr:Treatment {key: $key}) "
     "WHERE NOT s.id IN $system_ids RETURN s.id"
@@ -134,6 +146,12 @@ def import_treatments(
                 declaration = {"system_key": system_key(system_id), "key": key, "at": at}
                 store.execute(_DECLARE, declaration, conn)
                 links += 1
+        ids = [row.id for row in rows]
+        for absent in store.query(_ABSENT_TREATMENTS, {"ids": ids}, ("key",), conn):
+            key = str(absent["key"])
+            declared = store.query(_DECLARATIONS_OF, {"key": key}, ("n",), conn)
+            removed += int(declared[0]["n"]) if declared else 0
+            store.execute(_RETIRE_TREATMENT, {"key": key, "at": at}, conn)
         payload = {"treatments": len(rows), "links": links, "removed": removed}
         journal.append(actor, "inventory.treatments_import", payload, conn=conn)
     return ImportSummary(len(rows), links, removed)

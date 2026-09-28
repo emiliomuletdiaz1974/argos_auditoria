@@ -21,6 +21,7 @@ from argos_common.config import ArgosConfig, get_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
 from argos_events import bus_from_config
+from argos_inventory.ingest.main import DURABLE as INGEST_DURABLE
 from argos_inventory.scheduler.activities import InventoryActivities
 from argos_inventory.scheduler.workflows import RescanPlanner, ScanSystem
 
@@ -77,7 +78,12 @@ async def run(cfg: ArgosConfig) -> None:
     try:
         client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")
         secrets = VaultSecretStore(cfg.VAULT_ADDR, cfg.VAULT_TOKEN.get_secret_value())
-        activities = InventoryActivities(cfg.DATABASE_URL, secrets, bus)
+
+        async def ingestion_backlog() -> int:
+            info = await bus.js.consumer_info("DISCOVERY", INGEST_DURABLE)
+            return int(info.num_pending) + int(info.num_ack_pending)
+
+        activities = InventoryActivities(cfg.DATABASE_URL, secrets, bus, ingestion_backlog)
         created = await ensure_schedule(client)
         log = get_logger(__name__, "ARG-030")
         log.info(f"schedule {SCHEDULE_ID} {'created' if created else 'already present'}")

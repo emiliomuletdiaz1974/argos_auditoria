@@ -149,8 +149,10 @@ def test_deltas_are_stored_journaled_and_idempotent(migrated_db: str) -> None:
             "WHERE action = 'inventory.delta'"
         ).fetchall()
     assert dict(stored) == {"appeared": 3, "disappeared": 3, "anomalous_growth": 1}
-    assert journal == [("system:inventory", run2), ("system:inventory", run2)]
-    assert again.counts["disappeared"] == 0  # already marked missing by the first computation
+    # QA-030: a retry gives back the same report and journals nothing twice; it used to find the
+    # tables already marked and lose the disappearances.
+    assert journal == [("system:inventory", run2)]
+    assert again.counts == {"appeared": 3, "disappeared": 3, "anomalous_growth": 1}
 
 
 def test_failed_runs_are_refused(migrated_db: str) -> None:
@@ -205,3 +207,105 @@ def test_snapshots_are_immutable(migrated_db: str, statement: str) -> None:
         pytest.raises(psycopg.errors.RaiseException, match="immutable"),
     ):
         conn.execute(statement)
+
+
+# --- QA-26 --------------------------------------------------------------------------------
+
+
+def _access(system_id: str, run_id: str, at: datetime, table: str, grantee: str) -> dict[str, Any]:
+    return {
+        "system_id": system_id,
+        "run_id": run_id,
+        "source_connector": "argos_sql.postgres:PostgresConnector",
+        "probe_id": f"probe-access-{table}",
+        "journal_seq": 1,
+        "observed_at": iso_utc(at + timedelta(seconds=40)),
+        "schema": "clinic",
+        "table": table,
+        "grants": [{"grantee": grantee, "privilege": "SELECT"}],
+    }
+
+
+def _handle(ingestor: Ingestor, event_type: str, data: dict[str, Any]) -> None:
+    asyncio.run(ingestor.handle(data, {"type": f"eu.argos.{event_type}"}))
+
+
+def test_a_revoked_access_disappears_like_a_table(migrated_db: str) -> None:
+    """QA-032: a grant not seen again is marked, and the role with it."""
+    system_id = register_catalog_system(migrated_db, "dev-source-postgres")
+    store = GraphStore(migrated_db)
+    ingestor = Ingestor(store, migrated_db, RecordingBus())
+    run1 = _run(migrated_db, system_id, T1, None)
+    _ingest_all(ingestor, [_table(system_id, run1, T1, "appointments", 10, ["id"])])
+    _handle(
+        ingestor, "discovery.access_found.v1", _access(system_id, run1, T1, "appointments", "app")
+    )
+    run2 = _run(migrated_db, system_id, T2, run1)
+    _ingest_all(ingestor, [_table(system_id, run2, T2, "appointments", 10, ["id"])])
+    report = compute_deltas(store, migrated_db, RecordingBus(), system_id, run2)
+    gone = {(d.label, d.detail["name"]) for d in report.deltas if d.kind == "disappeared"}
+    assert ("CAN_ACCESS", "app") in gone and ("Identity", "app") in gone
+    [edge] = store.query(
+        "MATCH (:Identity)-[a:CAN_ACCESS]->(:Table) RETURN a.missing", columns=("missing",)
+    )
+    assert edge == {"missing": True}
+
+
+def test_a_redelivered_event_does_not_erase_the_growth(migrated_db: str) -> None:
+    """QA-039: the previous size is the one of the previous run, however many times an event of
+    this run arrives."""
+    system_id, _, run2, store = _two_runs(migrated_db)
+    ingestor = Ingestor(store, migrated_db, RecordingBus())
+    again = _table(system_id, run2, T2, "appointments", 70000, ["id", "department"])
+    _ingest_all(ingestor, [again, again])
+    report = compute_deltas(store, migrated_db, RecordingBus(), system_id, run2)
+    assert report.counts["anomalous_growth"] == 1
+
+
+def test_an_old_event_does_not_move_last_seen_back(migrated_db: str) -> None:
+    system_id, run1, _, store = _two_runs(migrated_db)
+    ingestor = Ingestor(store, migrated_db, RecordingBus())
+    _ingest_all(ingestor, [_table(system_id, run1, T1, "appointments", 20000, ["id"])])
+    [row] = store.query(
+        "MATCH (t:Table {key: $key}) RETURN t.last_seen",
+        {"key": table_key(system_id, "clinic", "appointments")},
+        ("seen",),
+    )
+    assert row["seen"] == iso_utc(T2 + timedelta(seconds=30))
+
+
+def test_a_closed_snapshot_takes_no_more_nodes(migrated_db: str) -> None:
+    """QA-040: the nodes of a snapshot are written when it is taken, never afterwards."""
+    _two_runs(migrated_db)
+    snapshot = take_snapshot(GraphStore(migrated_db), migrated_db, "closed")
+    with psycopg.connect(migrated_db) as conn, pytest.raises(psycopg.errors.RaiseException):
+        conn.execute(
+            "INSERT INTO argos.inventory_snapshot_nodes (snapshot_id, node_key, label, name,"
+            " qualified_name, system_id, categories)"
+            " SELECT snapshot_id, node_key || '-planted', label, name, qualified_name, system_id,"
+            " categories FROM argos.inventory_snapshot_nodes WHERE snapshot_id = %s LIMIT 1",
+            (snapshot.id,),
+        )
+    assert verify_snapshot(migrated_db, snapshot.id) is True
+
+
+def test_a_run_abandoned_in_running_does_not_block_its_system(migrated_db: str) -> None:
+    """QA-031: a run still `running` long after the scan timeout is closed as failed."""
+    from argos_inventory.scheduler.activities import InventoryActivities
+
+    system_id = register_catalog_system(migrated_db, "dev-source-postgres")
+    run_id = str(uuid.uuid4())
+    with psycopg.connect(migrated_db) as conn:
+        conn.execute(
+            "INSERT INTO argos.scan_runs (id, system_id, status, started_at)"
+            " VALUES (%s, %s, 'running', now() - interval '6 hours')",
+            (run_id, system_id),
+        )
+    activities = InventoryActivities(migrated_db, None, RecordingBus())  # type: ignore[arg-type]
+    [state] = [s for s in activities._states(datetime.now(UTC)) if s.system_id == system_id]
+    assert state.running is False
+    with psycopg.connect(migrated_db) as conn:
+        status, error = conn.execute(
+            "SELECT status, error FROM argos.scan_runs WHERE id = %s", (run_id,)
+        ).fetchone()  # type: ignore[misc]
+    assert status == "failed" and "abandoned" in error

@@ -12,7 +12,7 @@ from typing import Any
 import psycopg
 
 from argos_inventory.api.selector import Selector
-from argos_inventory.versioning.snapshots import snapshot_nodes
+from argos_inventory.versioning.snapshots import snapshot_nodes, verify_snapshot
 from argos_ontology.resolver import ResolvedNode
 
 _SYSTEMS_OF_KIND = "SELECT id::text FROM argos.systems WHERE kind = %s"
@@ -57,6 +57,10 @@ def matches(node: Mapping[str, Any], selector: Selector, system_ids: frozenset[s
     return False
 
 
+class SnapshotAlteredError(Exception):
+    """A snapshot whose nodes no longer give its recorded hash."""
+
+
 class SnapshotSelectorResolver:
     """Resolves selectors over a snapshot; fulfils the `SelectorResolver` protocol of F04-11."""
 
@@ -65,7 +69,12 @@ class SnapshotSelectorResolver:
     ):
         self._dsn = dsn
         self.snapshot_id = snapshot_id
-        self._nodes = list(nodes) if nodes is not None else snapshot_nodes(dsn, snapshot_id)
+        if nodes is None:
+            # What a campaign resolves on is what was hashed when the snapshot was taken (QA-040).
+            if not verify_snapshot(dsn, snapshot_id):
+                raise SnapshotAlteredError(f"snapshot {snapshot_id} does not match its hash")
+            nodes = snapshot_nodes(dsn, snapshot_id)
+        self._nodes = list(nodes)
         self._kinds: dict[str, frozenset[str]] = {}
 
     @property

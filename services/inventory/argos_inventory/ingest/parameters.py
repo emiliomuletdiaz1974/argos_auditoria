@@ -48,6 +48,7 @@ def _provenance(data: dict[str, Any]) -> dict[str, Any]:
         "source_connector": data["source_connector"],
         "probe_id": data["probe_id"],
         "journal_seq": data["journal_seq"],
+        "run_id": str(data.get("run_id", "")),
     }
 
 

@@ -1,6 +1,7 @@
 """Inventory scheduler activities: every I/O of the rescan pipeline lives here (ARG-030)."""
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import partial
@@ -26,6 +27,14 @@ from argos_inventory.versioning.deltas import compute_deltas
 
 INGESTION_PENDING = "IngestionPending"
 RECENT_WINDOW_DAYS = 7
+# A run still `running` after this long was abandoned (its worker died): it is closed as failed so
+# the system is scanned again (QA-031). Twice the SCAN_TIMEOUT of the workflow.
+ABANDONED_AFTER_HOURS = 4
+_CLOSE_ABANDONED = (
+    "UPDATE argos.scan_runs SET status = 'failed', finished_at = now(), "
+    "error = 'abandoned: no end after ' || %s || ' hours' "
+    "WHERE status = 'running' AND started_at < now() - make_interval(hours => %s)"
+)
 
 _SYSTEM_STATES = (
     "SELECT s.id::text, s.name, s.kind, s.connection -> 'config' -> 'budget', "
@@ -80,11 +89,20 @@ def _in_window(system_id: str, budget: dict[str, Any] | None) -> bool:
 
 
 class InventoryActivities:
-    def __init__(self, dsn: str, secrets: SecretStore, bus: EventPublisher) -> None:
+    def __init__(
+        self,
+        dsn: str,
+        secrets: SecretStore,
+        bus: EventPublisher,
+        ingestion_backlog: Callable[[], Awaitable[int]] | None = None,
+    ) -> None:
         self._dsn = dsn
         self._secrets = secrets
         self._bus = bus
         self._store = GraphStore(dsn)
+        # Messages of the ingest consumer not yet acknowledged: a redelivered table_found can
+        # still be on its way after the scan_completed was ingested (QA-029).
+        self._ingestion_backlog = ingestion_backlog
 
     @activity.defn(name="score_systems")
     async def score_systems(self) -> list[ScoredSystem]:
@@ -101,6 +119,10 @@ class InventoryActivities:
     async def compute_run_deltas(self, system_id: str, run_id: str) -> dict[str, int]:
         if await asyncio.to_thread(self._last_ingested, system_id) != run_id:
             raise ApplicationError(f"scan run {run_id} is not ingested yet", type=INGESTION_PENDING)
+        if self._ingestion_backlog is not None and await self._ingestion_backlog() > 0:
+            raise ApplicationError(
+                f"events of scan run {run_id} are still being ingested", type=INGESTION_PENDING
+            )
         publisher = ThreadSafePublisher(self._bus, asyncio.get_running_loop())
         report = await asyncio.to_thread(
             compute_deltas, self._store, self._dsn, publisher, system_id, run_id
@@ -121,6 +143,8 @@ class InventoryActivities:
             for r in self._store.query(_AI_PENDING, columns=("system", "n"))
         }
         with psycopg.connect(self._dsn) as conn:
+            hours = ABANDONED_AFTER_HOURS
+            conn.execute(_CLOSE_ABANDONED, (str(hours), hours))
             rows = conn.execute(_SYSTEM_STATES, (now, RECENT_WINDOW_DAYS)).fetchall()
         return [
             SystemState(
