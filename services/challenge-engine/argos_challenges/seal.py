@@ -22,7 +22,7 @@ from typing import Any
 
 import psycopg
 
-from argos_challenges.store import CampaignStateError, campaign_record
+from argos_challenges.store import campaign_record
 from argos_challenges.synthetic import pending_reversions
 from argos_common.errors import ArgosError
 from argos_common.journal import canonicalize
@@ -102,8 +102,11 @@ def seal_campaign(dsn: str, campaign_id: str) -> dict[str, Any]:
             f"{len(pending)} synthetic injection(s) are not reverted: the campaign is not sealed"
         )
     campaign = campaign_record(dsn, campaign_id)
-    if campaign["status"] == "sealed":
-        raise CampaignStateError(f"the campaign {campaign_id} is already sealed")
+    if campaign["status"] == "sealed" and campaign.get("seal"):
+        # A retried activity: the seal stored is the answer, and its announcement can go out
+        # (quality review QA-048). Nothing is computed or journaled twice.
+        stored = _verdict_hashes(dsn, campaign_id)
+        return {"campaign_id": campaign_id, "seal": str(campaign["seal"]), "verdicts": len(stored)}
     if campaign["status"] != "running":
         raise SealError(f"only a running campaign is sealed; {campaign_id} is {campaign['status']}")
     hashes = _verdict_hashes(dsn, campaign_id)
@@ -149,4 +152,6 @@ def verify_seal(dsn: str, campaign_id: str) -> bool:
 
 
 async def announce_seal(bus: Any, sealed: Mapping[str, Any]) -> None:
-    await bus.publish(EVENT_SUBJECT, EVENT_TYPE, dict(sealed))
+    # One announcement per campaign, whatever the retries: JetStream drops the duplicate.
+    event_id = f"campaign-sealed-{sealed['campaign_id']}"
+    await bus.publish(EVENT_SUBJECT, EVENT_TYPE, dict(sealed), event_id=event_id)

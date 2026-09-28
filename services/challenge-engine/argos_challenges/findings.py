@@ -70,8 +70,10 @@ ON CONFLICT (fingerprint) DO UPDATE SET
   last_verdict = %(verdict_id)s,
   detail = %(detail)s,
   updated_at = now()
-RETURNING id::text, occurrences, severity, status, (xmax = 0) AS created
+RETURNING id::text, occurrences, severity, status, (xmax = 0) AS created, campaign_id::text
 """
+# The verdict this finding last saw: the same verdict again is a retry of the same evaluation.
+_LAST_VERDICT = "SELECT last_verdict::text FROM argos.findings WHERE fingerprint = %s FOR UPDATE"
 
 
 class FindingError(ArgosError):
@@ -119,35 +121,41 @@ def open_or_recur(
     }
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:
+        before = conn.execute(_LAST_VERDICT, (mark,)).fetchone()
+        retry = before is not None and before[0] == verdict_id
         row = conn.execute(_OPEN_OR_RECUR, parameters).fetchone()
         if row is None:  # pragma: no cover - the upsert always returns its row
             raise FindingError("the finding could not be written")
-        finding_id, occurrences, severity, status, created = row
-        raised = escalate(str(severity), int(occurrences))
+        finding_id, occurrences, severity, status, created, opened_by = row
+        # From the severity of the challenge, never from the one already raised: one level up
+        # from three campaigns, not one more at every sighting (quality review QA-044).
+        raised = escalate(str(unit["severity"]), int(occurrences))
         if raised != severity:
             conn.execute(
                 "UPDATE argos.findings SET severity = %s, updated_at = now() WHERE id = %s",
                 (raised, finding_id),
             )
-        action = "finding.open" if created else "finding.recur"
-        journal.append(
-            SYSTEM_ACTOR,
-            action,
-            {
-                "finding": str(finding_id),
-                "fingerprint": mark,
-                "campaign": campaign_id,
-                "occurrences": int(occurrences),
-                "severity": raised,
-            },
-            conn=conn,
-        )
+        if not retry:  # a retried evaluation is not a new sighting (QA-051)
+            journal.append(
+                SYSTEM_ACTOR,
+                "finding.open" if created else "finding.recur",
+                {
+                    "finding": str(finding_id),
+                    "fingerprint": mark,
+                    "campaign": campaign_id,
+                    "occurrences": int(occurrences),
+                    "severity": raised,
+                },
+                conn=conn,
+            )
     return {
         "id": str(finding_id),
         "created": bool(created),
         "occurrences": int(occurrences),
         "severity": raised,
         "status": str(status),
+        # The campaign that opened it announces it, also when the evaluation is retried (QA-051).
+        "opened_here": str(opened_by) == campaign_id,
     }
 
 
@@ -162,6 +170,7 @@ async def announce(bus: Any, finding: Mapping[str, Any], campaign_id: str) -> No
             "severity": str(finding["severity"]),
             "occurrences": int(finding["occurrences"]),
         },
+        event_id=f"finding-opened-{finding['id']}",  # a retry is a duplicate JetStream drops
     )
 
 

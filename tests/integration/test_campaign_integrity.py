@@ -200,3 +200,19 @@ def test_the_seal_covers_approvals_and_the_plan(migrated_db: str) -> None:
             (campaign_id,),
         )
     assert not verify_seal(migrated_db, campaign_id)
+
+
+def test_sealing_again_gives_back_the_same_seal_and_anchors_it_once(migrated_db: str) -> None:
+    """QA-048: a retried seal activity returns the seal already stored; the announcement can then
+    go out, and the journal holds one anchor."""
+    campaign_id, _ = _campaign(migrated_db)
+    first = seal_campaign(migrated_db, campaign_id)
+    again = seal_campaign(migrated_db, campaign_id)
+    assert again["seal"] == first["seal"] and again["verdicts"] == first["verdicts"]
+    with psycopg.connect(migrated_db) as conn:
+        anchors = conn.execute(
+            "SELECT count(*) FROM argos.audit_journal WHERE action = %s"
+            " AND payload->>'campaign' = %s",
+            (JOURNAL_ACTION, campaign_id),
+        ).fetchone()
+    assert anchors == (1,)

@@ -70,7 +70,7 @@ def load_library(challenges_dir: Path = CHALLENGES_DIR) -> dict[str, ChallengeSp
     """Every challenge of the library by id; the archive is history, never a source."""
     challenges: dict[str, ChallengeSpec] = {}
     for path in library_challenges(challenges_dir):
-        if ARCHIVE_DIR in path.parts:
+        if ARCHIVE_DIR in path.relative_to(challenges_dir).parts:
             continue
         spec = load_challenge_file(path)
         # What CI checks is checked again here: a challenge that slipped past it does not run.
@@ -129,7 +129,7 @@ def archive_library(library_dir: Path, version: str) -> int:
     target = challenges_dir / ARCHIVE_DIR / version
     written = 0
     for path in library_challenges(challenges_dir):
-        if ARCHIVE_DIR in path.parts:
+        if ARCHIVE_DIR in path.relative_to(challenges_dir).parts:
             continue
         destination = target / path.relative_to(challenges_dir)
         content = path.read_bytes()

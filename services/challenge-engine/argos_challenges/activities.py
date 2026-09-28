@@ -202,7 +202,8 @@ class ChallengeActivities:
         return snapshot
 
     def _prepare(self, campaign_id: str) -> dict[str, Any]:
-        snapshot = self._snapshot(campaign_id)
+        record = campaign_record(self._dsn, campaign_id)
+        pinned = record["status"] == "pinned" and record.get("snapshot_id")
         ontology_version = version_in_force(self._dsn)
         # What decides the verdicts is the signed bundle in force, on this disk and in OPA; a
         # changed challenge, policy or shape stops the campaign before it compiles (SEC-011).
@@ -211,17 +212,33 @@ class ChallengeActivities:
             self._dsn, ontology_version, loaded_policies(self._opa_url, token=self._opa_token)
         )
         library_version, library_sha256 = library_fingerprint()
-        pin_campaign(
-            self._dsn,
-            campaign_id,
-            snapshot_id=snapshot.id,
-            snapshot_hash=snapshot.content_hash,
-            ontology_version=ontology_version,
-            library_version=library_version,
-            library_sha256=library_sha256,
-            applicability_run=None,
-        )
-        resolver = SnapshotSelectorResolver(self._dsn, snapshot.id)
+        if pinned:
+            # A retried preparation: the campaign measures against what it pinned, not against
+            # a new snapshot, and the pin is not attempted twice (quality review QA-049).
+            if (record["ontology_version"], record["library_sha256"]) != (
+                ontology_version,
+                library_sha256,
+            ):
+                raise ApplicationError(
+                    "the content changed since the campaign was pinned",
+                    type="ContentChanged",
+                    non_retryable=True,
+                )
+            snapshot_id = str(record["snapshot_id"])
+        else:
+            snapshot = self._snapshot(campaign_id)
+            snapshot_id = snapshot.id
+            pin_campaign(
+                self._dsn,
+                campaign_id,
+                snapshot_id=snapshot.id,
+                snapshot_hash=snapshot.content_hash,
+                ontology_version=ontology_version,
+                library_version=library_version,
+                library_sha256=library_sha256,
+                applicability_run=None,
+            )
+        resolver = SnapshotSelectorResolver(self._dsn, snapshot_id)
         ontology = OntologyStore(self._dsn, ontology_version)
         campaign = campaign_record(self._dsn, campaign_id)
         run = resolve_applicability(
@@ -242,7 +259,7 @@ class ChallengeActivities:
             nodes,
             systems,
             {
-                "campaign": {"snapshot_id": snapshot.id},
+                "campaign": {"snapshot_id": snapshot_id},
                 "client": client_parameters(),
                 "subject": subject.markers if subject is not None else {},
                 "injected_systems": injected,
@@ -252,7 +269,7 @@ class ChallengeActivities:
         save_units(self._dsn, campaign_id, compiled.units)
         return {
             "campaign_id": campaign_id,
-            "snapshot_id": snapshot.id,
+            "snapshot_id": snapshot_id,
             "ontology_version": ontology_version,
             "library_version": library_version,
             "units": compiled.units,
@@ -626,6 +643,6 @@ class ChallengeActivities:
         probe_result = payload["probe_result"]
         answer = await asyncio.to_thread(self._decide, unit, probe_result)
         finding = answer.get("finding")
-        if finding and finding.get("created") and self._bus is not None:
+        if finding and finding.get("opened_here") and self._bus is not None:
             await announce(self._bus, finding, str(unit["campaign_id"]))
         return answer

@@ -149,3 +149,27 @@ def test_the_fingerprint_is_unique_in_the_database(migrated_db: str) -> None:
         ).fetchone()
     assert row is not None
     assert row[0] == fingerprint(UNIT["challenge_id"], UNIT["node_key"])
+
+
+# --- QA-28 --------------------------------------------------------------------------------
+
+
+def test_the_severity_rises_once_however_many_campaigns_see_it(migrated_db: str) -> None:
+    """QA-044: from three campaigns, one level up from the challenge's severity; not one more
+    level at every sighting after that."""
+    findings = [_finding(migrated_db, _campaign(migrated_db, f"Campaña {n}")) for n in range(5)]
+    assert [f["severity"] for f in findings] == ["medium", "medium", "high", "high", "high"]
+
+
+def test_a_retry_in_the_same_campaign_journals_nothing_twice(migrated_db: str) -> None:
+    """QA-051: the evaluation of a unit retried by Temporal is not a new sighting."""
+    campaign_id = _campaign(migrated_db, "Campaña reintentada")
+    first = _finding(migrated_db, campaign_id)
+    again = _finding(migrated_db, campaign_id)
+    actions = [e.action for e in PostgresJournal(migrated_db).read(1, 500)]
+    assert actions.count("finding.open") == 1 and actions.count("finding.recur") == 0
+    # The campaign that opened it announces it, also on a retry: the id of the event makes the
+    # second announcement a duplicate the bus drops.
+    assert first["opened_here"] is True and again["opened_here"] is True
+    later = _finding(migrated_db, _campaign(migrated_db, "Campaña siguiente"))
+    assert later["opened_here"] is False

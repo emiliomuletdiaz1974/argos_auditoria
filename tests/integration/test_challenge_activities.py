@@ -7,6 +7,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import psycopg
 import pytest
 from temporalio.exceptions import ApplicationError
 
@@ -154,3 +155,24 @@ def test_a_rego_changed_on_disk_stops_the_campaign_before_it_is_pinned(
     with pytest.raises(IntegrityError, match="policies/retention.rego"):
         activities._prepare(campaign_id)
     assert campaign_record(migrated_db, campaign_id)["ontology_version"] is None
+
+
+def test_preparing_again_after_the_pin_reuses_what_was_pinned(migrated_db: str) -> None:
+    """QA-049: a retried preparation does not take another snapshot nor fail on the pin."""
+    signer = VaultTransitSigner(
+        os.environ.get("ARGOS_TEST_VAULT", "http://127.0.0.1:8200"), "root", key="argos-content"
+    )
+    publish_library(migrated_db, LIBRARY_DIR, "1.0.0", date(2026, 1, 1), signer)
+    register_catalog_system(migrated_db, "dev-source-postgres")
+    campaign_id = create_campaign(migrated_db, CAMPAIGN_NAME, {}, MANAGER)
+    activities = ChallengeActivities(migrated_db, secret_store())
+    first = activities._prepare(campaign_id)
+    again = activities._prepare(campaign_id)
+    assert again["snapshot_id"] == first["snapshot_id"]
+    assert len(again["units"]) == len(first["units"])
+    with psycopg.connect(migrated_db) as conn:
+        taken = conn.execute(
+            "SELECT count(*) FROM argos.inventory_snapshots WHERE label = %s",
+            (f"campaign-{campaign_id}",),
+        ).fetchone()
+    assert taken == (1,)

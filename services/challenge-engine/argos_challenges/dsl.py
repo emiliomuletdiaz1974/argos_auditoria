@@ -141,7 +141,8 @@ def library_challenges(challenges_dir: Path = CHALLENGES_DIR) -> list[Path]:
     return sorted(
         path
         for path in challenges_dir.rglob("*.yaml")
-        if "schema" not in path.parts and path.name != "catalog.yaml"
+        # Parts below the library only: a parent folder called `schema` is not the schema (QA-056).
+        if "schema" not in path.relative_to(challenges_dir).parts and path.name != "catalog.yaml"
     )
 
 

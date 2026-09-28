@@ -68,6 +68,17 @@ class Verdict:
         return hashlib.sha256(self.canonical().encode("utf-8")).hexdigest()
 
 
+UPPER_BOUND_OPERATORS = frozenset({"<", "<="})
+
+
+def _canonical_number(value: Any) -> Any:
+    """A float as its shortest decimal text: the canonical form of the verdict has no floats, and
+    `0.05` must hash the same on every platform (quality review QA-047)."""
+    if isinstance(value, float):
+        return format(Decimal(repr(value)).normalize(), "f")
+    return value
+
+
 def _pluck(data: Any, path: str) -> Any:
     """The value of a dotted path (`rows.0.ssl`), or MISSING when the evidence does not have it."""
     current = data
@@ -119,18 +130,27 @@ def _threshold_verdict(
 ) -> Verdict:
     field, op, expected = str(threshold["field"]), str(threshold["operator"]), threshold["value"]
     detail: dict[str, Any] = {
-        "expected": expected,
+        "expected": _canonical_number(expected),
         "field": field,
-        "observed": observed,
+        "observed": _canonical_number(observed),
         "operator": op,
     }
     if not _comparable(observed, expected):
         return _verdict(unit, "inconclusive", "type_mismatch", detail)
 
     sampling = unit.get("sampling")
+    if sampling and field == COUNTING_FIELD and "population" not in sampling:
+        # The challenge declares `muestreo` but no plan was made: the count read the whole table,
+        # a census (quality review QA-046). It is said, and decided as one.
+        sampling = None
+        detail["sampling"] = {"mode": "census"}
     if not sampling or field != COUNTING_FIELD:
         holds = OPERATORS[op](observed, expected)
         return _verdict(unit, "compliant" if holds else "non_compliant", "threshold", detail)
+    if op not in UPPER_BOUND_OPERATORS:
+        # A sample bounds the failures from above: it cannot show that at least N exist (QA-054).
+        detail["sampling"] = {"reason": "a sample decides only upper thresholds (<, <=)"}
+        return _verdict(unit, "inconclusive", "threshold", detail)
 
     population = int(sampling["population"])
     sample = int(sampling["sample"])
@@ -151,15 +171,25 @@ def _threshold_verdict(
         return _verdict(unit, "non_compliant", "threshold", detail)
     if OPERATORS[op](projected, expected):
         return _verdict(unit, "compliant", "threshold", detail)
-    detail["sampling"]["required_sample"] = _required_sample(expected, population, confidence)
+    detail["sampling"]["required_sample"] = _required_sample(
+        expected, population, confidence, strict=op == "<"
+    )
     return _verdict(unit, "not_demonstrated", "threshold", detail)
 
 
-def _required_sample(expected: Any, population: int, confidence: float) -> int:
-    """The sample that would demonstrate the threshold with no failures; a census when it is 0."""
+def _required_sample(expected: Any, population: int, confidence: float, strict: bool) -> int:
+    """The sample that would demonstrate the threshold with no failures; a census when it is 0.
+
+    For `< N` what is tolerated is N - 1, and the projection must stay strictly below N: the
+    target leaves room for the rounding up of the projection (quality review QA-053).
+    """
     tolerated = int(expected) if isinstance(expected, int | float) else 0
+    if strict:
+        tolerated -= 1
     if tolerated <= 0:
         return population
+    if tolerated >= population:
+        return 0
     target = tolerated / population
     return min(population, required_sample_size(0, target, confidence))
 
