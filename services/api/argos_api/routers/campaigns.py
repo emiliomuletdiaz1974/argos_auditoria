@@ -10,6 +10,7 @@ import json
 from typing import Annotated, Any
 from uuid import UUID
 
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel, Field, field_validator
 
@@ -18,7 +19,7 @@ from argos_api.core import CoreRoute
 from argos_api.http import IdempotencyKey, caller, database
 from argos_api.paging import Page, Paging, paginate
 from argos_api.runner import AlreadyRunningError, CampaignRunner
-from argos_api.sizing import refuse_beyond
+from argos_api.sizing import within_size
 from argos_challenges.seal import verify_seal
 from argos_challenges.store import (
     CampaignStateError,
@@ -106,6 +107,20 @@ def campaign(request: Request, campaign_id: UUID) -> dict[str, Any]:
     return record
 
 
+# The launch counts from now: it commits with the start of the workflow, or not at all (QA-006).
+_MARK_LAUNCHED = "UPDATE argos.campaigns SET launched_at = now() WHERE id = %s"
+
+
+def _holds_place(dsn: str, campaign_id: str) -> bool:
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT status = 'running' OR (status IN ('planned', 'pinned')"
+            " AND launched_at > now() - interval '72 hours') FROM argos.campaigns WHERE id = %s",
+            (campaign_id,),
+        ).fetchone()
+    return bool(row and row[0])
+
+
 @router.post(
     "/{campaign_id}/launch",
     summary="Launch the planned campaign",
@@ -115,10 +130,13 @@ async def launch(request: Request, campaign_id: UUID) -> dict[str, Any]:
     runner = _runner(request)
     dsn = database(request)
     await asyncio.to_thread(_record, dsn, str(campaign_id))
-    # F10-08 (ARG-098): the size of the appliance holds so many campaigns at once.
-    await asyncio.to_thread(refuse_beyond, request, dsn, "parallel_campaigns")
+    # F10-08 (ARG-098): the size of the appliance holds so many campaigns at once. A campaign that
+    # already holds its place is not measured again: launching it twice is a state error (QA-061).
+    holds = await asyncio.to_thread(_holds_place, dsn, str(campaign_id))
     try:
-        workflow_id = await runner.start(str(campaign_id))
+        async with within_size(request, dsn, "parallel_campaigns", holds_place=holds) as conn:
+            await asyncio.to_thread(conn.execute, _MARK_LAUNCHED, (str(campaign_id),))
+            workflow_id = await runner.start(str(campaign_id))
     except AlreadyRunningError as running:
         raise HTTPException(status.HTTP_409_CONFLICT, str(running)) from None
     # Who launched which campaign, and not only that a mutation happened (SEC-030).

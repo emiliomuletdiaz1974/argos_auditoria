@@ -17,6 +17,13 @@ function inline(text: string, key: string): ReactNode[] {
 }
 
 const LIST_ITEM = /^\s*(?:(-)|\d+\.) (.*)$/;
+const HEADING = /^(#{1,4}) (.*)$/;
+
+// A line another block takes. The paragraph stops only at these, so every line is taken by some
+// block: `##### x` or `#etiqueta` are text (quality review QA-062, they looped for ever).
+function startsBlock(line: string): boolean {
+  return line.startsWith("```") || HEADING.test(line) || LIST_ITEM.test(line);
+}
 
 type Block =
   | { kind: "heading"; level: number; text: string }
@@ -41,7 +48,7 @@ function blocks(text: string): Block[] {
       n += 1;
       continue;
     }
-    const heading = /^(#{1,4}) (.*)$/.exec(line);
+    const heading = HEADING.exec(line);
     if (heading) {
       found.push({ kind: "heading", level: heading[1]!.length, text: heading[2]! });
       n += 1;
@@ -65,8 +72,9 @@ function blocks(text: string): Block[] {
       n += 1;
       continue;
     }
-    const paragraph: string[] = [];
-    while (n < lines.length && lines[n]!.trim() !== "" && !/^(#|```|\s*(-|\d+\.) )/.test(lines[n]!)) {
+    const paragraph: string[] = [line];
+    n += 1;
+    while (n < lines.length && lines[n]!.trim() !== "" && !startsBlock(lines[n]!)) {
       paragraph.push(lines[n]!);
       n += 1;
     }

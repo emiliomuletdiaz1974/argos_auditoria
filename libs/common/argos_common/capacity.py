@@ -32,15 +32,26 @@ _MEASURES = {
     "systems": "SELECT count(*) FROM argos.systems",
     "assets": "SELECT coalesce((SELECT node_count FROM argos.inventory_snapshots"
     " ORDER BY taken_at DESC LIMIT 1), 0)",
-    # A campaign takes a place while it runs, or while it waits at a gate that has not expired
-    # (the 72 hours of GATE_TIMEOUT). Pinned but never launched, or abandoned at a gate, it
-    # takes none: it puts no load on the sources.
+    # A campaign takes a place while it runs, from its launch, or while it waits at a gate that
+    # has not expired (the 72 hours of GATE_TIMEOUT). Pinned but never launched, or abandoned at a
+    # gate, it takes none: it puts no load on the sources. From the launch and not from the first
+    # gate request: launches one after the other passed the limit (quality review QA-006).
     "parallel_campaigns": "SELECT count(*) FROM argos.campaigns c WHERE c.status = 'running'"
-    " OR (c.status = 'pinned' AND EXISTS (SELECT 1 FROM argos.approval_requests r"
-    " WHERE r.campaign_id = c.id AND r.requested_at > now() - interval '72 hours'))",
+    " OR (c.status IN ('planned', 'pinned') AND (c.launched_at > now() - interval '72 hours'"
+    " OR EXISTS (SELECT 1 FROM argos.approval_requests r"
+    " WHERE r.campaign_id = c.id AND r.requested_at > now() - interval '72 hours')))",
     "ai_tokens_per_day": "SELECT coalesce(sum(tokens_in + tokens_out), 0) FROM argos.ai_usage"
     " WHERE created_at > now() - interval '24 hours'",
 }
+
+
+# Measuring and taking a place are one step: whoever takes this lock measures, acts and commits
+# before the next one measures (quality review QA-006, QA-061).
+LOCK_SQL = "SELECT pg_advisory_xact_lock(hashtext(%s))"
+
+
+def lock_key(dimension: str) -> str:
+    return f"argos.capacity.{dimension}"
 
 
 class CapacityExceededError(ArgosError):

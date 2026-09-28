@@ -18,7 +18,7 @@ from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
 from argos_api.http import caller, database
 from argos_api.paging import Page, Paging, paginate
-from argos_api.sizing import refuse_beyond
+from argos_api.sizing import within_size
 from argos_challenges.compiler import CONNECTOR_IDS
 from argos_common.ids import uuid7
 from argos_common.journal_pg import PostgresJournal
@@ -83,5 +83,5 @@ async def create_system(request: Request, body: SystemCreate) -> dict[str, Any]:
     if len(json.dumps(body.config)) > MAX_CONFIG_BYTES:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "configuration too large")
     dsn = database(request)
-    await asyncio.to_thread(refuse_beyond, request, dsn, "systems")
-    return await asyncio.to_thread(_register, dsn, caller(request).actor, body)
+    async with within_size(request, dsn, "systems"):
+        return await asyncio.to_thread(_register, dsn, caller(request).actor, body)

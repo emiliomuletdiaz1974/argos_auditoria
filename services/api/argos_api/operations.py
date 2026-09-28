@@ -46,7 +46,9 @@ LIGHTS: tuple[Light, ...] = (
     Light("certificates", "Certificados", "argos_certs_expiring_7d", lambda v: v == 0),
     Light("version", "Versión", "argos_build_info", lambda v: True),
 )
-RUNBOOK_ID = re.compile(r"^RB-\d{2}-[a-z0-9-]+$")
+# ASCII digits and nothing after the name: `\d` takes other digits and `$` a final newline, which
+# the CHECK of the table refuses (quality review QA-060).
+RUNBOOK_ID = re.compile(r"\ARB-[0-9]{2}-[a-z0-9-]+\Z")
 
 
 class Metrics(Protocol):
@@ -103,10 +105,17 @@ def _runbook(url: str | None) -> str | None:
     return name if RUNBOOK_ID.match(name) else None
 
 
-def _instant(text: str | None) -> datetime | None:
-    if not text or text.startswith("0001-"):
+def _instant(text: Any) -> datetime | None:
+    if not isinstance(text, str) or not text or text.startswith("0001-"):
         return None
-    return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+class MalformedNotificationError(ValueError):
+    """What arrived is not a notification of Alertmanager."""
 
 
 class Alerts(Protocol):
@@ -116,16 +125,25 @@ class Alerts(Protocol):
 
 
 def _rows(notification: Mapping[str, Any]) -> Iterable[dict[str, Any]]:
-    for alert in notification.get("alerts", []):
-        labels = dict(alert.get("labels", {}))
-        annotations = dict(alert.get("annotations", {}))
+    """The alerts that can be kept. One malformed alert is skipped, not the batch (QA-060)."""
+    alerts = notification.get("alerts", [])
+    if not isinstance(alerts, list):
+        raise MalformedNotificationError("alerts is not a list")
+    for alert in alerts:
+        if not isinstance(alert, Mapping) or not alert.get("fingerprint"):
+            continue
+        labels = alert.get("labels")
+        labels = dict(labels) if isinstance(labels, Mapping) else {}
+        annotations = alert.get("annotations")
+        annotations = dict(annotations) if isinstance(annotations, Mapping) else {}
+        runbook_url = annotations.get("runbook_url")
         yield {
             "fingerprint": str(alert["fingerprint"])[:64],
             "alertname": str(labels.get("alertname", ""))[:120],
             "severity": str(labels.get("severity", ""))[:20],
             "status": "firing" if alert.get("status") == "firing" else "resolved",
             "summary": str(annotations.get("summary", ""))[:500],
-            "runbook": _runbook(annotations.get("runbook_url")),
+            "runbook": _runbook(runbook_url if isinstance(runbook_url, str) else None),
             "labels": {str(k)[:60]: str(v)[:200] for k, v in labels.items()},
             "starts_at": _instant(alert.get("startsAt")),
         }
@@ -140,12 +158,22 @@ class MemoryAlerts:
     def receive(self, notification: Mapping[str, Any]) -> int:
         count = 0
         for row in _rows(notification):
-            self._rows[row["fingerprint"]] = row
+            if not _late(self._rows.get(row["fingerprint"]), row):
+                self._rows[row["fingerprint"]] = row
             count += 1
         return count
 
     def active(self) -> list[dict[str, Any]]:
         return _public(r for r in self._rows.values() if r["status"] == "firing")
+
+
+def _late(stored: Mapping[str, Any] | None, row: Mapping[str, Any]) -> bool:
+    """A `firing` of an episode already resolved, delivered late: it must not revive it. A new
+    episode has a later start (quality review QA-066)."""
+    if stored is None or stored["status"] != "resolved" or row["status"] != "firing":
+        return False
+    before, now = stored["starts_at"], row["starts_at"]
+    return before is None or now is None or now <= before
 
 
 def _public(rows: Iterable[Mapping[str, Any]]) -> list[dict[str, Any]]:
@@ -180,7 +208,13 @@ class PostgresAlerts:
                     " VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)"
                     " ON CONFLICT (fingerprint) DO UPDATE SET status = EXCLUDED.status,"
                     " summary = EXCLUDED.summary, runbook = EXCLUDED.runbook,"
-                    " labels = EXCLUDED.labels, updated_at = EXCLUDED.updated_at",
+                    " labels = EXCLUDED.labels, updated_at = EXCLUDED.updated_at,"
+                    " starts_at = coalesce(EXCLUDED.starts_at, argos.operation_alerts.starts_at)"
+                    # A late firing of a resolved episode does not revive it (QA-066).
+                    " WHERE NOT (argos.operation_alerts.status = 'resolved'"
+                    " AND EXCLUDED.status = 'firing' AND (EXCLUDED.starts_at IS NULL"
+                    " OR argos.operation_alerts.starts_at IS NULL"
+                    " OR EXCLUDED.starts_at <= argos.operation_alerts.starts_at))",
                     (
                         row["fingerprint"], row["alertname"], row["severity"], row["status"],
                         row["summary"], row["runbook"], Jsonb(row["labels"]), row["starts_at"],

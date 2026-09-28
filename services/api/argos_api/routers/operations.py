@@ -80,6 +80,11 @@ async def alertmanager_webhook(request: Request) -> Response:
     scheme, _, token = given.partition(" ")
     if scheme.lower() != "bearer" or not hmac.compare_digest(token.encode(), expected.encode()):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "not the alertmanager of this appliance")
-    notification = await request.json()
-    alerts.receive(notification if isinstance(notification, dict) else {})
+    try:
+        notification = await request.json()
+        alerts.receive(notification if isinstance(notification, dict) else {})
+    except ValueError as malformed:  # not JSON, or not a notification (QA-060)
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, f"not a notification of Alertmanager: {malformed}"
+        ) from None
     return Response(status_code=204)

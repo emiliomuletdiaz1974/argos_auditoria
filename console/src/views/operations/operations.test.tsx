@@ -68,6 +68,16 @@ describe("Markdown", () => {
     expect(container.querySelector("script")).toBeNull();
     expect(screen.getByText("<script>alert(1)</script>")).toBeTruthy();
   });
+
+  it("a line that starts with # and is not a heading is text, and the viewer ends", () => {
+    // Quality review QA-062: these lines were neither heading nor paragraph, and the loop never ended.
+    const text = "##### x\n#etiqueta\n#\n\nFin.";
+    const { container } = renderWithApi(<Markdown text={text} />, {});
+    expect(container.textContent).toContain("##### x");
+    expect(container.textContent).toContain("#etiqueta");
+    expect(container.textContent).toContain("Fin.");
+    expect(container.querySelector("h5, h1")).toBeNull();
+  });
 });
 
 describe("Capacity", () => {
