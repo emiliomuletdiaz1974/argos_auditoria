@@ -76,9 +76,19 @@ def prerequisites(path: Path, size: str) -> list[dict[str, str]]:
 
 
 def parse_ping(text: str) -> float | None:
-    """The average round trip in ms, or None when no reply came back."""
-    found = re.search(r"=\s*[\d.]+/([\d.]+)/[\d.]+/[\d.]+\s*ms", text)
+    """The average round trip in ms, or None when no reply came back (iputils and busybox)."""
+    found = re.search(r"=\s*[\d.]+/([\d.]+)/[\d.]+(?:/[\d.]+)?\s*ms", text)
     return float(found[1]) if found else None
+
+
+def parse_ping_loss(text: str) -> float | None:
+    """The packet loss in percent, or None when the summary does not say it."""
+    found = re.search(r"([\d.]+)%\s*packet loss", text)
+    return float(found[1]) if found else None
+
+
+def link_detected(text: str) -> bool:
+    return re.search(r"Link detected:\s*yes", text) is not None
 
 
 def parse_ethtool(text: str) -> float | None:
@@ -89,11 +99,34 @@ def parse_ethtool(text: str) -> float | None:
     return int(found[1]) / 1000 if found else None
 
 
+PRESENCE = 0x01
+# failure, predictive failure, input lost, input lost or out of range, out of range, config error
+SUPPLY_FAULTS = 0x7E
+
+
+def supply_healthy(state: str) -> bool:
+    """A power supply sensor state of `ipmitool sensor list` (`0x0100`): its high byte carries the
+    offsets of the IPMI power supply sensor. Healthy is present and without any fault; `na` is
+    not a supply that works."""
+    try:
+        bits = (int(state, 16) >> 8) & 0xFF
+    except ValueError:
+        return False
+    return bool(bits & PRESENCE) and not bits & SUPPLY_FAULTS
+
+
 def parse_ipmi(text: str) -> dict[str, Any] | None:
-    """Inlet temperature, number of supplies, total input power and voltages of `sensor list`."""
+    """Inlet temperature, healthy supplies, total input power and the input voltage of each supply.
+
+    Only a sensor named after a supply (`PS1 Voltage`) is its input voltage: the rails of the board
+    (12 V, 3.3 V) are not the mains (quality review QA-076). A supply whose power reads `na` leaves
+    the total partial, and a partial total is not a measure (QA-075).
+    """
     inlet: float | None = None
-    supplies: set[str] = set()
+    healthy: set[str] = set()
+    faulty: set[str] = set()
     watts = 0.0
+    power_partial = False
     volts: list[float] = []
     for line in text.splitlines():
         cells = [cell.strip() for cell in line.split("|")]
@@ -102,20 +135,31 @@ def parse_ipmi(text: str) -> dict[str, Any] | None:
         name, value, unit = cells[0], cells[1], cells[2]
         supply = re.match(r"^(PS\d+)\s+Status$", name)
         if supply:
-            supplies.add(supply[1])
+            state = cells[3] if len(cells) > 3 else "na"
+            (healthy if supply_healthy(state) else faulty).add(supply[1])
+            continue
+        is_power = unit == "Watts" and "input power" in name.lower()
         try:
             number = float(value)
         except ValueError:
+            power_partial = power_partial or is_power
             continue
         if unit == "degrees C" and "inlet" in name.lower():
             inlet = number
-        elif unit == "Watts" and "input power" in name.lower():
+        elif is_power:
             watts += number
-        elif unit == "Volts":
+        elif unit == "Volts" and re.match(r"^PS\d+\b", name):
             volts.append(number)
-    if inlet is None and not supplies and not volts:
+    if inlet is None and not healthy and not faulty and not volts:
         return None
-    return {"inlet_c": inlet, "supplies": len(supplies), "watts": watts, "volts": volts}
+    return {
+        "inlet_c": inlet,
+        "supplies": len(healthy),
+        "faulty_supplies": sorted(faulty),
+        "watts": watts,
+        "power_partial": power_partial,
+        "volts": volts,
+    }
 
 
 def parse_nvidia(text: str) -> list[tuple[str, float]]:
@@ -139,6 +183,8 @@ class Measures:
     latency_ms: dict[str, float | None] = field(default_factory=dict)
     latency_measured: bool = True
     gpus: list[tuple[str, float]] | None = None
+    link_up: bool = False
+    loss_percent: dict[str, float | None] = field(default_factory=dict)
 
 
 def _output(run: Run, args: list[str]) -> str | None:
@@ -156,6 +202,7 @@ def measure(run: Run, data_interface: str, targets: Sequence[str]) -> Measures:
     link = _output(run, ["ethtool", data_interface])
     gpu = _output(run, ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv"])
     latency: dict[str, float | None] = {}
+    loss: dict[str, float | None] = {}
     latency_measured = True
     for target in targets:
         answer = _output(run, ["ping", "-c", "10", "-i", "0.2", "-q", target])
@@ -163,6 +210,7 @@ def measure(run: Run, data_interface: str, targets: Sequence[str]) -> Measures:
             latency_measured = False
             break
         latency[target] = parse_ping(answer)
+        loss[target] = parse_ping_loss(answer)
     return Measures(
         power=parse_ipmi(ipmi) if ipmi is not None else None,
         link_gbps=parse_ethtool(link) if link is not None else None,
@@ -170,6 +218,8 @@ def measure(run: Run, data_interface: str, targets: Sequence[str]) -> Measures:
         latency_ms=latency,
         latency_measured=latency_measured,
         gpus=parse_nvidia(gpu) if gpu is not None else None,
+        link_up=link is not None and link_detected(link),
+        loss_percent=loss,
     )
 
 
@@ -199,15 +249,17 @@ def _power_checks(limits: dict[str, float], power: dict[str, Any] | None) -> lis
             )
         )
     supplies, wanted = power["supplies"], int(limits["min_supplies"])
-    checks.append(
-        _check(
-            names[1],
-            FIT if supplies >= wanted else UNFIT,
-            f"{supplies} fuente(s) presente(s); se piden {wanted}",
-        )
-    )
+    faulty = power.get("faulty_supplies", [])
+    reason = f"{supplies} fuente(s) sana(s); se piden {wanted}"
+    if faulty:
+        reason += f"; ausente(s) o con fallo: {', '.join(faulty)}"
+    checks.append(_check(names[1], FIT if supplies >= wanted else UNFIT, reason))
     watts, budget = power["watts"], limits["power_max_w"]
-    if not watts:
+    if power.get("power_partial"):
+        checks.append(
+            _check(names[2], NOT_MEASURED, "alguna fuente no da su potencia (na): no medido")
+        )
+    elif not watts:
         checks.append(_check(names[2], NOT_MEASURED, "sin lectura de potencia: no medido"))
     else:
         checks.append(
@@ -237,6 +289,10 @@ def _link_check(limits: dict[str, float], measures: Measures) -> dict[str, str]:
     if not measures.link_measured:
         return _check("data_link", NOT_MEASURED, "ethtool no está: no medido")
     speed = measures.link_gbps
+    if speed is None and measures.link_up:
+        return _check(
+            "data_link", NOT_MEASURED, "enlace activo con velocidad desconocida: no medido"
+        )
     if speed is None:
         return _check("data_link", UNFIT, f"enlace de datos caído; se piden {wanted:g} Gbps")
     return _check(
@@ -252,8 +308,11 @@ def _latency_check(limits: dict[str, float], measures: Measures) -> dict[str, st
     ceiling = limits["latency_max_ms"]
     bad = []
     for target, ms in measures.latency_ms.items():
+        lost = measures.loss_percent.get(target)
         if ms is None:
             bad.append(f"{target} no responde")
+        elif lost:
+            bad.append(f"{target} pierde el {lost:g} % de los paquetes")
         elif ms >= ceiling:
             bad.append(f"{target} a {ms:g} ms")
     if bad:

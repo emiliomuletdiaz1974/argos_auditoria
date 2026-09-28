@@ -124,6 +124,9 @@ class Completed:
 class Command:
     args: list[str]
     stdin: str | None = None
+    # Shown to the operator as it runs and never captured: what it prints (the recovery key of
+    # the disk) must reach a person and must not reach the report (quality review QA-072).
+    to_console: bool = False
 
 
 class Runner(Protocol):
@@ -135,6 +138,14 @@ def subprocess_runner(args: list[str], stdin: str | None = None) -> Completed:
         args, input=stdin, capture_output=True, text=True, timeout=600, check=False
     )
     return Completed(done.returncode, done.stdout)
+
+
+def console_runner(args: list[str], stdin: str | None = None) -> Completed:
+    """Run on the console of the operator: the output goes to the screen, nothing is kept."""
+    done = subprocess.run(  # noqa: S603 - a list of validated arguments, never a shell
+        args, input=stdin, text=True, timeout=600, check=False
+    )
+    return Completed(done.returncode, "")
 
 
 class Signer(Protocol):
@@ -155,6 +166,9 @@ class Step:
     title: str
     plan: Callable[[InstallConfig], list[Command]]
     verify: Callable[[InstallConfig, Runner], tuple[bool, str]]
+    # Verified first, and its commands skipped when it already holds: sealing the disk again
+    # would enrol one more recovery key (QA-072).
+    skip_if_verified: bool = False
 
 
 def _ping(run: Runner, host: str) -> bool:
@@ -221,7 +235,7 @@ def _verify_time(c: InstallConfig, run: Runner) -> tuple[bool, str]:
 
 
 def _plan_disk(c: InstallConfig) -> list[Command]:
-    return [Command(["env", f"ARGOS_DATA_DEVICE={c.disk.device}", SEAL_SCRIPT])]
+    return [Command(["env", f"ARGOS_DATA_DEVICE={c.disk.device}", SEAL_SCRIPT], to_console=True)]
 
 
 def _verify_disk(c: InstallConfig, run: Runner) -> tuple[bool, str]:
@@ -241,14 +255,31 @@ def _plan_admin(c: InstallConfig) -> list[Command]:
 
 
 def _verify_admin(c: InstallConfig, run: Runner) -> tuple[bool, str]:
+    """What Keycloak says, read as JSON: the user, its required actions and its role (QA-081)."""
     user = c.admin.username
     found = run(["kcadm.sh", "get", "users", "-r", "argos", "-q", f"username={user}"])
-    ok = found.returncode == 0 and f'"username": "{user}"' in found.stdout
-    return ok, (
-        f"{user}: segundo factor y cambio de clave obligados al primer acceso"
-        if ok
-        else f"{user} no aparece en el realm"
-    )
+    users = _json_list(found)
+    match = [u for u in users if isinstance(u, dict) and u.get("username") == user]
+    if not match:
+        return False, f"{user} no aparece en el realm"
+    required = set(match[0].get("requiredActions") or [])
+    missing = [a for a in json.loads(REQUIRED_ACTIONS) if a not in required]
+    if missing:
+        return False, f"{user} existe, pero sin las acciones obligadas {', '.join(missing)}"
+    roles = _json_list(run(["kcadm.sh", "get-roles", "-r", "argos", "--uusername", user]))
+    if not any(isinstance(r, dict) and r.get("name") == "platform_admin" for r in roles):
+        return False, f"{user} existe, pero sin el rol platform_admin"
+    return True, f"{user}: platform_admin, con segundo factor y cambio de clave al primer acceso"
+
+
+def _json_list(done: Completed) -> list[Any]:
+    if done.returncode != 0:
+        return []
+    try:
+        value = json.loads(done.stdout)
+    except ValueError:
+        return []
+    return value if isinstance(value, list) else []
 
 
 def _plan_idp(c: InstallConfig) -> list[Command]:
@@ -283,7 +314,7 @@ STEPS: tuple[Step, ...] = (
     Step("network", "Red de gestión y bastión", _plan_network, _verify_network),
     Step("site", "Comprobación de sala (ARG-097)", _plan_site, _verify_site),
     Step("time", "Hora (NTP del organismo o deriva declarada)", _plan_time, _verify_time),
-    Step("disk", "Sellado del disco al TPM", _plan_disk, _verify_disk),
+    Step("disk", "Sellado del disco al TPM", _plan_disk, _verify_disk, skip_if_verified=True),
     Step("admin", "Primer administrador, con segundo factor", _plan_admin, _verify_admin),
     Step("idp", "Federación con el proveedor de identidad (opcional)", _plan_idp, _verify_idp),
     Step("tsa", "Autoridad de sellado o modo aislado", _plan_tsa, _verify_tsa),
@@ -303,24 +334,34 @@ class Installer:
     record: Record
     dry_run: bool = False
     steps: Sequence[Step] = STEPS
+    run_on_console: Runner = console_runner
     _done: list[str] = field(default_factory=list)
 
     @property
     def _state(self) -> Path:
         return self.state_dir / "state.json"
 
-    def _load_done(self) -> list[str]:
-        if not self._state.exists():
-            return []
-        return list(json.loads(self._state.read_text(encoding="utf-8")).get("done", []))
+    @property
+    def _config_sha256(self) -> str:
+        return hashlib.sha256(self.config.model_dump_json().encode("utf-8")).hexdigest()
 
-    def _save_done(self, done: list[str]) -> None:
+    def _load_state(self) -> tuple[list[str], list[dict[str, Any]]]:
+        """What earlier runs did under this same configuration; under another, nothing counts."""
+        if not self._state.exists():
+            return [], []
+        state = json.loads(self._state.read_text(encoding="utf-8"))
+        if state.get("config_sha256") != self._config_sha256:
+            return [], []
+        return list(state.get("done", [])), list(state.get("entries", []))
+
+    def _save_state(self, done: list[str], entries: list[dict[str, Any]]) -> None:
         self.state_dir.mkdir(parents=True, exist_ok=True)
-        self._state.write_text(json.dumps({"done": done}), encoding="utf-8")
+        state = {"config_sha256": self._config_sha256, "done": done, "entries": entries}
+        self._state.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
 
     def run(self) -> dict[str, Any]:
         started = datetime.now(UTC)
-        done = [] if self.dry_run else self._load_done()
+        done, earlier = ([], []) if self.dry_run else self._load_state()
         entries: list[dict[str, Any]] = []
         completed = True
         for step in self.steps:
@@ -331,17 +372,35 @@ class Installer:
                 entries.append({"key": step.key, "title": step.title,
                                 "would_run": [c.args for c in planned]})  # fmt: skip
                 continue
-            codes = [self.run_command(c.args, c.stdin).returncode for c in planned]
+            if step.skip_if_verified:
+                ok, detail = step.verify(self.config, self.run_command)
+                if ok:
+                    entries.append(
+                        {"key": step.key, "title": step.title, "ok": True,
+                         "detail": f"ya estaba hecho: {detail}", "commands": 0, "exit_codes": [],
+                         "at": datetime.now(UTC).isoformat()}
+                    )  # fmt: skip
+                    done.append(step.key)
+                    self._save_state(done, earlier + entries)
+                    continue
+            codes = [
+                (self.run_on_console if c.to_console else self.run_command)(
+                    c.args, c.stdin
+                ).returncode
+                for c in planned
+            ]
             ok, detail = step.verify(self.config, self.run_command)
             entries.append(
                 {"key": step.key, "title": step.title, "ok": ok, "detail": detail,
-                 "commands": len(planned), "exit_codes": codes}
+                 "commands": len(planned), "exit_codes": codes,
+                 "at": datetime.now(UTC).isoformat()}
             )  # fmt: skip
             if not ok:
                 completed = False
+                self._save_state(done, earlier + entries)
                 break
             done.append(step.key)
-            self._save_done(done)
+            self._save_state(done, earlier + entries)
         report = {
             "schema": REPORT_SCHEMA,
             "started": started.isoformat(),
@@ -351,7 +410,7 @@ class Installer:
             "config_sha256": hashlib.sha256(
                 self.config.model_dump_json().encode("utf-8")
             ).hexdigest(),
-            "steps": entries,
+            "steps": entries if self.dry_run else earlier + entries,
         }
         if not self.dry_run:
             self._seal(report)

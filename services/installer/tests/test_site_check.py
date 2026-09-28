@@ -43,7 +43,14 @@ def test_ethtool_gives_the_speed_of_a_link_that_is_up() -> None:
 
 def test_ipmi_gives_inlet_temperature_supplies_power_and_voltage() -> None:
     power = parse_ipmi(_fixture("ipmitool_sensor_list.txt"))
-    assert power == {"inlet_c": 22.0, "supplies": 2, "watts": 780.0, "volts": [230.0, 228.0]}
+    assert power == {
+        "inlet_c": 22.0,
+        "supplies": 2,
+        "faulty_supplies": [],
+        "watts": 780.0,
+        "power_partial": False,
+        "volts": [230.0, 228.0],
+    }
 
 
 def test_nvidia_smi_gives_each_gpu_and_its_memory() -> None:
@@ -142,3 +149,63 @@ def test_the_cli_prints_the_list_before_shipping(capsys: pytest.CaptureFixture[s
     assert main(["--prerequisites", "S", "--sizes", str(SIZES)]) == 0
     printed = capsys.readouterr().out
     assert "3071 BTU/h" in printed and "torre" in printed
+
+
+# --- QA-21: no «fit» from a partial or misread measure ----------------------------------------
+
+IPMI_ONE_SUPPLY_DOWN = """Inlet Temp       | 22.000     | degrees C  | ok    | na
+PS1 Status       | 0x0        | discrete   | 0x0100| na
+PS2 Status       | na         | discrete   | na    | na
+PS1 Input Power  | 400.000    | Watts      | ok    | na
+PS2 Input Power  | na         | Watts      | na    | na
+PS1 Voltage      | 230.000    | Volts      | ok    | na
+"""
+IPMI_ONE_SUPPLY_FAILED = IPMI_ONE_SUPPLY_DOWN.replace(
+    "PS2 Status       | na         | discrete   | na    | na",
+    "PS2 Status       | 0x0        | discrete   | 0x0b00| na",
+)
+IPMI_BOARD_RAILS = _fixture("ipmitool_sensor_list.txt") + (
+    "12V              | 12.100     | Volts      | ok    | na\n"
+    "3.3VCC           | 3.310      | Volts      | ok    | na\n"
+)
+PING_LOSSY = """--- 10.0.0.5 ping statistics ---
+10 packets transmitted, 1 received, 90% packet loss, time 9000ms
+rtt min/avg/max/mdev = 0.500/0.500/0.500/0.000 ms
+"""
+PING_BUSYBOX = """--- 10.0.0.5 ping statistics ---
+10 packets transmitted, 10 packets received, 0% packet loss
+round-trip min/avg/max = 0.071/0.093/0.130 ms
+"""
+
+
+def _checks(outputs: dict[str, str]) -> dict[str, dict[str, str]]:
+    return {c["check"]: c for c in _verdict(outputs)["checks"]}
+
+
+@pytest.mark.parametrize("ipmi", [IPMI_ONE_SUPPLY_DOWN, IPMI_ONE_SUPPLY_FAILED])
+def test_a_supply_that_is_down_or_failed_is_not_redundancy(ipmi: str) -> None:
+    checks = _checks({**HEALTHY, "ipmitool": ipmi})
+    assert checks["redundant_supply"]["status"] == "unfit", checks["redundant_supply"]
+    assert checks["power"]["status"] != "fit", "a power reading missing is not a measure"
+
+
+def test_board_rails_are_not_the_mains_voltage() -> None:
+    checks = _checks({**HEALTHY, "ipmitool": IPMI_BOARD_RAILS})
+    assert checks["voltage"]["status"] == "fit", checks["voltage"]
+
+
+def test_packet_loss_is_not_a_fit_latency() -> None:
+    checks = _checks({**HEALTHY, "ping": PING_LOSSY})
+    assert checks["latency"]["status"] == "unfit"
+    assert "90" in checks["latency"]["reason"]
+
+
+def test_the_busybox_summary_is_read() -> None:
+    assert parse_ping(PING_BUSYBOX) == pytest.approx(0.093)
+
+
+def test_a_link_up_with_an_unknown_speed_is_not_measured_not_down() -> None:
+    link = "Settings for data0:\n\tSpeed: Unknown!\n\tLink detected: yes\n"
+    checks = _checks({**HEALTHY, "ethtool": link})
+    assert checks["data_link"]["status"] == "not_measured"
+    assert "caído" not in checks["data_link"]["reason"]

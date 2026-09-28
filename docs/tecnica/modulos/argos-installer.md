@@ -4,9 +4,9 @@ kind: module
 title: Instalador de la semana 1 (argos-installer)
 module: argos-installer
 phases: ["10"]
-version: 0.2.0-alpha
-commit: ac98654
-date: 2026-09-25
+version: 0.3.0-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -51,6 +51,7 @@ Cada paso planifica sus órdenes, las ejecuta y verifica el resultado. Un paso s
   - cada analizador es una función pura sobre el texto de su orden;
   - compara con los límites de la talla (`platform/operation/sizes.yaml`, clave `site`) y da cada comprobación como `fit`, `unfit` o `not_measured`, con su motivo;
   - una orden que no está es `not_measured`, nunca `fit`; el paso solo pasa si todas son `fit`;
+  - una fuente cuenta si el estado de su sensor dice presente y sin fallo (`na` no cuenta); una potencia `na` deja la suma sin medir; solo las tensiones de los sensores de cada fuente (`PS1 Voltage`) son la tensión de red, no los raíles de la placa; un ping con pérdida no es apto; se lee la salida de busybox; un enlace activo con velocidad desconocida es `not_measured`, no «caído» (QA-075, 076, 077, 087);
   - `prerequisites(talla)` da la lista previa al envío (rack, potencia y circuitos, BTU/h, tomas, SAI, climatización y red).
 - **Órdenes:** siempre listas de argumentos. Un test recorre el código y falla si aparece `shell=`.
 
@@ -76,6 +77,9 @@ Cada paso planifica sus órdenes, las ejecuta y verifica el resultado. Un paso s
 ## 6. Seguridad y tratamiento de datos
 
 - **Sin shell:** cada valor de la configuración se valida antes de formar parte de una orden, y las órdenes nunca pasan por un intérprete. Los tests prueban que un `;` o un `&&` en una dirección, una interfaz, un usuario o un servidor NTP se rechazan.
+- **La clave de recuperación llega a la persona y no al informe (QA-072).** El sellado del disco es una orden `to_console`: corre en la consola del operador sin capturar su salida, así que la clave se ve en pantalla una vez y nunca entra en el informe ni en el estado. El paso del disco se verifica antes de ejecutarse y, si el volumen ya está sellado, no se vuelve a sellar: cada sellado añadiría otra clave de recuperación.
+- **El administrador se comprueba con lo que dice Keycloak (QA-081):** la salida de `kcadm.sh` se lee como JSON (con el formato de Jackson, espacio antes de los dos puntos), y el paso solo verifica si el usuario existe, tiene `CONFIGURE_TOTP` y `UPDATE_PASSWORD` como acciones obligadas y el rol `platform_admin`.
+- **El informe suma todas las ejecuciones (QA-083).** El estado guarda la huella de la configuración y las entradas de cada paso, con su hora. Al reanudar, el informe firmado lleva también lo que hicieron las ejecuciones anteriores, por ejemplo la sala. Con otra configuración no cuenta nada de lo hecho: la instalación empieza de nuevo.
 - **Sin contraseñas:** el administrador se crea sin clave y con el cambio de clave y el TOTP obligados.
 - **Token de firma en fichero:** nunca en una variable.
 - **Informe firmado:** con la clave de release, que no sale de Vault. Cualquiera con la clave pública verifica que es el que el appliance emitió.
@@ -118,3 +122,4 @@ La jornada de instalación y el runbook de campo llegan con el hardware (F10-90)
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-25 | Primera versión | F10-10 (ARG-096) |
 | 0.2.0-alpha | 2026-09-25 | Comprobación de sala: paso `site`, analizadores, límites por talla y lista previa | F10-11 (ARG-097) |
+| 0.3.0-alpha | 2026-09-28 | Clave de recuperación en la consola, disco sellado una sola vez, administrador comprobado en JSON, informe acumulado y ligado a la configuración, y sala sin falsos aptos | QA-21 (QA-072, 075, 076, 077, 081, 083, 087) |

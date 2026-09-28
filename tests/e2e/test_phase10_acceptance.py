@@ -145,7 +145,9 @@ class Hardware:
     outputs = {
         "timedatectl": "yes",
         "cryptsetup": "Tokens:\n  0: systemd-tpm2",
-        "kcadm.sh": '[{"username": "admin.organismo"}]',
+        "kcadm.sh get": '[ {\n  "username" : "admin.organismo",\n'
+        '  "requiredActions" : [ "CONFIGURE_TOTP", "UPDATE_PASSWORD" ]\n} ]',
+        "kcadm.sh get-roles": '[ {\n  "name" : "platform_admin"\n} ]',
         "ipmitool": (SITE / "ipmitool_sensor_list.txt").read_text(encoding="utf-8"),
         "ethtool": (SITE / "ethtool_10g.txt").read_text(encoding="utf-8"),
         "ping": (SITE / "ping_ok.txt").read_text(encoding="utf-8"),
@@ -153,7 +155,7 @@ class Hardware:
     }
 
     def __call__(self, args: list[str], stdin: str | None = None) -> Completed:
-        return Completed(0, self.outputs.get(args[0], ""))
+        return Completed(0, self.outputs.get(" ".join(args[:2]), self.outputs.get(args[0], "")))
 
 
 def _config(size: str) -> InstallConfig:

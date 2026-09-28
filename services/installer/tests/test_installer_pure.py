@@ -43,7 +43,10 @@ SITE = REPO / "tests" / "fixtures" / "site"
 OUTPUTS = {
     "timedatectl": "yes",
     "cryptsetup": "Tokens:\n  0: systemd-tpm2",
-    "kcadm.sh": '[{"username": "admin.organismo"}]',
+    # kcadm.sh prints JSON the way Jackson does: a space before each colon.
+    "kcadm.sh get": '[ {\n  "id" : "7f1c",\n  "username" : "admin.organismo",\n'
+    '  "requiredActions" : [ "CONFIGURE_TOTP", "UPDATE_PASSWORD" ]\n} ]',
+    "kcadm.sh get-roles": '[ {\n  "id" : "a1",\n  "name" : "platform_admin"\n} ]',
     "ipmitool": (SITE / "ipmitool_sensor_list.txt").read_text(encoding="utf-8"),
     "ethtool": (SITE / "ethtool_10g.txt").read_text(encoding="utf-8"),
     "ping": (SITE / "ping_ok.txt").read_text(encoding="utf-8"),
@@ -61,7 +64,8 @@ class Commands:
     def __call__(self, args: list[str], stdin: str | None = None) -> Completed:
         assert isinstance(args, list) and all(isinstance(a, str) for a in args)
         self.calls.append(args)
-        return Completed(1 if args[0] in self.failing else 0, OUTPUTS.get(args[0], ""))
+        output = OUTPUTS.get(" ".join(args[:2]), OUTPUTS.get(args[0], ""))
+        return Completed(1 if args[0] in self.failing else 0, output)
 
 
 class Signer:
@@ -104,10 +108,13 @@ def test_it_stops_at_the_first_step_that_fails_and_resumes_from_it(tmp_path: Pat
     report = _installer(tmp_path, Commands()).run()
     assert report["steps"][0]["key"] == "network"
     assert report["completed"] is True
-    # And a third run has nothing left to do.
+    # And a third run has nothing left to do: it runs nothing and its report still holds every
+    # step the earlier runs did (QA-083).
     again = Commands()
-    assert _installer(tmp_path, again).run()["steps"] == []
+    report = _installer(tmp_path, again).run()
     assert again.calls == []
+    assert report["completed"] is True
+    assert [s["key"] for s in report["steps"] if s["ok"]] == list(ORDER)
 
 
 def test_a_dry_run_changes_nothing(tmp_path: Path) -> None:
@@ -208,3 +215,79 @@ def test_a_room_that_does_not_give_stops_the_installation_and_says_why(tmp_path:
     assert not site["ok"]
     assert "unfit" in site["detail"] and "31" in site["detail"]
     assert [step["key"] for step in report["steps"]][-1] == "site"
+
+
+# --- QA-21: the key reaches the operator, the admin is really checked, the report adds up -----
+
+
+class Console:
+    """The console of the operator: what runs here is shown, never captured into the report."""
+
+    def __init__(self) -> None:
+        self.calls: list[list[str]] = []
+
+    def __call__(self, args: list[str], stdin: str | None = None) -> Completed:
+        self.calls.append(args)
+        print("    RECOVERY KEY (write it down): fhjk-vnrd-cbtl-hjgv")
+        return Completed(0, "")
+
+
+class SealedAfterwards(Commands):
+    """The volume has no TPM slot until the seal script ran."""
+
+    def __init__(self, console: Console) -> None:
+        super().__init__()
+        self.console = console
+
+    def __call__(self, args: list[str], stdin: str | None = None) -> Completed:
+        if args[0] == "cryptsetup":
+            self.calls.append(args)
+            return Completed(0, OUTPUTS["cryptsetup"] if self.console.calls else "Tokens:\n")
+        return super().__call__(args, stdin)
+
+
+def test_the_seal_script_runs_on_the_console_and_its_key_never_reaches_the_report(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    console = Console()
+    commands = SealedAfterwards(console)
+    report = _installer(tmp_path, commands, run_on_console=console).run()
+    assert report["completed"], report["steps"]
+    assert [c[-1] for c in console.calls] == ["/opt/argos/platform/image/seal-disk.sh"]
+    assert all("seal-disk.sh" not in " ".join(c) for c in commands.calls)
+    assert "fhjk" in capsys.readouterr().out, "the operator sees the key"
+    assert "fhjk" not in (tmp_path / "installation-report.json").read_text(encoding="utf-8")
+
+
+def test_a_volume_already_sealed_is_not_sealed_again(tmp_path: Path) -> None:
+    console = Console()
+    _installer(tmp_path, Commands(), run_on_console=console).run()
+    assert console.calls == [], "sealing again would add a recovery key nobody asked for"
+
+
+@pytest.mark.parametrize(
+    ("key", "output", "missing"),
+    [
+        ("kcadm.sh get-roles", "[ ]", "platform_admin"),
+        ("kcadm.sh get", '[ {\n  "username" : "admin.organismo",\n  "requiredActions" : [ ]\n} ]',
+         "CONFIGURE_TOTP"),
+        ("kcadm.sh get", "[ ]", "no aparece"),
+    ],
+)  # fmt: skip
+def test_the_admin_is_verified_on_what_keycloak_says(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, key: str, output: str, missing: str
+) -> None:
+    monkeypatch.setitem(OUTPUTS, key, output)
+    report = _installer(tmp_path, Commands()).run()
+    [admin] = [s for s in report["steps"] if s["key"] == "admin"]
+    assert admin["ok"] is False
+    assert missing in admin["detail"]
+
+
+def test_a_changed_configuration_starts_the_installation_again(tmp_path: Path) -> None:
+    _installer(tmp_path, Commands()).run()
+    changed = json.loads(json.dumps(CONFIG))
+    changed["disk"]["device"] = "/dev/disk/by-partlabel/argos-other"
+    commands = Commands()
+    _installer(tmp_path, commands, config=changed).run()
+    assert ["netplan", "apply"] in commands.calls, "nothing done under another configuration counts"
