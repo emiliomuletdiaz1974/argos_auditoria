@@ -4,9 +4,9 @@ kind: module
 title: Bus de eventos (argos-events)
 module: argos-events
 phases: ["01"]
-version: 0.2.0-alpha
-commit: 4f6309a
-date: 2026-09-23
+version: 0.3.0-alpha
+commit: pendiente
+date: 2026-09-28
 status: current
 confidentiality: client
 ---
@@ -57,6 +57,9 @@ Dependencias: `argos-common` (identificadores, diario y registro) y `nats-py`.
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Un evento que no se procesa no se pierde (QA-001).** El bus cuenta las entregas y, en la última (`max_deliveries`, 5), guarda el evento en `argos.event_dead_letters` con el error y lo da por terminado. Si no puede guardarlo, el evento vuelve a entregarse, porque los consumidores nuevos tienen entregas ilimitadas en JetStream. `EventsDeadLettered` avisa. Los consumidores durables creados antes siguen con 5 entregas en JetStream hasta que se recreen.
+- **Publicación deduplicable (QA-005).** Cada mensaje lleva su id como `Nats-Msg-Id`, y quien reintenta puede fijarlo (`event_id`): JetStream descarta el duplicado dentro de su ventana. El evento se serializa antes de escribir su asiento, así que no queda en el diario un evento que nunca salió.
+- **Certificado renovado al reconectar (QA-004).** El bus conserva un solo contexto TLS de cliente y, al perder la conexión, carga en él el certificado renovado antes de reconectar.
 - **TLS mutuo y permisos por consumidor** (F09-06, ARG-083, SEC-026): cada servicio conecta con su certificado de la CA interna y su usuario solo puede consultar, crear y confirmar sus propios consumidores. `Bus.connect()` ya no crea ni actualiza streams: `ensure_streams` lo ejecuta una vez el usuario de plataforma (`tools/nats_streams.py`). Corregido de paso: `Bus` no inicializaba su conexión en el constructor (las dos líneas estaban tras un `return` en `__repr__`), así que `close()` sobre un bus sin conectar fallaba.
 - Sujetos y tipos se validan con patrones cerrados (`argos.<dominio>.<evento>`, `dominio.evento.vN`); se rechaza cualquier otro valor.
 - **Publicación auditada** (`audit=True`): el asiento `event.publish` se escribe en el diario **antes** de publicar, así queda constancia aunque la publicación falle después.
@@ -88,3 +91,4 @@ Dependencias: `argos-common` (identificadores, diario y registro) y `nats-py`.
 | 0.1.0-alpha | 2026-09-14 | Librería de eventos con CloudEvents, reintentos acotados y auditoría opcional | Fase 01 (ARG-006) |
 | 0.1.0-alpha | 2026-09-18 | Identidad NATS por servicio y permisos por familia de sujetos | Auditoría de seguridad (M6) |
 | 0.2.0-alpha | 2026-09-23 | TLS mutuo con NATS; los servicios ya no crean streams (SEC-026); `tls_from_environment()` | F09-06 (ARG-083) |
+| 0.3.0-alpha | 2026-09-28 | Eventos agotados en `argos.event_dead_letters`, `Nats-Msg-Id` y `event_id`, serialización antes del asiento, certificado renovado al reconectar | QA-25 (QA-001, 004, 005) |

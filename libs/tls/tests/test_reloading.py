@@ -239,3 +239,24 @@ def test_the_issuer_reads_its_services() -> None:
     ]
     with pytest.raises(ValueError, match="folder"):
         parse_services("api=")
+
+
+def test_a_client_context_takes_the_renewed_certificate_in_place(
+    ca: Authority, server: tuple[Server, Path], tmp_path: Path
+) -> None:
+    """QA-004: a long-lived client (the bus) keeps one context object; `refresh()` loads the new
+    certificate and CA into that same object, so its next handshake uses them."""
+    running, _ = server
+    folder = tmp_path / "bus"
+    Authority.new("another CA").issue(folder, "api")
+    tls = ReloadingTLS(server=False, cert_dir=folder, check_interval=0)
+    context = tls.client_context()
+    with pytest.raises(ssl.SSLError):
+        _handshake(running.port, context)
+    ca.issue(folder, "api")
+    stamp = NOW.timestamp() + 60
+    for name in (CERT_FILE, KEY_FILE, CA_FILE):
+        os.utime(folder / name, (stamp, stamp))
+    tls.refresh()
+    assert tls.client_context() is context
+    assert _handshake(running.port, context) > 0

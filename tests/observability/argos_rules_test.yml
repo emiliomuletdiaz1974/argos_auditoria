@@ -280,3 +280,28 @@ tests:
   - eval_time: 18m
     alertname: HealthCheckFailing
     exp_alerts: []
+- interval: 1m
+  input_series:
+  - series: argos_events_dead_letters{job="argos-health"}
+    values: 0 0 2x10
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: EventsDeadLettered
+    exp_alerts:
+    - exp_labels:
+        severity: warning
+        objective: events-delivered
+        job: argos-health
+      exp_annotations:
+        summary: Events could not be processed and are kept as dead letters
+        description: 'A subscriber failed on every delivery of these events: an inventory, a seal or a webhook is missing until they are replayed.'
+        runbook_url: docs/operacion/runbooks/RB-05-campanas-y-colas.md
+        source: 'ADR-0002 y revisión de calidad QA-001: un evento que no se pudo procesar no se pierde en silencio'
+- interval: 1m
+  input_series:
+  - series: argos_events_dead_letters{job="argos-health"}
+    values: 0x12
+  alert_rule_test:
+  - eval_time: 10m
+    alertname: EventsDeadLettered
+    exp_alerts: []

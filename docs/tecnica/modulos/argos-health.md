@@ -4,8 +4,8 @@ kind: module
 title: Servicio de salud del dominio (argos-health)
 module: argos-health
 phases: ["10"]
-version: 0.6.0-alpha
-commit: 081851e
+version: 0.7.0-alpha
+commit: pendiente
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -108,6 +108,7 @@ Además, una vez al día toma la foto de la capacidad frente a la talla (`argos.
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Eventos agotados (QA-001):** `argos_events_dead_letters` cuenta los eventos guardados en `argos.event_dead_letters` sin resolver, y `EventsDeadLettered` avisa (migración 0045).
 - **Base de datos:** el rol `svc_health` solo lee las tablas que mide (desde la migración 0042, también hallazgos, cobertura y uso de la IA) y solo escribe en `argos.health_facts`. De la IA solo cuenta tokens, peticiones y duraciones: nunca lee un prompt ni su huella. No puede escribir en el diario ni leer veredictos (matriz `db_access_matrix.yaml`).
 - **Vault:** su AppRole lee su credencial de base de datos, lista `pki_int/certs` y lee `pki_int/cert/*`. Los certificados son públicos, pero Vault pide un token para listarlos.
 - **Contenedor:** tiene la postura de F09-03 y su propio certificado del emisor interno. Monta el volumen de evidencia en **solo lectura**, y solo para medir su ocupación.
@@ -151,3 +152,4 @@ Además, una vez al día toma la foto de la capacidad frente a la talla (`argos.
 | 0.4.0-alpha | 2026-09-24 | Líneas de log descartadas antes de llegar a Loki | F10-05 (ARG-093) |
 | 0.5.0-alpha | 2026-09-25 | Foto diaria de la capacidad frente a la talla | F10-08 (ARG-098) |
 | 0.6.0-alpha | 2026-09-28 | `argos_health_check_ok` y su alerta, hechos con la hora de su comprobación, y certificados solo de los servicios esperados | QA-22 (QA-078, 079, 088) |
+| 0.7.0-alpha | 2026-09-28 | `argos_events_dead_letters` y la alerta `EventsDeadLettered` | QA-25 (QA-001) |

@@ -150,6 +150,10 @@ _COUNTS = {
         "SELECT count(*) FROM argos.webhook_deliveries WHERE status IN ('pending', 'retrying')",
         "Webhook deliveries not yet delivered.",
     ),
+    "argos_events_dead_letters": (
+        "SELECT count(*) FROM argos.event_dead_letters WHERE resolved_at IS NULL",
+        "Events whose deliveries ran out and are kept as dead letters, not yet resolved (QA-001).",
+    ),
     "argos_review_queue_pending": (
         "SELECT count(*) FROM argos.review_queue WHERE status = 'pending'",
         "Classification proposals waiting for a person.",

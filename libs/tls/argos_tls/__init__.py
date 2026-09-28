@@ -51,6 +51,8 @@ class ReloadingTLS:
         self._stamp = self._files_stamp()
         self._current = self._build()
         self._base: ssl.SSLContext | None = None
+        self._client: ssl.SSLContext | None = None
+        self._client_stamp = self._stamp
 
     def _files_stamp(self) -> tuple[float, ...]:
         return tuple(
@@ -85,6 +87,28 @@ class ReloadingTLS:
 
     def _swap(self, sock: ssl.SSLObject | ssl.SSLSocket, _name: str | None, _: Any) -> None:
         sock.context = self._fresh()
+
+    def client_context(self) -> ssl.SSLContext:
+        """One client context for the life of a long connection (the bus): `refresh()` loads a
+        renewed certificate into this same object, so a reconnection presents it (QA-004)."""
+        if self._client is None:
+            self._client = self._build()
+        return self._client
+
+    def refresh(self) -> None:
+        """Load the certificate and CA on disk into the client context, if they changed."""
+        with self._lock:
+            if self._client is None:
+                return
+            try:
+                stamp = self._files_stamp()
+                if stamp == self._client_stamp:
+                    return
+                self._client.load_cert_chain(self.cert_dir / CERT_FILE, self.cert_dir / KEY_FILE)
+                self._client.load_verify_locations(cafile=self.cert_dir / CA_FILE)
+                self._client_stamp = stamp
+            except (OSError, ssl.SSLError):
+                pass  # a certificate half written: keep the current one and look again later
 
     def context(self) -> ssl.SSLContext:
         """For a server, one context whose handshakes always use the latest certificate; for a

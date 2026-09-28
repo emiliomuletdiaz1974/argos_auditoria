@@ -113,6 +113,19 @@ groups:
       description: Without it the journal, the WORM store and the queues go unwatched.
       runbook_url: docs/operacion/runbooks/RB-06-plataforma.md
       source: 'ADR-0015 punto 2: sin el servicio de salud, las alertas de dominio no pueden dispararse'
+  - alert: EventsDeadLettered
+    expr: argos_events_dead_letters > 0
+    for: 5m
+    labels:
+      severity: warning
+      objective: events-delivered
+    annotations:
+      summary: Events could not be processed and are kept as dead letters
+      description: 'A subscriber failed on every delivery of these events: an inventory, a seal or a webhook
+        is missing until they are replayed.'
+      runbook_url: docs/operacion/runbooks/RB-05-campanas-y-colas.md
+      source: 'ADR-0002 y revisión de calidad QA-001: un evento que no se pudo procesar no se pierde en
+        silencio'
   - alert: HealthCheckFailing
     expr: min by (check) (argos_health_check_ok) == 0
     for: 15m
