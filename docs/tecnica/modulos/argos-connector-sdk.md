@@ -4,8 +4,8 @@ kind: module
 title: SDK de conectores de solo lectura (argos-connector-sdk)
 module: argos-connector-sdk
 phases: ["02", "03"]
-version: 0.8.0-alpha
-commit: c9c270b
+version: 0.8.1-alpha
+commit: e1610ef
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -68,6 +68,7 @@ Otras piezas:
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Identificadores ocultos (QA-071):** `scrub_identifiers` quita los caracteres de ancho cero antes de buscar, para que no escondan un DNI.
 - **Validadores en sus bordes (QA-017):** un valor en blanco no cuenta como identificador mal escrito. DNI, NIE, NUSS e IBAN aceptan separadores (`12.345.678-Z`, `X-1234567-L`), y el DNI también sin el cero inicial (`1234567L`), porque la letra de control sigue decidiendo. Solo cuentan dígitos ASCII.
 - **Ventanas nocturnas (QA-018):** una ventana cuyo fin es anterior a su inicio (22:00–06:00) cruza la medianoche. Las horas después de medianoche pertenecen a la ventana del día en que empezó (`window_open`).
 - **El validador de solo lectura en sus bordes (QA-019, 023):** una sentencia que ni siquiera se tokeniza (una comilla sin cerrar) es una violación de solo lectura, con su asiento de rechazo. En MySQL y PostgreSQL se rechaza cualquier barra invertida: según el modo del servidor escapa o no, y el validador y el motor podrían leer dos sentencias distintas.
@@ -120,3 +121,4 @@ El presupuesto de carga vive en la memoria de cada proceso; con varias réplicas
 | 0.6.0-alpha | 2026-09-24 | `argos_facts` es fuente de configuración en PostgreSQL: los hechos del propio appliance | F10-01 (ARG-100) |
 | 0.7.0-alpha | 2026-09-28 | `check_config` solo con esquemas de catálogo y sin texto SQL de otras sesiones; `sample_size` | QA-23 (QA-015, 027) |
 | 0.8.0-alpha | 2026-09-28 | Validadores con separadores, sin cero inicial y solo ASCII; blancos fuera de la tasa; ventanas nocturnas; `TokenError` y barra invertida como violaciones | QA-24 (QA-017, 018, 019, 023) |
+| 0.8.1-alpha | 2026-09-28 | `scrub_identifiers` sin caracteres de ancho cero | QA-30 (QA-071) |
