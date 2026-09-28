@@ -557,6 +557,11 @@ Formato: `tarea` — **qué decidimos** — por qué (y qué medimos, si consta)
 - `QA-32` — **el inicio de una alerta decide si es un episodio nuevo** — un `firing` con el mismo inicio que el resuelto es el mismo episodio entregado tarde y no lo revive; uno con un inicio posterior es uno nuevo y trae su fecha. Así funciona `startsAt` en Alertmanager.
 - `QA-32` — **orden de los tests** — todos fallaron antes de corregir salvo dos: el de relanzar una campaña ya lanzada pasaba porque el recuento no la contaba (lo dejamos como regresión: con la corrección de QA-006 habría dado «talla llena») y la reaparición en memoria, que ya reemplazaba la fila. El del visor de runbooks agotó la memoria del proceso de tests, que es el fallo del informe.
 
+- `QA-33` — **el resumen de una ráfaga lo escribe un temporizador** — el primer evento plegado de cada ventana pide un temporizador para su final; al saltar escribe los resúmenes pendientes y saca de memoria las ventanas terminadas, que también salen en el siguiente evento de cualquier clave. Descartamos un hilo de barrido permanente: el temporizador solo existe mientras hay algo que resumir.
+- `QA-33` — **todo el `extra` va al log** — excepto los atributos propios de `LogRecord`. Si una llamada usa el nombre de un campo obligatorio (`service`, por ejemplo), su valor va como `extra_service` y el obligatorio no se pisa. Revisamos las llamadas con `extra`: pasan tipos de error, nombres de servicio y recuentos, ningún secreto.
+- `QA-33` — **el emisor sigue con el siguiente servicio** — y registra el que falló. Para el par desparejado comparamos la clave pública del certificado con la de la clave; si no coinciden, se emite de nuevo. Descartamos escribir clave y certificado en un solo archivo: los servicios los leen por separado.
+- `QA-33` — **orden de los tests** — los cinco fallaron antes de corregir.
+
 ### Fase 10
 - `F10-R` — **la autoverificación (ARG-100) va la primera** — el documento la pone al final. Adelantada, el resto de la fase se construye ya con la puerta de release activa, y cada tarea puede añadir su reto `self-*`.
 - `F10-R` — **una ruta `POST /api/v1/systems` nueva para los límites de talla** — hoy los sistemas se dan de alta con un script de desarrollo, y un límite que no tiene dónde aplicarse no limita nada.

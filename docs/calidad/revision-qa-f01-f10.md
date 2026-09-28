@@ -1,6 +1,6 @@
 # Revisión de calidad de las Fases 01 a 10
 
-**Versión:** 1.13 · **Fecha:** 2026-09-28 · **Base:** `main` en `d74ba47` (tag `fase-10`) · **Confidencialidad:** `internal`
+**Versión:** 1.14 · **Fecha:** 2026-09-28 · **Base:** `main` en `d74ba47` (tag `fase-10`) · **Confidencialidad:** `internal`
 **Tarea:** QA-01 · **Relacionado:** [revisión de seguridad de F1–F8](../seguridad/revision-f01-f08.md), [modelo de amenazas](../seguridad/modelo-amenazas.md)
 
 Revisamos todo lo construido en `argos/` buscando errores de funcionamiento y casos borde, no estilo. Tratamos los hallazgos como los de un cliente, igual que en F09-02: cada uno queda **registrado** aquí, se **corrige** en una tarea `QA-2N` con un test que lo reproduce primero, y la corrección queda **evidenciada** en el commit y en este registro.
@@ -202,6 +202,7 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | QA-058, QA-059, QA-068, QA-069, QA-070, QA-071 | Corregido (los `S` —QA-068, 069 y 070— reproducidos por sus tests antes de corregir) | QA-30 | `e1610ef` | 2026-09-28 |
 | QA-057, QA-063, QA-064, QA-065, QA-067 | Corregido (los `S` —QA-063, 064 y 065— reproducidos por sus tests antes de corregir) | QA-31 | `bdbf0f0` | 2026-09-28 |
 | QA-006, QA-060, QA-061, QA-062, QA-066 | Corregido (los `S` —QA-061 y QA-066— reproducidos por sus tests antes de corregir) | QA-32 | `7363e55` | 2026-09-28 |
+| QA-002, QA-003, QA-007, QA-011 | Corregido (los `S` —QA-003 y QA-011— reproducidos por sus tests antes de corregir) | QA-33 | `c5d1639` | 2026-09-28 |
 
 ## 7. Historial
 
@@ -221,3 +222,4 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | 1.11 | 2026-09-28 | Corregidos QA-058, 059, 068, 069, 070 y 071 (QA-30) |
 | 1.12 | 2026-09-28 | Corregidos QA-057, 063, 064, 065 y 067 (QA-31) |
 | 1.13 | 2026-09-28 | Corregidos QA-006, 060, 061, 062 y 066 (QA-32) |
+| 1.14 | 2026-09-28 | Corregidos QA-002, 003, 007 y 011 (QA-33) |

@@ -4,8 +4,8 @@ kind: module
 title: TLS mutuo entre servicios (argos-tls)
 module: argos-tls
 phases: ["09"]
-version: 0.2.0-alpha
-commit: 614dfaf
+version: 0.3.0-alpha
+commit: c5d1639
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -78,6 +78,8 @@ Dependencias: `httpx` y `cryptography`.
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Renovación por servicio (QA-003):** un servicio que no se puede emitir se registra y los demás siguen.
+- **Clave y certificado emparejados (QA-011):** si la clave de una carpeta no es la del certificado (un corte entre las dos escrituras), se vuelven a emitir (`paired()`).
 - **Contexto de cliente de larga vida (QA-004):** `client_context()` devuelve siempre el mismo objeto y `refresh()` carga en él el certificado y la CA del disco si cambiaron. Una conexión que dura más que el certificado, como la del bus, presenta el nuevo al reconectar.
 - **Sin excepciones.** Ningún extremo acepta un par sin certificado ni uno firmado por otra CA. En el código y la configuración del producto no hay `verify=False`, `CERT_NONE` ni un `sslmode` explícito inferior a `verify-full`; lo vigila `tests/security/test_tls_verification.py`.
 - **Aislamiento de las claves.** La clave privada de cada servicio solo la ve ese servicio: cada certificado vive en su propio volumen, que no monta ningún otro contenedor. `test_mtls.py` comprueba que cada contenedor tiene su propio certificado.
@@ -120,3 +122,4 @@ Dependencias: `httpx` y `cryptography`.
 |---|---|---|---|
 | 0.1.0-alpha | 2026-09-23 | TLS mutuo 1.3 con recarga sin reinicio, emisor desde Vault, PostgreSQL y NATS con TLS, permisos de NATS por servicio | F09-06 (ARG-083) |
 | 0.2.0-alpha | 2026-09-28 | `client_context()` y `refresh()` para conexiones de larga vida | QA-25 (QA-004) |
+| 0.3.0-alpha | 2026-09-28 | Renovación que no se corta por un servicio y reemisión de pares desparejados | QA-33 (QA-003, 011) |
