@@ -149,8 +149,9 @@ def test_a_finding_carries_its_whole_why(api: TestClient, migrated_db: str) -> N
 def test_a_sampled_finding_carries_its_sampling_declaration(
     api: TestClient, migrated_db: str
 ) -> None:
+    # `<=`: with a sample only upper thresholds are decided (QA-054); `== 0` is inconclusive.
     sampled = {
-        "criterion": {"threshold": {"field": "count", "operator": "==", "value": 0}},
+        "criterion": {"threshold": {"field": "count", "operator": "<=", "value": 0}},
         "sampling": {"population": 1200, "sample": 300, "confidence": "0.95"},
     }
     probe = {"ok": True, "data": {"count": 4}}
