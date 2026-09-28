@@ -31,10 +31,10 @@ uv run python platform/ha/size-m/failover.py --primary-dsn <principal> --replica
 ```
 
 3. Redirige el acceso de los usuarios al nuevo principal.
-4. Cuando el antiguo principal vuelva, reincorpóralo como réplica: se vacía y se clona del nuevo principal, y queda `ha.rejoin` en el diario. Nunca lo arranques como principal.
+4. Cuando el antiguo principal vuelva, reincorpóralo como réplica (sin `--confirm`, el script solo dice lo que haría): se vacía y se clona del nuevo principal, y queda `ha.rejoin` en el diario. Nunca lo arranques como principal.
 
 ```bash
-uv run python platform/ha/size-m/rejoin.py --node <antiguo> --node-dsn <antiguo> --primary <nuevo> --primary-dsn <nuevo> --compose-file deploy/dev/compose.yaml
+uv run python platform/ha/size-m/rejoin.py --node <antiguo> --node-dsn <antiguo> --primary <nuevo> --primary-dsn <nuevo> --compose-file deploy/dev/compose.yaml --confirm
 ```
 
 ## Verificación

@@ -14,10 +14,12 @@ Dos principales escribiendo evidencia a la vez serían dos verdades. En un almac
 
 - `platform/ha/size-m/failover.py`:
   - sin `--confirm` es un simulacro y no cambia nada;
-  - se niega si el principal responde;
-  - enseña el retraso de la réplica y avisa si supera el máximo;
+  - se niega si el principal responde, también cuando responde con un error (una contraseña, una base que no existe): solo un principal inalcanzable está caído;
+  - enseña el retraso de la réplica y avisa si supera el máximo; si nunca reprodujo nada, lo dice como desconocido;
+  - para si `pg_promote` no confirma la promoción;
   - promueve, verifica el diario en el promovido antes de nada más y deja `ha.failover` en el diario.
 - `platform/ha/size-m/rejoin.py`:
+  - sin `--confirm` es un simulacro y no vacía nada;
   - devuelve el antiguo principal como réplica del nuevo;
   - se niega si sigue corriendo como principal;
   - lo vacía y lo clona del nuevo principal con su propio slot;

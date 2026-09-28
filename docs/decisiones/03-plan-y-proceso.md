@@ -570,6 +570,11 @@ Formato: `tarea` — **qué decidimos** — por qué (y qué medimos, si consta)
 - `QA-34` — **argos-health entra en la release** — construcción, SBOM, puerta y actualizador; un test compara las cuatro listas con lo que corre en el compose para que no vuelva a quedarse fuera ninguna imagen.
 - `QA-34` — **orden de los tests** — todos fallaron antes de corregir. El de `sslmode` pasaba al principio por otro motivo (faltaba un punto de acceso cifrado en su configuración); lo corregimos para que fallara por lo suyo.
 
+- `QA-35` — **solo un principal inalcanzable está caído** — un error con SQLSTATE (una contraseña, una base que no existe) es un servidor que contesta; promover entonces daría dos principales. La réplica que nunca reprodujo nada tiene un retraso desconocido, que se dice y queda en el diario como `unknown`; y una promoción que `pg_promote` no confirma para la conmutación antes de verificar ni asentar nada.
+- `QA-35` — **la reincorporación es un simulacro sin `--confirm`** — como la conmutación: borra el volumen de un nodo, y eso no se hace por olvidar una opción. RB-07 y el test de integración la llaman con `--confirm`.
+- `QA-35` — **los recuentos del backup salen de la instantánea del volcado** — una transacción de solo lectura exporta su instantánea (`pg_export_snapshot`), cuenta en ella y `pg_dump --snapshot` lee la misma; con esos recuentos la prueba de restauración compara igualdad, no solo tablas a cero. Las copias anteriores, con recuentos sin instantánea, se siguen comparando como antes.
+- `QA-35` — **orden de los tests** — los seis fallaron antes de corregir; el de `rejoin` sin `--confirm` esperaba 180 s a un nodo que nunca volvía, que es el fallo.
+
 ### Fase 10
 - `F10-R` — **la autoverificación (ARG-100) va la primera** — el documento la pone al final. Adelantada, el resto de la fase se construye ya con la puerta de release activa, y cada tarea puede añadir su reto `self-*`.
 - `F10-R` — **una ruta `POST /api/v1/systems` nueva para los límites de talla** — hoy los sistemas se dan de alta con un script de desarrollo, y un límite que no tiene dónde aplicarse no limita nada.
