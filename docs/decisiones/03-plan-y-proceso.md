@@ -526,6 +526,13 @@ Formato: `tarea` — **qué decidimos** — por qué (y qué medimos, si consta)
 - `QA-27` — **una revisión rechazada se mantiene** — si el modelo vuelve a proponer, la propuesta se ignora; no se reabre la revisión, para no borrar quién la rechazó y cuándo. Aceptar lleva la categoría que se vio (campo existente `category`, ahora también para `accept`) y la API responde `409` si cambió. El contrato y los tipos de la consola se regeneraron.
 - `QA-27` — **orden de los tests** — los puros fallaron antes de corregir; el de flujos pasaba por casualidad (el mejor par ordenaba primero) y se ajustó para que no. Los dos de integración de la cola se escribieron después y los vimos fallar contra el código anterior.
 
+- `QA-28` — **la severidad se escala desde la del reto** — con la guardada, cada avistamiento subía un nivel más. Recalcular desde la del reto es idempotente y da un solo nivel a partir de tres campañas.
+- `QA-28` — **un reintento se reconoce por el veredicto** — `persist_verdict` devuelve el mismo id al reintentar, así que un hallazgo cuyo último veredicto es el mismo no es un avistamiento nuevo y no deja asiento. Lo anuncia la campaña que lo abrió, también al reintentar, con un id de evento fijo que JetStream deduplica (QA-25).
+- `QA-28` — **un reto de recuento con `muestreo` sin plan es un censo** — la sonda `count` lee la tabla entera. Descartamos inventar una población: el evaluador lo decide como censo y lo dice en el detalle. SEC-009 queda así: el doble control del muestreo se mantiene y el cálculo de Wilson solo se aplica cuando hay plan. Conectar `plan_sampling` a una sonda de recuento previa es trabajo nuevo, no una corrección.
+- `QA-28` — **los decimales se canonizan como texto** — la forma canónica del veredicto no admite floats; `repr` normalizado con `Decimal` da el mismo texto en toda plataforma. Los vectores de determinismo no cambian, porque no tenían decimales (con ellos fallaban).
+- `QA-28` — **con muestreo solo se deciden umbrales superiores** — una muestra acota los fallos por arriba; `>=` y `>` salen `inconclusive` con el motivo.
+- `QA-28` — **orden de los tests** — los puros y los cuatro de integración fallaron antes de corregir; el de la biblioteca se ajustó para cubrir `archive`, que estaba en otra función.
+
 ### Fase 10
 - `F10-R` — **la autoverificación (ARG-100) va la primera** — el documento la pone al final. Adelantada, el resto de la fase se construye ya con la puerta de release activa, y cada tarea puede añadir su reto `self-*`.
 - `F10-R` — **una ruta `POST /api/v1/systems` nueva para los límites de talla** — hoy los sistemas se dan de alta con un script de desarrollo, y un límite que no tiene dónde aplicarse no limita nada.

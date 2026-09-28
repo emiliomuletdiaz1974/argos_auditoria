@@ -4,8 +4,8 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.12.1-alpha
-commit: 8eb3e4f
+version: 0.13.0-alpha
+commit: 728095a
 date: 2026-09-28
 status: current
 confidentiality: client
@@ -230,6 +230,10 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
 
 ## 6. Seguridad y tratamiento de datos
 
+- **Escalado una vez (QA-044):** la severidad sube un nivel desde la del reto a partir de tres campañas, no un nivel más en cada avistamiento.
+- **Reintentos sin efectos dobles (QA-048, 049, 051):** una evaluación reintentada no escribe otro `finding.recur`; el sello reintentado devuelve el sello guardado; una preparación reintentada reutiliza lo fijado y no toma otra instantánea. Los anuncios llevan un id fijo (`finding-opened-…`, `campaign-sealed-…`) que el bus deduplica.
+- **Evaluador en sus bordes (QA-046, 047, 053, 054):** un reto de recuento con `muestreo` y sin plan se decide como el censo que es; los decimales se canonizan como texto (`0.05`); el tamaño de muestra propuesto para `<` demuestra el umbral; con muestreo, `>=` y `>` dan `inconclusive`.
+- **La biblioteca donde esté el repositorio (QA-056):** las carpetas `archive` y `schema` se buscan dentro de la biblioteca, no en la ruta absoluta.
 - **Instantánea verificada antes de usarla (QA-040):** el resolutor comprueba que los nodos de la instantánea siguen dando su hash antes de que una campaña resuelva sobre ella; si no, `SnapshotAlteredError`.
 - **TLS hacia PostgreSQL y NATS** (F09-06, ARG-083): el contenedor monta su propio certificado en `/run/tls`, que no monta ningún otro servicio. libpq verifica PostgreSQL (`verify-full`) y NATS exige el certificado del servicio.
 - **Postura del contenedor** (F09-03, ARG-084, P-22): corre como `10001:10001`, sin capacidades (`cap_drop: [ALL]`), con la raíz de solo lectura y `/tmp` en `tmpfs`, sin escalada (`no-new-privileges`) y con el perfil seccomp por defecto de Docker. La imagen no lleva `bash`. En el compose lo exige `tests/security/test_compose_posture.py`, y `tests/integration/test_container_posture.py` lo comprueba dentro del contenedor en marcha.
@@ -400,3 +404,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.11.0-alpha | 2026-09-24 | Familia `self` (autoverificación), vista `argos_facts.facts` y rol `svc_selfcheck` (migración 0040), y `tools/selfcheck.py` | F10-01 (ARG-100) |
 | 0.12.0-alpha | 2026-09-24 | Los hechos de las cadenas y los retos `self-010…012` los publica el servicio de salud (migración 0041) | F10-02 (ARG-094) |
 | 0.12.1-alpha | 2026-09-28 | El resolutor verifica la instantánea | QA-26 (QA-040) |
+| 0.13.0-alpha | 2026-09-28 | Escalado una vez, reintentos idempotentes con anuncios deduplicables, evaluador en sus bordes y biblioteca independiente de la ruta | QA-28 (QA-044, 046, 047, 048, 049, 051, 053, 054, 056) |
