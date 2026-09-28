@@ -162,6 +162,18 @@ La fuente de todas es la bitácora del plan (`.scratch/plan/BITACORA.md`), que n
 - **Por qué:** el programa no puede quedarse parado por dependencias externas. Cada informe de cierre las declara como pendientes y ningún documento las presenta como hechas.
 - **Excepción:** la Fase 06 **no tiene tag**, porque F06-99 depende de F06-05 (pesos del modelo, MANUAL). Ver [revisión](04-revision-2026-09-23.md).
 
+### DP-17
+**Revisión de calidad de F01–F10 (QA-01)** · 2026-09-28
+
+- **Decidimos:**
+  - revisar toda la plataforma `argos` buscando errores de funcionamiento y casos borde, con seis revisores de solo lectura en paralelo, uno por bloque;
+  - no dar por bueno ningún hallazgo sin verificarlo: 25 reproducidos ejecutando el código, 24 confirmados leyendo el código y 40 señalados con archivo y línea, que se confirman con el test que falla al empezar su tarea;
+  - tratar los hallazgos como los de un cliente, igual que en F09-02: informe en `docs/calidad/`, severidad y 16 tareas `QA-20…QA-35` para corregirlos con TDD;
+  - reabrir en la revisión de seguridad lo que no quedó cerrado (SEC-009 y SEC-034) y devolver M-08 y M-27 a «en desarrollo» en el modelo de amenazas.
+- **Por qué:** las pruebas de fase comprueban lo que cada fase prometió, no los casos borde; y la Fase 10 no la había revisado nadie más que quien la escribió.
+- **Qué comprobamos antes:** que el entorno estaba en pie; se cayó durante la revisión y lo levantamos con `make dev`. Las reproducciones son funciones puras o dobles, y nada escribió en la base compartida.
+- **Descartamos:** corregir sobre la marcha, porque mezclaría 89 cambios en un solo commit sin su test; e incluir `argos-web`, por decisión del usuario.
+
 ### DP-16
 **Fase 10 (F10-00)** · 2026-09-24
 

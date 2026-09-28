@@ -1,6 +1,6 @@
 # Revisión de seguridad de las Fases 01 a 08
 
-**Versión:** 1.17 · **Fecha:** 2026-09-23 · **Base:** `main` en `47711f5` (con la auditoría del 2026-09-18 integrada) · **Confidencialidad:** `client`
+**Versión:** 1.18 · **Fecha:** 2026-09-28 · **Base:** `main` en `47711f5` (con la auditoría del 2026-09-18 integrada) · **Confidencialidad:** `client`
 **Tarea:** F09-02 · **Referencia:** [modelo de amenazas](modelo-amenazas.md)
 
 Tratamos nuestros hallazgos como los de un cliente: cada uno queda **registrado** aquí, se **corrige** en una tarea con un test que lo reproduce primero, y la corrección queda **evidenciada** en el commit y en este registro.
@@ -163,3 +163,4 @@ Cada fila se añade cuando la tarea que corrige el hallazgo se cierra, con el co
 | 1.15 | 2026-09-23 | SEC-057 tratado con excepción que caduca (F09-09) |
 | 1.16 | 2026-09-24 | La batería de accesos (F09-15) añade SEC-058 y SEC-059, corregidos, y SEC-060, abierto en F09-32 |
 | 1.17 | 2026-09-24 | Corregido SEC-060 (F09-32): el token de acceso de una sesión cerrada se rechaza |
+| 1.18 | 2026-09-28 | La revisión de calidad QA-01 reabre SEC-009 (QA-046, en QA-28) y SEC-034 (QA-058 y QA-059, en QA-30), y encuentra variantes de SEC-022 (QA-015), SEC-023 (QA-026) y un resto de SEC-048 (QA-068): ver `docs/calidad/revision-qa-f01-f10.md` |
