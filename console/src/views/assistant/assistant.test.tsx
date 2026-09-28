@@ -62,6 +62,33 @@ describe("AssistantView", () => {
     expect(cited).not.toHaveTextContent(/cifrado de los datos personales/);
   });
 
+  it("a citation of the state does not unfold to an article that its detail happens to name", async () => {
+    // Quality review QA-069: only a citation of the regulation search unfolds to a fragment.
+    renderWithApi(<AssistantView />, {
+      [ASK]: {
+        ...ANSWER,
+        answer: "Hay 2 hallazgos del RGPD art. 32.1.a [1].",
+        sources: [{ tool: "finding_status", detail: "hallazgos abiertos del RGPD art. 32.1.a" }],
+      },
+    });
+    ask("¿cuántos hallazgos de cifrado hay?");
+    const answer = await screen.findByRole("article", { name: /respuesta/i });
+    fireEvent.click(within(answer).getByRole("button", { name: "Cita 1" }));
+    const cited = within(answer).getByRole("region", { name: /cita 1/i });
+    expect(cited).not.toHaveTextContent(/cifrado de los datos personales/);
+  });
+
+  it("an answer the guardrails stopped is told apart from one that quoted what it did not consult", async () => {
+    // Quality review QA-070: a verdict or a write stopped by the guardrails arrives as 422.
+    renderWithApi(<AssistantView />, {
+      [ASK]: { __status: 422, detail: "veredicto_no_citado" },
+    });
+    ask("¿cumple el sistema clínico?");
+    const problem = await screen.findByRole("status");
+    expect(problem).toHaveTextContent(/veredicto sin citarlo o una escritura/i);
+    expect(problem).not.toHaveTextContent(/no consultó/i);
+  });
+
   it("shows under each answer the tools it consulted", async () => {
     renderWithApi(<AssistantView />, { [ASK]: ANSWER });
     ask("¿qué pide el RGPD de cifrado?");

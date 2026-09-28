@@ -152,3 +152,26 @@ def test_an_auditor_does_not_spend_the_quota_of_the_local_model(migrated_db: str
         f"{API_PREFIX}/assistant/ask", json=QUESTION, headers=_as("read_only_auditor")
     )
     assert answer.status_code == 403
+
+
+def test_an_answer_the_guardrails_reject_is_told_apart_from_an_unbacked_one(
+    migrated_db: str,
+) -> None:
+    """QA-070: a verdict or a write rejected by the guardrails (422 at the gateway) is not "it
+    quoted what it did not consult" (502)."""
+    claim = [{"action": "answer", "answer": "El sistema cumple el RGPD.", "sources": []}]
+    answer = _api(migrated_db, _through_gateway(migrated_db, claim)).post(
+        f"{API_PREFIX}/assistant/ask", json=QUESTION, headers=_as("dpo_reviewer")
+    )
+    assert answer.status_code == 422, answer.text
+    assert "veredicto_no_citado" in answer.json()["detail"]
+
+
+def test_a_campaign_the_assistant_would_ignore_is_refused(migrated_db: str) -> None:
+    """QA-070: the question does not take a campaign it would then ignore."""
+    answer = _api(migrated_db, _through_gateway(migrated_db, [])).post(
+        f"{API_PREFIX}/assistant/ask",
+        json={**QUESTION, "campaign_id": "01920000-0000-7000-8000-000000000001"},
+        headers=_as("dpo_reviewer"),
+    )
+    assert answer.status_code == 422

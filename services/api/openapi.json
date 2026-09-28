@@ -337,18 +337,8 @@
         "type": "object"
       },
       "Question": {
+        "additionalProperties": false,
         "properties": {
-          "campaign_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Campaign Id"
-          },
           "question": {
             "maxLength": 2000,
             "minLength": 3,

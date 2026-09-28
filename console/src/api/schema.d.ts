@@ -1062,8 +1062,6 @@ export interface components {
         };
         /** Question */
         Question: {
-            /** Campaign Id */
-            campaign_id?: string | null;
             /** Question */
             question: string;
         };

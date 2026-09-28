@@ -5,21 +5,27 @@
 # Versión 2 (revisión de seguridad F09-02, SEC-032, SEC-034 y SEC-049): límites propios en lugar
 # de `\b` (que no separa un DNI de un `_`), separadores dentro de los identificadores, afirmaciones
 # como patrones sobre texto normalizado y escrituras ancladas como sentencia SQL.
-version: 2
+#
+# Versión 3 (revisión de calidad QA-01, QA-058, QA-059 y QA-071): afirmaciones con adverbio
+# («plenamente conforme», «fully compliant»), «se ajusta», la ausencia de incumplimientos y «que»
+# solo exento tras un sujeto en plural; escrituras con alias, sin FROM, MERGE, GRANT/REVOKE,
+# CREATE y `rm -r`; guiones y puntos dentro del DNI y del IBAN.
+version: 3
 
 # Identificadores españoles que se sustituyen a la entrada. `validator` es el de ARG-024: solo se
 # sustituye lo que valida (sin separadores), para no destrozar un código de producto que se parezca
 # a un DNI. Los límites son solo «ni un dígito más» a cada lado: un `_`, un guion o una letra
 # pegada no protegen un DNI (`dni_12345678Z`, `columna12345678Zfin`), y el validador descarta lo que
-# no lo es. Se admiten espacio, guion, punto y barra como separadores. El IBAN va primero: sus
-# dígitos no deben leerse como otro identificador.
+# no lo es. Se admiten espacio, guion, punto y barra como separadores (y los caracteres de ancho
+# cero se quitan antes de buscar). El IBAN va primero: sus dígitos no deben leerse como otro
+# identificador.
 identifiers:
   - marker: IBAN
     validator: iban_es
-    pattern: "[Ee][Ss]\\d{2}(?:[ \\-]?\\d{4}){5}(?!\\d)"
+    pattern: "[Ee][Ss]\\d{2}(?:[ .\\-]?\\d{4}){5}(?!\\d)"
   - marker: DNI
     validator: dni
-    pattern: "(?<!\\d)\\d{2}[ .]?\\d{3}[ .]?\\d{3}[ .\\-/]?[A-Za-z]"
+    pattern: "(?<!\\d)\\d{2}[ .\\-]?\\d{3}[ .\\-]?\\d{3}[ .\\-/]?[A-Za-z]"
   - marker: NIE
     validator: nie
     pattern: "[XYZxyz][ .\\-/]?\\d{7}[ .\\-/]?[A-Za-z]"
@@ -28,28 +34,43 @@ identifiers:
     pattern: "(?<!\\d)\\d{2}[ .\\-/]?\\d{7,8}[ .\\-/]?\\d{2}(?!\\d)"
 
 # Cómo afirma una respuesta que algo cumple. Se comparan sobre el texto normalizado: NFKC, sin
-# caracteres de formato (espacios de ancho cero), sin tildes, en minúsculas y con los blancos
-# reducidos a uno. Si una aparece y la respuesta no cita un veredicto que existe (y, en el
-# asistente, que devolvió una herramienta), la salida se rechaza: el veredicto nace en el evaluador.
+# caracteres de formato (espacios de ancho cero), con las letras cirílicas y griegas que imitan a
+# las latinas leídas como latinas, sin tildes, en minúsculas y con los blancos reducidos a uno. Si
+# una aparece y la respuesta no cita un veredicto que existe (y, en el asistente, que devolvió una
+# herramienta), la salida se rechaza: el veredicto nace en el evaluador.
 # Se buscan formas verbales, no la raíz: «el cumplimiento del artículo 32 exige…» explica la norma
-# y no afirma nada de ningún activo. Tras «que» no cuentan: «los tratamientos que incumplen la
-# forma» describe un criterio (así lo escriben los retos), no afirma nada de un activo concreto.
+# y no afirma nada de ningún activo, y «el incumplimiento del artículo 33 obliga…» tampoco.
 verdict_patterns:
-  - "(?<!\\bque )\\b(in)?cumpl(e|en|ia|ian|io|ieron|ira|iran|ido|ida|idos|idas)\\b"
-  - "\\b(es|son|resulta|resultan|esta|estan|sea|sean|era|eran)\\s+(no\\s+)?(conforme|conformes|en\\s+conformidad)\\b"
+  - "\\b(in)?cumpl(e|en|ia|ian|io|ieron|ira|iran|ido|ida|idos|idas)\\b"
+  - "\\b(es|son|resulta|resultan|esta|estan|sea|sean|era|eran)\\s+(\\w+mente\\s+)?(no\\s+)?(conforme|conformes|en\\s+conformidad)\\b"
   - "\\bno\\s+conforme(s)?\\b"
-  - "\\b(is|are|was|were|be)\\s+(not\\s+)?(compliant|conformant|in\\s+compliance)\\b"
+  - "\\b\\w+mente\\s+conformes?\\b"
+  - "\\bse\\s+(\\w+mente\\s+)?(ajusta|ajustan|adecua|adecuan|atiene|atienen)\\b"
+  - "\\b(ningun|ninguna|sin|hay|existe|existen|aprecia|aprecian|observa|observan|detecta|detectan|detectado|detectados|constata|consta|encontrado|encontrados)\\s+(\\w+\\s+){0,2}incumplimientos?\\b"
+  - "\\b(is|are|was|were|be)\\s+(\\w+ly\\s+)?(not\\s+)?(compliant|conformant|in\\s+compliance)\\b"
   - "\\bcompl(y|ies|ied)\\s+with\\b"
   - "\\bnon[\\s-]?compliant\\b"
+
+# Lo que describe un criterio y no afirma nada de un activo: «los tratamientos que incumplen la
+# forma», «las columnas que cumplen el patrón» (así lo escriben los retos). Se borra del texto antes
+# de buscar las afirmaciones. Solo tras un sujeto en plural: «concluyo que cumple» o «el sistema
+# que cumple» siguen siendo afirmaciones (QA-058).
+criterion_patterns:
+  - "\\b(los|las|aquellos|aquellas|unos|unas)\\s+(\\w+\\s+){1,3}que\\s+(no\\s+)?(in)?cumplen\\b"
 
 # Escrituras sobre un objetivo, como sentencia y no como subcadena: `last_update` es una columna y
 # no un UPDATE. El asistente propone, nunca manda ejecutar.
 write_patterns:
   - "\\bdrop\\s+(table|schema|database|view|index)\\b"
   - "\\bdelete\\s+from\\s+\\S"
+  - "\\bdelete\\s+[\\w.\"]+\\s+(\\w+\\s+)?(where|using)\\b"
   - "\\btruncate\\s+(table\\s+)?[\\w.\"]+"
-  - "\\bupdate\\s+[\\w.\"]+\\s+set\\b"
+  - "\\bupdate\\s+[\\w.\"]+\\s+(as\\s+)?(\\w+\\s+)?set\\b"
   - "\\binsert\\s+into\\s+\\S"
+  - "\\bmerge\\s+into\\s+\\S"
+  - "\\b(grant|revoke)\\s+(all|select|insert|update|delete|usage|execute|create|connect|references|trigger|truncate)\\b"
+  - "\\bcreate\\s+(or\\s+replace\\s+)?(temp\\s+|temporary\\s+|unlogged\\s+)?(table|schema|database|view|index|role|user|function|procedure|trigger)\\b"
+  - "\\brm\\s+-\\w*[rf]\\w*\\s+\\S"
   - "\\balter\\s+(table|schema|database)\\b"
   - "\\bmodifica(r)?\\s+la\\s+tabla\\b"
   - "\\bborra(r)?\\s+la\\s+tabla\\b"

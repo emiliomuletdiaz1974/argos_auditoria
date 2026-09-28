@@ -41,20 +41,23 @@ const TOOL_LABELS: Record<string, string> = {
 };
 
 const REFUSALS: Record<number, string> = {
+  422: "El modelo propuso un veredicto sin citarlo o una escritura sobre un sistema, y eso no sale del asistente. Reformula la pregunta.",
   429: "Se ha agotado el cupo del modelo local por ahora. Vuelve a preguntar dentro de un rato.",
-  502: "El modelo respondió algo que no se puede enseñar como respuesta (citaba lo que no consultó). Reformula la pregunta.",
+  502: "El modelo respondió algo que no se puede respaldar con lo que consultó (una fuente o una cifra). Reformula la pregunta.",
   503: "El modelo local no está disponible en este equipo. El resto de la consola funciona; el asistente vuelve cuando el modelo esté en marcha.",
 };
 
 const CITATION = /\[(\d+)\]/g;
 
 function fragmentOf(source: Source, fragments: Fragment[]): Fragment | undefined {
-  // An empty detail is contained in every reference: it cites nothing, so it unfolds nothing.
-  const detail = source.detail.trim();
-  if (!detail) {
+  // Only a citation of the regulation search is a fragment, and the gateway has already checked
+  // that its detail is the reference, word for word (QA-069). A count that names an article is
+  // not that article; an empty detail cites nothing.
+  if (source.tool !== "search_regulation") {
     return undefined;
   }
-  return fragments.find((fragment) => detail.includes(fragment.reference) || fragment.reference.includes(detail));
+  const detail = source.detail.trim();
+  return fragments.find((fragment) => fragment.reference === detail);
 }
 
 function Citation({ number, source, fragments }: { number: number; source: Source | undefined; fragments: Fragment[] }) {

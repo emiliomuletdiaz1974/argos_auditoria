@@ -207,7 +207,14 @@ async def ask(
             sources = _checked(step, consulted, fragments, numbers)
             return Answer(str(step.get("answer", "")), sources, True, used, fragments)
         if step.get("action") == "refuse":
-            return Answer(str(step.get("answer", "")), [], False, used, fragments, refused=True)
+            # A refusal is text shown to a person too: no figure of its own (QA-070).
+            said = str(step.get("answer", ""))
+            offending = unsupported_figures(said, numbers)
+            if offending:
+                raise AssistantError(
+                    f"la respuesta da cifras que ninguna herramienta devolvió: {offending}"
+                )
+            return Answer(said, [], False, used, fragments, refused=True)
         if len(used) >= MAX_TOOL_CALLS:
             break
         name, outcome = await asyncio.to_thread(_step_result, tools, step)

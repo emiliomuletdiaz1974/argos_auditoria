@@ -13,12 +13,13 @@ calibrate— and compares what comes out with what the case expects. The model's
 """
 
 import json
+import re
 from collections.abc import Callable, Mapping
 from typing import Any
 
 import yaml
 
-from argos_ai.backends.base import Backend
+from argos_ai.backends.base import Backend, Completion
 from argos_ai.backends.fake import FakeBackend
 from argos_ai.classify.calibration import Calibrator
 from argos_ai.classify.service import SemanticClassifier
@@ -102,7 +103,37 @@ def oracle_answer(suite: str, case: Case) -> str:
     raise ValueError(f"unknown suite: {suite!r}")
 
 
+class RagOracle:
+    """The RAG oracle cites as the prompt demands: `[n]` is the n-th fragment of the context it
+    was given, which only the retrieval decides (quality review QA-068). A reference the retrieval
+    did not bring gets a number past the context, and the pipeline refuses it as invented."""
+
+    def __init__(self, case: Case) -> None:
+        self._expected = case.expected
+
+    async def complete(
+        self, system: str, user: str, schema: dict[str, object] | None = None
+    ) -> Completion:
+        numbered = dict(re.findall(r"^\[(\d+)\] (.+)$", user, flags=re.MULTILINE))
+        position = {reference: int(number) for number, reference in numbered.items()}
+        references = list(self._expected.get("citations", []))
+        citations = [
+            {"n": position.get(reference, len(numbered) + 1), "reference": reference}
+            for reference in references
+        ]
+        text = json.dumps(
+            {
+                "answer": "Respuesta de referencia.",
+                "sufficient": self._expected["sufficient"],
+                "citations": citations,
+            }
+        )
+        return Completion(text=text, tokens_in=len(system) + len(user), tokens_out=len(text))
+
+
 def oracle_backends(suite: str) -> BackendFor:
+    if suite == "rag":
+        return RagOracle
     return lambda case: FakeBackend.of([oracle_answer(suite, case)])
 
 

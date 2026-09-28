@@ -79,11 +79,21 @@ def build_context(fragments: Sequence[tuple[str, str]]) -> str:
 
 
 def checked_citations(citations: Sequence[Mapping[str, Any]], allowed: Sequence[str]) -> list[str]:
-    """The citations of the answer, or `CitationError` naming the one that was invented."""
+    """The citations of the answer, or `CitationError` naming the one that was invented.
+
+    A citation is its number: `[n]` is the n-th fragment of the context, and the reference it
+    names has to be that fragment's. Two fragments of different origins can share a reference, so
+    the reference alone does not say which one was read (quality review QA-068).
+    """
     if not citations:
         raise CitationError("una respuesta con soporte suficiente no puede venir sin citas")
     references = [str(citation["reference"]) for citation in citations]
-    invented = [reference for reference in references if reference not in set(allowed)]
+    invented = [
+        f"[{citation['n']}] {citation['reference']}"
+        for citation in citations
+        if not 1 <= int(citation["n"]) <= len(allowed)
+        or allowed[int(citation["n"]) - 1] != str(citation["reference"])
+    ]
     if invented:
         raise CitationError(f"la respuesta cita fragmentos que no se recuperaron: {invented}")
     return references

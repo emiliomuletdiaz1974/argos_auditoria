@@ -14,7 +14,8 @@ are versioned content (`library/prompts/guardrails.yaml`), so the team widens th
 release. The decision to reject is not content: it has no switch.
 
 The answer is compared once normalised (NFKC, no format characters, no accents, lower case): a
-zero-width space or a missing accent must not open a door (security review F09-02, SEC-034).
+zero-width space or a missing accent must not open a door (security review F09-02, SEC-034), and
+neither does a Cyrillic or Greek letter that looks Latin (quality review QA-058).
 """
 
 import re
@@ -32,6 +33,14 @@ from argos_connector.validators import scrub_identifiers
 PATTERNS_FILE = Path(__file__).resolve().parents[4] / "library" / "prompts" / "guardrails.yaml"
 
 
+# Cyrillic and Greek letters that NFKC keeps apart from the Latin ones they look like: `сumple`
+# with a Cyrillic es reads as `cumple` (quality review QA-058).
+_CONFUSABLES = str.maketrans(
+    "аАвВсСеЕһНіІјЈкКмМоОрРѕЅтТхХуУԁӏԛԝαΑβΒεΕηΗιΙκΚμΜνΝοΟρΡτΤυΥχΧζΖ",
+    "aAbBcCeEhHiIjJkKmMoOpPsStTxXyYdlqwaAbBeEnHiIkKmMvNoOpPtTuYxXzZ",
+)
+
+
 class OutputRejectedError(ArgosError):
     """The model answered something the product does not let through."""
 
@@ -40,7 +49,7 @@ class OutputRejectedError(ArgosError):
 def load_patterns(path: Path = PATTERNS_FILE) -> dict[str, Any]:
     """The pattern tables, as content. A table that is missing is an error, not an empty default."""
     document = yaml.safe_load(path.read_text(encoding="utf-8"))
-    for table in ("identifiers", "verdict_patterns", "write_patterns"):
+    for table in ("identifiers", "verdict_patterns", "criterion_patterns", "write_patterns"):
         if not document.get(table):
             raise ArgosError(f"the guardrails need the table {table!r}")
     return dict(document)
@@ -68,7 +77,8 @@ def _texts(value: Any) -> list[str]:
 
 
 def normalise(text: str, format_as_space: bool = False) -> str:
-    """The text as the patterns see it: NFKC, no format characters, no accents, lower case.
+    """The text as the patterns see it: NFKC, no format characters, Latin look-alikes read as
+    Latin, no accents, lower case.
 
     A zero-width character may stand between two words or hide inside one: `check_output` reads
     the text both ways, with them dropped and with them as spaces.
@@ -76,6 +86,7 @@ def normalise(text: str, format_as_space: bool = False) -> str:
     folded = unicodedata.normalize("NFKC", text)
     replacement = " " if format_as_space else ""
     visible = "".join(replacement if unicodedata.category(ch) == "Cf" else ch for ch in folded)
+    visible = visible.translate(_CONFUSABLES)
     bare = "".join(
         ch for ch in unicodedata.normalize("NFD", visible) if unicodedata.category(ch) != "Mn"
     )
@@ -85,6 +96,12 @@ def normalise(text: str, format_as_space: bool = False) -> str:
 @lru_cache(maxsize=4)
 def _compiled(table: str) -> tuple[re.Pattern[str], ...]:
     return tuple(re.compile(str(pattern)) for pattern in load_patterns()[table])
+
+
+def _without_criteria(text: str) -> str:
+    for pattern in _compiled("criterion_patterns"):
+        text = pattern.sub(" ", text)
+    return text
 
 
 def _cited(
@@ -118,7 +135,9 @@ def check_output(
     for text in _texts(answer):
         readings = {normalise(text), normalise(text, format_as_space=True)}
         claims = _compiled("verdict_patterns")
-        if not cited and any(p.search(seen) for p in claims for seen in readings):
+        # A criterion describes what a challenge looks for; it claims nothing of an asset.
+        stated = {_without_criteria(seen) for seen in readings}
+        if not cited and any(p.search(seen) for p in claims for seen in stated):
             raise OutputRejectedError("veredicto_no_citado")
         if any(p.search(seen) for p in _compiled("write_patterns") for seen in readings):
             raise OutputRejectedError("escritura_sobre_objetivo")

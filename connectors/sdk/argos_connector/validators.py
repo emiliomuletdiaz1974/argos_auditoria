@@ -5,6 +5,7 @@ only acceptance rates leave it (deviation note ARG-024-025).
 """
 
 import re
+import unicodedata
 from collections.abc import Callable, Iterable, Mapping
 
 DNI_LETTERS = "TRWAGMYFPDXBNJZSQVHLCKE"
@@ -101,7 +102,8 @@ def scrub_identifiers(text: str, identifiers: Iterable[Mapping[str, object]]) ->
     like a DNI survives. The same value receives the same marker inside one text. It lives here,
     next to the validators, so that whoever scrubs does not import the AI layer (ADR-0012).
     """
-    clean = text
+    # A zero-width character inside an identifier hides it from every pattern (QA-071).
+    clean = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
     substitutions = 0
     for entry in identifiers:
         marker, validator = str(entry["marker"]), VALIDATORS[str(entry["validator"])]

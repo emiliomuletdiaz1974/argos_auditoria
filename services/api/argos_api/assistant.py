@@ -56,7 +56,14 @@ class AssistantClient:
             answer: dict[str, Any] = response.json()
             return answer
         detail = _detail(response)
-        if response.status_code in (httpx.codes.SERVICE_UNAVAILABLE, httpx.codes.TOO_MANY_REQUESTS):
+        # A rejection by the guardrails (a verdict or a write) is its own reason, not a failure
+        # of the assistant (quality review QA-070).
+        passed_through = (
+            httpx.codes.SERVICE_UNAVAILABLE,
+            httpx.codes.TOO_MANY_REQUESTS,
+            httpx.codes.UNPROCESSABLE_ENTITY,
+        )
+        if response.status_code in passed_through:
             raise AssistantUnavailableError(response.status_code, detail)
         raise AssistantUnavailableError(httpx.codes.BAD_GATEWAY, f"the assistant failed: {detail}")
 

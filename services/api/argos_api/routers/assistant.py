@@ -8,7 +8,7 @@ there the route answers 503 with the reason: an assistant that is down does not 
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from argos_api.assistant import AssistantClient, AssistantUnavailableError
 from argos_api.authz import require_perm
@@ -22,8 +22,11 @@ NOTICE = (
 
 
 class Question(BaseModel):
+    # The assistant answers about the whole client: a field it would ignore is refused, not
+    # silently dropped (quality review QA-070).
+    model_config = ConfigDict(extra="forbid")
+
     question: str = Field(min_length=3, max_length=2000)
-    campaign_id: str | None = None
 
 
 @router.post(
