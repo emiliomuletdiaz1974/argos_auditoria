@@ -15,6 +15,7 @@ from argos_evidence.merkle import (
     proof,
     verify_proof,
 )
+from argos_evidence.merkle import main as merkle_main
 
 VECTORS = Path(__file__).parents[3] / "tests" / "vectors" / "merkle_v1.json"
 SEED = 20260918
@@ -85,7 +86,9 @@ def test_a_proof_does_not_verify_at_another_position(size: int) -> None:
                 assert not verify_proof(leaf, other, size, path, tree.root)
 
 
-def test_a_proof_does_not_verify_against_another_tree_size() -> None:
+def test_a_promoted_leaf_does_not_verify_against_another_tree_size() -> None:
+    """Only some leaves are pinned to their size by the shape of their path (the last one of an
+    odd tree is promoted); the others are not: see the QA-055 test below."""
     leaves = _hashes(5)
     tree = build_tree(leaves)
     path = proof(tree, 4)
@@ -164,3 +167,38 @@ def test_the_tree_is_immutable() -> None:
     assert isinstance(tree, MerkleTree)
     with pytest.raises(AttributeError):
         tree.levels = ()  # type: ignore[misc]
+
+
+def test_the_size_of_the_tree_is_not_in_its_root_so_it_must_come_from_the_signature(
+    tmp_path: Path,
+) -> None:
+    """QA-055: a proof for leaf 0 of five leaves also fits a tree of six. The size is what the
+    root signature declares (`leaf_count`), and the standalone check takes it from there, never
+    from the proof it is checking."""
+    leaves = _hashes(5)
+    tree = build_tree(leaves)
+    path = proof(tree, 0)
+    assert verify_proof(leaves[0], 0, 6, path, tree.root), "the reason the size must be signed"
+    artifact = tmp_path / "artifact.bin"
+    artifact.write_bytes(b"artifact")
+    leaf = hashlib.sha256(b"artifact").digest()
+    real = build_tree([leaf, *leaves[1:]])
+    document = {
+        "index": 0,
+        "size": 6,  # the proof lies about the size
+        "root": real.root.hex(),
+        "path": [[side, sibling.hex()] for side, sibling in proof(real, 0)],
+    }
+    (tmp_path / "proof.json").write_text(json.dumps(document), encoding="utf-8")
+    envelope = {"payload": {"merkle_root": real.root.hex(), "leaf_count": 5}}
+    (tmp_path / "root.sig.json").write_text(json.dumps(envelope), encoding="utf-8")
+    assert (
+        merkle_main([str(artifact), str(tmp_path / "proof.json"), str(tmp_path / "root.sig.json")])
+        == 1
+    )
+    document["size"] = 5
+    (tmp_path / "proof.json").write_text(json.dumps(document), encoding="utf-8")
+    assert (
+        merkle_main([str(artifact), str(tmp_path / "proof.json"), str(tmp_path / "root.sig.json")])
+        == 0
+    )

@@ -7,7 +7,7 @@ duplicated: duplicating it would give two different leaf lists the same root.
 This file depends only on the standard library. It is shipped next to the
 campaign record so anyone can check an artifact without ARGOS:
 
-    python merkle.py <artifact file> <proof.json>
+    python merkle.py <artifact file> <proof.json> <root signature.json>
 
 where proof.json is {"index": int, "size": int, "path": [["L"|"R", hex], ...],
 "root": hex}. Exit code 0 means the artifact belongs to the tree with that root.
@@ -100,8 +100,10 @@ def verify_proof(
 ) -> bool:
     """True when the artifact sits at ``index`` of a tree of ``size`` leaves with ``root``.
 
-    The shape of the path is derived from index and size, so a proof presented
-    for another position or another tree size does not verify.
+    The shape of the path is derived from index and size, so a proof presented for another
+    position does not verify. The size is not in the root: a proof can also fit another size
+    (leaf 0 of five fits six). ``size`` must therefore come from what the root signature
+    declares (`leaf_count`), never from the proof itself (quality review QA-055).
     """
     if not 0 <= index < size or len(artifact_sha256) != DIGEST_SIZE:
         return False
@@ -129,17 +131,22 @@ def failing_leaves(artifact_hashes: list[bytes], tree: MerkleTree) -> list[int]:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 2:
-        print("usage: python merkle.py <artifact file> <proof.json>")
+    """The size and the root come from the signed root, the path from the proof (QA-055)."""
+    if len(argv) != 3:
+        print("usage: python merkle.py <artifact file> <proof.json> <root signature.json>")
         return 2
     with open(argv[0], "rb") as artifact_file:
         digest = hashlib.sha256(artifact_file.read()).digest()
     with open(argv[1], encoding="utf-8") as proof_file:
         document = json.load(proof_file)
+    with open(argv[2], encoding="utf-8") as envelope_file:
+        signed = json.load(envelope_file)["payload"]
+    size, root = int(signed["leaf_count"]), bytes.fromhex(str(signed["merkle_root"]))
+    if int(document["size"]) != size or bytes.fromhex(document["root"]) != root:
+        print("FAIL: the proof is for another tree than the one signed")
+        return 1
     path = [(str(side), bytes.fromhex(sibling)) for side, sibling in document["path"]]
-    ok = verify_proof(
-        digest, int(document["index"]), int(document["size"]), path, bytes.fromhex(document["root"])
-    )
+    ok = verify_proof(digest, int(document["index"]), size, path, root)
     print("OK: the artifact belongs to the tree" if ok else "FAIL: the artifact does not match")
     return 0 if ok else 1
 

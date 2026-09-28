@@ -113,11 +113,14 @@ def stamp_of(dsn: str, object_key: str) -> Stamp | None:
     return None if row is None else Stamp(*row)
 
 
-def _queued(dsn: str) -> list[tuple[str, str, str]]:
+def _queued(dsn: str, online: bool = False) -> list[tuple[str, str, str]]:
+    """What waits for a stamp. Online, not what went out through the airlock: a new request
+    would replace its nonce and the reply stamped outside would be refused (QA-045)."""
+    exported = " AND exported_at IS NULL" if online else ""
     with psycopg.connect(dsn) as conn:
         rows = conn.execute(
-            "SELECT object_key, version_id, sha256 FROM argos.tsa_queue"
-            " WHERE status = 'queued' ORDER BY enqueued_at, object_key"
+            "SELECT object_key, version_id, sha256 FROM argos.tsa_queue"  # noqa: S608
+            f" WHERE status = 'queued'{exported} ORDER BY enqueued_at, object_key"
         ).fetchall()
     return [(str(r[0]), str(r[1]), str(r[2])) for r in rows]
 
@@ -206,7 +209,7 @@ def process_queue(
 ) -> QueueSummary:
     """Try every queued object once. A failure is recorded and the object stays queued."""
     summary = QueueSummary()
-    for object_key, version_id, sha256 in _queued(dsn):
+    for object_key, version_id, sha256 in _queued(dsn, online=True):
         try:
             data = _stored_object(store, object_key, version_id, sha256)
             reply = transport(_request_for(dsn, object_key, data))

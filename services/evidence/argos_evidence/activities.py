@@ -15,6 +15,7 @@ from typing import Any
 
 import psycopg
 from temporalio import activity
+from temporalio.exceptions import ApplicationError
 
 from argos_common.release import Signer
 from argos_evidence.artifacts import write_artifact
@@ -108,6 +109,13 @@ class EvidenceActivities:
                 (campaign_id,),
             ).fetchall()
         leaves = {str(v): bytes.fromhex(str(h)) for v, h in rows}
+        if not leaves:
+            # No verdict, no artifact, no root: said once, not retried five times (QA-050).
+            raise ApplicationError(
+                f"campaign {campaign_id} has no verdict: there is no evidence to seal",
+                type="NothingToEvidence",
+                non_retryable=True,
+            )
         tree = tree_for(leaves)
         body = seal_document(
             {

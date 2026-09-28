@@ -151,3 +151,18 @@ def test_a_stamped_entry_cannot_change_or_disappear(migrated_db: str) -> None:
         conn.execute("UPDATE argos.tsa_queue SET status = 'queued' WHERE object_key = %s", (key,))
     with psycopg.connect(migrated_db) as conn, pytest.raises(psycopg.errors.RaiseException):
         conn.execute("DELETE FROM argos.tsa_queue")
+
+
+def test_a_request_exported_for_the_airlock_survives_an_online_attempt(migrated_db: str) -> None:
+    """QA-045: an online attempt must not replace the nonce of a request already exported; the
+    reply stamped outside is then accepted."""
+    store = _store()
+    key = _signed(migrated_db, store)
+    exported = export_requests(migrated_db, store)[key]
+    process_queue(migrated_db, store, _failing, _roots(), _until())
+    results = import_replies(
+        migrated_db, store, {key: http_transport(TSA)(exported)}, _roots(), _until()
+    )
+    assert results[key] is None
+    stamp = stamp_of(migrated_db, key)
+    assert stamp is not None and stamp.status == "stamped"

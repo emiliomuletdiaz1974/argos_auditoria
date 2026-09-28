@@ -192,3 +192,16 @@ def test_a_stamp_that_never_comes_leaves_an_honest_dossier(migrated_db: str) -> 
             "SELECT count(*) FROM argos.credentials WHERE campaign_id = %s", (campaign_id,)
         ).fetchone()
     assert count == (1,)
+
+
+def test_a_campaign_without_verdicts_stops_the_evidence_at_once(migrated_db: str) -> None:
+    """QA-050: no Merkle root exists for nothing; the activity says so and is not retried five
+    times on a ValueError."""
+    from temporalio.exceptions import ApplicationError
+
+    campaign_id = create_campaign(migrated_db, "Campaña vacía", {}, "user:manager")
+    running(migrated_db, campaign_id)
+    seal_campaign(migrated_db, campaign_id)
+    with pytest.raises(ApplicationError) as stopped:
+        _activities(migrated_db).build_root_now(campaign_id)
+    assert stopped.value.non_retryable and stopped.value.type == "NothingToEvidence"

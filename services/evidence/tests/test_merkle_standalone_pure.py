@@ -37,12 +37,17 @@ def _proof_file(tmp_path: Path, artifact: bytes, index: int, root: str | None = 
     }
     path = tmp_path / "proof.json"
     path.write_text(json.dumps(document), encoding="utf-8")
+    # The size and the root the check trusts come from the signed root, not from the proof.
+    signed = {"payload": {"merkle_root": tree.root.hex(), "leaf_count": tree.size}}
+    (tmp_path / "root.sig.json").write_text(json.dumps(signed), encoding="utf-8")
     return path
 
 
 def _run(*args: Path) -> subprocess.CompletedProcess[str]:
+    signed = args[-1].parent / "root.sig.json" if args else None
+    extra = [str(signed)] if signed is not None and signed.is_file() else []
     return subprocess.run(  # noqa: S603 - fixed interpreter and our own file
-        [sys.executable, str(MODULE), *map(str, args)],
+        [sys.executable, str(MODULE), *map(str, args), *extra],
         capture_output=True,
         text=True,
         check=False,

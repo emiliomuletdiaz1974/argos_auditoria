@@ -187,3 +187,47 @@ async def test_a_bare_signal_does_not_open_a_gate(migrated_db: str, prepared: st
         assert progress["status"] == "awaiting:start"
         assert campaign_record(migrated_db, prepared)["status"] != "running"
         await handle.cancel()
+
+
+@pytest.mark.asyncio
+async def test_a_campaign_with_nothing_to_verify_ends_failed_without_asking(
+    migrated_db: str,
+) -> None:
+    """QA-050: a plan without units is not sealed into a campaign without evidence: it ends
+    failed at once, and says why."""
+    publish_library(
+        migrated_db,
+        LIBRARY_DIR,
+        ONTOLOGY_VERSION,
+        __import__("datetime").date(2024, 8, 1),
+        VaultTransitSigner(
+            os.environ.get("ARGOS_TEST_VAULT", "http://127.0.0.1:8200"), "root", key="argos-content"
+        ),
+    )
+    campaign_id = create_campaign(migrated_db, "Campaña sin nada que verificar", {}, MANAGER)
+    client = await Client.connect(get_config().TEMPORAL_ADDRESS, namespace="default")
+    activities = ChallengeActivities(migrated_db, secret_store())
+    queue = f"argos-campaigns-test-{uuid.uuid4().hex[:8]}"
+    async with Worker(
+        client,
+        task_queue=queue,
+        workflows=[CampaignWorkflow, SystemRun],
+        activities=[
+            activities.prepare_campaign,
+            activities.request_approval,
+            activities.check_gate,
+            activities.set_campaign_status,
+            activities.seal,
+            activities.check_reversions,
+        ],
+    ):
+        handle = await client.start_workflow(
+            CampaignWorkflow.run, campaign_id, id=f"campaign-{campaign_id}", task_queue=queue
+        )
+        try:
+            result = dict(await asyncio.wait_for(handle.result(), timeout=180))
+        except TimeoutError:
+            await handle.terminate("test timeout: the campaign waited instead of ending")
+            raise AssertionError("a campaign with nothing to verify waited for its gate") from None
+    assert result["status"] == "failed" and "nothing" in result["reason"]
+    assert campaign_record(migrated_db, campaign_id)["status"] == "failed"

@@ -229,12 +229,20 @@ def verify_bundle(
     ):
         _guarded(report, name, step)
 
-    root = (chain.get("merkle") or {}).get("root")
+    # Whatever the bundle holds, the answer is a report (quality review QA-052).
+    merkle = chain.get("merkle") if isinstance(chain, Mapping) else None
+    root = merkle.get("root") if isinstance(merkle, Mapping) else None
+    artifacts = bundle.get("artifacts") or []
+    if not isinstance(artifacts, list):
+        _guarded(
+            report, "artifacts", lambda: (FAILED, "the artifacts of the bundle are not a list")
+        )
+        artifacts = []
     try:
         signed_leaves = int(json.loads(envelope or b"{}")["payload"]["leaf_count"])
     except (KeyError, TypeError, ValueError):
         signed_leaves = None
-    for position, item in enumerate(bundle.get("artifacts") or []):
+    for position, item in enumerate(artifacts):
 
         def inclusion(item: Mapping[str, Any] = item) -> tuple[str, str]:
             artifact = _bytes(item, "artifact")

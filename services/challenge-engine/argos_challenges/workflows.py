@@ -233,6 +233,18 @@ class CampaignWorkflow:
         )
         units: list[dict[str, Any]] = prepared["units"]
         self._progress["total"] = len(units)
+        if not units:
+            # Nothing to verify: the campaign ends failed and says why; no gate is asked and no
+            # seal without evidence is made (quality review QA-050).
+            await workflow.execute_activity(
+                "set_campaign_status",
+                {"campaign_id": campaign_id, "status": "failed"},
+                start_to_close_timeout=_TIMEOUT,
+                retry_policy=RETRY_POLICY,
+            )
+            reason = "nothing to verify: the plan of the campaign has no unit"
+            self._progress["status"] = "failed"
+            return {"campaign_id": campaign_id, "reason": reason, **self._progress}
         await self._gate(
             campaign_id,
             START_GATE,

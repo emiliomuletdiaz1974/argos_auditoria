@@ -341,3 +341,13 @@ def test_the_route_map_is_not_served() -> None:
     client = TestClient(app)
     assert client.get("/openapi.json").status_code == 404
     assert client.get("/docs").status_code == 404
+
+
+@pytest.mark.parametrize(
+    "broken",
+    [{"artifacts": 5}, {"artifacts": "none"}, {"artifacts": [7]}],
+)
+def test_artifacts_of_the_wrong_type_are_a_failed_check_not_a_500(broken: dict[str, Any]) -> None:
+    """QA-052: the public verifier answers a report, whatever it is given."""
+    report = _verify({**_bundle(), **broken})
+    assert not report.ok
