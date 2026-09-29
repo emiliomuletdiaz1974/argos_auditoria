@@ -1,0 +1,27 @@
+# Read from `argos.health_facts` through the facts view: false when the health service has not
+# looked in the last 15 minutes (F10-02).
+id: self-010
+version: "1.0"
+title: El almacén WORM guardó y devolvió el último canario
+objective:
+  obligation: OBL-SELF-3-6-1
+selector:
+  asset_class: AC-argos-appliance
+probe:
+  kind: check_config
+  by_connector:
+    rdbms.postgresql:
+      statement: SELECT setting FROM argos_facts.facts WHERE fact = 'worm_canary_ok'
+criterion:
+  threshold:
+    field: rows.0.setting
+    operator: "=="
+    value: "true"
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo si el canario reciente se leyó intacto; ni la clave ni el contenido del almacén.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 1

@@ -1,0 +1,36 @@
+# Se ejerce sobre el sujeto sintético (ADR-0008): el cliente lo inyecta, pide la supresión y
+# confirma; el reto comprueba que de verdad desapareció. Sin sujeto inyectado no se ejecuta.
+id: dsr-erasure-effective
+version: "1.0"
+title: La supresión ejercida por el interesado es efectiva en el sistema
+objective:
+  obligation: OBL-RGPD-17-1
+selector:
+  asset_class: AC-stored-identifier-data
+probe:
+  kind: count
+  target: {$node: table}
+  by_connector:
+    rdbms.postgresql: &erasure_filter
+      params:
+        filters:
+          - column: {$node: column}
+            operator: "=="
+            value: {$subject: national_id}
+            cast: text
+    rdbms.generic: *erasure_filter
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts]
+  minimisation: >-
+    Solo el recuento de apariciones del sujeto sintético; ninguna fila, ningún dato de personas
+    reales y ningún valor en claro del propio sujeto.
+severity: high
+preconditions: [synthetic_subject_injected]
+estimated_cost:
+  probes: 1
+  rows: 0

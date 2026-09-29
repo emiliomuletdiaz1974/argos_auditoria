@@ -1,0 +1,44 @@
+# Reto patrón escrito en castellano: la capa de traducción lo lleva al núcleo en inglés (ADR-0007).
+# La columna de referencia va en cada variante porque un nombre de columna no puede viajar como
+# parámetro de una sentencia (pendiente anotado en F05-18).
+id: ret-table-retention
+version: "1.0"
+titulo: Retención efectiva en tabla frente al calendario declarado
+objetivo:
+  obligacion: OBL-RGPD-5-1
+selector:
+  clase_de_activo: AC-stored-personal-data
+sonda:
+  tipo: count
+  target: {$node: table}
+  por_conector:
+    rdbms.postgresql:
+      parametros:
+        filters:
+          - column: created_at
+            operator: "<"
+            value: {$client: retention_limit}
+    rdbms.generic:
+      parametros:
+        filters:
+          - column: issued_at
+            operator: "<"
+            value: {$client: retention_limit}
+criterio:
+  opa:
+    paquete: argos.retention
+    input_map:
+      treatment: {$client: treatment_id}
+      category: special_category.health
+muestreo:
+  confianza: 0.95
+  margen: 0.05
+evidencia:
+  capturar: [recuentos]
+  minimizacion: >-
+    Solo el recuento de registros fuera de plazo y los parámetros del cálculo; ningún
+    identificador ni contenido abandona el sistema de origen.
+severidad: alta
+coste_estimado:
+  sondas: 1
+  filas: 0

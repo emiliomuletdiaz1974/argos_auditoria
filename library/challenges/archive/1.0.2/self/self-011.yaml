@@ -1,0 +1,27 @@
+# Read from `argos.health_facts` through the facts view: false when the health service has not
+# looked in the last 15 minutes (F10-02).
+id: self-011
+version: "1.0"
+title: Ningún certificado interno caduca en los próximos 7 días
+objective:
+  obligation: OBL-SELF-3-8-3
+selector:
+  asset_class: AC-argos-appliance
+probe:
+  kind: check_config
+  by_connector:
+    rdbms.postgresql:
+      statement: SELECT setting FROM argos_facts.facts WHERE fact = 'certificates_valid'
+criterion:
+  threshold:
+    field: rows.0.setting
+    operator: "=="
+    value: "true"
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo si algún certificado caduca pronto; ni los certificados ni sus nombres.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 1

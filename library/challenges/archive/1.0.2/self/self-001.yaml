@@ -1,0 +1,25 @@
+id: self-001
+version: "1.0"
+title: El diario de auditoría del appliance verifica en su último tramo
+objective:
+  obligation: OBL-SELF-3-7-1
+selector:
+  asset_class: AC-argos-appliance
+probe:
+  kind: check_config
+  by_connector:
+    rdbms.postgresql:
+      statement: SELECT setting FROM argos_facts.facts WHERE fact = 'journal_tail_intact'
+criterion:
+  threshold:
+    field: rows.0.setting
+    operator: "=="
+    value: "true"
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo el resultado de la verificación (verdadero o falso); ningún asiento, actor ni carga.
+severity: critical
+estimated_cost:
+  probes: 1
+  rows: 1

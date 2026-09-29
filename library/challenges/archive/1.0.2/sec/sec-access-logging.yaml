@@ -1,0 +1,28 @@
+id: sec-access-logging
+version: "1.0"
+title: Registro de accesos activo en el sistema que guarda categorías especiales
+objective:
+  obligation: OBL-RGPD-32-2
+selector:
+  asset_class: AC-stored-special-category-data
+probe:
+  kind: check_config
+  by_connector:
+    rdbms.postgresql:
+      statement: SELECT setting FROM pg_settings WHERE name = 'log_statement'
+    rdbms.generic:
+      statement: SELECT IF(@@global.general_log, 'all', 'none') AS setting
+criterion:
+  threshold:
+    field: rows.0.setting
+    operator: "=="
+    value: "all"
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo el parámetro de registro del motor; ninguna línea de log, ningún usuario y ningún dato
+    de negocio.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 1

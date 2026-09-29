@@ -1,0 +1,27 @@
+# Read from `argos.health_facts` through the facts view: false when the health service has not
+# looked in the last 15 minutes (F10-02).
+id: self-012
+version: "1.0"
+title: Ninguna cola de sellado o de entregas lleva más de un día atascada
+objective:
+  obligation: OBL-SELF-3-9-2
+selector:
+  asset_class: AC-argos-appliance
+probe:
+  kind: check_config
+  by_connector:
+    rdbms.postgresql:
+      statement: SELECT setting FROM argos_facts.facts WHERE fact = 'queues_flowing'
+criterion:
+  threshold:
+    field: rows.0.setting
+    operator: "=="
+    value: "true"
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo si hay algo atascado; ni las peticiones, ni los destinos, ni los eventos.
+severity: medium
+estimated_cost:
+  probes: 1
+  rows: 1

@@ -1,0 +1,32 @@
+# Solo tiene variante para el conector de ficheros: sobre una fuente relacional la campaña la
+# declara "unverifiable" con su motivo, en lugar de hacer como que la obligación está verificada.
+id: ret-file-retention
+version: "1.0"
+title: Ficheros conservados por encima del plazo declarado por el cliente
+objective:
+  obligation: OBL-RGPD-5-1
+selector:
+  asset_class: AC-stored-personal-data
+probe:
+  kind: count
+  by_connector:
+    files.smb:
+      params:
+        modified_before: {$client: retention_limit}
+    files.s3:
+      params:
+        modified_before: {$client: retention_limit}
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts]
+  minimisation: >-
+    Solo el recuento de ficheros por encima del plazo; ningún nombre de fichero, ninguna ruta y
+    ningún contenido.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 0

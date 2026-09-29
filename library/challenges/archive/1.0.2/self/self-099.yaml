@@ -1,0 +1,27 @@
+# The trap: the appliance fixes `selfcheck_trap` to 'tripped' and this criterion asks
+# for a value it never has, so a campaign that evaluates always opens this finding.
+id: self-099
+version: "1.0"
+title: "Reto trampa: siempre falla para demostrar que la campaña evalúa"
+objective:
+  obligation: OBL-SELF-7-1
+selector:
+  asset_class: AC-argos-appliance
+probe:
+  kind: check_config
+  by_connector:
+    rdbms.postgresql:
+      statement: SELECT setting FROM argos_facts.facts WHERE fact = 'selfcheck_trap'
+criterion:
+  threshold:
+    field: rows.0.setting
+    operator: "=="
+    value: "untripped"
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo la constante de la trampa, que el appliance fija y ningún ajuste cambia.
+severity: low
+estimated_cost:
+  probes: 1
+  rows: 1

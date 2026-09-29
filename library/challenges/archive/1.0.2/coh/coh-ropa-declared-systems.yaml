@@ -1,0 +1,25 @@
+id: coh-ropa-declared-systems
+version: "1.0"
+title: Los sistemas con datos de salud están en el registro de actividades
+objective:
+  obligation: OBL-RGPD-30-1
+selector:
+  asset_class: AC-stored-special-category-data
+probe:
+  kind: shacl
+  params:
+    shape: HealthDataSystemShape
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts, configuration]
+  minimisation: >-
+    Solo los nodos del inventario que incumplen la forma y su mensaje; ninguna fila de los
+    sistemas del cliente.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 0

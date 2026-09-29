@@ -1,0 +1,25 @@
+id: self-004
+version: "1.0"
+title: Ninguna conexión por red a la base del appliance viaja sin TLS
+objective:
+  obligation: OBL-SELF-3-8-2
+selector:
+  asset_class: AC-argos-appliance
+probe:
+  kind: check_config
+  by_connector:
+    rdbms.postgresql:
+      statement: SELECT setting FROM argos_facts.facts WHERE fact = 'connections_encrypted'
+criterion:
+  threshold:
+    field: rows.0.setting
+    operator: "=="
+    value: "true"
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo si existe alguna conexión sin cifrar; ninguna dirección, usuario ni consulta.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 1

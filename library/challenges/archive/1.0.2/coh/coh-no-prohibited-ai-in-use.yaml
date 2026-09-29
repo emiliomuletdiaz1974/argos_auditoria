@@ -1,0 +1,26 @@
+id: coh-no-prohibited-ai-in-use
+version: "1.0"
+title: Ningún sistema de IA en uso está clasificado como práctica prohibida
+objective:
+  obligation: OBL-AIACT-5-1
+selector:
+  asset_class: AC-confirmed-ai-system
+probe:
+  kind: inventory_query
+  params:
+    query: prohibited_ai_systems
+    snapshot_id: {$campaign: snapshot_id}
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts]
+  minimisation: >-
+    Solo el recuento de sistemas de IA marcados como prohibidos; ninguna entrada ni salida del
+    modelo y ningún dato de entrenamiento.
+severity: critical
+estimated_cost:
+  probes: 1
+  rows: 1

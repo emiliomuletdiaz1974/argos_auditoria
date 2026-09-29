@@ -1,0 +1,25 @@
+id: doc-ai-human-oversight
+version: "1.0"
+title: El sistema de IA de alto riesgo declara su responsable de supervisión humana
+objective:
+  obligation: OBL-AIACT-26-1
+selector:
+  asset_class: AC-confirmed-ai-system
+probe:
+  kind: shacl
+  params:
+    shape: AIHumanOversightShape
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts, configuration]
+  minimisation: >-
+    Solo los sistemas de IA sin responsable de supervisión declarado y su mensaje; ningún dato
+    del propio responsable más allá de que falta.
+severity: medium
+estimated_cost:
+  probes: 1
+  rows: 0

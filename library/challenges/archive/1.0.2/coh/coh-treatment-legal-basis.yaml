@@ -1,0 +1,26 @@
+id: coh-treatment-legal-basis
+version: "1.0"
+title: Todo tratamiento de categorías especiales declara su base jurídica
+objective:
+  obligation: OBL-RGPD-9-1
+selector:
+  asset_class: AC-stored-special-category-data
+probe:
+  kind: shacl
+  params:
+    shape: TreatmentShape
+    severity: violation
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts, configuration]
+  minimisation: >-
+    Solo los tratamientos que incumplen la forma y su mensaje; ninguna fila de los sistemas del
+    cliente.
+severity: critical
+estimated_cost:
+  probes: 1
+  rows: 0

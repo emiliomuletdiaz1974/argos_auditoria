@@ -1,0 +1,26 @@
+id: coh-unclassified-columns
+version: "1.0"
+title: Columnas vivas del inventario sin categoría asignada
+objective:
+  obligation: OBL-RGPD-30-3
+selector:
+  asset_class: AC-unclassified-column
+probe:
+  kind: inventory_query
+  params:
+    query: unclassified_columns
+    snapshot_id: {$campaign: snapshot_id}
+criterion:
+  threshold:
+    field: count
+    operator: "=="
+    value: 0
+evidence:
+  capture: [counts]
+  minimisation: >-
+    Solo el recuento de columnas sin categoría de la instantánea fijada; ningún nombre de columna
+    y ningún contenido.
+severity: medium
+estimated_cost:
+  probes: 1
+  rows: 1

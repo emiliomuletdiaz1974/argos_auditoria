@@ -1,0 +1,25 @@
+id: self-003
+version: "1.0"
+title: La última prueba de restauración pasó hace menos de 35 días
+objective:
+  obligation: OBL-SELF-3-9-1
+selector:
+  asset_class: AC-argos-appliance
+probe:
+  kind: check_config
+  by_connector:
+    rdbms.postgresql:
+      statement: SELECT setting FROM argos_facts.facts WHERE fact = 'restore_test_recent'
+criterion:
+  threshold:
+    field: rows.0.setting
+    operator: "=="
+    value: "true"
+evidence:
+  capture: [configuration]
+  minimisation: >-
+    Solo si la última prueba pasó a tiempo; ni la copia, ni sus recuentos, ni su contenido.
+severity: high
+estimated_cost:
+  probes: 1
+  rows: 1
