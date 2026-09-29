@@ -59,6 +59,44 @@ def test_each_role_may_do_exactly_what_the_matrix_says(
         assert _allowed(conn, role, target, privilege) is expected
 
 
+def test_every_role_that_may_select_a_view_can_actually_read_it(migrated_db: str) -> None:
+    """SELECT on a view is not enough: a plain view runs the functions it calls as the reader.
+
+    `catalog_freshness` calls `argos.agtype_text`, so a role with SELECT on the view and no EXECUTE
+    on the function got a permission error on every read (QA coverage 503). The other tests ask
+    the catalogue what a role may do; this one does the read, as the role, for every view.
+    """
+    failures: list[str] = []
+    with psycopg.connect(migrated_db) as conn:
+        views = [
+            row[0]
+            for row in conn.execute(
+                "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace"
+                " WHERE n.nspname = 'argos' AND c.relkind = 'v' ORDER BY 1"
+            ).fetchall()
+        ]
+        roles = [
+            row[0]
+            for row in conn.execute(
+                "SELECT rolname FROM pg_roles WHERE rolname = ANY(%s)",
+                ([*SERVICE_ROLES, "svc_backup"],),
+            ).fetchall()
+        ]
+        for view in views:
+            for role in roles:
+                if not _allowed(conn, role, view, "SELECT"):
+                    continue
+                try:
+                    with conn.transaction():
+                        conn.execute(sql.SQL("SET LOCAL ROLE {}").format(sql.Identifier(role)))
+                        conn.execute(
+                            sql.SQL("SELECT * FROM argos.{} LIMIT 1").format(sql.Identifier(view))
+                        ).fetchall()
+                except psycopg.errors.InsufficientPrivilege as error:
+                    failures.append(f"{role} reads {view}: {error}")
+    assert not failures, failures
+
+
 def test_the_service_roles_exist_and_nobody_logs_in_with_them(migrated_db: str) -> None:
     with psycopg.connect(migrated_db) as conn:
         rows = dict(

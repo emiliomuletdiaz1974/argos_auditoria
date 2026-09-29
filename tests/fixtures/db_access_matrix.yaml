@@ -85,3 +85,9 @@ cases:
   - [svc_api, systems, UPDATE, false]
   - [svc_api, capacity_snapshots, INSERT, false]
   - [svc_health, capacity_snapshots, INSERT, true]
+  # --- catalog_freshness is a plain view: its readers also execute the function it calls -----
+  - [svc_api, "agtype_text()", EXECUTE, true]
+  - [svc_inventory, "agtype_text()", EXECUTE, true]
+  - [svc_ai_gateway, "agtype_text()", EXECUTE, true]
+  - [svc_challenge, "agtype_text()", EXECUTE, false]
+  - [PUBLIC, "agtype_text()", EXECUTE, false]
