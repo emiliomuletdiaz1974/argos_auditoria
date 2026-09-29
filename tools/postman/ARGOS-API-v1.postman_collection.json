@@ -1,0 +1,3615 @@
+{
+  "info": {
+    "_postman_id": "e3344c5a-3a2d-4517-afd3-b28fa27f0d21",
+    "name": "ARGOS · API v1 (desarrollo)",
+    "description": "# ARGOS · API v1 — colección de pruebas\n\nColección para probar la API única de ARGOS (`argos-api`, bajo `/api/v1`) en el **entorno de desarrollo** (`make dev`). Se generó a partir del contrato versionado `services/api/openapi.json` (54 operaciones), de la matriz de autorización `argos_api/authz/permissions.yaml` y del realm de desarrollo `deploy/dev/keycloak/realm-argos.json`.\n\n## Antes de empezar\n1. En `argos/`, levanta el entorno: `make dev`. Si no existen las fuentes simuladas, regístralas: `uv run --env-file .env.example python tools/register_dev_sources.py`.\n2. Importa este archivo en Postman (*Import → File*). Usa la aplicación de escritorio: el navegador no permite cambiar la cabecera `Host` que necesitan los tokens.\n3. Ejecuta **00 · Preparación → Salud de la API**. Debe responder 200.\n\n## Autenticación (automática)\nNo hay que copiar tokens. Cada petición declara el rol con el que se hace (`Bearer {{token_manager}}`, `{{token_dpo}}`, `{{token_admin}}` o `{{token_auditor}}`) y el script de la colección pide o renueva el token de ese rol a Keycloak. Para el DPO y el administrador calcula además el **código TOTP** con el secreto de desarrollo del realm, porque las acciones que deciden exigen segundo factor.\n\n| Variable del token | Usuario | Rol | Segundo factor |\n|---|---|---|---|\n| `token_manager` | manager.test | campaign_manager | no |\n| `token_dpo` | dpo.test | dpo_reviewer | sí (TOTP automático) |\n| `token_admin` | admin.test | platform_admin | sí (TOTP automático) |\n| `token_auditor` | auditor.test | read_only_auditor | no |\n\nLos tokens duran 5 minutos y se renuevan solos. Keycloak no acepta dos veces el mismo código TOTP en la misma ventana de 30 s; si hace falta, el script espera a la siguiente.\n\n## Orden recomendado\n- **01 → 03**: sistemas, inventario y el ciclo completo de una campaña. La preparación tarda unos segundos: si «Plan previo» responde 409, repítela.\n- **04 → 06**: hallazgos, evidencia y credencial. La evidencia y la credencial requieren una campaña **sellada**: con una campaña recién lanzada, esas rutas responden 404/409, y así lo esperan los tests.\n- **12**: pruebas negativas. Todas deben ser rechazadas.\n\nLos identificadores se encadenan solos entre peticiones mediante variables de la colección (`campaign_id`, `finding_id`, `verdict_id`…). Puedes fijar cualquiera a mano en *Variables*.\n\n## Convenciones de la API\n- Errores en `application/problem+json` (RFC 9457). La colección los escribe en la consola de Postman.\n- Listados con paginación por cursor opaco: `limit` (1–100) y `cursor`, que es el `next` de la página anterior.\n- Los POST que crean aceptan `Idempotency-Key`: si se repite la clave, la API devuelve la respuesta original y no crea nada nuevo.\n\n## Aviso\nSolo para el entorno de desarrollo: usuarios, contraseñas y secretos TOTP son los de pruebas del realm de desarrollo. **No** usar contra un appliance de cliente. Algunas peticiones modifican datos (crean campañas, sistemas y webhooks, deciden columnas, mueven hallazgos o revocan credenciales): están marcadas en su descripción.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00 · Preparación y tokens",
+      "description": "Comprueba que la API responde y obtiene los tokens de los cuatro usuarios de desarrollo.\n\n| Variable del token | Usuario | Rol | Segundo factor |\n|---|---|---|---|\n| `token_manager` | manager.test | campaign_manager | no |\n| `token_dpo` | dpo.test | dpo_reviewer | sí (TOTP automático) |\n| `token_admin` | admin.test | platform_admin | sí (TOTP automático) |\n| `token_auditor` | auditor.test | read_only_auditor | no |",
+      "item": [
+        {
+          "name": "Salud de la API",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            },
+            "description": "Liveness de la API. No necesita token. Si no responde, el entorno no está levantado: ejecuta `make dev` en `argos/` y espera a que los contenedores estén sanos (`docker compose -f deploy/dev/compose.yaml ps`).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token · manager.test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{keycloakHost}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{keycloakUrl}}/realms/argos/protocol/openid-connect/token",
+              "host": [
+                "{{keycloakUrl}}"
+              ],
+              "path": [
+                "realms",
+                "argos",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Pide a Keycloak un token de acceso para **manager.test** con el flujo *password* del cliente de pruebas `argos-tests`.\nEste usuario no tiene segundo factor.\n\nLa cabecera `Host: keycloak:8080` hace que el token salga con el emisor que la API valida dentro de la red de Docker (`ARGOS_OIDC_ISSUER`).\n\nNo hace falta ejecutarla: la colección pide los tokens sola. Sirve para verlo paso a paso o para forzar un token nuevo.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{keycloakClient}}"
+                },
+                {
+                  "key": "username",
+                  "value": "manager.test"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const t = pm.response.json();",
+                  "  pm.collectionVariables.set('token_manager', t.access_token);",
+                  "  pm.collectionVariables.set('token_manager_exp', String(Date.now() + t.expires_in * 1000));",
+                  "  const claims = JSON.parse(atob(t.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.test('El emisor es el que valida la API (keycloak:8080)', () => pm.expect(claims.iss).to.eql('http://' + pm.variables.get('keycloakHost') + '/realms/argos'));",
+                  "  console.log('Token de manager.test: roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token · dpo.test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{keycloakHost}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{keycloakUrl}}/realms/argos/protocol/openid-connect/token",
+              "host": [
+                "{{keycloakUrl}}"
+              ],
+              "path": [
+                "realms",
+                "argos",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Pide a Keycloak un token de acceso para **dpo.test** con el flujo *password* del cliente de pruebas `argos-tests`.\nAñade el código **TOTP** que calcula el script previo con el secreto de desarrollo del realm: sin él, las acciones que deciden responden 401 `insufficient_user_authentication`.\n\nLa cabecera `Host: keycloak:8080` hace que el token salga con el emisor que la API valida dentro de la red de Docker (`ARGOS_OIDC_ISSUER`).\n\nNo hace falta ejecutarla: la colección pide los tokens sola. Sirve para verlo paso a paso o para forzar un token nuevo.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{keycloakClient}}"
+                },
+                {
+                  "key": "username",
+                  "value": "dpo.test"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid"
+                },
+                {
+                  "key": "totp",
+                  "value": "{{totp_code_dpo}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function argosTotp(secret) {",
+                  "  const counter = Math.floor(Date.now() / 1000 / 30);",
+                  "  const hi = Math.floor(counter / 0x100000000), lo = counter >>> 0;",
+                  "  const mac = CryptoJS.HmacSHA256(CryptoJS.lib.WordArray.create([hi, lo], 8), CryptoJS.enc.Utf8.parse(secret));",
+                  "  const b = [];",
+                  "  for (let i = 0; i < mac.sigBytes; i++) b.push((mac.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff);",
+                  "  const o = b[b.length - 1] & 0x0f;",
+                  "  const bin = ((b[o] & 0x7f) << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3];",
+                  "  return String(bin % 1000000).padStart(6, '0');",
+                  "}",
+                  "// El código TOTP se calcula aquí con el secreto de desarrollo del realm (HMAC-SHA256, 6 dígitos, 30 s).",
+                  "const win = Math.floor(Date.now() / 30000);",
+                  "if (Number(pm.collectionVariables.get('totp_window_dpo') || -1) === win) {",
+                  "  console.warn('El código de esta ventana de 30 s ya se usó: si Keycloak responde 401, repite la petición en unos segundos.');",
+                  "}",
+                  "pm.collectionVariables.set('totp_code_dpo', argosTotp(pm.variables.get('totp_secret_dpo')));",
+                  "pm.collectionVariables.set('totp_window_dpo', String(win));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const t = pm.response.json();",
+                  "  pm.collectionVariables.set('token_dpo', t.access_token);",
+                  "  pm.collectionVariables.set('token_dpo_exp', String(Date.now() + t.expires_in * 1000));",
+                  "  const claims = JSON.parse(atob(t.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.test('El emisor es el que valida la API (keycloak:8080)', () => pm.expect(claims.iss).to.eql('http://' + pm.variables.get('keycloakHost') + '/realms/argos'));",
+                  "  console.log('Token de dpo.test: roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token · admin.test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{keycloakHost}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{keycloakUrl}}/realms/argos/protocol/openid-connect/token",
+              "host": [
+                "{{keycloakUrl}}"
+              ],
+              "path": [
+                "realms",
+                "argos",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Pide a Keycloak un token de acceso para **admin.test** con el flujo *password* del cliente de pruebas `argos-tests`.\nAñade el código **TOTP** que calcula el script previo con el secreto de desarrollo del realm: sin él, las acciones que deciden responden 401 `insufficient_user_authentication`.\n\nLa cabecera `Host: keycloak:8080` hace que el token salga con el emisor que la API valida dentro de la red de Docker (`ARGOS_OIDC_ISSUER`).\n\nNo hace falta ejecutarla: la colección pide los tokens sola. Sirve para verlo paso a paso o para forzar un token nuevo.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{keycloakClient}}"
+                },
+                {
+                  "key": "username",
+                  "value": "admin.test"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid"
+                },
+                {
+                  "key": "totp",
+                  "value": "{{totp_code_admin}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "function argosTotp(secret) {",
+                  "  const counter = Math.floor(Date.now() / 1000 / 30);",
+                  "  const hi = Math.floor(counter / 0x100000000), lo = counter >>> 0;",
+                  "  const mac = CryptoJS.HmacSHA256(CryptoJS.lib.WordArray.create([hi, lo], 8), CryptoJS.enc.Utf8.parse(secret));",
+                  "  const b = [];",
+                  "  for (let i = 0; i < mac.sigBytes; i++) b.push((mac.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff);",
+                  "  const o = b[b.length - 1] & 0x0f;",
+                  "  const bin = ((b[o] & 0x7f) << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3];",
+                  "  return String(bin % 1000000).padStart(6, '0');",
+                  "}",
+                  "// El código TOTP se calcula aquí con el secreto de desarrollo del realm (HMAC-SHA256, 6 dígitos, 30 s).",
+                  "const win = Math.floor(Date.now() / 30000);",
+                  "if (Number(pm.collectionVariables.get('totp_window_admin') || -1) === win) {",
+                  "  console.warn('El código de esta ventana de 30 s ya se usó: si Keycloak responde 401, repite la petición en unos segundos.');",
+                  "}",
+                  "pm.collectionVariables.set('totp_code_admin', argosTotp(pm.variables.get('totp_secret_admin')));",
+                  "pm.collectionVariables.set('totp_window_admin', String(win));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const t = pm.response.json();",
+                  "  pm.collectionVariables.set('token_admin', t.access_token);",
+                  "  pm.collectionVariables.set('token_admin_exp', String(Date.now() + t.expires_in * 1000));",
+                  "  const claims = JSON.parse(atob(t.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.test('El emisor es el que valida la API (keycloak:8080)', () => pm.expect(claims.iss).to.eql('http://' + pm.variables.get('keycloakHost') + '/realms/argos'));",
+                  "  console.log('Token de admin.test: roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token · auditor.test",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Host",
+                "value": "{{keycloakHost}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{keycloakUrl}}/realms/argos/protocol/openid-connect/token",
+              "host": [
+                "{{keycloakUrl}}"
+              ],
+              "path": [
+                "realms",
+                "argos",
+                "protocol",
+                "openid-connect",
+                "token"
+              ]
+            },
+            "description": "Pide a Keycloak un token de acceso para **auditor.test** con el flujo *password* del cliente de pruebas `argos-tests`.\nEste usuario no tiene segundo factor.\n\nLa cabecera `Host: keycloak:8080` hace que el token salga con el emisor que la API valida dentro de la red de Docker (`ARGOS_OIDC_ISSUER`).\n\nNo hace falta ejecutarla: la colección pide los tokens sola. Sirve para verlo paso a paso o para forzar un token nuevo.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "password"
+                },
+                {
+                  "key": "client_id",
+                  "value": "{{keycloakClient}}"
+                },
+                {
+                  "key": "username",
+                  "value": "auditor.test"
+                },
+                {
+                  "key": "password",
+                  "value": "{{password}}"
+                },
+                {
+                  "key": "scope",
+                  "value": "openid"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const t = pm.response.json();",
+                  "  pm.collectionVariables.set('token_auditor', t.access_token);",
+                  "  pm.collectionVariables.set('token_auditor_exp', String(Date.now() + t.expires_in * 1000));",
+                  "  const claims = JSON.parse(atob(t.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  pm.test('El emisor es el que valida la API (keycloak:8080)', () => pm.expect(claims.iss).to.eql('http://' + pm.variables.get('keycloakHost') + '/realms/argos'));",
+                  "  console.log('Token de auditor.test: roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "01 · Sistemas",
+      "description": "Sistemas registrados que ARGOS audita. En desarrollo, `tools/register_dev_sources.py` registra las fuentes simuladas con identificadores fijos (por ejemplo `01920000-0000-7000-8000-00000000a001`, dev-source-postgres).",
+      "item": [
+        {
+          "name": "Listar sistemas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/systems?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "systems"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Lista paginada de sistemas (permiso `systems.read`). La paginación es por cursor opaco: si la respuesta trae `next`, pásalo como `cursor` para la página siguiente.\n\nGuarda el primer sistema en `system_id` (por defecto ya vale el de dev-source-postgres)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const it = (pm.response.json().items || [])[0];",
+                  "  if (it) {",
+                  "    const v = it.id;",
+                  "    if (v) { pm.collectionVariables.set('system_id', v); console.log('system_id =', v); }",
+                  "  } else { console.log('La lista está vacía: system_id no cambia.'); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registrar un sistema (admin, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/systems",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "systems"
+              ]
+            },
+            "description": "Registra un sistema a auditar (permiso `systems.create`: solo **platform_admin con segundo factor**). Comprueba el límite de la talla del appliance (talla M en desarrollo) y responde 409 si ya no caben más.\n\n`connector` debe ser uno de: `argos_sql.postgres:PostgresConnector`, `argos_sql.mssql:MssqlConnector`, `argos_sql.oracle:OracleConnector`, `argos_sql.generic:SqlConnector`, `argos_files.connector:FilesConnector`, `argos_ldap.connector:LdapConnector`, `argos_rest.connector:RestConnector`, `argos_fhir.connector:FhirConnector`, `argos_dicom.connector:DicomConnector`.\n\nLas credenciales **no** viajan en la API: la respuesta indica la ruta de Vault (`secret`) donde el operador las guarda. Cada ejecución crea un sistema nuevo (el nombre lleva la marca de tiempo).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"postman-postgres-{{$timestamp}}\",\n  \"kind\": \"rdbms\",\n  \"environment\": \"development\",\n  \"owner\": \"Equipo ARGOS\",\n  \"connector\": \"argos_sql.postgres:PostgresConnector\",\n  \"config\": {\n    \"allow_insecure\": true,\n    \"statement_timeout_ms\": 5000,\n    \"host_aliases\": [\n      \"source-postgres\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 201 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 409]));",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('new_system_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 · Inventario",
+      "description": "Inventario de datos descubierto por los conectores: cobertura, cola de revisión del DPO y detalle de cada nodo del grafo.",
+      "item": [
+        {
+          "name": "Cobertura y frescura",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/coverage",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "coverage"
+              ]
+            },
+            "description": "Cobertura del inventario por sistema, frescura de la última exploración y columnas pendientes de revisión."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cola de revisión del DPO",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/review-queue?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "review-queue"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Columnas que el clasificador no pudo decidir solo y esperan revisión humana. Guarda la primera en `node_key` y su categoría propuesta en `review_category`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const it = (pm.response.json().items || [])[0];",
+                  "  if (it) {",
+                  "    pm.collectionVariables.set('node_key', it.node_key || it.key || '');",
+                  "    pm.collectionVariables.set('review_category', it.proposed_category || it.category || '');",
+                  "    console.log('node_key =', pm.collectionVariables.get('node_key'));",
+                  "  } else { console.log('No hay columnas pendientes de revisión.'); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detalle de un nodo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/nodes/{{node_key}}?limit=25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "nodes",
+                "{{node_key}}"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "25"
+                }
+              ]
+            },
+            "description": "Nodo del grafo con su vecindario, su procedencia y su línea temporal de cambios (deltas). `node_key` sale de la cola de revisión; también puedes escribir uno a mano. El script lo codifica para la URL."
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Si node_key está vacío, lo toma de la primera columna de la cola de revisión.",
+                  "const key = pm.collectionVariables.get('node_key');",
+                  "const finish = () => {",
+                  "  pm.request.url.path = pm.request.url.path.map(p => p === '{{node_key}}' ? encodeURIComponent(pm.collectionVariables.get('node_key') || '') : p);",
+                  "};",
+                  "if (key) { finish(); } else {",
+                  "  pm.sendRequest({",
+                  "    url: pm.variables.replaceIn('{{baseUrl}}/api/v1/inventory/review-queue?limit=1'),",
+                  "    method: 'GET',",
+                  "    header: { Authorization: 'Bearer ' + pm.collectionVariables.get('token_auditor') },",
+                  "  }, (err, res) => {",
+                  "    const it = !err && res.code === 200 ? (res.json().items || [])[0] : null;",
+                  "    if (it) {",
+                  "      pm.collectionVariables.set('node_key', it.node_key || it.key || '');",
+                  "      pm.collectionVariables.set('review_category', it.proposed_category || it.category || '');",
+                  "    } else { console.log('node_key vacío y no hay columnas en la cola de revisión: pon uno a mano.'); }",
+                  "    finish();",
+                  "  });",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Decidir una columna (DPO, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/inventory/review-queue/{{node_key}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "inventory",
+                "review-queue",
+                "{{node_key}}"
+              ]
+            },
+            "description": "Decisión del DPO sobre una columna en revisión (permiso `inventory.review`, con segundo factor).\n\n- `accept`: confirma la categoría propuesta. Se envía la categoría que el revisor vio, para que no se acepte una propuesta que cambió entretanto.\n- `reject`: deja la columna sin clasificar.\n- `correct`: rechaza la propuesta y clasifica la columna como `category`.\n\n**Modifica datos**: la decisión queda en el diario.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"decision\": \"accept\",\n  \"category\": \"{{review_category}}\",\n  \"note\": \"Revisado desde Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Si node_key está vacío, lo toma de la primera columna de la cola de revisión.",
+                  "const key = pm.collectionVariables.get('node_key');",
+                  "const finish = () => {",
+                  "  pm.request.url.path = pm.request.url.path.map(p => p === '{{node_key}}' ? encodeURIComponent(pm.collectionVariables.get('node_key') || '') : p);",
+                  "};",
+                  "if (key) { finish(); } else {",
+                  "  pm.sendRequest({",
+                  "    url: pm.variables.replaceIn('{{baseUrl}}/api/v1/inventory/review-queue?limit=1'),",
+                  "    method: 'GET',",
+                  "    header: { Authorization: 'Bearer ' + pm.collectionVariables.get('token_dpo') },",
+                  "  }, (err, res) => {",
+                  "    const it = !err && res.code === 200 ? (res.json().items || [])[0] : null;",
+                  "    if (it) {",
+                  "      pm.collectionVariables.set('node_key', it.node_key || it.key || '');",
+                  "      pm.collectionVariables.set('review_category', it.proposed_category || it.category || '');",
+                  "    } else { console.log('node_key vacío y no hay columnas en la cola de revisión: pon uno a mano.'); }",
+                  "    finish();",
+                  "  });",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404 o 409 o 422', () => pm.expect(pm.response.code).to.be.oneOf([200, 404, 409, 422]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 · Campañas (flujo completo)",
+      "description": "Ciclo de una campaña: planificar → lanzar → leer el plan previo → aprobar la compuerta de arranque → seguir el progreso → veredictos.\n\nEjecuta las peticiones **en orden**. La preparación (resolución sobre la instantánea del inventario) la hace el worker de campañas en Temporal y tarda unos segundos: si «Plan previo» responde 409, espera y repítela.\n\nSeparación de deberes: quien planifica y lanza (manager) no aprueba; aprueba el DPO.",
+      "item": [
+        {
+          "name": "Planificar campaña",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_manager}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns"
+              ]
+            },
+            "description": "Crea una campaña (permiso `campaigns.create`, rol campaign_manager). `scope` solo admite `system_ids`, una lista no vacía de identificadores de sistema. Si lo omites, la campaña cubre todo el inventario.\n\n`Idempotency-Key`: si repites la petición con la **misma** clave, la API devuelve la misma respuesta sin crear otra campaña. Aquí se genera una clave nueva cada vez.\n\nGuarda el identificador en `campaign_id`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Campaña Postman {{$isoTimestamp}}\",\n  \"scope\": {\n    \"system_ids\": [\n      \"{{system_id}}\"\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 201', () => pm.expect(pm.response.code).to.be.oneOf([201]));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set('campaign_id', pm.response.json().campaign_id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar campañas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns?limit=4",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "4"
+                }
+              ]
+            },
+            "description": "Listado paginado de campañas, de la más reciente a la más antigua."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estado de la campaña",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns/{{campaign_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns",
+                "{{campaign_id}}"
+              ]
+            },
+            "description": "Estado (`planned`, `pinned`, `running`, `sealed` o `failed`) y, si está sellada, `seal_verified`: la API vuelve a comprobar el sello."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lanzar campaña",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_manager}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns/{{campaign_id}}/launch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns",
+                "{{campaign_id}}",
+                "launch"
+              ]
+            },
+            "description": "Arranca el workflow en Temporal (permiso `campaigns.launch`). Se para en la compuerta `start` hasta que un DPO la apruebe. Responde 409 si ya estaba lanzada y 429/409 si la talla del appliance no admite más campañas en paralelo."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 409 o 429', () => pm.expect(pm.response.code).to.be.oneOf([200, 409, 429]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Plan previo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns/{{campaign_id}}/plan",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns",
+                "{{campaign_id}}",
+                "plan"
+              ]
+            },
+            "description": "Lo que la campaña va a preguntar a cada sistema, **literalmente**, antes de preguntar nada. 409 mientras no esté preparada: espera unos segundos y repite."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Compuertas",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns/{{campaign_id}}/gates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns",
+                "{{campaign_id}}",
+                "gates"
+              ]
+            },
+            "description": "Puntos de control humanos, con quién ha aprobado y cuántas aprobaciones de personas distintas faltan. La compuerta `sampling` exige dos personas distintas."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aprobaciones pendientes del DPO",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/approvals",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "approvals"
+              ]
+            },
+            "description": "Puntos de control que esperan a esta persona.\n\nAviso: hoy responde 501 a propósito (decisión F08-99). Las compuertas de cada campaña se ven en `GET /campaigns/{id}/gates`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 501 (ruta declarada, sin implementar; decisión F08-99)', () => pm.expect(pm.response.code).to.be.oneOf([200, 501]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aprobar compuerta start (DPO, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns/{{campaign_id}}/gates/start/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns",
+                "{{campaign_id}}",
+                "gates",
+                "start",
+                "approve"
+              ]
+            },
+            "description": "Aprueba la compuerta de arranque (permiso `campaigns.approve`, **dpo_reviewer con segundo factor**). La aprobación queda en el diario y la campaña empieza a ejecutar sondas.\n\nNadie aprueba lo que él mismo pidió: con el token del manager esta petición da 403 (ver carpeta 12).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"note\": \"Plan previo revisado desde Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Progreso",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns/{{campaign_id}}/progress",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns",
+                "{{campaign_id}}",
+                "progress"
+              ]
+            },
+            "description": "Progreso según el workflow: unidades hechas y totales, hallazgos y sistemas en pausa (con su causa, por ejemplo el cortacircuitos). 409 si la campaña no está en marcha."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Veredictos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns/{{campaign_id}}/verdicts?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns",
+                "{{campaign_id}}",
+                "verdicts"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "description": "Veredictos de la campaña tal como los escribió el evaluador (conforme, no conforme, no demostrado, no concluyente). Guarda el primero en `verdict_id` y su asiento del diario en `journal_seq`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const it = (pm.response.json().items || [])[0];",
+                  "  if (it) {",
+                  "    pm.collectionVariables.set('verdict_id', it.id || it.verdict_id);",
+                  "    if (it.probe_journal_seq) pm.collectionVariables.set('journal_seq', String(it.probe_journal_seq));",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Reejecutar para verificar subsanación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_manager}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns/{{campaign_id}}/remediation",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns",
+                "{{campaign_id}}",
+                "remediation"
+              ]
+            },
+            "description": "Vuelve a ejecutar lo que la campaña encontró para comprobar si se ha corregido (permiso `campaigns.remediate`). Los hallazgos solo se cierran así."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 202 o 404 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 202, 404, 409]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 · Hallazgos",
+      "description": "Hallazgos abiertos por los veredictos no conformes. Estados: `open` → `in_remediation` → `pending_verification` → `closed_compliant` / `reopened`; y `risk_accepted`.\n\n`closed_compliant` y `reopened` **solo** los decide la reejecución del reto: una persona no puede cerrar un hallazgo a mano.",
+      "item": [
+        {
+          "name": "Listar hallazgos (peor primero)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/findings?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "findings"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Filtros opcionales: `status`, `severity` (`low`, `medium`, `high`, `critical`) y `campaign_id`. Guarda el primero en `finding_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const it = (pm.response.json().items || [])[0];",
+                  "  if (it) {",
+                  "    const v = it.id || it.finding_id;",
+                  "    if (v) { pm.collectionVariables.set('finding_id', v); console.log('finding_id =', v); }",
+                  "  } else { console.log('La lista está vacía: finding_id no cambia.'); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detalle de un hallazgo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/findings/{{finding_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "findings",
+                "{{finding_id}}"
+              ]
+            },
+            "description": "El porqué completo: criterio, valor observado, declaración muestral, asiento del diario, obligación con su artículo e historia de estados."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Pasar a remediación (DPO, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/findings/{{finding_id}}/transition",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "findings",
+                "{{finding_id}}",
+                "transition"
+              ]
+            },
+            "description": "Mueve el hallazgo de `open` (o `reopened`) a `in_remediation` (permiso `findings.transition`, DPO con segundo factor).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"in_remediation\",\n  \"note\": \"Asignado al equipo de sistemas\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Marcar como subsanado (DPO, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/findings/{{finding_id}}/transition",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "findings",
+                "{{finding_id}}",
+                "transition"
+              ]
+            },
+            "description": "De `in_remediation` a `pending_verification`. A partir de aquí solo la reejecución lo cierra.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"pending_verification\",\n  \"note\": \"Corrección aplicada; pendiente de verificar\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Aceptar el riesgo (DPO, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/findings/{{finding_id}}/transition",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "findings",
+                "{{finding_id}}",
+                "transition"
+              ]
+            },
+            "description": "Acepta el riesgo con justificación y **caducidad** (`risk_expiry`, obligatoria en este caso). Queda en el diario y en el expediente. Al caducar, el hallazgo se reabre solo.\n\nSolo es válido desde `open`, `in_remediation` o `reopened`; en otro estado responde 409.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"risk_accepted\",\n  \"note\": \"Riesgo asumido hasta la migración del sistema\",\n  \"risk_expiry\": \"2026-12-31\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 409 o 422', () => pm.expect(pm.response.code).to.be.oneOf([200, 409, 422]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificar la subsanación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_manager}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/findings/{{finding_id}}/verify",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "findings",
+                "{{finding_id}}",
+                "verify"
+              ]
+            },
+            "description": "Reejecuta el reto del hallazgo (permiso `findings.verify`). Si vuelve a pasar, el sistema (`system:remediation`) lo cierra como `closed_compliant`; si no, lo reabre."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 202 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 202, 409]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 · Evidencia",
+      "description": "Cadena de evidencia de una campaña **sellada**: artefactos en el almacén WORM, árbol de Merkle, firma, sello de tiempo, diario y expediente. Mientras la campaña no esté sellada, muchas de estas rutas responden 404 o 409.",
+      "item": [
+        {
+          "name": "Cadena de evidencia",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/evidence/{{campaign_id}}/chain",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "evidence",
+                "{{campaign_id}}",
+                "chain"
+              ]
+            },
+            "description": "Estado real de cada eslabón. En desarrollo la firma es de una clave de pruebas y el sello de tiempo puede estar en cola: la API lo dice así, no lo presenta como válido."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 404, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Artefactos de la campaña",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/evidence/{{campaign_id}}/artifacts?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "evidence",
+                "{{campaign_id}}",
+                "artifacts"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Artefactos canónicos indexados de la campaña."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Artefacto de un veredicto con su prueba de inclusión",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/evidence/artifacts/{{verdict_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "evidence",
+                "artifacts",
+                "{{verdict_id}}"
+              ]
+            },
+            "description": "Artefacto de un veredicto con la prueba de inclusión en el árbol de Merkle. `verdict_id` sale de «Veredictos»."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Asiento del diario citado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/evidence/{{campaign_id}}/journal/{{journal_seq}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "evidence",
+                "{{campaign_id}}",
+                "journal",
+                "{{journal_seq}}"
+              ]
+            },
+            "description": "Un asiento del diario, solo si lo cita algún veredicto de la campaña (para no abrir el diario entero). `journal_seq` sale de «Veredictos»."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Expediente (JSON canónico)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/evidence/{{campaign_id}}/dossier.json",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "evidence",
+                "{{campaign_id}}",
+                "dossier.json"
+              ]
+            },
+            "description": "Expediente de la campaña en JSON canónico; su SHA-256 es lo que firma la credencial."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Expediente (PDF)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/evidence/{{campaign_id}}/dossier.pdf",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "evidence",
+                "{{campaign_id}}",
+                "dossier.pdf"
+              ]
+            },
+            "description": "El mismo expediente en PDF con QR. En Postman usa «Save response → Save to a file»."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Paquete para el comprobador público",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/evidence/{{campaign_id}}/bundle",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "evidence",
+                "{{campaign_id}}",
+                "bundle"
+              ]
+            },
+            "description": "Paquete portable que un tercero verifica sin acceder al appliance."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "06 · Credenciales verificables",
+      "description": "Credencial verificable (VC 2.0, `did:web`) de una campaña sellada. Emitirla es un acto explícito del DPO tras leer la vista previa; revocarla es cosa del administrador.",
+      "item": [
+        {
+          "name": "Vista previa de la credencial (DPO, 2FA)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/credentials/preview?campaign_id={{campaign_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "credentials",
+                "preview"
+              ],
+              "query": [
+                {
+                  "key": "campaign_id",
+                  "value": "{{campaign_id}}"
+                }
+              ]
+            },
+            "description": "Exactamente lo que afirmaría la credencial, antes de emitirla. Guarda el SHA-256 del expediente en `dossier_sha256`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 404, 409]));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const j = pm.response.json();",
+                  "  const sha = j.dossier_sha256 || (j.dossier && j.dossier.sha256) || j.sha256;",
+                  "  if (sha) pm.collectionVariables.set('dossier_sha256', sha);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Emitir la credencial (DPO, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/credentials",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "credentials"
+              ]
+            },
+            "description": "Emite la credencial. Si el expediente ha cambiado desde la vista previa, responde 409 y hay que volver a leerla. Guarda el identificador en `credential_id`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"campaign_id\": \"{{campaign_id}}\",\n  \"dossier_sha256\": \"{{dossier_sha256}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 201 o 404 o 409', () => pm.expect(pm.response.code).to.be.oneOf([201, 404, 409]));",
+                  "if (pm.response.code === 201) { const j = pm.response.json(); pm.collectionVariables.set('credential_id', j.credential_id || j.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Estado de la credencial",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/credentials/{{credential_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "credentials",
+                "{{credential_id}}"
+              ]
+            },
+            "description": "La credencial y su estado en la lista de estado (vigente o revocada)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Revocar la credencial (admin, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/credentials/{{credential_id}}/revoke",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "credentials",
+                "{{credential_id}}",
+                "revoke"
+              ]
+            },
+            "description": "Revoca la credencial (permiso `credentials.revoke`, platform_admin con segundo factor). **Irreversible.**",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Prueba de revocación desde Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 404, 409]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "07 · Sujeto sintético (ADR-0008)",
+      "description": "El sujeto sintético sirve para medir de verdad un derecho (por ejemplo, la supresión): ARGOS lo genera, el DPO autoriza el punto de inyección y el cliente confirma cada paso que hace en sus sistemas.\n\n**Requisito:** `subject_id` debe ser un sujeto ya generado y registrado por el motor para la campaña; la API v1 no los genera. Rellena `subject_id` (y `injection_id` tras autorizar) con valores de tu entorno.",
+      "item": [
+        {
+          "name": "Autorizar un punto de inyección (DPO, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns/{{campaign_id}}/synthetic/authorize",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns",
+                "{{campaign_id}}",
+                "synthetic",
+                "authorize"
+              ]
+            },
+            "description": "El DPO autoriza dónde y cómo se inyecta el sujeto, y cómo se deshace. Guarda `injection_id`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject_id\": \"{{subject_id}}\",\n  \"system_id\": \"{{system_id}}\",\n  \"point\": \"clinic.patients\",\n  \"method\": \"INSERT\",\n  \"revert_procedure\": \"DELETE por id\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 201 o 404 o 409 o 422', () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 404, 409, 422]));",
+                  "if (pm.response.code < 300) { const j = pm.response.json(); pm.collectionVariables.set('injection_id', j.injection_id || j.id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar la inyección (cliente)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_manager}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/synthetic/{{injection_id}}/confirm-injection",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "synthetic",
+                "{{injection_id}}",
+                "confirm-injection"
+              ]
+            },
+            "description": "El cliente (vía campaign_manager) confirma que inyectó el sujeto en el punto autorizado. No puede confirmarlo quien lo autorizó."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 404, 409]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar el ejercicio del derecho (cliente)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_manager}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/synthetic/{{injection_id}}/confirm-exercise",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "synthetic",
+                "{{injection_id}}",
+                "confirm-exercise"
+              ]
+            },
+            "description": "El cliente indica cuándo recibió la petición del derecho y cuándo respondió: el plazo lo mide esa respuesta.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"right\": \"erasure\",\n  \"requested_at\": \"{{$isoTimestamp}}\",\n  \"answered_at\": \"{{$isoTimestamp}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404 o 409 o 422', () => pm.expect(pm.response.code).to.be.oneOf([200, 404, 409, 422]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirmar la reversión (cliente)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_manager}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/synthetic/{{injection_id}}/confirm-revert",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "synthetic",
+                "{{injection_id}}",
+                "confirm-revert"
+              ]
+            },
+            "description": "El cliente confirma que dejó la fuente como estaba. Se comprueba antes de sellar la campaña."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 404, 409]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "08 · Asistente",
+      "description": "Asistente de la consola: responde con citas a la normativa o rehúsa. **Sus respuestas no son veredictos de conformidad.**\n\nNecesita el modelo local (tarea F06-05, pendiente). Sin él la API responde **503**, y con el cupo agotado, **429**.",
+      "item": [
+        {
+          "name": "Preguntar al asistente",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_manager}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/assistant/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "assistant",
+                "ask"
+              ]
+            },
+            "description": "Pregunta de 3 a 2000 caracteres (permiso `assistant.ask`).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"¿Qué exige el artículo 32 del RGPD sobre el cifrado de datos en tránsito?\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 429 o 503', () => pm.expect(pm.response.code).to.be.oneOf([200, 429, 503]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "09 · Webhooks e ITSM",
+      "description": "Suscripciones de sistemas externos (ServiceNow, Jira…) a eventos de ARGOS. Solo el administrador de plataforma. Los destinos deben ser `https` y públicos: se rechazan las direcciones internas (protección SSRF).\n\nEventos disponibles: `finding_opened`, `campaign_sealed`, `approval_requested`.",
+      "item": [
+        {
+          "name": "Suscribir un endpoint (admin, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks"
+              ]
+            },
+            "description": "Crea la suscripción. El secreto (16 caracteres o más) firma cada entrega, se guarda en Vault y **nunca** se devuelve. Guarda `webhook_id`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://example.com/argos/webhook\",\n  \"events\": [\n    \"finding_opened\",\n    \"campaign_sealed\"\n  ],\n  \"secret\": \"postman-secreto-compartido-2026\",\n  \"template\": \"generic\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 201 o 422', () => pm.expect(pm.response.code).to.be.oneOf([201, 422]));",
+                  "if (pm.response.code === 201) { const j = pm.response.json(); pm.collectionVariables.set('webhook_id', j.id || j.webhook_id); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Listar suscripciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks"
+              ]
+            },
+            "description": "Suscripciones activas."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "  const it = (pm.response.json().items || [])[0];",
+                  "  if (it) {",
+                  "    const v = it.id;",
+                  "    if (v) { pm.collectionVariables.set('webhook_id', v); console.log('webhook_id =', v); }",
+                  "  } else { console.log('La lista está vacía: webhook_id no cambia.'); }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Entregas y reintentos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks/{{webhook_id}}/deliveries",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks",
+                "{{webhook_id}}",
+                "deliveries"
+              ]
+            },
+            "description": "Bandeja de entregas de una suscripción, con sus reintentos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10 · Operación y registro de seguridad",
+      "description": "Pantalla de operación: semáforos, alertas activas, capacidad y libro de operación. Solo lectura, para el administrador y el auditor.",
+      "item": [
+        {
+          "name": "Estado del appliance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/operations/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "operations",
+                "status"
+              ]
+            },
+            "description": "Los ocho semáforos del appliance (preguntados a Prometheus; sin medida responden `unknown`) y las alertas activas con su runbook."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Capacidad frente a la talla",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/operations/capacity",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "operations",
+                "capacity"
+              ]
+            },
+            "description": "Sistemas, activos, campañas en paralelo y tokens de IA frente a los límites de la talla, con la serie de 13 meses."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Runbook RB-01 (diario)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/operations/runbooks/RB-01-diario",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "operations",
+                "runbooks",
+                "RB-01-diario"
+              ]
+            },
+            "description": "Texto Markdown de un runbook. Identificadores disponibles: `RB-01-diario`, `RB-02-almacen-evidencia`, `RB-03-copias`, `RB-04-seguridad`, `RB-05-campanas-y-colas`, `RB-06-plataforma`, `RB-07-conmutacion-talla-m`, `RB-08-restauracion-completa`, `RB-09-esclusa`, `RB-10-ampliar-volumen-evidencia`, `RB-11-certificados-externos`, `RB-12-simulacro-trimestral`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Registro de seguridad",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/security/events?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "security",
+                "events"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Eventos de autenticación, autorización y firma, encadenados y separados del diario funcional."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200', () => pm.expect(pm.response.code).to.be.oneOf([200]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "11 · Soporte, actualizaciones y esclusa",
+      "description": "Operaciones de plataforma reservadas al **administrador con segundo factor**. Varias dependen de ficheros en las carpetas montadas en desarrollo (`deploy/dev/update`, `deploy/dev/airgap`): sin ellos, la API responde con un error explicativo, que también es una prueba válida.",
+      "item": [
+        {
+          "name": "Pedir paquete de diagnóstico",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/support/diagnostics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "support",
+                "diagnostics"
+              ]
+            },
+            "description": "Pide al recolector un paquete de diagnóstico. Se revisa antes de que salga nada. Guarda `diagnostics_id`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 201 o 202', () => pm.expect(pm.response.code).to.be.oneOf([200, 201, 202]));",
+                  "if (pm.response.code < 300) pm.collectionVariables.set('diagnostics_id', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Vista previa del diagnóstico",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/support/diagnostics/{{diagnostics_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "support",
+                "diagnostics",
+                "{{diagnostics_id}}"
+              ]
+            },
+            "description": "El índice y cada fichero en claro, tal como saldrían. Mientras se recolecta responde `status: collecting`: repite hasta que esté listo. Guarda `index_sha256`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));",
+                  "if (pm.response.code === 200 && pm.response.json().index_sha256) pm.collectionVariables.set('index_sha256', pm.response.json().index_sha256);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cifrar el paquete para soporte (2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/support/diagnostics/{{diagnostics_id}}/package",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "support",
+                "diagnostics",
+                "{{diagnostics_id}}",
+                "package"
+              ]
+            },
+            "description": "Cifra (age) solo el índice aprobado: si el índice cambió desde la revisión, se rechaza.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved_index_sha256\": \"{{index_sha256}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404 o 409 o 503', () => pm.expect(pm.response.code).to.be.oneOf([200, 404, 409, 503]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Encolar una actualización (2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/system/updates",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "system",
+                "updates"
+              ]
+            },
+            "description": "Verifica la firma de un bundle de la bandeja de entrada (`deploy/dev/update`) y lo encola para el actualizador. Con un nombre que no existe responde 404/422: así se comprueba que no se aplica nada sin firma.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bundle\": \"argos-update-ejemplo\",\n  \"allow_downgrade\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 202 o 404 o 409 o 422', () => pm.expect(pm.response.code).to.be.oneOf([200, 202, 404, 409, 422]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Importar desde el soporte (esclusa, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/airgap/imports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "airgap",
+                "imports"
+              ]
+            },
+            "description": "Escanea el soporte e importa lo que verifica; dice qué rechazó y por qué."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 409 o 503', () => pm.expect(pm.response.code).to.be.oneOf([200, 409, 503]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Exportar el expediente al soporte (esclusa, 2FA)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/airgap/exports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "airgap",
+                "exports"
+              ]
+            },
+            "description": "Escribe en el soporte un tipo de la lista cerrada: `tsq`, `diagnostics`, `dossier` o `credential`. Cualquier otro se rechaza.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"kind\": \"dossier\",\n  \"campaign_id\": \"{{campaign_id}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 404 o 409 o 422 o 503', () => pm.expect(pm.response.code).to.be.oneOf([200, 404, 409, 422, 503]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "12 · Pruebas de seguridad (deben fallar)",
+      "description": "Peticiones que **deben** ser rechazadas. Si alguna pasa, es un fallo de seguridad. Reproducen casos de la batería de accesos indebidos (F09-15).",
+      "item": [
+        {
+          "name": "Sin token → 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns"
+              ]
+            },
+            "description": "Sin cabecera Authorization: 401 con problem+json.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 401', () => pm.expect(pm.response.code).to.be.oneOf([401]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token falso → 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJ4In0.firma-falsa",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns"
+              ]
+            },
+            "description": "Un token que no firmó Keycloak se rechaza.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 401', () => pm.expect(pm.response.code).to.be.oneOf([401]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Auditor intenta crear campaña → 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns"
+              ]
+            },
+            "description": "El auditor solo tiene permisos de lectura.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"No debería crearse\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 403', () => pm.expect(pm.response.code).to.be.oneOf([403]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Manager intenta aprobar su compuerta → 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_manager}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns/{{campaign_id}}/gates/start/approve",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns",
+                "{{campaign_id}}",
+                "gates",
+                "start",
+                "approve"
+              ]
+            },
+            "description": "Separación de deberes: quien lanza la campaña no la aprueba.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 403', () => pm.expect(pm.response.code).to.be.oneOf([403]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cierre manual de un hallazgo → 409/422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_dpo}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/findings/{{finding_id}}/transition",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "findings",
+                "{{finding_id}}",
+                "transition"
+              ]
+            },
+            "description": "Nadie cierra un hallazgo a mano: solo la reejecución verificada.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"to\": \"closed_compliant\",\n  \"note\": \"cierre a mano\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 409 o 422 o 404', () => pm.expect(pm.response.code).to.be.oneOf([409, 422, 404]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Webhook a una dirección interna → 422",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_admin}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/webhooks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "webhooks"
+              ]
+            },
+            "description": "Protección SSRF: no se aceptan destinos internos.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://127.0.0.1/interno\",\n  \"events\": [\n    \"finding_opened\"\n  ],\n  \"secret\": \"postman-secreto-compartido-2026\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 422 o 400', () => pm.expect(pm.response.code).to.be.oneOf([422, 400]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cursor manipulado → 400",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/campaigns?cursor=no-es-un-cursor",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "campaigns"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "no-es-un-cursor"
+                }
+              ]
+            },
+            "description": "Un cursor ilegible se trata como tal, sin error 500."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 400', () => pm.expect(pm.response.code).to.be.oneOf([400]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ruta inexistente → 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_auditor}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/nada-por-aqui",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "nada-por-aqui"
+              ]
+            },
+            "description": "Bajo /api/v1 una ruta desconocida devuelve problem+json 404."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 404', () => pm.expect(pm.response.code).to.be.oneOf([404]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "13 · Sesión de la consola (referencia)",
+      "description": "Rutas que usa la **consola web** con OIDC + PKCE y una cookie `argos_refresh` (HttpOnly, SameSite=Strict, ruta `/api/v1/auth`). Necesitan un código de autorización obtenido en el navegador, así que desde Postman sirven como referencia. Para probar la API, usa los tokens de la carpeta 00.",
+      "item": [
+        {
+          "name": "Abrir sesión con código PKCE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/session",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "session"
+              ]
+            },
+            "description": "Intercambia el código de autorización por el token de acceso y deja la cookie de refresco. Con datos de ejemplo responde 400/401.",
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"<código devuelto por Keycloak al redirigir>\",\n  \"code_verifier\": \"<verificador PKCE de 43 a 128 caracteres>\",\n  \"redirect_uri\": \"http://127.0.0.1:8000/\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 400 o 401 o 422', () => pm.expect(pm.response.code).to.be.oneOf([200, 400, 401, 422]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refrescar el token",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "refresh"
+              ]
+            },
+            "description": "Canjea la cookie `argos_refresh` por un token nuevo. Sin cookie, 401.",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 401', () => pm.expect(pm.response.code).to.be.oneOf([200, 401]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cerrar sesión",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "logout"
+              ]
+            },
+            "description": "Revoca el refresh token y borra la cookie. Desde ese momento el token de acceso de esa sesión deja de valer (SEC-060).",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Código esperado: 200 o 204 o 401', () => pm.expect(pm.response.code).to.be.oneOf([200, 204, 401]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "function argosTotp(secret) {",
+          "  const counter = Math.floor(Date.now() / 1000 / 30);",
+          "  const hi = Math.floor(counter / 0x100000000), lo = counter >>> 0;",
+          "  const mac = CryptoJS.HmacSHA256(CryptoJS.lib.WordArray.create([hi, lo], 8), CryptoJS.enc.Utf8.parse(secret));",
+          "  const b = [];",
+          "  for (let i = 0; i < mac.sigBytes; i++) b.push((mac.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff);",
+          "  const o = b[b.length - 1] & 0x0f;",
+          "  const bin = ((b[o] & 0x7f) << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3];",
+          "  return String(bin % 1000000).padStart(6, '0');",
+          "}",
+          "",
+          "// ARGOS · token automático por rol.",
+          "// Cada petición lleva \"Authorization: Bearer {{token_<rol>}}\". Este script mira qué rol pide y, si",
+          "// su token no existe o caduca en menos de 20 s, lo pide a Keycloak (con el código TOTP si el",
+          "// usuario tiene segundo factor). Keycloak no acepta dos veces el mismo código en la misma ventana",
+          "// de 30 s: si hiciera falta, se espera a la siguiente.",
+          "const USERS = {",
+          "  manager: { user: 'manager.test', secret: null },",
+          "  dpo:     { user: 'dpo.test',     secret: pm.variables.get('totp_secret_dpo') },",
+          "  admin:   { user: 'admin.test',   secret: pm.variables.get('totp_secret_admin') },",
+          "  auditor: { user: 'auditor.test', secret: null },",
+          "};",
+          "const header = pm.request.headers.get('Authorization') || '';",
+          "const match = header.match(/\\{\\{token_(manager|dpo|admin|auditor)\\}\\}/);",
+          "if (match) {",
+          "  const role = match[1];",
+          "  const token = pm.collectionVariables.get('token_' + role);",
+          "  const exp = Number(pm.collectionVariables.get('token_' + role + '_exp') || 0);",
+          "  if (!token || Date.now() > exp - 20000) {",
+          "    const u = USERS[role];",
+          "    const win = Math.floor(Date.now() / 30000);",
+          "    const last = Number(pm.collectionVariables.get('totp_window_' + role) || -1);",
+          "    const wait = (u.secret && last === win) ? (30000 - (Date.now() % 30000) + 800) : 0;",
+          "    setTimeout(() => {",
+          "      const form = [",
+          "        { key: 'grant_type', value: 'password' },",
+          "        { key: 'client_id', value: pm.variables.get('keycloakClient') },",
+          "        { key: 'username', value: u.user },",
+          "        { key: 'password', value: pm.variables.get('password') },",
+          "        { key: 'scope', value: 'openid' },",
+          "      ];",
+          "      if (u.secret) {",
+          "        form.push({ key: 'totp', value: argosTotp(u.secret) });",
+          "        pm.collectionVariables.set('totp_window_' + role, String(Math.floor(Date.now() / 30000)));",
+          "      }",
+          "      pm.sendRequest({",
+          "        url: pm.variables.get('keycloakUrl') + '/realms/argos/protocol/openid-connect/token',",
+          "        method: 'POST',",
+          "        header: [{ key: 'Host', value: pm.variables.get('keycloakHost') }],",
+          "        body: { mode: 'urlencoded', urlencoded: form },",
+          "      }, (err, res) => {",
+          "        if (err || res.code !== 200) {",
+          "          console.error('ARGOS · no se obtuvo token para ' + u.user, err || res.text());",
+          "          return;",
+          "        }",
+          "        const t = res.json();",
+          "        pm.collectionVariables.set('token_' + role, t.access_token);",
+          "        pm.collectionVariables.set('token_' + role + '_exp', String(Date.now() + t.expires_in * 1000));",
+          "      });",
+          "    }, wait);",
+          "  }",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Si la API devuelve un error, se muestra el problem+json (RFC 9457) en la consola de Postman.",
+          "if (pm.response.code >= 400) {",
+          "  let body = pm.response.text();",
+          "  try { body = JSON.stringify(pm.response.json(), null, 2); } catch (e) {}",
+          "  console.warn(pm.info.requestName + ' → ' + pm.response.code, body);",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000",
+      "type": "string",
+      "description": "API de ARGOS en el entorno de desarrollo (make dev)"
+    },
+    {
+      "key": "keycloakUrl",
+      "value": "http://127.0.0.1:8180",
+      "type": "string",
+      "description": "Keycloak publicado en el host"
+    },
+    {
+      "key": "keycloakHost",
+      "value": "keycloak:8080",
+      "type": "string",
+      "description": "Host con el que se piden los tokens: el emisor que valida la API"
+    },
+    {
+      "key": "keycloakClient",
+      "value": "argos-tests",
+      "type": "string",
+      "description": "Cliente público con flujo password (solo desarrollo)"
+    },
+    {
+      "key": "password",
+      "value": "test",
+      "type": "string",
+      "description": "Contraseña de los usuarios del realm de desarrollo"
+    },
+    {
+      "key": "totp_secret_dpo",
+      "value": "dev-only-totp-dpo-test-7c1e4b9a2f",
+      "type": "string",
+      "description": "Secreto TOTP de desarrollo de dpo.test (realm-argos.json)"
+    },
+    {
+      "key": "totp_secret_admin",
+      "value": "dev-only-totp-admin-test-3b8e5d1c6a",
+      "type": "string",
+      "description": "Secreto TOTP de desarrollo de admin.test (realm-argos.json)"
+    },
+    {
+      "key": "system_id",
+      "value": "01920000-0000-7000-8000-00000000a001",
+      "type": "string",
+      "description": "dev-source-postgres (fuente simulada registrada)"
+    },
+    {
+      "key": "campaign_id",
+      "value": "",
+      "type": "string",
+      "description": "Se rellena al planificar o listar campañas"
+    },
+    {
+      "key": "finding_id",
+      "value": "",
+      "type": "string",
+      "description": "Se rellena al listar hallazgos"
+    },
+    {
+      "key": "verdict_id",
+      "value": "",
+      "type": "string",
+      "description": "Se rellena al listar veredictos"
+    },
+    {
+      "key": "journal_seq",
+      "value": "",
+      "type": "string",
+      "description": "Asiento del diario citado por un veredicto"
+    },
+    {
+      "key": "node_key",
+      "value": "",
+      "type": "string",
+      "description": "Se rellena desde la cola de revisión"
+    },
+    {
+      "key": "review_category",
+      "value": "",
+      "type": "string",
+      "description": "Categoría propuesta de la columna en revisión"
+    },
+    {
+      "key": "dossier_sha256",
+      "value": "",
+      "type": "string",
+      "description": "Se rellena con la vista previa de la credencial"
+    },
+    {
+      "key": "credential_id",
+      "value": "",
+      "type": "string",
+      "description": "Se rellena al emitir la credencial"
+    },
+    {
+      "key": "webhook_id",
+      "value": "",
+      "type": "string",
+      "description": "Se rellena al suscribir o listar webhooks"
+    },
+    {
+      "key": "diagnostics_id",
+      "value": "",
+      "type": "string",
+      "description": "Se rellena al pedir un diagnóstico"
+    },
+    {
+      "key": "index_sha256",
+      "value": "",
+      "type": "string",
+      "description": "Índice revisado del diagnóstico"
+    },
+    {
+      "key": "subject_id",
+      "value": "",
+      "type": "string",
+      "description": "Sujeto sintético registrado por el motor (rellenar a mano)"
+    },
+    {
+      "key": "injection_id",
+      "value": "",
+      "type": "string",
+      "description": "Se rellena al autorizar una inyección"
+    },
+    {
+      "key": "new_system_id",
+      "value": "",
+      "type": "string",
+      "description": "Sistema creado desde Postman"
+    },
+    {
+      "key": "token_manager",
+      "value": "",
+      "type": "string",
+      "description": "Token de acceso (automático)"
+    },
+    {
+      "key": "token_manager_exp",
+      "value": "",
+      "type": "string",
+      "description": "Caducidad del token (ms)"
+    },
+    {
+      "key": "totp_window_manager",
+      "value": "",
+      "type": "string",
+      "description": "Última ventana TOTP usada"
+    },
+    {
+      "key": "token_dpo",
+      "value": "",
+      "type": "string",
+      "description": "Token de acceso (automático)"
+    },
+    {
+      "key": "token_dpo_exp",
+      "value": "",
+      "type": "string",
+      "description": "Caducidad del token (ms)"
+    },
+    {
+      "key": "totp_window_dpo",
+      "value": "",
+      "type": "string",
+      "description": "Última ventana TOTP usada"
+    },
+    {
+      "key": "token_admin",
+      "value": "",
+      "type": "string",
+      "description": "Token de acceso (automático)"
+    },
+    {
+      "key": "token_admin_exp",
+      "value": "",
+      "type": "string",
+      "description": "Caducidad del token (ms)"
+    },
+    {
+      "key": "totp_window_admin",
+      "value": "",
+      "type": "string",
+      "description": "Última ventana TOTP usada"
+    },
+    {
+      "key": "token_auditor",
+      "value": "",
+      "type": "string",
+      "description": "Token de acceso (automático)"
+    },
+    {
+      "key": "token_auditor_exp",
+      "value": "",
+      "type": "string",
+      "description": "Caducidad del token (ms)"
+    },
+    {
+      "key": "totp_window_auditor",
+      "value": "",
+      "type": "string",
+      "description": "Última ventana TOTP usada"
+    },
+    {
+      "key": "totp_code_dpo",
+      "value": "",
+      "type": "string",
+      "description": "Código TOTP calculado"
+    },
+    {
+      "key": "totp_code_admin",
+      "value": "",
+      "type": "string",
+      "description": "Código TOTP calculado"
+    }
+  ]
+}
