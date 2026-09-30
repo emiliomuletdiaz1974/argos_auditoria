@@ -1,14 +1,4 @@
-# The single API (ARG-071) with the console inside (ARG-073, ADR-0013): one image, one origin.
-#
-# The console is built here, from its lock file, and travels as static files next to the API: the
-# appliance is air-gapped, so nothing may be fetched from a CDN at run time.
-FROM node:22-slim AS console
-WORKDIR /console
-COPY console/package.json console/package-lock.json ./
-RUN npm ci --no-fund --no-audit
-COPY console ./
-RUN npm run build
-
+# The single API (ARG-071). It serves no page: the front end is its own application (ARG-073).
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /bin/uv
 WORKDIR /app
@@ -23,7 +13,6 @@ RUN uv sync --locked --no-dev --package argos-api
 COPY library ./library
 # F10-07: the book of operation, which the operation screen shows next to each alert.
 COPY docs/operacion ./docs/operacion
-COPY --from=console /console/dist ./console
 # ARG-084: no extra shell in the final image (sh stays: it is the base of the system).
 RUN rm -f /bin/bash /usr/bin/bash
 USER 10001:10001

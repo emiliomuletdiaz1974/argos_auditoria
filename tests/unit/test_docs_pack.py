@@ -188,6 +188,35 @@ def test_the_check_command_exit_code_follows_coverage(tmp_path: Path) -> None:
     assert docs_pack.main(["--root", str(root), "--check"]) == 1
 
 
+def _with_guide(root: Path) -> Path:
+    guides = root / "docs" / "tecnica" / "guias"
+    guides.mkdir()
+    (guides / "integracion-frontend.md").write_text(
+        _doc("guide", "GUIA-frontend", phases='["08"]'), encoding="utf-8"
+    )
+    return root
+
+
+def test_a_guide_lives_in_its_folder_and_must_be_in_the_index(tmp_path: Path) -> None:
+    root = _with_guide(_repo(tmp_path))
+    assert "guias/integracion-frontend.md is not linked from docs/tecnica/README.md" in (
+        docs_pack.coverage_errors(root)
+    )
+    index = root / "docs" / "tecnica" / "README.md"
+    index.write_text(
+        index.read_text(encoding="utf-8") + "- [Front](guias/integracion-frontend.md)\n",
+        encoding="utf-8",
+    )
+    assert docs_pack.coverage_errors(root) == []
+
+
+def test_a_guide_is_packed_with_the_phases_it_serves(tmp_path: Path) -> None:
+    docs = docs_pack.load_docs(_with_guide(_repo(tmp_path)))
+    chosen = docs_pack.select_docs(docs, phases=["08"], modules=[], include_internal=False)
+    assert [d.meta["id"] for d in chosen] == ["GUIA-frontend"]
+    assert docs_pack.select_docs(docs, phases=["03"], modules=[], include_internal=False)
+
+
 def test_the_console_is_a_module_too_and_needs_its_document(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     (root / "console").mkdir()

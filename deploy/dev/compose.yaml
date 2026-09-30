@@ -337,7 +337,7 @@ services:
       interval: 2s
       retries: 60
 
-  # ── The single API (ADR-0012) with the console inside (ADR-0013). The campaign API of Phase 05
+  # ── The single API (ADR-0012); it serves no page (desviación ARG-073). The campaign API of Phase 05
   # is gone: its routes live under /api/v1. It is the only service that reaches the AI gateway. ──
   api:
     <<: *argos-posture

@@ -1,8 +1,8 @@
-"""ARG-071/073 · the API and the console are one container of the development environment.
+"""ARG-071 · the API is one container of the development environment, and it serves no page.
 
-One image, one origin (ADR-0012, ADR-0013): the v1 answers under `/api/v1` and the console is
-served from the same place, as static files built into the image. Nothing is fetched from a CDN,
-because the appliance has no way out. The deliveries towards the ITSM run in their own process.
+The v1 answers under `/api/v1` (ADR-0012). The front end is its own application, on its own
+origin (ARG-073): the image neither builds nor mounts the console of phase 08, and a path outside
+the API is a 404 in problem+json. The deliveries towards the ITSM run in their own process.
 """
 
 import json
@@ -27,7 +27,6 @@ DOCKERFILE = REPO / "services" / "api" / "Dockerfile"
 COMPOSE = REPO / "deploy" / "dev" / "compose.yaml"
 BASE = "http://127.0.0.1:8000"
 WEBHOOK_QUEUE = "argos-webhooks"
-EXTERNAL = re.compile(r"src=\"https?://|href=\"https?://")
 
 
 def _get(path: str) -> tuple[int, str]:
@@ -44,16 +43,11 @@ def test_the_container_answers_its_health_check() -> None:
     assert json.loads(body)["service"] == "argos-api"
 
 
-def test_the_console_is_served_from_the_same_container() -> None:
-    status, page = _get("/")
-    assert status == 200
-    assert '<div id="root">' in page
-    assert not EXTERNAL.search(page), "the appliance has no internet: nothing comes from a CDN"
-
-
-def test_a_console_route_survives_a_reload() -> None:
-    status, page = _get("/campaigns")
-    assert (status, '<div id="root">' in page) == (200, True)
+def test_the_container_serves_no_page() -> None:
+    for path in ("/", "/campaigns"):
+        status, body = _get(path)
+        assert status == 404, path
+        assert json.loads(body)["status"] == 404, "a path outside the API is a problem too"
 
 
 def test_the_v1_is_mounted_and_asks_for_a_token() -> None:
@@ -62,13 +56,13 @@ def test_the_v1_is_mounted_and_asks_for_a_token() -> None:
     assert json.loads(body)["status"] == 401, "errors are problem+json, also here"
 
 
-def test_the_contract_the_console_was_built_against_is_the_one_it_serves() -> None:
+def test_the_contract_the_front_end_reads_is_the_one_it_serves() -> None:
     status, body = _get(f"{API_PREFIX}/openapi.json")
     assert status == 200
     served = json.loads(body)
     kept = json.loads((REPO / "services" / "api" / "openapi.json").read_text(encoding="utf-8"))
     # The graph is mounted only when there is a database, so it is in the served document and not
-    # in the generated one; everything else has to match, or the console types are stale.
+    # in the generated one; everything else has to match, or the published contract is stale.
     assert sorted(set(served["paths"]) - {f"{API_PREFIX}/inventory/graph"}) == sorted(kept["paths"])
 
 
@@ -85,9 +79,9 @@ async def test_the_webhook_worker_polls_its_queue() -> None:
     assert described.pollers, "no worker is polling argos-webhooks"
 
 
-def test_the_image_builds_the_console_and_drops_privileges() -> None:
+def test_the_image_builds_no_front_end_and_drops_privileges() -> None:
     recipe = DOCKERFILE.read_text(encoding="utf-8")
-    assert "npm ci" in recipe and "npm run build" in recipe, "the console is built in the image"
+    assert "node" not in recipe and "npm" not in recipe, "the API image carries no console"
     users = re.findall(r"^USER\s+(\S+)", recipe, re.MULTILINE)
     assert users and users[-1] not in {"root", "0"}
 

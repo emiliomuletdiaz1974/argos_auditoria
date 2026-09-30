@@ -1,10 +1,11 @@
-"""ARG-087 · the SBOM of every ARGOS image and of the console, and grype over each one (F09-09).
+"""ARG-087 · the SBOM of every ARGOS image, and grype over each one (F09-09).
 
 uv run python tools/sbom.py [--tag 0.1.0] [--out dist/sbom]
 
 syft and grype run as images pinned by digest, never `latest`. Each image gets
-`<name>.cdx.json` (CycloneDX) and `<name>.vulns.json` (the grype report); the console gets the
-same from its `package-lock.json`. `tools/vuln_gate.py` then decides, and `tools/release.py build`
+`<name>.cdx.json` (CycloneDX) and `<name>.vulns.json` (the grype report). The console of phase 08
+no longer travels in any image (desviación ARG-073), so it has no SBOM. `tools/vuln_gate.py` then
+decides, and `tools/release.py build`
 puts the hashes of both files in the signed manifest.
 
 The grype database is downloaded once and kept (a docker volume, or ARGOS_GRYPE_CACHE in CI); grype
@@ -33,7 +34,6 @@ IMAGES = (
     "argos-health",
     "argos-verifier",
 )
-CONSOLE = "console"
 
 
 def _run(args: list[str]) -> bytes:
@@ -54,19 +54,6 @@ def sbom_of_image(image: str) -> bytes:
             "docker", "run", "--rm",
             "-v", "/var/run/docker.sock:/var/run/docker.sock",
             SYFT, f"docker:{image}", "-o", "cyclonedx-json", "-q",
-        ]
-    )  # fmt: skip
-
-
-def sbom_of_console() -> bytes:
-    """From the lock file alone: what `npm ci` installs, development tools included."""
-    lock, package = ROOT / "console" / "package-lock.json", ROOT / "console" / "package.json"
-    return _run(
-        [
-            "docker", "run", "--rm",
-            "-v", f"{lock}:/src/package-lock.json:ro",
-            "-v", f"{package}:/src/package.json:ro",
-            SYFT, "dir:/src", "-o", "cyclonedx-json", "-q",
         ]
     )  # fmt: skip
 
@@ -92,7 +79,6 @@ def main(argv: list[str] | None = None) -> int:
     for stale in args.out.glob("*.json"):
         stale.unlink()
     targets = {name: lambda n=name: sbom_of_image(f"{n}:{args.tag}") for name in IMAGES}
-    targets[CONSOLE] = sbom_of_console
     for name, make in targets.items():
         data = make()
         _no_local_paths(name, data)

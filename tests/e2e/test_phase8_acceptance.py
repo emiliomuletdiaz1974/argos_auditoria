@@ -2,8 +2,9 @@
 
 What this phase promised, checked end to end:
 
-1. The appliance serves the console and the v1 from **one origin**, and the v1 answers nothing
-   without a token of the realm. The contract the console was built against is the one it serves.
+1. The v1 answers nothing without a token of the realm, and the contract it publishes is the one
+   it serves. Since 2026-09-29 the API serves no page: the front end is its own application
+   (desviación ARG-073), and the console of phase 08 stays in `console/` as code.
 2. The authorisation matrix the API enforces is the one written by hand, and nothing is granted by
    default: a permission that is not declared cannot even be asked for.
 3. **Every mutation leaves its entry in the journal**, with the person behind it.
@@ -104,24 +105,21 @@ def api(migrated_db: str) -> TestClient:
 # ── 1. one origin ────────────────────────────────────────────────────────────
 
 
-def test_the_console_and_the_v1_come_from_the_same_container() -> None:
-    page_status, page = _get("/")
-    assert (page_status, '<div id="root">' in page) == (200, True)
-    assert not re.search(r'(src|href)="https?://', page), "nothing comes from a CDN"
+def test_the_v1_serves_no_page_and_asks_for_a_token() -> None:
+    page_status, _ = _get("/")
+    assert page_status == 404, "the API serves no front end"
 
     api_status, body = _get(f"{API_PREFIX}/campaigns")
     assert api_status == 401, "the v1 answers nothing without a token of the realm"
     assert json.loads(body)["status"] == 401
 
 
-def test_the_contract_the_console_was_built_against_is_the_one_that_is_served() -> None:
+def test_the_contract_that_is_published_is_the_one_that_is_served() -> None:
     status, body = _get(f"{API_PREFIX}/openapi.json")
     assert status == 200
     served = set(json.loads(body)["paths"])
     kept = set(json.loads((REPO / "services" / "api" / "openapi.json").read_text("utf-8"))["paths"])
     assert kept <= served
-    types = (CONSOLE / "src" / "api" / "schema.d.ts").read_text(encoding="utf-8")
-    assert f'"{API_PREFIX}/findings/{{finding_id}}"' in types, "the console types are generated"
 
 
 # ── 2. the matrix, and nothing by default ────────────────────────────────────

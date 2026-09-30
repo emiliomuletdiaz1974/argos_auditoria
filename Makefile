@@ -23,7 +23,7 @@ help:
 	@echo "make check      lint + typecheck + secrets + all tests (needs make dev)"
 	@echo "make cover      all tests with coverage threshold (needs make dev)"
 	@echo "make check-heavy tests that need make dev-heavy"
-	@echo "make sbom       SBOM of every image and the console, grype and the vulnerability gate"
+	@echo "make sbom       SBOM of every image, grype and the vulnerability gate"
 	@echo "make backup     encrypted backup (restic) of the database, the evidence and the configuration"
 	@echo "make restore-test  restore the last backup in a disposable database and record the result"
 	@echo "make manifest   build images and write dist/release-manifest.json"
@@ -92,7 +92,7 @@ secrets:
 test:
 	uv run pytest -m "not integration"
 
-check: lint typecheck secrets docs-check api-contract console-lint console-test console-types
+check: lint typecheck secrets docs-check api-contract
 	uv run pytest -m "not heavy"
 
 check-heavy:
@@ -111,7 +111,7 @@ build:
 	docker build -f services/verifier/Dockerfile --label org.argos.component=ARG-069 --label org.argos.version=$(VERSION) -t argos-verifier:$(VERSION) .
 	docker build -f services/health/Dockerfile --label org.argos.component=ARG-094 --label org.argos.version=$(VERSION) -t argos-health:$(VERSION) .
 
-# ARG-087: the SBOM of every image and of the console, grype over each, and the gate. It downloads
+# ARG-087: the SBOM of every image, grype over each, and the gate. It downloads
 # the grype database, so it is not part of `make check`.
 sbom: build
 	uv run python tools/sbom.py --tag $(VERSION)
@@ -165,7 +165,8 @@ api-contract:
 api-contract-write:
 	uv run python tools/api_contract.py
 
-# The console (ADR-0013): npm with its lock file, never a CDN.
+# The console of phase 08 (ADR-0013), kept as code: the API does not serve it and neither make check
+# nor the CI runs these targets since 2026-09-29 (desviación ARG-073). npm with its lock file.
 console-install:
 	npm --prefix console ci --no-fund --no-audit
 

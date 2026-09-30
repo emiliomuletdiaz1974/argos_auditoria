@@ -525,8 +525,8 @@ def test_an_undeclared_route_is_a_plain_problem_without_a_stack() -> None:
     assert ok
 
 
-def test_the_console_carries_its_security_headers() -> None:
-    answer = httpx.get(f"{API}/", timeout=10)
+def test_the_api_carries_its_security_headers() -> None:
+    answer = httpx.get(f"{API}/health", timeout=10)
     csp = answer.headers.get("content-security-policy", "")
     checks = {
         "CSP without unsafe-inline": "unsafe-inline" not in csp and "default-src 'self'" in csp,
@@ -535,7 +535,7 @@ def test_the_console_carries_its_security_headers() -> None:
         "Referrer-Policy": bool(answer.headers.get("referrer-policy")),
     }
     for name, ok in checks.items():
-        record("surface", f"console header: {name}", "present", "present" if ok else "missing", ok)
+        record("surface", f"API header: {name}", "present", "present" if ok else "missing", ok)
     assert all(checks.values()), checks
 
 

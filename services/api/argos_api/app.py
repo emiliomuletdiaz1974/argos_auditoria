@@ -116,7 +116,6 @@ def create_app(
     session_revoker: SessionRevoker | None = None,
     webhook_allowed: tuple[str, ...] = (),
     webhook_resolve: Resolver = resolve_host,
-    console: Path | None = None,
     publish_docs: bool = False,
     updates: system.UpdateRequests | None = None,
     support: support.SupportDiagnostics | None = None,
@@ -171,9 +170,9 @@ def create_app(
     async def _same_origin(request: Request, call_next: Callable[[Request], Awaitable[Any]]) -> Any:
         """A mutation a page of another origin sends is refused before it runs (F09-15, SEC-058).
 
-        The console lives on this origin (ADR-0013); browsers add `Origin` to every POST, and an
-        opaque one (`null`) is another origin too. A client without a browser sends no `Origin`
-        and is judged by its token alone.
+        Browsers add `Origin` to every POST, and an opaque one (`null`) is another origin too. A
+        client without a browser sends no `Origin` and is judged by its token alone. A front end
+        on its own origin needs an allow-list here, and CORS, before it can change anything.
         """
         origin = request.headers.get("origin")
         if (
@@ -192,7 +191,7 @@ def create_app(
     async def _security_headers(
         request: Request, call_next: Callable[[Request], Awaitable[Any]]
     ) -> Any:
-        """The console and the API, from this one origin, with no frames and no sniffing (SEC-046).
+        """Every answer of the API, with no frames and no sniffing (SEC-046).
 
         The route map of development loads its page from a CDN, so it keeps its own headers.
         """
@@ -283,32 +282,7 @@ def create_app(
         return app.openapi_schema
 
     app.openapi = contract  # type: ignore[method-assign]
-    if console is not None and (console / "index.html").is_file():
-        _serve_console(app, console)
     return app
-
-
-def _serve_console(app: FastAPI, built: Path) -> None:
-    """The console as static files of this same origin (ADR-0013): no CDN, no second server.
-
-    Its routes live in the browser, so any path that is not the API answers the single page and a
-    reload of `/findings/<id>` works. Under the API prefix nothing is rewritten: an unknown route
-    there is a problem+json, as every other error of the v1.
-    """
-    from fastapi.responses import FileResponse
-    from fastapi.staticfiles import StaticFiles
-
-    page = built / "index.html"
-    app.mount("/assets", StaticFiles(directory=built / "assets"), name="console-assets")
-
-    @app.get("/{path:path}", include_in_schema=False)
-    def console_page(path: str) -> FileResponse:
-        if f"/{path}".startswith(API_PREFIX):
-            raise HTTPException(status.HTTP_404_NOT_FOUND, f"no route /{path}")
-        asked = (built / path).resolve()
-        if path and asked.is_file() and asked.is_relative_to(built.resolve()):
-            return FileResponse(asked)
-        return FileResponse(page)
 
 
 def _graph_router(dsn: str) -> APIRouter:

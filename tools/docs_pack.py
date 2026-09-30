@@ -33,8 +33,10 @@ ROOT = Path(__file__).resolve().parents[1]
 TECH_DIR = Path("docs") / "tecnica"
 PHASE_INTERFACES = re.compile(r"^interfaces-F(\d{2})\.md$")
 REQUIRED_FIELDS = ("id", "kind", "title", "version", "commit", "date", "status", "confidentiality")
-KIND_FIELDS = {"module": ("module", "phases"), "phase": ("phase",)}
-KIND_DIRS = {"module": "modulos", "phase": "fases"}
+# A guide explains how to use what several modules build (the front-end guide, for one): it is
+# packed with the phases it serves.
+KIND_FIELDS = {"module": ("module", "phases"), "phase": ("phase",), "guide": ("phases",)}
+KIND_DIRS = {"module": "modulos", "phase": "fases", "guide": "guias"}
 STATUSES = ("draft", "current", "superseded")
 CONFIDENTIALITY = ("client", "internal")
 FRONT_MATTER = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
@@ -66,7 +68,7 @@ def parse_doc(path: Path) -> TechnicalDoc:
         raise ValueError(f"{path.name}: confidentiality must be one of {CONFIDENTIALITY}")
     if meta["status"] not in STATUSES:
         raise ValueError(f"{path.name}: status must be one of {STATUSES}")
-    if kind == "module":
+    if kind in ("module", "guide"):
         meta["phases"] = [str(p) for p in meta["phases"]]
     else:
         meta["phase"] = str(meta["phase"])
@@ -75,7 +77,7 @@ def parse_doc(path: Path) -> TechnicalDoc:
 
 def load_docs(root: Path = ROOT) -> list[TechnicalDoc]:
     tech = root / TECH_DIR
-    paths = sorted((tech / "modulos").glob("*.md")) + sorted((tech / "fases").glob("*.md"))
+    paths = [path for folder in KIND_DIRS.values() for path in sorted((tech / folder).glob("*.md"))]
     return [parse_doc(path) for path in paths]
 
 
@@ -143,7 +145,8 @@ def select_docs(
         if doc.meta["kind"] == "phase":
             wanted = doc.meta["phase"] in phases
         else:
-            wanted = doc.meta["module"] in modules or bool(set(doc.meta["phases"]) & set(phases))
+            named = doc.meta.get("module") in modules
+            wanted = named or bool(set(doc.meta["phases"]) & set(phases))
         if wanted:
             chosen.append(doc)
     return sorted(chosen, key=lambda d: (d.meta["kind"] != "phase", d.meta["id"]))

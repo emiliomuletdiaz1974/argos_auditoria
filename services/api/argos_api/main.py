@@ -1,10 +1,10 @@
-"""The API process of the appliance: the v1 and the console, from one origin (ADR-0012, ADR-0013).
+"""The API process of the appliance: the v1 (ADR-0012). It serves no page (desviación ARG-073).
 
-This is where everything the routes ask for gets attached: the realm that exchanges the console's
-authorization code, the Temporal client that starts and signals campaigns, the evidence service,
-the AI gateway —reached over HTTP, the only service this API calls (ADR-0012)— and the Vault where
-each webhook keeps its secret. What is not configured is simply not attached, and the route that
-needs it answers 503 with the reason instead of pretending.
+This is where everything the routes ask for gets attached: the realm that exchanges the front
+end's authorization code, the Temporal client that starts and signals campaigns, the evidence
+service, the AI gateway —reached over HTTP, the only service this API calls (ADR-0012)— and the
+Vault where each webhook keeps its secret. What is not configured is simply not attached, and the
+route that needs it answers 503 with the reason instead of pretending.
 
 Usage: uv run python -m argos_api.main
 """
@@ -48,7 +48,6 @@ from argos_support import DiagnosticsStore
 DEV_HOST = "127.0.0.1"
 DEV_PORT = 8000
 CAMPAIGN_QUEUE = "argos-campaigns"
-CONSOLE = Path(os.environ.get("ARGOS_CONSOLE_DIR", "/app/console"))
 
 
 class TemporalCampaigns:
@@ -139,7 +138,6 @@ def build_app(cfg: ArgosConfig) -> Any:
         evidence=evidence,
         assistant=AssistantClient(gateway, tls_dir=cfg.TLS_DIR) if gateway else None,
         webhook_secrets=VaultSecretStore(cfg.VAULT_ADDR, token),
-        console=CONSOLE,
         publish_docs=cfg.ENVIRONMENT is Environment.DEVELOPMENT,
         updates=updates,
         support=diagnostics,

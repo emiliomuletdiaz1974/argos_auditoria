@@ -9,7 +9,6 @@
 """
 
 import asyncio
-from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
 
@@ -179,11 +178,9 @@ EXPECTED = {
 }
 
 
-def test_the_console_and_the_api_carry_the_security_headers(tmp_path: Path) -> None:
-    (tmp_path / "assets").mkdir()
-    (tmp_path / "index.html").write_text("<html></html>", encoding="utf-8")
-    client = TestClient(create_app(cast(JwtValidator, Admin()), console=tmp_path))
-    for path in ("/", "/findings/x", f"{API_PREFIX}/campaigns", "/health"):
+def test_every_answer_of_the_api_carries_the_security_headers() -> None:
+    client = TestClient(create_app(cast(JwtValidator, Admin())))
+    for path in ("/", f"{API_PREFIX}/nothing-here", f"{API_PREFIX}/campaigns", "/health"):
         headers = client.get(path).headers
         for name, value in EXPECTED.items():
             assert headers.get(name) == value, (path, name)
