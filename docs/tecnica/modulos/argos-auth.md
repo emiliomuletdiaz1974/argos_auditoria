@@ -4,9 +4,9 @@ kind: module
 title: Validación de identidades (argos-auth)
 module: argos-auth
 phases: ["01"]
-version: 0.4.0-alpha
-commit: 328609d
-date: 2026-09-28
+version: 0.5.0-alpha
+commit: 5f0964f
+date: 2026-09-30
 status: current
 confidentiality: client
 ---
@@ -52,7 +52,7 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 - **Segundo factor** (F09-07, DP-14):
   - `platform_admin` y `dpo_reviewer` heredan el rol `mfa_required`, y el flujo de navegador del realm (`argos browser`) les pide TOTP después de la contraseña. Si aún no lo tienen, se lo hace configurar.
   - Política TOTP: HMAC-SHA-256, 6 dígitos, 30 s, sin reutilizar un código.
-  - El token lleva `amr` (RFC 8176) con `pwd` y `otp`, gracias a las referencias de cada autenticador y al mapper `amr`. `Identity.amr` lo recoge.
+  - El token lleva `amr` (RFC 8176) con `pwd` y `otp`, gracias a las referencias de cada autenticador y al mapper `amr`. `Identity.amr` lo recoge. Cada referencia lleva `default.reference.maxAge` de 36 000 s, la vida máxima de la sesión. Sin ese valor, Keycloak solo la incluye en el mismo instante en que se ganó: un token renovado o una sesión SSO reutilizada salían con `amr` vacío.
   - Contraseñas: longitud mínima 12, historial de 5, ni el usuario ni el correo.
   - Bloqueo temporal tras 5 fallos (de 60 s a 15 min).
   - En desarrollo, `dpo.test` tiene un secreto TOTP sembrado (`dev-only-…`) que solo existe en el realm de desarrollo. Lo comprueba `tests/integration/test_keycloak_mfa.py`.
@@ -84,3 +84,4 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 | 0.2.0-alpha | 2026-09-23 | `amr` en la identidad y segundo factor TOTP en el realm para los roles que deciden | F09-07 (ARG-072) |
 | 0.3.0-alpha | 2026-09-24 | `Identity.sid`: la sesión del realm del token | F09-32 (SEC-060) |
 | 0.4.0-alpha | 2026-09-28 | Margen de reloj y roles del realm con forma inesperada | QA-34 (QA-009) |
+| 0.5.0-alpha | 2026-09-30 | El realm conserva `amr` en los tokens renovados y en la SSO (`default.reference.maxAge`) | F09-07 (ARG-072) |

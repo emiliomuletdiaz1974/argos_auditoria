@@ -446,25 +446,29 @@
     {
       "alias": "argos-reference-pwd",
       "config": {
-        "default.reference.value": "pwd"
+        "default.reference.value": "pwd",
+        "default.reference.maxAge": "36000"
       }
     },
     {
       "alias": "argos-reference-otp",
       "config": {
-        "default.reference.value": "otp"
+        "default.reference.value": "otp",
+        "default.reference.maxAge": "36000"
       }
     },
     {
       "alias": "argos-reference-pwd-direct",
       "config": {
-        "default.reference.value": "pwd"
+        "default.reference.value": "pwd",
+        "default.reference.maxAge": "36000"
       }
     },
     {
       "alias": "argos-reference-otp-direct",
       "config": {
-        "default.reference.value": "otp"
+        "default.reference.value": "otp",
+        "default.reference.maxAge": "36000"
       }
     },
     {

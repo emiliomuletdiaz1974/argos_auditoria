@@ -10,10 +10,14 @@ realm and nowhere else in the repository.
 import base64
 import hashlib
 import html
+import json
 import re
 import secrets
 import subprocess
+import time
 import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 import httpx
@@ -38,6 +42,8 @@ pytestmark = pytest.mark.integration
 REPO = Path(__file__).resolve().parents[2]
 REDIRECT = "http://127.0.0.1:8000/callback"
 LOCKOUT_USER = "lockout.test"
+# The longest a session of the realm lives: Keycloak's default, which the realm does not change.
+SESSION_MAX_SECONDS = 36000
 
 
 def _forget_failures(username: str) -> None:
@@ -59,6 +65,38 @@ def test_the_dpo_gets_no_token_without_the_second_factor() -> None:
 def test_with_the_totp_code_the_token_says_so() -> None:
     amr = claims(token("dpo.test")).get("amr")
     assert set(amr) == {"pwd", "otp"}
+
+
+def _refresh(refresh_token: str) -> dict[str, object]:
+    form = {
+        "grant_type": "refresh_token",
+        "client_id": "argos-tests",
+        "refresh_token": refresh_token,
+    }
+    request = urllib.request.Request(  # noqa: S310 - the development realm
+        f"{ISSUER}/protocol/openid-connect/token", data=urllib.parse.urlencode(form).encode()
+    )
+    with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310
+        answer: dict[str, object] = json.loads(response.read())
+    return answer
+
+
+def test_a_refreshed_token_keeps_how_the_person_signed_in() -> None:
+    """Without a max age, Keycloak keeps a reference only in the second it was earned: a refreshed
+    token lost `amr`, so the DPO would be asked for the second factor after every refresh, and a
+    sign-in that crossed a second came out with `amr` empty (the flaky test above)."""
+    signed = sign_in("manager.test")
+    time.sleep(2)
+    refreshed = _refresh(str(signed["refresh_token"]))
+    assert claims(str(refreshed["access_token"])).get("amr") == ["pwd"]
+
+
+def test_every_reference_lasts_as_long_as_the_session() -> None:
+    configs = {c["alias"]: c["config"] for c in realm()["authenticatorConfig"]}
+    references = {alias: c for alias, c in configs.items() if "default.reference.value" in c}
+    assert len(references) == 4
+    for alias, config in references.items():
+        assert int(config.get("default.reference.maxAge", 0)) == SESSION_MAX_SECONDS, alias
 
 
 def test_the_campaign_manager_signs_in_with_the_password_alone() -> None:
