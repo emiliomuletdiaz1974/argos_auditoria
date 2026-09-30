@@ -4,9 +4,9 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.42.0-alpha
-commit: 7363e55
-date: 2026-09-28
+version: 0.43.0-alpha
+commit: 7880c2d
+date: 2026-09-29
 status: current
 confidentiality: client
 ---
@@ -15,7 +15,7 @@ confidentiality: client
 
 ## 1. Propósito
 
-Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallazgos, evidencia, credenciales, asistente, aprobaciones y suscripciones. No hay rutas reservadas a la consola; lo que hace la consola lo puede hacer la integración del cliente con el mismo contrato y la misma autorización. Implementa ARG-071 (pliego P-18, P-19, P-20) y aplica el ADR-0012.
+Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallazgos, evidencia, credenciales, asistente, aprobaciones y suscripciones. No hay rutas reservadas al front; lo que hace el front lo puede hacer la integración del cliente con el mismo contrato y la misma autorización. Desde el 2026-09-29 no sirve ninguna página: el front es una aplicación aparte ([guía de integración](../guias/integracion-frontend.md), nota [ARG-073](../../desviaciones/ARG-073.md)). Implementa ARG-071 (pliego P-18, P-19, P-20) y aplica el ADR-0012.
 
 ## 2. Alcance y límites
 
@@ -59,7 +59,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Salud | `GET /health` | Sin token |
 | Recursos vivos | `GET /systems`, `GET /inventory/coverage`, `GET /inventory/nodes/{node_key}`, `GET /inventory/review-queue`, `POST /inventory/review-queue/{node_key}` | Llaman a `argos_inventory`; ningún router escribe SQL propio |
 | Campañas | `POST /campaigns` (idempotente), `GET /campaigns`, `GET /campaigns/{id}`, `POST /campaigns/{id}/launch`, `GET /campaigns/{id}/plan`, `GET /campaigns/{id}/progress`, `GET /campaigns/{id}/gates`, `POST /campaigns/{id}/gates/{gate}/approve` | Llaman a `argos_challenges.store`; el plan previo es la lista literal de unidades y lo no verificable, y existe desde que la campaña está preparada (`409` antes) |
-| Hallazgos | `GET /findings` (peor primero, filtros `status`, `severity`, `campaign_id`), `GET /findings/{id}`, `POST /findings/{id}/transition`, `POST /findings/{id}/verify` | El detalle trae el porqué completo —veredicto con sus valores, declaración muestral, asiento del diario de la consulta y la obligación con su artículo—, su historia en el diario (`history`) y `allowed_transitions`, para que la consola no duplique la máquina de estados. `closed_compliant` y `reopened` no se alcanzan por transición: solo `verify`, que lanza la reejecución de ARG-049 |
+| Hallazgos | `GET /findings` (peor primero, filtros `status`, `severity`, `campaign_id`), `GET /findings/{id}`, `POST /findings/{id}/transition`, `POST /findings/{id}/verify` | El detalle trae el porqué completo —veredicto con sus valores, declaración muestral, asiento del diario de la consulta y la obligación con su artículo—, su historia en el diario (`history`) y `allowed_transitions`, para que el front no duplique la máquina de estados. `closed_compliant` y `reopened` no se alcanzan por transición: solo `verify`, que lanza la reejecución de ARG-049 |
 | Evidencia | `GET /evidence/{id}/chain`, `/artifacts`, `/artifacts/{verdict_id}`, `/journal/{seq}`, `/dossier.json`, `/dossier.pdf`, `/bundle` | La cadena con su estado real (firma con su marca `non_production`, sello en cola o sellado con su política), cada artefacto con su prueba de inclusión contra la raíz firmada, el asiento del diario que cita un veredicto de la campaña (solo esos: no es una ventana al diario entero) y el expediente en sus bytes exactos (cabecera `X-Dossier-Sha256`). Cada descarga del expediente o del paquete deja un asiento `evidence.download` con quién |
 | Credenciales | `GET /credentials/preview`, `POST /credentials`, `GET /credentials/{id}`, `POST /credentials/{id}/revoke` | Emitir es un acto explícito de `dpo_reviewer`: la vista previa muestra el sujeto exacto y `withheld`, lo que se queda en el expediente, y la emisión nombra por su hash el expediente que se vio; si cambió entremedias, `409`. Revocar exige motivo |
 | Asistente | `POST /assistant/ask` | Reenvía la pregunta al gateway de IA **por HTTP** —el único servicio al que llama la API (ADR-0012)— y devuelve respuesta, citas, herramientas consultadas, `complete`, `refused` y `fragments` (los fragmentos normativos recuperados, para desplegar las citas o juzgar un rehúso); siempre con `assisted: true` y el aviso de que no es un veredicto. Sin modelo local, `503` con el motivo |
@@ -81,7 +81,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 
 ## 5. Configuración
 
-El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORAL_ADDRESS`, `ARGOS_VAULT_ADDR`/`ARGOS_VAULT_TOKEN`, `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, la configuración de evidencia (`ARGOS_EVIDENCE_*`), `ARGOS_AI_GATEWAY_URL` (el asistente; sin ella, la ruta responde 503) y `ARGOS_CONSOLE_DIR` (los estáticos de la consola, `/app/console` en la imagen). `ARGOS_API_BIND` existe solo para el contenedor: docker publica el puerto en `127.0.0.1`. Desde F09-05, `ARGOS_DATABASE_URL` no lleva usuario (`postgresql://postgres:5432/argos?service=argos`), y `ARGOS_DATABASE_VAULT_ROLE` (`svc-api` y `svc-webhook`) con `ARGOS_VAULT_APPROLE_DIR` dicen de dónde sale la credencial. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-api`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión.
+El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORAL_ADDRESS`, `ARGOS_VAULT_ADDR`/`ARGOS_VAULT_TOKEN`, `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, la configuración de evidencia (`ARGOS_EVIDENCE_*`), `ARGOS_AI_GATEWAY_URL` (el asistente; sin ella, la ruta responde 503). `ARGOS_CONSOLE_DIR` ya no se lee (ARG-073). `ARGOS_API_BIND` existe solo para el contenedor: docker publica el puerto en `127.0.0.1`. Desde F09-05, `ARGOS_DATABASE_URL` no lleva usuario (`postgresql://postgres:5432/argos?service=argos`), y `ARGOS_DATABASE_VAULT_ROLE` (`svc-api` y `svc-webhook`) con `ARGOS_VAULT_APPROLE_DIR` dicen de dónde sale la credencial. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-api`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión.
 
 ## 6. Seguridad y tratamiento de datos
 
@@ -94,7 +94,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 - **El rechazo de los guardarraíles se distingue (QA-070):** `POST /assistant/ask` responde `422` con el motivo (`veredicto_no_citado`, `escritura_sobre_objetivo`) en vez de `502`; la pregunta ya no admite `campaign_id`, que se ignoraba, ni campos desconocidos.
 - **Aceptar lo que se vio (QA-041):** `POST /inventory/review-queue/{node_key}` con `accept` admite la categoría que vio el revisor; si la propuesta cambió entretanto, responde `409`.
 - **Sesiones cerradas** (F09-32, SEC-060): al cerrar sesión (`POST /api/v1/auth/logout`), si el realm aceptó revocar ese refresco, la API apunta su sesión (`sid`) en `argos.closed_sessions` durante 15 minutos, más que cualquier token de acceso. El guardián de cada réplica rechaza con `401` un token de una sesión cerrada y lo registra (`auth.session_closed`). Cada réplica guarda las respuestas 5 segundos. Una cookie que el realm rechaza no cierra nada: nadie puede cerrar la sesión de otra persona con un `sid` copiado.
-- **Mismo origen en las mutaciones** (F09-15, SEC-058): un `POST`, `PUT`, `PATCH` o `DELETE` con una cabecera `Origin` de otro origen (o `null`) recibe `403` problem+json antes de llegar a la ruta, y queda en el registro de seguridad (`http.origin_refused`). La consola vive en el mismo origen (ADR-0013); un cliente sin navegador no envía `Origin` y se juzga solo por su token.
+- **Mismo origen en las mutaciones** (F09-15, SEC-058): un `POST`, `PUT`, `PATCH` o `DELETE` con una cabecera `Origin` de otro origen (o `null`) recibe `403` problem+json antes de llegar a la ruta, y queda en el registro de seguridad (`http.origin_refused`). Un cliente sin navegador no envía `Origin` y se juzga solo por su token. **Pendiente:** un front de otro origen necesita una lista de orígenes permitidos y CORS; hoy recibe `403` en cada mutación ([guía](../guias/integracion-frontend.md), §3).
 - **Esclusa** (F09-13, ARG-090): `POST /api/v1/airgap/imports` y `POST /api/v1/airgap/exports` (`airgap.import` y `airgap.export`, solo `platform_admin` con segundo factor). La API construye la esclusa (`argos-airgap`) con los importadores y exportadores de los servicios que tiene configurados; un tipo de exportación fuera de la lista cerrada responde `403` y queda registrado. Desde la migración 0038, `svc_api` puede insertar las cuádruplas de una versión de contenido que `load_bundle` ya verificó.
 - **Operación** (F10-07, ARG-092/099):
   - `GET /api/v1/operations/status` devuelve los ocho semáforos del panel de operación, preguntados a Prometheus (`ARGOS_PROMETHEUS_URL`) en el momento, y las alertas activas, cada una con su runbook. Un semáforo sin medida sale `unknown`, nunca verde;
@@ -130,7 +130,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 - **Emisión de credenciales:** pasa de `campaign_manager` a `dpo_reviewer` (F08-07): es el DPO quien firma lo que se afirma ante terceros, después de leer la vista previa.
 - **Separación de deberes:** quien planifica y lanza (`campaign_manager`) no aprueba compuertas ni mueve hallazgos; `platform_admin` opera la plataforma (integraciones, revocación) y no aprueba ni juzga; `read_only_auditor` solo tiene permisos `.read`. Aceptar un riesgo es de `dpo_reviewer` y exige justificación escrita. El doble control del muestreo sigue siendo el de ARG-047, en el motor de campañas.
 - Los cuerpos se validan con Pydantic y un cuerpo inválido sale como `422` en formato problema, sin filtrar trazas.
-- Decisiones aplicables: ADR-0012 (API única), ADR-0013 (consola), nota de desviación ARG-071-080 (identificadores en inglés y sin `INSERT` propios).
+- Decisiones aplicables: ADR-0012 (API única), ADR-0013 (consola; su punto 5 lo sustituye la nota ARG-073), nota de desviación ARG-071-080 (identificadores en inglés y sin `INSERT` propios).
 - **Entradas acotadas** (auditoría del 2026-09-18, trasladada en F09-17): identificadores de ruta tipados como UUID, textos libres de 2000 caracteres como máximo, `scope` de campaña de 16 KiB y nombre de compuerta `^[a-z_]{1,32}$`; lo que no cumple responde 422 sin tocar la base.
 - **Errores de la base sin detalle:** un `psycopg.Error` responde 503 problem+json («the store is not available») y solo su tipo queda en el log; el mensaje del driver nombra host, SQL o restricción.
 - **Mapa de rutas solo en desarrollo:** `/api/v1/docs` y `/api/v1/openapi.json` se sirven con `ARGOS_ENVIRONMENT=development`; el contrato versionado se sigue generando de `openapi()`.
@@ -138,7 +138,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 - **Señal a campañas sin workflow propio** (F09-23): `TemporalCampaigns.signal` ignora que no exista `campaign-<id>`, porque una campaña de subsanación consulta sus compuertas por su cuenta.
 - **Webhooks sin destinos internos** (F09-30, SEC-031): `webhooks.destination.check_destination` exige `https`, rechaza los nombres de los servicios del appliance y `localhost`, resuelve el nombre y rechaza cualquier dirección que no sea pública (loopback, privada, link-local, reservada). Se comprueba al suscribir (422) y otra vez antes de cada entrega (queda `failed` con `destination_refused`, sin enviar nada). La excepción para el ITSM del cliente en su red privada la escribe quien instala, en `ARGOS_WEBHOOK_ALLOWED_TARGETS` (nombres o redes, separados por comas).
 - **Sesión que se cierra** (F09-30, SEC-041): `POST /auth/logout` revoca el refresco en Keycloak y borra la cookie. La cookie de refresco es de sesión (sin `Max-Age`: muere con el navegador) y su ruta es `/api/v1/auth`, para que la lean el refresco y el cierre. Un refresco que el realm rechaza responde 401 problem+json, y una respuesta del realm que no es JSON (un proxy que contesta HTML) es un rechazo, no un error 500.
-- **Cabeceras de seguridad** (F09-30, SEC-046): toda respuesta, de la consola y de la API, lleva `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff` y `Referrer-Policy: same-origin`. Solo la página de `/api/v1/docs` de desarrollo, que carga de una CDN, queda fuera.
+- **Cabeceras de seguridad** (F09-30, SEC-046): toda respuesta de la API lleva `Content-Security-Policy: default-src 'self'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff` y `Referrer-Policy: same-origin`. Solo la página de `/api/v1/docs` de desarrollo, que carga de una CDN, queda fuera.
 - **Límites de texto** (F09-30, SEC-045): `Revocation.reason` y `ReviewDecision.note` hasta 2000 caracteres, `Exercise.right` hasta 40 y la cabecera `Idempotency-Key` de 1 a 128 letras, cifras, `-` o `_` (F09-26, SEC-029: fuera de ese alfabeto, `400` sin ejecutar nada).
 - **Quién pregunta al asistente** (F09-29, SEC-043): `AssistantClient.ask(question, person)` envía al gateway el actor autenticado (`user:<sub>`), y la cuota del asistente se cuenta por persona.
 - **Fechas del cliente en el ejercicio de un derecho** (F09-27, SEC-014): `POST /synthetic/{id}/confirm-exercise` exige `requested_at` y `answered_at` con zona horaria. El plazo se mide entre ambas, nunca con la hora de la petición; unas fechas futuras o desordenadas responden 409.
@@ -146,7 +146,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 
 ## 7. Operación
 
-Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero de bloqueo y la copia junto a la API: un origen, sin CDN, como exige un equipo aislado. `make dev` levanta el servicio `api` en `127.0.0.1:8000` —con healthcheck sobre `/health`— y `webhook-worker`, que entrega los webhooks (cola `argos-webhooks`) y escucha el bus con un durable por asunto. El servicio `api` está en las redes `default`, `ai` (el gateway, el único al que llama) y `evidence`; el worker de campañas no está en `ai`.
+La imagen (`services/api/Dockerfile`) solo lleva la API: desde el 2026-09-29 no construye ni sirve la consola (ARG-073). `make dev` levanta el servicio `api` en `127.0.0.1:8000` —con healthcheck sobre `/health`— y `webhook-worker`, que entrega los webhooks (cola `argos-webhooks`) y escucha el bus con un durable por asunto. El servicio `api` está en las redes `default`, `ai` (el gateway, el único al que llama) y `evidence`; el worker de campañas no está en `ai`.
 
 ## 8. Verificación
 
@@ -221,3 +221,4 @@ Una sola imagen (`services/api/Dockerfile`) construye la consola con su fichero 
 | 0.40.0-alpha | 2026-09-28 | `/assistant/ask`: 422 del gateway sin traducir y pregunta sin campos ignorados (contrato v1) | QA-30 (QA-070) |
 | 0.41.0-alpha | 2026-09-28 | Idempotencia con ficheros, errores reales de Temporal, cursores ilegibles y nota del DPO | QA-31 (QA-057, 063, 065, 067) |
 | 0.42.0-alpha | 2026-09-28 | Capacidad sin carreras, campañas que cuentan desde el lanzamiento y receptor de alertas robusto | QA-32 (QA-006, 060, 061, 066) |
+| 0.43.0-alpha | 2026-09-29 | Deja de construir y servir la consola: lo que no es ruta de la API responde 404 problem+json; `create_app` ya no recibe `console` | ARG-073 (desviación) |

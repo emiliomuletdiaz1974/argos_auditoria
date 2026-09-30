@@ -1,6 +1,6 @@
 # ADR-0013 · La consola: herramientas, pruebas y cómo se sirve
 
-- **Estado:** Aceptado
+- **Estado:** Aceptado; el punto 5 (la consola se sirve desde la API) y las consecuencias sobre `make check` y el CI quedan sustituidos por la nota de desviación [ARG-073](../desviaciones/ARG-073.md) (2026-09-29)
 - **Fecha:** 2026-09-20
 - **Decide:** el usuario (tarea F08-00) · **Aprobado:** 2026-09-20
 - **Contexto:** Fase 08 · Consola y APIs (ARG-073…ARG-080) · Pliego P-03 y P-18 · Plan Director §9.3

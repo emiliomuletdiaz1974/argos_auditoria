@@ -67,5 +67,6 @@ Leyenda del **Quién**: **U** = decisión nuestra en una tarea DECISIÓN o por i
 | DP-15 | varias | U | Las tareas que esperan hardware, accesos o contratos son MANUAL y no bloquean el cierre de su fase | [→](03-plan-y-proceso.md#dp-15) |
 | DP-16 | 2026-09-24 | U | Fase 10: sin recolector por el socket de Docker, tallas del documento y autoverificación como puerta local | [→](03-plan-y-proceso.md#dp-16) |
 | DP-17 | 2026-09-28 | U | Revisión de calidad de F01–F10: 89 hallazgos verificados y 16 tareas de corrección con TDD | [→](03-plan-y-proceso.md#dp-17) |
+| DP-18 | 2026-09-29 | U | La API deja de servir la consola: el front es otra aplicación, con su guía de integración; la consola queda como código | [→](03-plan-y-proceso.md#dp-18) |
 
 Las decisiones técnicas tomadas dentro de las tareas (unas 90) están agrupadas por fase en [03 · Plan y proceso](03-plan-y-proceso.md#decisiones-técnicas-dentro-de-las-tareas). Las 31 notas de desviación, en [02 · Desviaciones](02-desviaciones.md).

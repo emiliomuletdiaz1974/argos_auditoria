@@ -162,6 +162,18 @@ La fuente de todas es la bitácora del plan (`.scratch/plan/BITACORA.md`), que n
 - **Por qué:** el programa no puede quedarse parado por dependencias externas. Cada informe de cierre las declara como pendientes y ningún documento las presenta como hechas.
 - **Excepción:** la Fase 06 **no tiene tag**, porque F06-99 depende de F06-05 (pesos del modelo, MANUAL). Ver [revisión](04-revision-2026-09-23.md).
 
+### DP-18
+**La API deja de servir la consola** · 2026-09-29
+
+- **Decidimos:**
+  - que la API no construya ni sirva la consola de la Fase 08: el front lo construye otro equipo, como aplicación aparte y en otro origen (nota [ARG-073](../desviaciones/ARG-073.md));
+  - dejar el código en `console/` como referencia, fuera de `make check`, del CI y del SBOM;
+  - dar al equipo del front una guía en el repositorio, `docs/tecnica/guias/integracion-frontend.md`, empaquetable con `tools/docs_pack.py` (tipo de documento `guide` nuevo);
+  - tratar en una tarea aparte que la API admita un front de otro origen.
+- **Por qué:** mantener dos cadenas de herramientas y servir una interfaz que no es la del producto no aporta nada. La seguridad de la API frente a otros orígenes cambia SEC-058 y la sesión, así que no va mezclada con la retirada.
+- **Qué comprobamos antes:** qué dependía de la consola (imagen de la API, `main.py`, `make check`, CI, SBOM, `vex.yaml`, tests del contenedor, de la Fase 08 y de la batería de accesos). También comprobamos que, sin consola, lo que no es ruta de la API responde 404 problem+json con las cabeceras de SEC-046. Al revisar la sesión vimos que la API rechaza hoy cualquier front de otro origen: `_same_origin` devuelve 403, no hay CORS y la cookie de refresco es `SameSite=Strict`.
+- **Descartamos:** borrar `console/` (el usuario prefiere conservarla) y resolver CORS en este mismo cambio.
+
 ### DP-17
 **Revisión de calidad de F01–F10 (QA-01)** · 2026-09-28
 

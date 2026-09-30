@@ -3,6 +3,7 @@
 Documentación por módulo y por fase cerrada, preparada para entregarse a clientes. Cada documento lleva una cabecera con su versión, el commit que lo deja al día y su confidencialidad (`client` o `internal`).
 
 - **Plantillas:** [módulo](plantillas/modulo.md) · [cierre de fase](plantillas/cierre-fase.md)
+- **Tipos de documento:** módulo (`modulos/`), cierre de fase (`fases/`) y guía (`guias/`); las guías se empaquetan con las fases que sirven
 - **Comprobar que no falta nada:** `make docs-check`
 - **Paquete para un cliente** (Markdown, PDF, índice y manifiesto con SHA-256 en `dist/documentacion/`):
   `uv run python tools/docs_pack.py --phase 03 --label <cliente>`, o `--module <paquete>`, o `--all`; `--include-internal` solo con autorización.
@@ -20,6 +21,12 @@ Documentación por módulo y por fase cerrada, preparada para entregarse a clien
 | 08 · Consola y APIs | [F08-consola-apis.md](fases/F08-consola-apis.md) | Cerrada (`fase-08`); falta la prueba con un usuario de negocio (F08-98) y el asistente espera al modelo local (F06-05) |
 | 09 · Seguridad de plataforma | [F09-seguridad.md](fases/F09-seguridad.md) | Cerrada (`fase-09`) en el entorno de desarrollo; imagen, TPM y k3s esperan el hardware (F09-90…92) y la entrega del dossier es F09-97 |
 | 10 · Operación y despliegue | [F10-operacion.md](fases/F10-operacion.md) | Cerrada (`fase-10`) en el entorno de desarrollo; instalación, sala y alta disponibilidad reales esperan el hardware (F10-90…92), y la v1.0 es F10-97 |
+
+## Guías
+
+| Guía | Documento | Fases |
+|---|---|---|
+| Integración del front end con la API v1 | [integracion-frontend.md](guias/integracion-frontend.md) | 08 (borrador: falta que la API admita otro origen) |
 
 ## Módulos
 

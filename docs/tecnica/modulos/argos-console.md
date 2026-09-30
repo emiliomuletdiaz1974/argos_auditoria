@@ -4,9 +4,9 @@ kind: module
 title: Consola de ARGOS (argos-console)
 module: argos-console
 phases: ["08"]
-version: 0.18.1-alpha
-commit: 7363e55
-date: 2026-09-28
+version: 0.19.0-alpha
+commit: 7880c2d
+date: 2026-09-29
 status: current
 confidentiality: client
 ---
@@ -15,7 +15,9 @@ confidentiality: client
 
 ## 1. Propósito
 
-Es la interfaz con la que el DPO, el responsable de campañas y el auditor trabajan con ARGOS. Habla solo con la API única v1 —no tiene rutas propias— y la sirve el propio appliance, sin CDN (pliego P-03). Implementa ARG-073 (sesión) y ARG-080 (sistema de diseño) según el ADR-0013.
+> **Desde el 2026-09-29 la API no sirve esta consola** (nota de desviación [ARG-073](../../desviaciones/ARG-073.md)). El front de ARGOS lo construye otro equipo como aplicación aparte, con la [guía de integración](../guias/integracion-frontend.md). El código sigue en `console/` como referencia, fuera de `make check`, del CI y del SBOM, y sus objetivos `console-*` del Makefile se pueden ejecutar a mano.
+
+Es la interfaz con la que el DPO, el responsable de campañas y el auditor trabajaban con ARGOS en la Fase 08. Habla solo con la API única v1 —no tiene rutas propias—. Implementa ARG-073 (sesión) y ARG-080 (sistema de diseño) según el ADR-0013.
 
 ## 2. Alcance y límites
 
@@ -133,3 +135,4 @@ En desarrollo: `make console-install` y `npm --prefix console run dev` (Vite hac
 | 0.17.0-alpha | 2026-09-28 | «Confirmar» envía la categoría propuesta que se mostró | QA-27 (QA-041) |
 | 0.18.0-alpha | 2026-09-28 | Citas del estado sin fragmento normativo y mensaje propio para el 422 | QA-30 (QA-069, 070) |
 | 0.18.1-alpha | 2026-09-28 | El visor de runbooks trata como texto lo que no es título | QA-32 (QA-062) |
+| 0.19.0-alpha | 2026-09-29 | La API deja de construirla y servirla; sale de `make check`, del CI y del SBOM; el código queda como referencia | ARG-073 (desviación) |

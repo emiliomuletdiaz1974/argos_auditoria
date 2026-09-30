@@ -71,6 +71,7 @@ Cada ficha resume en una línea lo que pedía el documento, lo que hicimos en su
 
 | Nota | Documento pedía | Hicimos | Por qué | Qué comprobamos | Estado |
 |---|---|---|---|---|---|
+| ARG-073 | La consola servida desde la API única, en `make check` y en el CI (ADR-0013, punto 5) | La API no construye ni sirve la consola; sale de `make check`, del CI y del SBOM; el código queda en `console/`; guía de integración para el front | El front lo construye otro equipo, en otro origen | Todo lo que no es ruta de la API responde 404 problem+json con sus cabeceras; los tests del contenedor pasan tras reconstruirlo. Hallamos que la API rechaza hoy un front de otro origen (`_same_origin`, sin CORS, cookie `SameSite=Strict`) | Aprobada (usuario, 2026-09-29) |
 | ARG-071-080 | Roles y estados en castellano; `INSERT` propio en la API; «sello cualificado» y «TPM» en la interfaz; `.jsx` | Identificadores en inglés con los roles del realm; la API llama a las funciones del dominio; la evidencia se muestra como es, marca `non_production` incluida; `.tsx` | ADR-0005; una sola verdad por tabla; la firma aún no está en TPM y el sello no es cualificado | Roles del realm y estados ya construidos | Aprobada (F08-00) |
 
 ## Fase 09 · Seguridad de plataforma
