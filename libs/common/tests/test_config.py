@@ -191,3 +191,53 @@ def test_a_password_in_the_url_and_in_a_file_is_ambiguous(
         load_config()
     assert "from-file" not in str(refused.value.details)
     assert "inline" not in str(refused.value.details)
+
+
+# ---------- C-03 · the origins of the front end ----------
+
+
+def test_without_front_end_origins_the_list_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ARGOS_DATABASE_URL", DSN)
+    assert load_config().frontend_origins() == ()
+
+
+def test_front_end_origins_are_read_and_normalised(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ARGOS_DATABASE_URL", DSN)
+    monkeypatch.setenv(
+        "ARGOS_FRONTEND_ORIGINS", " https://App.Hospital.example/ , http://127.0.0.1:5173"
+    )
+    assert load_config().frontend_origins() == (
+        "https://app.hospital.example",
+        "http://127.0.0.1:5173",
+    )
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "*",
+        "null",
+        "https://app.example/path",
+        "https://app.example?x=1",
+        "https://user@app.example",
+        "ftp://app.example",
+        "app.example",
+        "http://app.example",  # plain http only for this machine
+    ],
+)
+def test_a_front_end_origin_that_is_not_exact_refuses_to_start(
+    monkeypatch: pytest.MonkeyPatch, origin: str
+) -> None:
+    monkeypatch.setenv("ARGOS_DATABASE_URL", DSN)
+    monkeypatch.setenv("ARGOS_FRONTEND_ORIGINS", origin)
+    with pytest.raises(ConfigurationError) as refused:
+        load_config()
+    assert "FRONTEND_ORIGINS" in str(refused.value.details)
+    assert origin not in str(refused.value.details), "the error never repeats the value"
+
+
+def test_a_local_http_front_end_is_refused_in_production(monkeypatch: pytest.MonkeyPatch) -> None:
+    _production(monkeypatch, ARGOS_FRONTEND_ORIGINS="http://127.0.0.1:5173")
+    with pytest.raises(ConfigurationError) as refused:
+        load_config()
+    assert "FRONTEND_ORIGINS" in str(refused.value.details)

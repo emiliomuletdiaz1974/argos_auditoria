@@ -134,6 +134,7 @@ def build_app(cfg: ArgosConfig) -> Any:
         code_exchanger=realm.exchange,
         session_revoker=realm.logout,
         webhook_allowed=allowed_targets(cfg),
+        frontend_origins=cfg.frontend_origins(),
         campaign_runner=TemporalCampaigns(cfg.TEMPORAL_ADDRESS),
         evidence=evidence,
         assistant=AssistantClient(gateway, tls_dir=cfg.TLS_DIR) if gateway else None,

@@ -14,6 +14,7 @@ from urllib.parse import urlsplit
 import psycopg
 from fastapi import APIRouter, Depends, FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from fastapi.responses import PlainTextResponse
 from starlette.exceptions import HTTPException
@@ -22,7 +23,7 @@ from argos_airgap import Gate
 from argos_api import API_PREFIX, API_VERSION, SERVICE_NAME
 from argos_api.assistant import AssistantClient
 from argos_api.authz import require_perm
-from argos_api.core import MUTATIONS, IdempotencyStore
+from argos_api.core import IDEMPOTENCY_HEADER, MUTATIONS, IdempotencyStore
 from argos_api.http import ERRORS, PROBLEM_MEDIA_TYPE, ProblemResponse, problem_response
 from argos_api.operations import Alerts, Metrics, PostgresAlerts
 from argos_api.routers import (
@@ -43,7 +44,7 @@ from argos_api.routers import (
     systems,
     webhooks,
 )
-from argos_api.routers.session import CodeExchanger, SessionRevoker
+from argos_api.routers.session import SESSION_HEADER, CodeExchanger, SessionRevoker
 from argos_api.runner import CampaignRunner
 from argos_api.security_events import backup_metrics, log_metrics, security_event, security_metrics
 from argos_api.sessions import ClosedSessions, SessionClosures
@@ -115,6 +116,7 @@ def create_app(
     code_exchanger: CodeExchanger | None = None,
     session_revoker: SessionRevoker | None = None,
     webhook_allowed: tuple[str, ...] = (),
+    frontend_origins: tuple[str, ...] = (),
     webhook_resolve: Resolver = resolve_host,
     publish_docs: bool = False,
     updates: system.UpdateRequests | None = None,
@@ -164,6 +166,7 @@ def create_app(
     app.state.code_exchanger = code_exchanger
     app.state.session_revoker = session_revoker
     app.state.webhook_allowed = webhook_allowed
+    app.state.frontend_origins = frontend_origins
     app.state.webhook_resolve = webhook_resolve
 
     @app.middleware("http")
@@ -171,14 +174,16 @@ def create_app(
         """A mutation a page of another origin sends is refused before it runs (F09-15, SEC-058).
 
         Browsers add `Origin` to every POST, and an opaque one (`null`) is another origin too. A
-        client without a browser sends no `Origin` and is judged by its token alone. A front end
-        on its own origin needs an allow-list here, and CORS, before it can change anything.
+        client without a browser sends no `Origin` and is judged by its token alone. The front end
+        lives on its own origin (C-03): only the origins the installer listed get through, compared
+        whole, never as a prefix.
         """
         origin = request.headers.get("origin")
         if (
             origin is not None
             and request.method in MUTATIONS
             and urlsplit(origin).netloc != request.headers.get("host", "")
+            and origin.lower().rstrip("/") not in frontend_origins
         ):
             detail = {"origin": origin[:100]}
             security_event(request, "http.origin_refused", "anonymous", "refused", detail)
@@ -199,6 +204,20 @@ def create_app(
         if not (publish_docs and request.url.path == f"{API_PREFIX}/docs"):
             response.headers.update(SECURITY_HEADERS)
         return response
+
+    if frontend_origins:
+        # Added last, so it wraps everything: a preflight is answered before any guard runs, and
+        # every answer to a listed origin carries its grant. The step-up challenge (RFC 9470)
+        # travels in WWW-Authenticate, so the front end has to be able to read it.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list(frontend_origins),
+            allow_credentials=True,
+            allow_methods=["GET", "POST"],
+            allow_headers=["Authorization", "Content-Type", IDEMPOTENCY_HEADER, SESSION_HEADER],
+            expose_headers=["WWW-Authenticate", "Content-Disposition"],
+            max_age=600,
+        )
 
     app.state.idempotency = IdempotencyStore(dsn) if dsn else None
     app.state.journal = PostgresJournal(dsn) if dsn else None

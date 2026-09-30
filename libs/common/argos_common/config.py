@@ -34,6 +34,10 @@ class ApplianceSize(StrEnum):
     L = "L"
 
 
+def _origin(raw: str) -> str:
+    return raw.strip().lower().rstrip("/")
+
+
 def _is_local(host: str | None) -> bool:
     """Whether a host is this machine: by its name or its address, not by a substring of the URL
     (`pg.localhost-cluster.example` is not local; quality review QA-010)."""
@@ -114,6 +118,35 @@ class ArgosConfig(BaseSettings):
     OPA_TOKEN: SecretStr | None = None  # bearer token OPA accepts for evaluating argos.* packages
     VAULT_ADDR: str = "http://127.0.0.1:8200"
     VAULT_TOKEN: SecretStr | None = None  # services that open connectors: svc-connector-sdk policy
+    # The front end lives on its own origin (C-03): the exact origins, comma-separated, that may
+    # change anything from a browser and that CORS answers. Empty: no browser page but the API's.
+    FRONTEND_ORIGINS: str = ""
+
+    def frontend_origins(self) -> tuple[str, ...]:
+        """The listed origins, lower case and without a trailing slash."""
+        return tuple(_origin(o) for o in self.FRONTEND_ORIGINS.split(",") if o.strip())
+
+    @model_validator(mode="after")
+    def _exact_frontend_origins(self) -> Self:
+        for raw in (o for o in self.FRONTEND_ORIGINS.split(",") if o.strip()):
+            parts = urlsplit(_origin(raw))
+            exact = (
+                parts.scheme in ("https", "http")
+                and parts.hostname is not None
+                and not parts.username
+                and parts.path == ""
+                and not parts.query
+                and not parts.fragment
+                and "*" not in parts.netloc
+            )
+            if not exact:
+                # The value is not repeated: a wrong origin may carry what should not be logged.
+                raise ValueError("FRONTEND_ORIGINS takes exact origins: scheme://host[:port]")
+            if parts.scheme == "http" and (
+                not _is_local(parts.hostname) or self.ENVIRONMENT is Environment.PRODUCTION
+            ):
+                raise ValueError("FRONTEND_ORIGINS must use https (plain http only for localhost)")
+        return self
 
     @model_validator(mode="after")
     def _database_password(self) -> Self:

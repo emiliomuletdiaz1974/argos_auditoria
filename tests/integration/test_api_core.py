@@ -20,6 +20,7 @@ from argos_api import API_PREFIX
 from argos_api.app import AUTHENTICATED, create_app
 from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
+from argos_api.routers.session import SESSION_HEADER
 from argos_auth import Identity, JwtValidator
 
 pytestmark = pytest.mark.integration
@@ -175,7 +176,7 @@ def test_the_session_is_refreshed_from_the_cookie_and_never_from_a_header(migrat
         return {"access_token": "a-fresh-one", "expires_in": 300, "refresh_token": "the-next-one"}
 
     app = create_app(_validator("dpo_reviewer"), dsn=migrated_db, refresher=refresher)
-    client = TestClient(app)
+    client = TestClient(app, headers={SESSION_HEADER: "1"})
 
     nothing = client.post(f"{API_PREFIX}/auth/refresh")
     assert nothing.status_code == 401

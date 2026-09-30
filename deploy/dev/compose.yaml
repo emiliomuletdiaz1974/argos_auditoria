@@ -350,6 +350,8 @@ services:
               "./alertmanager/webhook-token:/run/secrets/alertmanager-token:ro"]
     command: ["/app/.venv/bin/python", "-m", "argos_api.main"]
     environment: &api_env
+      # C-03: the front end of development, on its own origin (the realm already takes it back).
+      ARGOS_FRONTEND_ORIGINS: http://127.0.0.1:5173
       ARGOS_DATABASE_URL: postgresql://postgres:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
       ARGOS_DATABASE_VAULT_ROLE: svc-api
       ARGOS_VAULT_APPROLE_DIR: /run/secrets/approle

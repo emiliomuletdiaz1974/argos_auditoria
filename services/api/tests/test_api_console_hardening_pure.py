@@ -19,6 +19,7 @@ from fastapi.testclient import TestClient
 from argos_api import API_PREFIX
 from argos_api.app import create_app
 from argos_api.keycloak import Keycloak
+from argos_api.routers.session import SESSION_HEADER
 from argos_api.webhooks.destination import DestinationRefusedError, check_destination
 from argos_auth import Identity, JwtValidator
 
@@ -115,6 +116,7 @@ def _session_client(revoked: list[str], refuse: bool = False) -> TestClient:
     return TestClient(
         create_app(code_exchanger=exchange, refresher=refresh, session_revoker=revoke),
         base_url="https://testserver",
+        headers={SESSION_HEADER: "1"},
     )
 
 

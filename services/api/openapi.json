@@ -2,7 +2,7 @@
   "components": {
     "schemas": {
       "Authorization": {
-        "description": "What the console brings back from Keycloak: the code and the verifier it kept.",
+        "description": "What the front end brings back from Keycloak: the code and the verifier it kept.",
         "properties": {
           "code": {
             "maxLength": 4096,
@@ -1009,7 +1009,7 @@
             "description": "not configured yet"
           }
         },
-        "summary": "Close the console session: revoke the refresh token and delete its cookie",
+        "summary": "Close the session: revoke the refresh token and delete its cookie",
         "tags": [
           "auth"
         ]
@@ -1177,7 +1177,7 @@
             "description": "not configured yet"
           }
         },
-        "summary": "Open the console session from an authorization code (PKCE)",
+        "summary": "Open the session from an authorization code (PKCE)",
         "tags": [
           "auth"
         ]

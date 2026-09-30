@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 
 from argos_api import API_PREFIX
 from argos_api.app import create_app
+from argos_api.routers.session import SESSION_HEADER
 from argos_api.sessions import ClosedSessions, sid_of
 from argos_auth import Identity, JwtValidator
 
@@ -56,7 +57,7 @@ def _client(store: Any, revoked: list[str], accept: bool = True) -> TestClient:
         revoked.append(token)
 
     app = create_app(cast(JwtValidator, Tokens()), session_revoker=revoke, closed_sessions=store)
-    return TestClient(app)
+    return TestClient(app, headers={SESSION_HEADER: "1"})
 
 
 def _logout(client: TestClient, sid: str) -> int:

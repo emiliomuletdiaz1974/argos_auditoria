@@ -29,6 +29,7 @@ import pytest
 import yaml
 from cryptography.hazmat.primitives.asymmetric import rsa
 
+from argos_auth import LEEWAY_SECONDS
 from argos_challenges.store import pin_campaign, request_approval
 
 pytestmark = pytest.mark.integration
@@ -289,9 +290,11 @@ def test_a_token_whose_payload_was_changed_is_refused() -> None:
 
 
 def test_an_expired_token_is_refused() -> None:
+    """The API forgives clock skew up to LEEWAY_SECONDS (QA-009, kept at 30 s on 2026-09-29): a
+    token is refused once its expiry and that margin have both gone by, not a second before."""
     answer = _token_answer("manager.test", client="argos-expiring")
-    time.sleep(int(answer.get("expires_in", 5)) + 2)
-    _refused("expired (client argos-expiring, 5 s)", str(answer["access_token"]))
+    time.sleep(int(answer.get("expires_in", 5)) + LEEWAY_SECONDS + 2)
+    _refused("expired (client argos-expiring, 5 s + 30 s of leeway)", str(answer["access_token"]))
 
 
 def test_a_token_for_another_audience_is_refused() -> None:
@@ -326,8 +329,19 @@ def test_no_token_at_all_is_refused() -> None:
 
 
 def _console_session(username: str) -> tuple[str, str]:
-    """A session of the console, as a browser opens it: sign-in at the realm with the code flow
-    and PKCE, then the API exchanges the code and sets the refresh cookie. (access, refresh)"""
+    """(access, refresh) of a session opened as a browser opens it (see `_session_answer`)."""
+    opened = _session_answer(username)
+    refresh = next(
+        h.split("=", 1)[1].split(";", 1)[0]
+        for h in opened.headers.get_list("set-cookie")
+        if h.startswith("argos_refresh=")
+    )
+    return str(opened.json()["access_token"]), refresh
+
+
+def _session_answer(username: str) -> httpx.Response:
+    """A session as a browser opens it: sign-in at the realm with the code flow and PKCE, then
+    the API exchanges the code and sets the refresh cookie. The answer of `/auth/session`."""
     import hashlib
     import html
     import re
@@ -369,22 +383,20 @@ def _console_session(username: str) -> tuple[str, str]:
     opened = httpx.post(
         f"{API}/api/v1/auth/session",
         json={"code": code, "code_verifier": verifier, "redirect_uri": redirect},
+        headers={"X-Argos-Session": "1"},
         timeout=10,
     )
     assert opened.status_code == 200, opened.text
-    refresh = next(
-        h.split("=", 1)[1].split(";", 1)[0]
-        for h in opened.headers.get_list("set-cookie")
-        if h.startswith("argos_refresh=")
-    )
-    return str(opened.json()["access_token"]), refresh
+    return opened
 
 
 def test_a_token_is_refused_after_its_session_was_closed() -> None:
     access, refresh = _console_session("manager.test")
     assert _call("GET", "/api/v1/campaigns", access).status_code == 200, "a live session works"
     closed = httpx.post(
-        f"{API}/api/v1/auth/logout", headers={"Cookie": f"argos_refresh={refresh}"}, timeout=10
+        f"{API}/api/v1/auth/logout",
+        headers={"Cookie": f"argos_refresh={refresh}", "X-Argos-Session": "1"},
+        timeout=10,
     )
     assert closed.status_code == 204
     got = _call("GET", "/api/v1/campaigns", access).status_code
@@ -525,6 +537,34 @@ def test_an_undeclared_route_is_a_plain_problem_without_a_stack() -> None:
     assert ok
 
 
+FRONT = "http://127.0.0.1:5173"  # the front end of development, on its own origin (C-03)
+
+
+def test_cors_grants_the_front_end_and_nobody_else() -> None:
+    def preflight(origin: str) -> httpx.Response:
+        return httpx.options(
+            f"{API}/api/v1/campaigns",
+            headers={"Origin": origin, "Access-Control-Request-Method": "POST"},
+            timeout=10,
+        )
+
+    granted = preflight(FRONT).headers.get("access-control-allow-origin")
+    refused = preflight("https://attacker.example").headers.get("access-control-allow-origin")
+    checks = {
+        "preflight of the front end granted": granted == FRONT,
+        "preflight of another origin not granted": refused is None,
+    }
+    for name, ok in checks.items():
+        record("surface", f"CORS: {name}", "yes", "yes" if ok else "no", ok)
+    assert all(checks.values()), checks
+
+
+def test_the_session_routes_refuse_a_call_without_their_header() -> None:
+    got = httpx.post(f"{API}/api/v1/auth/refresh", timeout=10).status_code
+    record("tokens", "session route without X-Argos-Session", "403", str(got), got == 403)
+    assert got == 403
+
+
 def test_the_api_carries_its_security_headers() -> None:
     answer = httpx.get(f"{API}/health", timeout=10)
     csp = answer.headers.get("content-security-policy", "")
@@ -540,19 +580,19 @@ def test_the_api_carries_its_security_headers() -> None:
 
 
 def test_the_refresh_cookie_does_not_travel_outside_its_path() -> None:
-    from argos_api.routers.session import COOKIE_PATH
-
-    ok = COOKIE_PATH == "/api/v1/auth"
-    source = (REPO / "services" / "api" / "argos_api" / "routers" / "session.py").read_text("utf-8")
-    ok = (
-        ok
-        and "httponly=True" in source
-        and 'samesite="strict"' in source
-        and "secure=True" in source
+    """The cookie the deployed API really sets. The front end lives on another site (C-03), so it
+    crosses sites (`SameSite=None`), and only the session routes, behind their header, spend it."""
+    cookie = next(
+        h
+        for h in _session_answer("manager.test").headers.get_list("set-cookie")
+        if h.startswith("argos_refresh=")
+    ).lower()
+    ok = all(
+        part in cookie for part in ("path=/api/v1/auth", "httponly", "secure", "samesite=none")
     )
     record(
         "surface",
-        "refresh cookie: path /api/v1/auth, HttpOnly, Secure, SameSite=Strict",
+        "refresh cookie: path /api/v1/auth, HttpOnly, Secure, SameSite=None (C-03)",
         "yes",
         "yes" if ok else "no",
         ok,

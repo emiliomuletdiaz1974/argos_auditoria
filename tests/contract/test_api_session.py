@@ -11,9 +11,11 @@ from fastapi.testclient import TestClient
 
 from argos_api import API_PREFIX
 from argos_api.app import create_app
+from argos_api.routers.session import SESSION_HEADER
 
 SESSION = f"{API_PREFIX}/auth/session"
 REDIRECT = "https://argos.appliance.example/callback"
+HEADER = {SESSION_HEADER: "1"}
 
 
 def _client(seen: list[tuple[str, str, str]]) -> TestClient:
@@ -21,7 +23,7 @@ def _client(seen: list[tuple[str, str, str]]) -> TestClient:
         seen.append((code, verifier, redirect_uri))
         return {"access_token": "access", "expires_in": 300, "refresh_token": "the-refresh"}
 
-    return TestClient(create_app(code_exchanger=exchange))
+    return TestClient(create_app(code_exchanger=exchange), headers=HEADER)
 
 
 def test_the_code_becomes_an_access_token_and_a_cookie_the_page_cannot_read() -> None:
@@ -50,7 +52,7 @@ def test_a_verifier_that_is_not_pkce_is_refused() -> None:
 
 
 def test_without_an_exchanger_the_api_says_so() -> None:
-    answer = TestClient(create_app()).post(
+    answer = TestClient(create_app(), headers=HEADER).post(
         SESSION, json={"code": "c", "code_verifier": "v" * 43, "redirect_uri": REDIRECT}
     )
     assert answer.status_code == 501
@@ -61,7 +63,7 @@ def test_a_code_the_identity_provider_refuses_is_a_401() -> None:
     async def refuse(code: str, verifier: str, redirect_uri: str) -> dict[str, Any]:
         raise PermissionError("invalid_grant")
 
-    answer = TestClient(create_app(code_exchanger=refuse)).post(
+    answer = TestClient(create_app(code_exchanger=refuse), headers=HEADER).post(
         SESSION, json={"code": "c", "code_verifier": "v" * 43, "redirect_uri": REDIRECT}
     )
     assert answer.status_code == 401
