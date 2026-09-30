@@ -7,7 +7,7 @@ a day keeps thirteen months of history, which never leaves the appliance.
 
 import json
 import uuid
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import psycopg
@@ -70,7 +70,8 @@ def test_a_snapshot_a_day_and_thirteen_months_of_history(migrated_db: str) -> No
                 "SELECT DISTINCT taken_on FROM argos.capacity_snapshots ORDER BY 1"
             ).fetchall()
         ]
-    assert days == [date.today()]
+    # The snapshot keeps the day in UTC: the local date differs from it for hours every evening.
+    assert days == [datetime.now(UTC).date()]
 
 
 @pytest.mark.parametrize("role", ["svc_api", "svc_health"])
