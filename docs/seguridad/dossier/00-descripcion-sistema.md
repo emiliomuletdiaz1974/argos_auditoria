@@ -1,6 +1,6 @@
 # Descripción del sistema
 
-**Versión:** 1.0 · **Fecha:** 2026-09-24 · **Dossier de seguridad v1** · **Confidencialidad:** `client`
+**Versión:** 1.1 · **Fecha:** 2026-09-29 (acceso con el front en otro dominio, C-03) · **Dossier de seguridad v1** · **Confidencialidad:** `client`
 
 ## 1. Qué es ARGOS
 
@@ -17,7 +17,7 @@ Nada sale del perímetro del organismo salvo lo que el operador exporta por la e
 
 | Capa | Componentes | Documento técnico |
 |---|---|---|
-| Acceso | API única v1 (`argos-api`) y consola servida desde su mismo origen; Keycloak como proveedor de identidad | `docs/tecnica/modulos/argos-api.md`, `argos-console.md`, `argos-auth.md` |
+| Acceso | API única v1 (`argos-api`), usada por un front en otro dominio (ARG-073, C-03); Keycloak como proveedor de identidad | `docs/tecnica/modulos/argos-api.md`, `argos-console.md`, `argos-auth.md` |
 | Conectores | SQL, PostgreSQL, Oracle, SQL Server, ficheros, LDAP, REST, FHIR y DICOM, todos de solo lectura, con diario previo de cada consulta y presupuesto de carga | `docs/tecnica/modulos/argos-connector-*.md` |
 | Núcleo | Inventario y grafo (PostgreSQL con Apache AGE), ontología normativa, motor de retos (Temporal) y evaluador determinista | `argos-inventory.md`, `argos-ontology.md`, `argos-challenge-engine.md` |
 | IA local | Gateway de IA con guardarraíles; el modelo nunca decide un veredicto | `argos-ai-gateway.md` |
@@ -48,9 +48,9 @@ Las decisiones de arquitectura están en `docs/adr/`, y ADR-0014 recoge la segur
 Descritas con sus amenazas y mitigaciones en el [modelo de amenazas](../modelo-amenazas.md).
 
 - **Red del organismo ↔ appliance:**
-  - solo la API y la consola están expuestas;
+  - solo la API está expuesta; el front vive en otro dominio;
   - autenticación OIDC y segundo factor para los roles que deciden;
-  - el mismo origen para toda mutación.
+  - toda mutación desde un navegador viene del origen de la API o de uno de `ARGOS_FRONTEND_ORIGINS`, con CORS solo para esos orígenes.
 - **Entre servicios del appliance:** mTLS con certificados de la PKI interna, y un rol de base de datos por servicio con credenciales dinámicas.
 - **Appliance ↔ sistemas del organismo:** conectores de solo lectura, validadores de sentencias por dialecto y TLS verificado.
 - **Capa de IA ↔ veredicto:** barrera arquitectónica comprobada por tests. Ningún camino lleva del modelo a un veredicto.

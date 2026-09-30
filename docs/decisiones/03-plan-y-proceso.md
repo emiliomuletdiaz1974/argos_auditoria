@@ -162,6 +162,24 @@ La fuente de todas es la bitácora del plan (`.scratch/plan/BITACORA.md`), que n
 - **Por qué:** el programa no puede quedarse parado por dependencias externas. Cada informe de cierre las declara como pendientes y ningún documento las presenta como hechas.
 - **Excepción:** la Fase 06 **no tiene tag**, porque F06-99 depende de F06-05 (pesos del modelo, MANUAL). Ver [revisión](04-revision-2026-09-23.md).
 
+### DP-19
+**El front en otro dominio: orígenes permitidos, CORS y cookie entre sitios (C-02 y C-03)** · 2026-09-29
+
+- **Decidimos:**
+  - front y API en dominios distintos (usuario, C-02);
+  - una lista exacta de orígenes del front en la configuración (`ARGOS_FRONTEND_ORIGINS`). La API no arranca con `*`, `null`, rutas, credenciales en la URL o `http` fuera de `localhost`, ni con `http` en producción;
+  - `_same_origin` deja pasar esos orígenes comparados enteros, nunca como prefijo, y sigue rechazando el resto con 403;
+  - CORS solo para esos orígenes, con credenciales, `GET` y `POST`, y exponiendo `WWW-Authenticate` para que el front lea el segundo factor (RFC 9470);
+  - con orígenes configurados, la cookie `argos_refresh` pasa a `SameSite=None; Secure`. Sin ellos sigue `Strict`;
+  - como la cookie cruza sitios, `/auth/session`, `/auth/refresh` y `/auth/logout` exigen `X-Argos-Session: 1`. Es una cabecera propia que ninguna página envía sin una petición previa CORS, y esa petición solo se concede a la lista;
+  - si el navegador bloquea la cookie de terceros (Safari), el front vuelve a Keycloak, que devuelve el código sin pedir contraseña mientras la sesión del realm siga viva.
+- **Por qué:** con dominios distintos, `Strict` no deja viajar la cookie y el `_same_origin` anterior rechazaba todo POST del front. Abrir CORS a `*` con credenciales no es posible ni deseable. La cabecera propia añade una segunda barrera a la comprobación de `Origin` justo en las rutas que gasta la cookie.
+- **Qué comprobamos antes:** que el realm de desarrollo ya admitía `http://127.0.0.1:5173` como vuelta y origen, y que `ConfigurationError` no repite el valor recibido. Los 11 tests de `test_frontend_origin_pure.py` y los 4 nuevos de configuración fallaron antes de implementar. Después comprobamos la petición previa contra la API desplegada, en la batería de accesos.
+- **Descartamos:**
+  - que el token de refresco viaje en el cuerpo y lo guarde el front, para esquivar el bloqueo de Safari: lo dejaría al alcance de cualquier XSS;
+  - CORS con comodín;
+  - `SameSite=None` siempre, sin mirar si hay un front configurado.
+
 ### DP-18
 **La API deja de servir la consola** · 2026-09-29
 
@@ -576,6 +594,7 @@ Formato: `tarea` — **qué decidimos** — por qué (y qué medimos, si consta)
 
 - `QA-34` — **una carpeta de SBOM ausente es un error** — el manifiesto se firmaba sin SBOM si la ruta no existía; ahora solo se firma sin SBOM cuando no se pide ninguno.
 - `QA-34` — **30 s de margen de reloj en los tokens** — lo habitual entre Keycloak y los servicios; un token caducado hace dos minutos sigue rechazado (el test de caducado pasó de 10 a 120 s porque 10 caen dentro del margen). Unos roles del realm con otra forma dan un conjunto vacío: sin rol no hay permiso, que es la respuesta segura.
+- `C-03` — **el margen de reloj se queda en 30 s y la batería lo espera** (usuario, 2026-09-29) — la batería de accesos esperaba 7 s tras la caducidad de un token de 5 s, dentro del margen, y lo daba por aceptado. Lo que estaba mal era el test, no el margen: ahora espera la caducidad más `LEEWAY_SECONDS` más 2 s, y lo lee de `argos_auth` para no desfasarse si el margen cambia. Descartamos reducir el margen: con 30 s, un reloj algo desviado entre Keycloak y la API no rompe sesiones válidas.
 - `QA-34` — **producción exige `sslmode=verify-full`** — los demás enlaces ya exigían transporte cifrado; este llevaba credenciales y veredictos sin verificar al servidor. La base local se reconoce por su host y no por una subcadena de la URL.
 - `QA-34` — **la hora del diario se toma con el cerrojo** — migración 0049, que redefine las dos funciones de asiento sin cambiar nada más; conservan dueño y permisos. Lo reprodujimos reteniendo el cerrojo desde otra sesión.
 - `QA-34` — **el migrador avisa, no se niega** — una base con migraciones que el código no trae es código viejo sobre un esquema nuevo; lo registramos como aviso en lugar de parar, porque volver atrás una versión (el actualizador) pasa justo por ese estado.

@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.43.0-alpha
-commit: 7880c2d
+version: 0.44.0-alpha
+commit: 8a64174
 date: 2026-09-29
 status: current
 confidentiality: client
@@ -46,7 +46,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Autorización | Denegación por defecto: `require_perm("recurso.acción")` en cada ruta contra `permissions.yaml` |
 | Idempotencia real | `argos.api_idempotency` guarda la respuesta por (actor, clave); repetirla la devuelve sin volver a ejecutar, y la misma clave con otro cuerpo o en otra ruta es `409`. La clave se reserva antes de ejecutar, después del guardián de permisos: de dos peticiones iguales a la vez, una se ejecuta y la otra recibe `409`; si la petición falla, la clave queda libre (F09-26) |
 | Auditoría (P-19) | Toda mutación con respuesta correcta deja un asiento `api.mutation` en el diario con actor, método, ruta y estado |
-| Sesión | `POST /auth/session` abre la sesión de la consola desde el código y el verificador PKCE (`create_app(code_exchanger=...)`); `POST /auth/refresh` la renueva. El token de refresco vive en una cookie `HttpOnly`, `Secure`, `SameSite=Strict` y `Path=/api/v1/auth/refresh`; la respuesta solo devuelve el de acceso |
+| Sesión | `POST /auth/session` abre la sesión del front desde el código y el verificador PKCE (`create_app(code_exchanger=...)`); `POST /auth/refresh` la renueva y `POST /auth/logout` la cierra. Las tres exigen `X-Argos-Session: 1` (C-03). El token de refresco vive en una cookie `HttpOnly`, `Secure` y `Path=/api/v1/auth`, `SameSite=None` si hay orígenes de front configurados y `Strict` si no; la respuesta solo devuelve el de acceso |
 
 ## 4. Interfaces
 
@@ -81,7 +81,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 
 ## 5. Configuración
 
-El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORAL_ADDRESS`, `ARGOS_VAULT_ADDR`/`ARGOS_VAULT_TOKEN`, `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, la configuración de evidencia (`ARGOS_EVIDENCE_*`), `ARGOS_AI_GATEWAY_URL` (el asistente; sin ella, la ruta responde 503). `ARGOS_CONSOLE_DIR` ya no se lee (ARG-073). `ARGOS_API_BIND` existe solo para el contenedor: docker publica el puerto en `127.0.0.1`. Desde F09-05, `ARGOS_DATABASE_URL` no lleva usuario (`postgresql://postgres:5432/argos?service=argos`), y `ARGOS_DATABASE_VAULT_ROLE` (`svc-api` y `svc-webhook`) con `ARGOS_VAULT_APPROLE_DIR` dicen de dónde sale la credencial. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-api`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión.
+El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORAL_ADDRESS`, `ARGOS_VAULT_ADDR`/`ARGOS_VAULT_TOKEN`, `ARGOS_OIDC_ISSUER` y `ARGOS_OIDC_AUDIENCE`, la configuración de evidencia (`ARGOS_EVIDENCE_*`), `ARGOS_AI_GATEWAY_URL` (el asistente; sin ella, la ruta responde 503). `ARGOS_CONSOLE_DIR` ya no se lee (ARG-073). `ARGOS_FRONTEND_ORIGINS` lista los orígenes exactos del front (C-03); vacía, no hay CORS y la cookie sigue `Strict`. `ARGOS_API_BIND` existe solo para el contenedor: docker publica el puerto en `127.0.0.1`. Desde F09-05, `ARGOS_DATABASE_URL` no lleva usuario (`postgresql://postgres:5432/argos?service=argos`), y `ARGOS_DATABASE_VAULT_ROLE` (`svc-api` y `svc-webhook`) con `ARGOS_VAULT_APPROLE_DIR` dicen de dónde sale la credencial. La contraseña de la base llega en un fichero, `ARGOS_DATABASE_PASSWORD_FILE` (en desarrollo, `/run/secrets/db-api`, que genera `tools/dev_db_users.py`), y no en la cadena de conexión.
 
 ## 6. Seguridad y tratamiento de datos
 
@@ -94,7 +94,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 - **El rechazo de los guardarraíles se distingue (QA-070):** `POST /assistant/ask` responde `422` con el motivo (`veredicto_no_citado`, `escritura_sobre_objetivo`) en vez de `502`; la pregunta ya no admite `campaign_id`, que se ignoraba, ni campos desconocidos.
 - **Aceptar lo que se vio (QA-041):** `POST /inventory/review-queue/{node_key}` con `accept` admite la categoría que vio el revisor; si la propuesta cambió entretanto, responde `409`.
 - **Sesiones cerradas** (F09-32, SEC-060): al cerrar sesión (`POST /api/v1/auth/logout`), si el realm aceptó revocar ese refresco, la API apunta su sesión (`sid`) en `argos.closed_sessions` durante 15 minutos, más que cualquier token de acceso. El guardián de cada réplica rechaza con `401` un token de una sesión cerrada y lo registra (`auth.session_closed`). Cada réplica guarda las respuestas 5 segundos. Una cookie que el realm rechaza no cierra nada: nadie puede cerrar la sesión de otra persona con un `sid` copiado.
-- **Mismo origen en las mutaciones** (F09-15, SEC-058): un `POST`, `PUT`, `PATCH` o `DELETE` con una cabecera `Origin` de otro origen (o `null`) recibe `403` problem+json antes de llegar a la ruta, y queda en el registro de seguridad (`http.origin_refused`). Un cliente sin navegador no envía `Origin` y se juzga solo por su token. **Pendiente:** un front de otro origen necesita una lista de orígenes permitidos y CORS; hoy recibe `403` en cada mutación ([guía](../guias/integracion-frontend.md), §3).
+- **Mismo origen en las mutaciones** (F09-15, SEC-058): un `POST`, `PUT`, `PATCH` o `DELETE` con una cabecera `Origin` de otro origen (o `null`) recibe `403` problem+json antes de llegar a la ruta, y queda en el registro de seguridad (`http.origin_refused`). Un cliente sin navegador no envía `Origin` y se juzga solo por su token. El front, en otro dominio, pasa si su origen está en `ARGOS_FRONTEND_ORIGINS`, comparado entero (C-03). Para esos orígenes, y solo para ellos, hay CORS con credenciales, y la cookie de refresco es `SameSite=None`. Las rutas `/auth/*` exigen `X-Argos-Session: 1` ([guía](../guias/integracion-frontend.md), §3).
 - **Esclusa** (F09-13, ARG-090): `POST /api/v1/airgap/imports` y `POST /api/v1/airgap/exports` (`airgap.import` y `airgap.export`, solo `platform_admin` con segundo factor). La API construye la esclusa (`argos-airgap`) con los importadores y exportadores de los servicios que tiene configurados; un tipo de exportación fuera de la lista cerrada responde `403` y queda registrado. Desde la migración 0038, `svc_api` puede insertar las cuádruplas de una versión de contenido que `load_bundle` ya verificó.
 - **Operación** (F10-07, ARG-092/099):
   - `GET /api/v1/operations/status` devuelve los ocho semáforos del panel de operación, preguntados a Prometheus (`ARGOS_PROMETHEUS_URL`) en el momento, y las alertas activas, cada una con su runbook. Un semáforo sin medida sale `unknown`, nunca verde;
@@ -222,3 +222,4 @@ La imagen (`services/api/Dockerfile`) solo lleva la API: desde el 2026-09-29 no 
 | 0.41.0-alpha | 2026-09-28 | Idempotencia con ficheros, errores reales de Temporal, cursores ilegibles y nota del DPO | QA-31 (QA-057, 063, 065, 067) |
 | 0.42.0-alpha | 2026-09-28 | Capacidad sin carreras, campañas que cuentan desde el lanzamiento y receptor de alertas robusto | QA-32 (QA-006, 060, 061, 066) |
 | 0.43.0-alpha | 2026-09-29 | Deja de construir y servir la consola: lo que no es ruta de la API responde 404 problem+json; `create_app` ya no recibe `console` | ARG-073 (desviación) |
+| 0.44.0-alpha | 2026-09-29 | Front en otro dominio: `frontend_origins`, CORS con credenciales, cookie `SameSite=None` y cabecera `X-Argos-Session` en `/auth/*` (contrato v1: resúmenes de la sesión) | C-03 (DP-19) |

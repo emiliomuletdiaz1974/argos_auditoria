@@ -3,10 +3,10 @@ id: GUIA-integracion-frontend
 kind: guide
 title: Guía de integración del front end con la API v1
 phases: ["08"]
-version: 0.1.0
-commit: 7880c2d
+version: 0.2.0
+commit: 8a64174
 date: 2026-09-29
-status: draft
+status: current
 confidentiality: client
 ---
 
@@ -16,7 +16,7 @@ Esta guía es para el equipo que construye el front end de ARGOS. Explica qué e
 
 El contrato exacto (esquemas, tipos y códigos de cada operación) es `services/api/openapi.json`. Esta guía no lo sustituye: si discrepan, manda el contrato. En desarrollo también se sirve en `GET /api/v1/openapi.json`, con la vista interactiva en `/api/v1/docs`.
 
-> **Estado: borrador.** El front end en otro origen **todavía no puede funcionar contra la API**: falta CORS y una lista de orígenes permitidos (ver [§3](#3-front-end-en-otro-origen-lo-que-falta)). El resto de la guía describe la API tal como es hoy.
+> **Front en otro dominio:** la API lo admite desde C-03 si su origen está en `ARGOS_FRONTEND_ORIGINS`. Las llamadas de sesión llevan la cabecera `X-Argos-Session: 1` (ver [§3](#3-front-end-en-otro-origen)).
 
 ## 1. Lo que hay que saber antes de empezar
 
@@ -53,21 +53,22 @@ El front no guarda ningún secreto de cliente. El flujo es:
    ```http
    POST /api/v1/auth/session
    Content-Type: application/json
+   X-Argos-Session: 1
 
    {"code": "...", "code_verifier": "...", "redirect_uri": "https://front.example/callback"}
    ```
 
-4. La API cambia el código en Keycloak y responde `{"access_token", "token_type": "Bearer", "expires_in"}`. El **token de refresco no llega al JavaScript**: viaja en la cookie `argos_refresh` (`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/v1/auth`).
+4. La API cambia el código en Keycloak y responde `{"access_token", "token_type": "Bearer", "expires_in"}`. El **token de refresco no llega al JavaScript**: viaja en la cookie `argos_refresh` (`HttpOnly`, `Secure`, `SameSite=None` con el front en otro dominio, `Path=/api/v1/auth`).
 5. El front borra el verificador y el `state`, y guarda el token de acceso **solo en memoria** (nunca en `localStorage` ni en `sessionStorage`).
 
-El cliente público que usa hoy la API es `argos-console` (`services/api/argos_api/keycloak.py`). El front real necesita que ese cliente admita su `redirect_uri` y su origen en `webOrigins`, o un cliente propio (ver §3).
+El cliente público que usa la API es `argos-console` (`services/api/argos_api/keycloak.py`). Tiene que admitir el `redirect_uri` y el origen del front (ver §3).
 
 ### 2.3 Llamadas autenticadas y renovación
 
 - Cada llamada lleva `Authorization: Bearer <access_token>`.
-- Un `401` sin más: se llama **una vez** a `POST /api/v1/auth/refresh` (sin cuerpo, con la cookie) y se reintenta **una vez**. Si vuelve a dar `401`, la sesión ha terminado y hay que iniciar sesión de nuevo. No hay que entrar en bucle.
+- Un `401` sin más: se llama **una vez** a `POST /api/v1/auth/refresh` (sin cuerpo, con la cookie y `X-Argos-Session: 1`) y se reintenta **una vez**. Si el refresco da `401`, la sesión ha terminado o el navegador no envió la cookie: se vuelve a Keycloak (§3). No hay que entrar en bucle.
 - Un `401` con `WWW-Authenticate: Bearer error="insufficient_user_authentication"` no es una sesión caducada: la acción pide **segundo factor** (§2.4).
-- `POST /api/v1/auth/logout` revoca el refresco en Keycloak, borra la cookie y cierra la sesión también para los tokens de acceso que siguieran vivos. Responde `204`.
+- `POST /api/v1/auth/logout` (con `X-Argos-Session: 1`) revoca el refresco en Keycloak, borra la cookie y cierra la sesión también para los tokens de acceso que siguieran vivos. Responde `204`.
 
 ### 2.4 Segundo factor (step-up)
 
@@ -75,28 +76,26 @@ Las acciones que deciden piden un token emitido con TOTP (`amr` contiene `otp`).
 
 Permisos con segundo factor: `campaigns.approve`, `findings.transition`, `credentials.create`, `credentials.revoke`, `synthetic.authorize`, `inventory.review`, `webhooks.create`, `system.update`, `support.package`, `airgap.import`, `airgap.export`, `systems.create`. Solo `platform_admin` y `dpo_reviewer` tienen TOTP.
 
-## 3. Front end en otro origen: lo que falta
+## 3. Front end en otro origen
 
-El front se servirá desde un origen distinto al de la API. Hoy la API está pensada para un solo origen, y **tres cosas lo impiden**:
+Front y API viven en dominios distintos (decisión C-02, 2026-09-29). Desde C-03 la API lo admite así:
 
-| Qué | Dónde | Efecto hoy |
-|---|---|---|
-| Comprobación de `Origin` | middleware `_same_origin` de `services/api/argos_api/app.py` | Todo `POST` con un `Origin` distinto del host de la API recibe `403` ("a change sent from another origin"), incluido `POST /auth/session`. |
-| CORS | no hay | El navegador bloquea las respuestas a otro origen y las peticiones previas (`OPTIONS`) no se atienden. |
-| Cookie de refresco `SameSite=Strict` | `services/api/argos_api/routers/session.py` | Si front y API no son del mismo sitio (mismo dominio registrable), el navegador no envía la cookie y el refresco da `401`. |
+| Qué | Cómo funciona |
+|---|---|
+| Orígenes permitidos | `ARGOS_FRONTEND_ORIGINS` en la API: la lista exacta de orígenes del front (`https://front.example`, sin ruta ni barra final), separados por comas. Solo `https`; `http` solo para `localhost` o `127.0.0.1` fuera de producción. La API no arranca si un origen no es exacto (`*`, `null`, con ruta…). |
+| Comprobación de `Origin` | Un `POST` con `Origin` pasa si es el host de la API o uno de la lista, comparado entero. Cualquier otro recibe `403` ("a change sent from another origin"). |
+| CORS | Solo para los orígenes de la lista, con credenciales. Métodos `GET` y `POST`. Cabeceras admitidas: `Authorization`, `Content-Type`, `Idempotency-Key` y `X-Argos-Session`. Cabeceras legibles por el front: `WWW-Authenticate` (el segundo factor, §2.4) y `Content-Disposition` (el nombre de las descargas). La petición previa se guarda 10 minutos. |
+| Cookie de refresco | Con orígenes en la lista, `argos_refresh` es `SameSite=None; Secure; HttpOnly; Path=/api/v1/auth`. Sin lista, sigue `SameSite=Strict`. |
+| Anti-CSRF de la sesión | `POST /auth/session`, `/auth/refresh` y `/auth/logout` exigen la cabecera `X-Argos-Session: 1`. Sin ella responden `403`. Ninguna página puede enviarla sin una petición previa CORS, y la API solo se la concede a los orígenes de la lista. |
 
-Hace falta un cambio en la API, con sus tests, antes de integrar. Está registrado como pendiente. Lo que tendrá que cubrir:
+**Lo que tiene que hacer el front:**
 
-- una lista cerrada de orígenes permitidos por configuración, que sustituya a la comparación con el host en `_same_origin`;
-- CORS solo para esos orígenes, con credenciales (`Access-Control-Allow-Credentials: true`) para la cookie de refresco;
-- decidir la cookie: si front y API comparten dominio registrable (`app.hospital.es` y `api.hospital.es`), `SameSite=Strict` sigue valiendo; si no, hace falta `SameSite=None` y revisar la protección frente a CSRF;
-- el `redirect_uri` y el `webOrigins` del front en el cliente de Keycloak.
+- Las llamadas a `/api/v1/auth/*` llevan `credentials: "include"` y la cabecera `X-Argos-Session: 1`. El resto de llamadas van con `Authorization: Bearer …` y sin credenciales.
+- Su `redirect_uri` y su origen tienen que estar en el cliente `argos-console` del realm (`redirectUris` y `webOrigins`). Eso lo configura quien instala.
 
-**Decidido (2026-09-29): front y API estarán en dominios distintos.** Por tanto, la cookie de refresco pasará a `SameSite=None; Secure` y `/auth/refresh` y `/auth/logout` llevarán protección frente a CSRF. Lo aplica la tarea C-03, que concretará qué cabecera debe enviar el front.
+**Cuando el navegador bloquea la cookie.** Con dominios distintos, `argos_refresh` es una cookie de terceros. Safari la bloquea por defecto, y otros navegadores pueden hacerlo según su configuración. Entonces `POST /auth/refresh` responde `401` ("no session cookie"). El front no debe tratarlo como un error: redirige a la persona a Keycloak (§2.2, paso 2) y, si su sesión en el realm sigue viva, Keycloak devuelve el código al momento, sin pedir la contraseña. Lo que se pierde es el estado de la pantalla, así que conviene guardar en `sessionStorage` la ruta en la que estaba la persona (nunca el token) para devolverla allí.
 
-**Riesgo a tener en cuenta:** con dominios distintos, la cookie de refresco es de terceros para el navegador. Safari la bloquea por defecto, y otros navegadores pueden hacer lo mismo según la configuración. Si el navegador no la envía, el refresco da `401` y la persona tiene que volver a iniciar sesión cuando caduca el token de acceso. C-03 debe decidir cómo se cubre ese caso.
-
-Las peticiones del front deben usar `credentials: "include"` solo en las rutas de `/api/v1/auth/*`. El resto va con el token en la cabecera.
+**En desarrollo:** `make dev` configura `ARGOS_FRONTEND_ORIGINS=http://127.0.0.1:5173`, que el realm ya admite como vuelta. Un front servido en ese puerto funciona contra `http://127.0.0.1:8000` sin más cambios.
 
 ## 4. Convenciones comunes
 
@@ -114,6 +113,7 @@ Todos los errores son `application/problem+json` (RFC 9457):
 |---|---|---|
 | `400` | Un valor ilegible (un cursor que no es nuestro, por ejemplo) | Mostrar `detail`; no reintentar igual |
 | `401` | Sin token válido, o falta segundo factor | §2.3 y §2.4 |
+| `403` en `/auth/*` | Falta `X-Argos-Session: 1` | Enviar la cabecera (§3) |
 | `403` | El rol no lo permite | No debería pasar si el front solo ofrece lo que el rol puede hacer |
 | `404` | No existe | Mostrar que no existe |
 | `409` | El estado no lo permite (transición ilegal, campaña aún no preparada…) | Mostrar `detail` y refrescar el recurso: el estado cambió |
@@ -145,9 +145,9 @@ Leyenda de roles: **A** `platform_admin` · **M** `campaign_manager` · **D** `d
 | Método y ruta | Para qué | Roles |
 |---|---|---|
 | `GET /health` | La API está viva | Abierta |
-| `POST /api/v1/auth/session` | Abrir sesión con el código PKCE (§2.2) | Abierta |
-| `POST /api/v1/auth/refresh` | Nuevo token de acceso desde la cookie | Abierta (cookie) |
-| `POST /api/v1/auth/logout` | Cerrar sesión | Abierta (cookie) |
+| `POST /api/v1/auth/session` | Abrir sesión con el código PKCE (§2.2) | Abierta, con `X-Argos-Session: 1` |
+| `POST /api/v1/auth/refresh` | Nuevo token de acceso desde la cookie | Abierta (cookie), con `X-Argos-Session: 1` |
+| `POST /api/v1/auth/logout` | Cerrar sesión | Abierta (cookie), con `X-Argos-Session: 1` |
 
 ### 5.2 Sistemas
 
@@ -316,3 +316,4 @@ Lo que la consola de la Fase 08 ya resolvía y el front real también debe cumpl
 | Versión | Fecha | Cambio |
 |---|---|---|
 | 0.1.0 | 2026-09-29 | Primera versión, con la retirada de la consola de la API. Borrador hasta que la API admita otros orígenes |
+| 0.2.0 | 2026-09-29 | La API admite el front en otro dominio (C-03): orígenes permitidos, CORS, cookie `SameSite=None`, cabecera `X-Argos-Session` y qué hacer si el navegador bloquea la cookie |

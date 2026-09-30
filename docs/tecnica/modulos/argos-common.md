@@ -4,9 +4,9 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.16.0-alpha
-commit: 328609d
-date: 2026-09-28
+version: 0.17.0-alpha
+commit: 8a64174
+date: 2026-09-29
 status: current
 confidentiality: client
 ---
@@ -64,6 +64,7 @@ Dependencias externas: PostgreSQL 16 (esquema `argos`), HashiCorp Vault (kv-v2 y
 
 Variables con prefijo `ARGOS_`:
 - `AIRGAP_DIR` y `CONTENT_PUBLIC_KEY_FILE` (F09-13): la carpeta de la esclusa (`in/` de solo lectura, `out/` y `work/`) y la clave de contenido fijada con la que se verifica lo que entra por ella;
+- `FRONTEND_ORIGINS` (C-03) y `frontend_origins()`: los orígenes exactos del front, separados por comas y normalizados en minúsculas y sin barra final. Si uno no es `scheme://host[:port]`, lleva `*` o credenciales, o usa `http` fuera de `localhost` (o en producción), la configuración no arranca, y el error no repite el valor;
 - `SUPPORT_DIR` y `SUPPORT_RECIPIENT_FILE` (F09-11): la carpeta que la API comparte con el recolector de diagnóstico y la clave pública `age` del soporte;
 - `UPDATE_DIR` y `RELEASE_PUBLIC_KEY_FILE` (F09-10): la carpeta del actualizador y la clave de release fijada con la que la API verifica un paquete antes de encolarlo;
 - `TLS_DIR` (F09-06, ARG-083): carpeta con el certificado, la clave y la CA interna del servicio (`argos-tls`);
@@ -169,3 +170,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.14.2-alpha | 2026-09-28 | Recuento de campañas desde el lanzamiento y candado por dimensión | QA-32 (QA-006) |
 | 0.15.0-alpha | 2026-09-28 | Resumen de ráfagas por temporizador y todo el contexto de `extra` en los logs | QA-33 (QA-002, 007) |
 | 0.16.0-alpha | 2026-09-28 | SBOM obligatorio, verify-full en producción, migrador que avisa y hora del diario tras el cerrojo | QA-34 (QA-008, 010, 012, 014) |
+| 0.17.0-alpha | 2026-09-29 | `FRONTEND_ORIGINS` y `frontend_origins()`, validados al arrancar | C-03 (DP-19) |

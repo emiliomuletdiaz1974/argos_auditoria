@@ -1,6 +1,6 @@
 # Batería de accesos indebidos
 
-**Generado:** 2026-09-24 10:39 UTC · **Commit:** `a2436af` · **API atacada:** http://127.0.0.1:8000 · **Confidencialidad:** `client`
+**Generado:** 2026-09-30 04:27 UTC · **Commit:** `fe520e1` · **API atacada:** http://127.0.0.1:8000 · **Confidencialidad:** `client`
 
 Informe generado por `tests/security/test_access_battery.py` y `tools/security_report.py` (F09-15). La batería ataca el contenedor `api` desplegado con tokens reales del realm, como lo haría alguien dentro de la red, y comprueba después el estado: una denegación que dejó efecto no es una denegación. No se edita a mano.
 
@@ -8,11 +8,11 @@ Informe generado por `tests/security/test_access_battery.py` y `tools/security_r
 
 | Categoría | Pruebas | Correctas | Fallidas |
 |---|---|---|---|
-| matrix | 78 | 78 | 0 |
+| matrix | 87 | 87 | 0 |
 | second factor | 2 | 2 | 0 |
-| tokens | 33 | 33 | 0 |
+| tokens | 34 | 34 | 0 |
 | separation of duties | 4 | 4 | 0 |
-| surface | 8 | 8 | 0 |
+| surface | 10 | 10 | 0 |
 | internal services | 3 | 3 | 0 |
 | public services | 5 | 5 | 0 |
 | security log | 3 | 3 | 0 |
@@ -27,6 +27,7 @@ Ningún fallo: cada intento indebido fue rechazado y no dejó efecto.
 
 | Caso | Esperado | Obtenido | Resultado |
 |---|---|---|---|
+| campaign_manager POST /api/v1/systems | 403 | 403 | correcto |
 | campaign_manager POST /api/v1/inventory/review-queue/{node_key} | 403 | 403 | correcto |
 | campaign_manager POST /api/v1/campaigns/{campaign_id}/gates/{gate}/approve | 403 | 403 | correcto |
 | campaign_manager POST /api/v1/campaigns/{campaign_id}/synthetic/authorize | 403 | 403 | correcto |
@@ -44,7 +45,11 @@ Ningún fallo: cada intento indebido fue rechazado y no dejó efecto.
 | campaign_manager POST /api/v1/support/diagnostics/{diagnostics_id}/package | 403 | 403 | correcto |
 | campaign_manager POST /api/v1/airgap/imports | 403 | 403 | correcto |
 | campaign_manager POST /api/v1/airgap/exports | 403 | 403 | correcto |
-| campaign_manager: journal entries left by 17 refusals | 0 | 0 | correcto |
+| campaign_manager GET /api/v1/operations/status | 403 | 403 | correcto |
+| campaign_manager GET /api/v1/operations/runbooks/{runbook_id} | 403 | 403 | correcto |
+| campaign_manager GET /api/v1/operations/capacity | 403 | 403 | correcto |
+| campaign_manager: journal entries left by 21 refusals | 0 | 0 | correcto |
+| dpo_reviewer POST /api/v1/systems | 403 | 403 | correcto |
 | dpo_reviewer POST /api/v1/campaigns | 403 | 403 | correcto |
 | dpo_reviewer POST /api/v1/campaigns/{campaign_id}/launch | 403 | 403 | correcto |
 | dpo_reviewer POST /api/v1/campaigns/{campaign_id}/remediation | 403 | 403 | correcto |
@@ -63,7 +68,10 @@ Ningún fallo: cada intento indebido fue rechazado y no dejó efecto.
 | dpo_reviewer POST /api/v1/support/diagnostics/{diagnostics_id}/package | 403 | 403 | correcto |
 | dpo_reviewer POST /api/v1/airgap/imports | 403 | 403 | correcto |
 | dpo_reviewer POST /api/v1/airgap/exports | 403 | 403 | correcto |
-| dpo_reviewer: journal entries left by 18 refusals | 0 | 0 | correcto |
+| dpo_reviewer GET /api/v1/operations/status | 403 | 403 | correcto |
+| dpo_reviewer GET /api/v1/operations/runbooks/{runbook_id} | 403 | 403 | correcto |
+| dpo_reviewer GET /api/v1/operations/capacity | 403 | 403 | correcto |
+| dpo_reviewer: journal entries left by 22 refusals | 0 | 0 | correcto |
 | platform_admin POST /api/v1/inventory/review-queue/{node_key} | 403 | 403 | correcto |
 | platform_admin POST /api/v1/campaigns | 403 | 403 | correcto |
 | platform_admin POST /api/v1/campaigns/{campaign_id}/launch | 403 | 403 | correcto |
@@ -79,6 +87,7 @@ Ningún fallo: cada intento indebido fue rechazado y no dejó efecto.
 | platform_admin POST /api/v1/synthetic/{injection_id}/confirm-exercise | 403 | 403 | correcto |
 | platform_admin POST /api/v1/synthetic/{injection_id}/confirm-revert | 403 | 403 | correcto |
 | platform_admin: journal entries left by 14 refusals | 0 | 0 | correcto |
+| read_only_auditor POST /api/v1/systems | 403 | 403 | correcto |
 | read_only_auditor POST /api/v1/inventory/review-queue/{node_key} | 403 | 403 | correcto |
 | read_only_auditor POST /api/v1/campaigns | 403 | 403 | correcto |
 | read_only_auditor POST /api/v1/campaigns/{campaign_id}/launch | 403 | 403 | correcto |
@@ -104,7 +113,7 @@ Ningún fallo: cada intento indebido fue rechazado y no dejó efecto.
 | read_only_auditor POST /api/v1/support/diagnostics/{diagnostics_id}/package | 403 | 403 | correcto |
 | read_only_auditor POST /api/v1/airgap/imports | 403 | 403 | correcto |
 | read_only_auditor POST /api/v1/airgap/exports | 403 | 403 | correcto |
-| read_only_auditor: journal entries left by 25 refusals | 0 | 0 | correcto |
+| read_only_auditor: journal entries left by 26 refusals | 0 | 0 | correcto |
 
 ### Segundo factor
 
@@ -120,10 +129,11 @@ Ningún fallo: cada intento indebido fue rechazado y no dejó efecto.
 | signed with another key (same kid) | 401 | 401 | correcto |
 | alg none | 401 | 401 | correcto |
 | real signature over a changed payload (roles added) | 401 | 401 | correcto |
-| expired (client argos-expiring, 5 s) | 401 | 401 | correcto |
+| expired (client argos-expiring, 5 s + 30 s of leeway) | 401 | 401 | correcto |
 | audience of another client (argos-other) | 401 | 401 | correcto |
 | issuer of another realm (master, admin-cli) | 401 | 401 | correcto |
 | account without roles GET /api/v1/systems | 403 | 403 | correcto |
+| account without roles POST /api/v1/systems | 403 | 403 | correcto |
 | account without roles GET /api/v1/inventory/coverage | 403 | 403 | correcto |
 | account without roles GET /api/v1/inventory/nodes/{node_key} | 403 | 403 | correcto |
 | account without roles GET /api/v1/inventory/review-queue | 403 | 403 | correcto |
@@ -147,9 +157,9 @@ Ningún fallo: cada intento indebido fue rechazado y no dejó efecto.
 | account without roles GET /api/v1/evidence/{campaign_id}/artifacts | 403 | 403 | correcto |
 | account without roles GET /api/v1/evidence/{campaign_id}/journal/{seq} | 403 | 403 | correcto |
 | account without roles GET /api/v1/evidence/artifacts/{verdict_id} | 403 | 403 | correcto |
-| account without roles GET /api/v1/evidence/{campaign_id}/dossier.json | 403 | 403 | correcto |
 | no token | 401 with WWW-Authenticate | 401 | correcto |
 | access token of a session closed from the console | 401 | 401 | correcto |
+| session route without X-Argos-Session | 403 | 403 | correcto |
 
 ### Separación de deberes
 
@@ -165,11 +175,13 @@ Ningún fallo: cada intento indebido fue rechazado y no dejó efecto.
 | Caso | Esperado | Obtenido | Resultado |
 |---|---|---|---|
 | undeclared route | 404 problem+json without a stack | 404 | correcto |
-| console header: CSP without unsafe-inline | present | present | correcto |
-| console header: frame-ancestors 'none' | present | present | correcto |
-| console header: X-Content-Type-Options nosniff | present | present | correcto |
-| console header: Referrer-Policy | present | present | correcto |
-| refresh cookie: path /api/v1/auth, HttpOnly, Secure, SameSite=Strict | yes | yes | correcto |
+| CORS: preflight of the front end granted | yes | yes | correcto |
+| CORS: preflight of another origin not granted | yes | yes | correcto |
+| API header: CSP without unsafe-inline | present | present | correcto |
+| API header: frame-ancestors 'none' | present | present | correcto |
+| API header: X-Content-Type-Options nosniff | present | present | correcto |
+| API header: Referrer-Policy | present | present | correcto |
+| refresh cookie: path /api/v1/auth, HttpOnly, Secure, SameSite=None (C-03) | yes | yes | correcto |
 | POST with Origin https://attacker.example | 403, nothing created | 403 | correcto |
 | POST with the Origin of the console | 201 | 201 | correcto |
 
