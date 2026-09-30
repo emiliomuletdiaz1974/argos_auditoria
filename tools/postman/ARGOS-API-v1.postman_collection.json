@@ -195,6 +195,7 @@
                   "if (Number(pm.collectionVariables.get('totp_window_dpo') || -1) === win) {",
                   "  console.warn('El código de esta ventana de 30 s ya se usó: si Keycloak responde 401, repite la petición en unos segundos.');",
                   "}",
+                  "if (!pm.variables.get('totp_secret_dpo')) { throw new Error('ARGOS · falta totp_secret_dpo: ponla como valor actual (local) de la colección, con el secreto de dpo.test de deploy/dev/keycloak/realm-argos.json. No se exporta ni se versiona.'); }",
                   "pm.collectionVariables.set('totp_code_dpo', argosTotp(pm.variables.get('totp_secret_dpo')));",
                   "pm.collectionVariables.set('totp_window_dpo', String(win));"
                 ]
@@ -299,6 +300,7 @@
                   "if (Number(pm.collectionVariables.get('totp_window_admin') || -1) === win) {",
                   "  console.warn('El código de esta ventana de 30 s ya se usó: si Keycloak responde 401, repite la petición en unos segundos.');",
                   "}",
+                  "if (!pm.variables.get('totp_secret_admin')) { throw new Error('ARGOS · falta totp_secret_admin: ponla como valor actual (local) de la colección, con el secreto de admin.test de deploy/dev/keycloak/realm-argos.json. No se exporta ni se versiona.'); }",
                   "pm.collectionVariables.set('totp_code_admin', argosTotp(pm.variables.get('totp_secret_admin')));",
                   "pm.collectionVariables.set('totp_window_admin', String(win));"
                 ]
@@ -3344,6 +3346,7 @@
           "  const exp = Number(pm.collectionVariables.get('token_' + role + '_exp') || 0);",
           "  if (!token || Date.now() > exp - 20000) {",
           "    const u = USERS[role];",
+          "    if ((role === 'dpo' || role === 'admin') && !u.secret) { throw new Error('ARGOS · falta totp_secret_' + role + ': ponla como valor actual (local) de la colección, con el secreto de ' + u.user + ' de deploy/dev/keycloak/realm-argos.json. No se exporta ni se versiona.'); }",
           "    const win = Math.floor(Date.now() / 30000);",
           "    const last = Number(pm.collectionVariables.get('totp_window_' + role) || -1);",
           "    const wait = (u.secret && last === win) ? (30000 - (Date.now() % 30000) + 800) : 0;",
@@ -3427,15 +3430,15 @@
     },
     {
       "key": "totp_secret_dpo",
-      "value": "dev-only-totp-dpo-test-7c1e4b9a2f",
+      "value": "",
       "type": "string",
-      "description": "Secreto TOTP de desarrollo de dpo.test (realm-argos.json)"
+      "description": "Secreto TOTP de dpo.test: ponlo solo como valor actual (local), copiado de deploy/dev/keycloak/realm-argos.json. No va en el archivo."
     },
     {
       "key": "totp_secret_admin",
-      "value": "dev-only-totp-admin-test-3b8e5d1c6a",
+      "value": "",
       "type": "string",
-      "description": "Secreto TOTP de desarrollo de admin.test (realm-argos.json)"
+      "description": "Secreto TOTP de admin.test: ponlo solo como valor actual (local), copiado de deploy/dev/keycloak/realm-argos.json. No va en el archivo."
     },
     {
       "key": "system_id",
