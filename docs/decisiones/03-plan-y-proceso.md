@@ -162,6 +162,18 @@ La fuente de todas es la bitácora del plan (`.scratch/plan/BITACORA.md`), que n
 - **Por qué:** el programa no puede quedarse parado por dependencias externas. Cada informe de cierre las declara como pendientes y ningún documento las presenta como hechas.
 - **Excepción:** la Fase 06 **no tiene tag**, porque F06-99 depende de F06-05 (pesos del modelo, MANUAL). Ver [revisión](04-revision-2026-09-23.md).
 
+### DP-20
+**Banco k3s en una VM de Google Cloud, con datos sintéticos (etapa K)** · 2026-10-02
+
+- **Decidimos:**
+  - usar la VM `vm-argos` (`e2-highmem-8`, `us-central1-c`) como banco con datos sintéticos sobre k3s, no como piloto con datos reales (nota [ARG-002-003](../desviaciones/ARG-002-003.md), §7);
+  - hacer allí F1-11b de verdad, en las tareas K-01 a K-99, con los manifiestos en `platform/k8s/` (kustomize);
+  - mantener la regla de siempre: el agente escribe manifiestos y scripts, y lee la VM por SSH; el despliegue lo hace una persona;
+  - pedir al organismo la decisión sobre dónde pueden estar sus datos antes de cualquier piloto real.
+- **Por qué:** desbloquea k3s y la seguridad del clúster, da al front una API real y no arriesga datos de nadie. Lo que se construye vale igual para la VM movida a la UE o para el appliance físico.
+- **Qué comprobamos antes:** inventario de solo lectura de la VM (sistema, CPU, memoria, discos, GPU, TPM, arranque, IPMI, red, software y permisos) y su zona en el servidor de metadatos. No tiene GPU; tiene vTPM 2.0; Secure Boot está desactivado; el SSH está abierto a internet con `sudo` sin contraseña (tarea K-00).
+- **Descartamos:** el piloto real en esta VM sin aprobación del organismo, e instalar el compose de desarrollo.
+
 ### DP-19
 **El front en otro dominio: orígenes permitidos, CORS y cookie entre sitios (C-02 y C-03)** · 2026-09-29
 

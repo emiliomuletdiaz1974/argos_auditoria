@@ -1,0 +1,48 @@
+# K-01 · the namespaces of ARGOS on k3s (ADR-0014) and the one of the simulated sources of the
+# bench. Kubernetes enforces the restricted Pod Security standard on every namespace of ARGOS, under
+# the Kyverno policy `argos-pod-baseline` (K-09); the simulated sources are third-party images that
+# are not the product, so they get the baseline standard.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argos-core
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    argos/zone: core
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argos-services
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    argos/zone: services
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argos-ai
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    argos/zone: ai
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argos-connect
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    argos/zone: connect
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: bench-sources
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    argos/zone: bench

@@ -17,7 +17,7 @@ Cada ficha resume en una línea lo que pedía el documento, lo que hicimos en su
 
 | Nota | Documento pedía | Hicimos | Por qué | Qué comprobamos | Estado |
 |---|---|---|---|---|---|
-| ARG-002-003 | Imagen Packer y k3s en la F1 | Docker Compose con los mismos servicios; Keycloak publicado en `127.0.0.1:8180` | No hay hardware; un `httpd` local ya ocupaba el 8080 y falseaba un test | El puerto 8080 estaba ocupado en la máquina de trabajo | Aprobada vía ADR-0001 |
+| ARG-002-003 | Imagen Packer y k3s en la F1 | Docker Compose con los mismos servicios; Keycloak publicado en `127.0.0.1:8180` | No hay hardware; un `httpd` local ya ocupaba el 8080 y falseaba un test | El puerto 8080 estaba ocupado en la máquina de trabajo. **Ampliada el 2026-10-02:** banco k3s en una VM de Google Cloud con datos sintéticos (DP-20), tras un inventario de solo lectura de la VM | Aprobada vía ADR-0001; ampliación del usuario |
 | ARG-005 | Diario con `FOR UPDATE`, IDENTITY y hash sobre `::text` | La especificación de ADR-0002 y el migrador en `argos_common.migrations` | Bifurcación concurrente, huecos, hash ambiguo; el migrador fallaba en la primera ejecución | Análisis de defectos (ver ADR-0002) | Aprobada vía ADR-0002 |
 | ARG-010 | GitLab CI y cosign | GitHub Actions; manifiesto firmado con Ed25519 en Vault; imágenes fijadas por `Id`; Makefile válido en cmd | El proyecto vive en GitHub; no hay registro de imágenes; `$(shell cat)` y `bash` fallan en Windows | `bash` resolvía al lanzador de WSL | Aprobada vía ADR-0003 |
 | ARG-066 | `verify_chain` con otra fórmula | `PostgresJournal.verify` de ADR-0002; ARG-066 aporta el anclaje y el informe | Con dos fórmulas, todo el diario saldría corrupto | — | Aprobada vía ADR-0002 |

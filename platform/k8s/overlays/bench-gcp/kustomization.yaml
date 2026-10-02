@@ -1,0 +1,10 @@
+# K-01 · the bench on the Google Cloud VM (DP-20): synthetic data only, never the data of an
+# organisation. Each later task (K-03 onwards) adds its components here.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+labels:
+  - pairs:
+      argos/environment: bench
+    includeSelectors: false

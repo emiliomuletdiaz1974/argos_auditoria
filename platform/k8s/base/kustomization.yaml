@@ -1,0 +1,6 @@
+# K-01 · what every cluster of ARGOS has: its namespaces and a network denied by default.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespaces.yaml
+  - default-deny.yaml
