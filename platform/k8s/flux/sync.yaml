@@ -1,0 +1,16 @@
+# K-02F (DP-21) · Flux applies the verified artifact and removes from the cluster whatever leaves
+# the manifests, so the bench is always exactly the last signed version.
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: argos-bench
+  namespace: flux-system
+spec:
+  interval: 10m
+  sourceRef:
+    kind: OCIRepository
+    name: argos-bench
+  path: ./
+  prune: true
+  wait: true
+  timeout: 5m

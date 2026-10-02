@@ -1,0 +1,20 @@
+# K-02F (DP-21) · where the bench comes from: the manifests the workflow bench.yml published in
+# GHCR, as a signed OCI artifact. Flux only takes versions (a tag banco-vX.Y.Z becomes X.Y.Z) and
+# checks the keyless cosign signature first: it has to be the workflow bench.yml of this
+# repository, running on a bench tag. Anything else, from a branch, another workflow or a fork,
+# is refused and nothing is applied.
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: argos-bench
+  namespace: flux-system
+spec:
+  interval: 5m
+  url: oci://ghcr.io/emiliomuletdiaz1974/argos-bench
+  ref:
+    semver: ">=0.0.0"
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+      - issuer: '^https://token\.actions\.githubusercontent\.com$'
+        subject: '^https://github\.com/emiliomuletdiaz1974/argos_auditoria/\.github/workflows/bench\.yml@refs/tags/banco-v[0-9]+\.[0-9]+\.[0-9]+$'

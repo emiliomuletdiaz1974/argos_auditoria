@@ -1,0 +1,6 @@
+# K-02F · what install.sh applies once, after `flux install`: the source of the bench and its sync.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - source.yaml
+  - sync.yaml
