@@ -23,7 +23,7 @@ En todos, la red empieza cerrada (`base/default-deny.yaml`): nada entra y lo ún
 ## Reglas
 
 - **Ningún secreto en el repositorio.** Las contraseñas, tokens y claves se generan dentro del clúster al arrancar (K-04). `tests/security/test_k8s_bench.py` falla si aparece un `Secret` o algo con forma de credencial.
-- **Lo despliega una persona.** Estos manifiestos se aplican en la VM siguiendo las tareas MANUAL de la etapa K.
+- **Se despliega desde una etiqueta (DP-21).** Una persona empuja `banco-vX.Y.Z`. El workflow `.github/workflows/bench.yml` construye y firma las imágenes, y publica este overlay, con cada imagen fijada por digest, como artefacto OCI firmado en GHCR. Flux, en la VM, comprueba la firma y lo aplica. Nada se aplica a mano después de la instalación inicial.
 
 Comprobar que el overlay se construye:
 

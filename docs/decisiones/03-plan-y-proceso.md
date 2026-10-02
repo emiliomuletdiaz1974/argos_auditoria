@@ -162,6 +162,18 @@ La fuente de todas es la bitácora del plan (`.scratch/plan/BITACORA.md`), que n
 - **Por qué:** el programa no puede quedarse parado por dependencias externas. Cada informe de cierre las declara como pendientes y ningún documento las presenta como hechas.
 - **Excepción:** la Fase 06 **no tiene tag**, porque F06-99 depende de F06-05 (pesos del modelo, MANUAL). Ver [revisión](04-revision-2026-09-23.md).
 
+### DP-21
+**El banco se despliega desde una etiqueta, con GitOps y firma verificada** · 2026-10-02
+
+- **Decidimos:**
+  - desplegar el banco solo al empujar una etiqueta `banco-vX.Y.Z` (usuario), que no se confunde con las `v*` de las releases del producto;
+  - con esa etiqueta, el workflow `bench.yml` pasa lint, tipos y tests; construye las imágenes de ARGOS; las publica en GHCR; las firma con cosign sin clave (la identidad OIDC del workflow); y publica los manifiestos del banco, con cada imagen fijada por digest, como artefacto OCI firmado;
+  - Flux, dentro del k3s de la VM, verifica esa firma antes de aplicar nada (K-02F);
+  - el CI no escribe en el repositorio ni guarda credenciales de la VM.
+- **Por qué:** el repositorio es público. Un job que entre por SSH necesitaría la clave de la VM en GitHub, y un runner en la VM ejecutaría el código de cualquier pull request. Con GitOps la VM lee y comprueba la firma. Además, el registro permite fijar las imágenes por digest y firmarlas, dos pendientes desde F1-10.
+- **Qué comprobamos antes:** que el CI actual no se ejecuta con etiquetas (de ahí el job `verify` propio), y las versiones estables de k3s (`v1.36.5+k3s1`, canal estable) y Flux (`v2.9.6`), con sus checksums.
+- **Descartamos:** desplegar por SSH desde GitHub Actions, un runner autoalojado en la VM y desplegar en cada push a `main`.
+
 ### DP-20
 **Banco k3s en una VM de Google Cloud, con datos sintéticos (etapa K)** · 2026-10-02
 

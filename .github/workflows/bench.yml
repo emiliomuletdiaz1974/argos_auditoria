@@ -1,0 +1,113 @@
+name: bench
+
+# K-02 (DP-21) · the bench on the Google Cloud VM is deployed only from a tag `banco-vX.Y.Z`. This
+# builds every image of ARGOS, signs each one by digest (cosign, keyless: the OIDC identity of this
+# workflow) and publishes the rendered manifests of `bench-gcp` as a signed OCI artifact. Flux, on
+# the VM, verifies that signature before applying anything. Nothing here writes to the repository
+# or holds a credential of the VM. Synthetic data only (DP-20).
+on:
+  push:
+    tags: ["banco-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --locked
+      - run: make lint typecheck test
+
+  images:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    strategy:
+      fail-fast: true
+      matrix:
+        image:
+          - { name: argos-example, dockerfile: services/example/Dockerfile, component: ARG-001 }
+          - { name: argos-challenge-engine, dockerfile: services/challenge-engine/Dockerfile, component: ARG-043 }
+          - { name: argos-ai-gateway, dockerfile: services/ai-gateway/Dockerfile, component: ARG-052 }
+          - { name: argos-api, dockerfile: services/api/Dockerfile, component: ARG-071 }
+          - { name: argos-evidence, dockerfile: services/evidence/Dockerfile, component: ARG-061 }
+          - { name: argos-verifier, dockerfile: services/verifier/Dockerfile, component: ARG-069 }
+          - { name: argos-health, dockerfile: services/health/Dockerfile, component: ARG-094 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - id: tag
+        run: |
+          echo "version=$(uv run --no-project --with pyyaml python tools/bench_render.py version "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.image.dockerfile }}
+          push: true
+          tags: ghcr.io/${{ steps.tag.outputs.owner }}/${{ matrix.image.name }}:${{ steps.tag.outputs.version }}
+          labels: |
+            org.argos.component=${{ matrix.image.component }}
+            org.argos.version=${{ steps.tag.outputs.version }}
+      - uses: sigstore/cosign-installer@v3
+      - name: sign the image by its digest
+        run: cosign sign --yes "ghcr.io/${{ steps.tag.outputs.owner }}/${{ matrix.image.name }}@${{ steps.build.outputs.digest }}"
+      - name: keep the digest for the manifests
+        run: mkdir -p digests && echo "${{ steps.build.outputs.digest }}" > "digests/${{ matrix.image.name }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digest-${{ matrix.image.name }}
+          path: digests/
+
+  manifests:
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - id: tag
+        run: |
+          echo "version=$(uv run --no-project --with pyyaml python tools/bench_render.py version "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+      - name: render the bench with every image pinned by digest
+        run: |
+          uv run --no-project --with pyyaml python tools/bench_render.py render --digests digests --owner "${{ steps.tag.outputs.owner }}" --out rendered
+          mkdir -p out
+          kubectl kustomize rendered > out/bench.yaml
+      - uses: fluxcd/flux2/action@v2.9.6
+        with:
+          version: 2.9.6
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: sigstore/cosign-installer@v3
+      - name: publish and sign the manifests
+        run: |
+          artifact="ghcr.io/${{ steps.tag.outputs.owner }}/argos-bench"
+          flux push artifact "oci://$artifact:${{ steps.tag.outputs.version }}" --path=out             --source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" --revision="$GITHUB_REF_NAME@sha1:$GITHUB_SHA"             --output json > pushed.json
+          digest=$(python3 -c "import json; print(json.load(open('pushed.json'))['digest'])")
+          cosign sign --yes "$artifact@$digest"
