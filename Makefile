@@ -89,6 +89,9 @@ typecheck:
 secrets:
 	gitleaks detect --no-banner --redact
 
+# The unit tests run on a clean clone in the CI, where `make dev` never issued the host certificate:
+# there, clients run without TLS instead of failing on a folder that does not exist.
+test: export ARGOS_TLS_DIR := $(if $(wildcard deploy/dev/secrets/tls-host/tls.crt),deploy/dev/secrets/tls-host,)
 test:
 	uv run pytest -m "not integration"
 
