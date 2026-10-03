@@ -162,6 +162,16 @@ La fuente de todas es la bitácora del plan (`.scratch/plan/BITACORA.md`), que n
 - **Por qué:** el programa no puede quedarse parado por dependencias externas. Cada informe de cierre las declara como pendientes y ningún documento las presenta como hechas.
 - **Excepción:** la Fase 06 **no tiene tag**, porque F06-99 depende de F06-05 (pesos del modelo, MANUAL). Ver [revisión](04-revision-2026-09-23.md).
 
+### DP-22
+**El CI comprueba en cada push lo que funciona en un runner limpio, y el banco se monta por capas** · 2026-10-03
+
+- **Decidimos:**
+  - en `ci`, el job `verify` (lint, tipos, secretos, tests unitarios, políticas, ontología, retos, contrato y documentación) corre en cada push y pull request; `integration` y `build`, que levantan el entorno de `make dev` o construyen todas las imágenes, solo a mano (`workflow_dispatch`);
+  - montar el banco por capas: primero el núcleo (PostgreSQL, NATS, Temporal, Keycloak, Vault, OPA), la evidencia (almacén WORM y TSA de pruebas) y los siete servicios de ARGOS (unos 16 contenedores); después la observabilidad y las fuentes simuladas. La IA espera a una GPU.
+- **Por qué:** `ci` no había estado en verde ni una vez desde el primer push (9 ejecuciones). `integration` intenta levantar los 37 contenedores de desarrollo en el runner, y el último intento cayó en `cert-issuer`. La integración se ha verificado siempre en la máquina de trabajo con `make check`. Un CI siempre rojo no avisa de nada.
+- **Qué comprobamos antes:** el historial de ejecuciones con la API de GitHub; que `verify` pasa tras `c909694` y `bceffa7`, reproducido con `make test` en un clon limpio; y qué contenedores del compose son del producto y cuáles de desarrollo.
+- **Descartamos:** arreglar `integration` en el runner ahora (son días para algo que ya cubre `make check`), y quitar los jobs, que siguen sirviendo a mano.
+
 ### DP-21
 **El banco se despliega desde una etiqueta, con GitOps y firma verificada** · 2026-10-02
 

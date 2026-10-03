@@ -71,5 +71,6 @@ Leyenda del **Quién**: **U** = decisión nuestra en una tarea DECISIÓN o por i
 | DP-19 | 2026-09-29 | U | Front en otro dominio: orígenes permitidos, CORS con credenciales, cookie `SameSite=None` y cabecera `X-Argos-Session` en la sesión | [→](03-plan-y-proceso.md#dp-19) |
 | DP-20 | 2026-10-02 | U | Banco k3s en una VM de Google Cloud con datos sintéticos; el piloto real espera la aprobación del organismo | [→](03-plan-y-proceso.md#dp-20) |
 | DP-21 | 2026-10-02 | U | El banco se despliega solo desde una etiqueta `banco-vX.Y.Z`: imágenes y manifiestos firmados en GHCR, aplicados por Flux tras verificar la firma | [→](03-plan-y-proceso.md#dp-21) |
+| DP-22 | 2026-10-03 | U | En cada push solo `verify`; `integration` y `build`, a mano. El banco se monta por capas, empezando por unos 16 contenedores | [→](03-plan-y-proceso.md#dp-22) |
 
 Las decisiones técnicas tomadas dentro de las tareas (unas 90) están agrupadas por fase en [03 · Plan y proceso](03-plan-y-proceso.md#decisiones-técnicas-dentro-de-las-tareas). Las 31 notas de desviación, en [02 · Desviaciones](02-desviaciones.md).

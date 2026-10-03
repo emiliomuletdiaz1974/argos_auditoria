@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The jobs that need the whole environment of `make dev` run only when asked for (DP-22).
+  workflow_dispatch:
 
 # No job writes to the repository: artifacts travel with the runtime token, not with this one.
 permissions:
@@ -31,6 +33,9 @@ jobs:
 
   integration:
     needs: verify
+    # It raises the 37 containers of `make dev`: on the developer's machine with `make check`, and
+    # here only by hand (DP-22).
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +48,9 @@ jobs:
 
   build:
     needs: verify
+    # It raises the 37 containers of `make dev`: on the developer's machine with `make check`, and
+    # here only by hand (DP-22).
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
