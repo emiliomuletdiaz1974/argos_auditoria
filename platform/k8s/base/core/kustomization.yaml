@@ -1,0 +1,5 @@
+# K-03 · capa 1 del banco (DP-22): what keeps the data and the secrets, in argos-core.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - vault

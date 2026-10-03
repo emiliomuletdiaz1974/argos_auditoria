@@ -1,0 +1,30 @@
+# K-03 · Vault as a server (never -dev): integrated storage in its own volume, no UI, and no mlock,
+# because the restricted standard gives no IPC_LOCK capability (the volume keeps what mlock would
+# have kept out of swap; the VM has no swap). The listener is plain HTTP inside the cluster and
+# only the namespaces of ARGOS reach it (network.yaml); its TLS comes with cert-manager (K-06).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+  namespace: argos-core
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/part-of: argos
+data:
+  vault.hcl: |
+    ui = false
+    disable_mlock = true
+
+    listener "tcp" {
+      address         = "0.0.0.0:8200"
+      cluster_address = "0.0.0.0:8201"
+      tls_disable     = true
+    }
+
+    storage "raft" {
+      path    = "/vault/data"
+      node_id = "vault-0"
+    }
+
+    api_addr     = "http://vault.argos-core.svc:8200"
+    cluster_addr = "http://vault-0.vault-internal.argos-core.svc:8201"

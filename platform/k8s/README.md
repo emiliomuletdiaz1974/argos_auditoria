@@ -7,6 +7,8 @@ ARGOS en producción corre sobre k3s (ARG-003). Esta carpeta guarda sus manifies
 | `base/` | Lo que tiene todo clúster de ARGOS: los espacios de nombres y una red denegada por defecto |
 | `overlays/bench-gcp/` | El banco en la VM de Google Cloud (DP-20): **solo datos sintéticos** |
 | `security/` | Kyverno, cert-manager, seccomp y AppArmor (F09-92, ADR-0014); se aplican en K-09 |
+| `base/core/` | Capa 1 del banco (K-03): por ahora Vault en modo servidor |
+| `bench/vault.sh` | Inicializar y desellar Vault: las claves solo salen en la consola de quien lo ejecuta |
 | `bench/install.sh` | Instalación única de la VM: k3s y Flux, con versión y SHA-256 fijados (K-02F) |
 | `flux/` | De dónde saca Flux el banco (el artefacto firmado de GHCR) y cómo lo aplica |
 
@@ -32,6 +34,13 @@ Instalar la VM, una sola vez y desde un clon del repositorio en ella:
 ```bash
 bash platform/k8s/bench/install.sh --dry-run
 bash platform/k8s/bench/install.sh
+```
+
+Vault arranca sellado y sin inicializar. La primera vez, y después de cada reinicio de su pod, lo desella una persona en la VM:
+
+```bash
+bash platform/k8s/bench/vault.sh init     # solo la primera vez: guarda las claves fuera de la VM
+bash platform/k8s/bench/vault.sh unseal   # 3 de las 5 claves
 ```
 
 Después, cada despliegue es una etiqueta:

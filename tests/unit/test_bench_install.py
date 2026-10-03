@@ -139,3 +139,27 @@ def test_flux_removes_what_leaves_the_manifests() -> None:
     assert sync["apiVersion"].startswith("kustomize.toolkit.fluxcd.io/")
     assert sync["spec"]["sourceRef"] == {"kind": "OCIRepository", "name": "argos-bench"}
     assert sync["spec"]["prune"] is True
+
+
+VAULT_SH = ROOT / "platform" / "k8s" / "bench" / "vault.sh"
+
+
+def test_the_unseal_keys_go_to_the_console_and_nowhere_else() -> None:
+    script = VAULT_SH.read_text(encoding="utf-8")
+    [init] = [line for line in script.splitlines() if "operator init" in line]
+    assert ">" not in init.split("operator init", 1)[1], "the keys are never written to a file"
+    assert "tee" not in script and "kubectl create secret" not in script
+    assert "-key-threshold" in init and "-key-shares" in init
+
+
+def test_init_refuses_a_vault_that_is_already_initialised() -> None:
+    script = VAULT_SH.read_text(encoding="utf-8")
+    init_block = script.split("  init)", 1)[1].split(";;", 1)[0]
+    assert init_block.index("if initialised") < init_block.index("operator init")
+
+
+@pytest.mark.skipif(BASH is None, reason="no working bash here")
+def test_the_vault_script_is_valid_bash() -> None:
+    assert BASH is not None
+    script = VAULT_SH.relative_to(ROOT).as_posix()
+    subprocess.run([BASH, "-n", script], check=True, cwd=ROOT)  # noqa: S603

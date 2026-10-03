@@ -20,7 +20,10 @@ BASE = K8S / "base"
 OVERLAY = K8S / "overlays" / "bench-gcp"
 ARGOS_NAMESPACES = {"argos-core", "argos-services", "argos-ai", "argos-connect"}
 BENCH_NAMESPACES = {"bench-sources"}
-SECRET_LIKE = re.compile(r"dev-only-|password\s*:|token\s*:|BEGIN [A-Z ]*PRIVATE KEY", re.I)
+# A key named password or token (not `automountServiceAccountToken`), or a private key.
+SECRET_LIKE = re.compile(
+    r"dev-only-|(?<![a-z])password\s*:|(?<![a-z])token\s*:|BEGIN [A-Z ]*PRIVATE KEY", re.I
+)
 
 
 def _documents(folder: Path) -> list[dict[str, Any]]:
@@ -100,6 +103,7 @@ def test_kustomize_builds_the_overlay() -> None:
         text=True,
         check=True,
     ).stdout
-    kinds = [doc["kind"] for doc in yaml.safe_load_all(built) if doc]
-    assert kinds.count("Namespace") == 5
-    assert kinds.count("NetworkPolicy") == 5
+    documents = [doc for doc in yaml.safe_load_all(built) if doc]
+    assert [d["kind"] for d in documents].count("Namespace") == 5
+    denials = [d for d in documents if d["metadata"]["name"] == "default-deny"]
+    assert len(denials) == 5

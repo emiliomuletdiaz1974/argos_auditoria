@@ -1,0 +1,37 @@
+# K-03 · how ARGOS reaches Vault (vault) and how Vault reaches itself (vault-internal, headless).
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault
+  namespace: argos-core
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/part-of: argos
+spec:
+  selector:
+    app.kubernetes.io/name: vault
+  ports:
+    - name: api
+      port: 8200
+      targetPort: api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vault-internal
+  namespace: argos-core
+  labels:
+    app.kubernetes.io/name: vault
+    app.kubernetes.io/part-of: argos
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app.kubernetes.io/name: vault
+  ports:
+    - name: api
+      port: 8200
+      targetPort: api
+    - name: cluster
+      port: 8201
+      targetPort: cluster
