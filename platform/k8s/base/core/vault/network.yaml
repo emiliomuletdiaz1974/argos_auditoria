@@ -1,5 +1,6 @@
-# K-03 · only the namespaces of ARGOS reach Vault, and only its API. Nothing goes out of it: the
-# default denial of the namespace (default-deny.yaml) already says so.
+# K-03 · only the namespaces of ARGOS reach Vault, and only its API. Out of it, only the API of
+# Kubernetes, to review the tokens of the services that sign in (K-04); on k3s that is the address
+# of the node (6443) behind the service kubernetes.default (443).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -9,7 +10,7 @@ spec:
   podSelector:
     matchLabels:
       app.kubernetes.io/name: vault
-  policyTypes: [Ingress]
+  policyTypes: [Ingress, Egress]
   ingress:
     - from:
         - namespaceSelector:
@@ -20,3 +21,9 @@ spec:
       ports:
         - protocol: TCP
           port: 8200
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443

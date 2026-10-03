@@ -22,7 +22,9 @@ spec:
         app.kubernetes.io/name: vault
         app.kubernetes.io/part-of: argos
     spec:
-      automountServiceAccountToken: false
+      # Its token lets Vault review the tokens of the services that sign in (rbac.yaml).
+      serviceAccountName: vault
+      automountServiceAccountToken: true
       securityContext:
         runAsNonRoot: true
         runAsUser: 100

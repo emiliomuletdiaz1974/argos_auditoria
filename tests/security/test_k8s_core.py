@@ -358,3 +358,17 @@ def test_only_the_services_of_argos_reach_the_evidence() -> None:
         assert peer["namespaceSelector"]["matchLabels"] == {
             "kubernetes.io/metadata.name": "argos-services"
         }, name
+
+
+def test_vault_may_review_tokens_of_service_accounts_and_nothing_more() -> None:
+    pod = _pod(_named("StatefulSet", "vault"))
+    assert pod["serviceAccountName"] == "vault" and pod["automountServiceAccountToken"] is True
+    binding = _named("ClusterRoleBinding", "vault-token-review")
+    assert binding["roleRef"]["name"] == "system:auth-delegator"
+    assert binding["subjects"] == [
+        {"kind": "ServiceAccount", "name": "vault", "namespace": "argos-core"}
+    ]
+    egress = _named("NetworkPolicy", "vault")["spec"]["egress"]
+    assert egress == [
+        {"ports": [{"protocol": "TCP", "port": 443}, {"protocol": "TCP", "port": 6443}]}
+    ]

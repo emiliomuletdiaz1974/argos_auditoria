@@ -4,6 +4,7 @@
 #   bash platform/k8s/bench/vault.sh status   # initialised? sealed?
 #   bash platform/k8s/bench/vault.sh init     # once: shows 5 unseal keys and the root token
 #   bash platform/k8s/bench/vault.sh unseal   # after init and after every restart of the pod
+#   bash platform/k8s/bench/vault.sh configure  # engines, keys and policies (asks for the root token)
 #
 # The keys and the root token appear on this console and nowhere else: nothing here writes them to
 # a file, a variable of the cluster or a log. Keep them apart from the VM (three of the five
@@ -42,8 +43,20 @@ case "${1:-status}" in
     done
     vault_in_pod status || true
     ;;
+  configure)
+    # The root token is typed without echo and reaches Vault on the standard input of the pod,
+    # before the setup script: never as an argument (the process list) nor as a variable of this
+    # shell after it is used.
+    read -rsp "Root token of Vault (it is not shown): " token
+    echo
+    {
+      printf 'export VAULT_TOKEN=%s\n' "$token"
+      cat "$(dirname "$0")/vault-setup.sh"
+    } | "${KUBECTL[@]}" exec -i "$POD" -- sh -s
+    unset token
+    ;;
   *)
-    echo "usage: $0 status|init|unseal" >&2
+    echo "usage: $0 status|init|unseal|configure" >&2
     exit 2
     ;;
 esac

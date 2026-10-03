@@ -163,3 +163,41 @@ def test_the_vault_script_is_valid_bash() -> None:
     assert BASH is not None
     script = VAULT_SH.relative_to(ROOT).as_posix()
     subprocess.run([BASH, "-n", script], check=True, cwd=ROOT)  # noqa: S603
+
+
+SETUP_SH = ROOT / "platform" / "k8s" / "bench" / "vault-setup.sh"
+
+
+def test_configure_asks_for_the_root_token_without_showing_or_keeping_it() -> None:
+    script = VAULT_SH.read_text(encoding="utf-8")
+    block = script.split("  configure)", 1)[1].split(";;", 1)[0]
+    assert "read -rs" in block, "the token is typed without echo"
+    assert "vault-setup.sh" in block
+    # It reaches Vault through standard input, never as an argument or a variable of the host.
+    assert "exec -i" in block and "sh -s" in block
+    for line in block.splitlines():
+        if "exec" in line:
+            assert "$token" not in line, f"the token would be an argument: {line.strip()}"
+    assert "unset token" in block
+
+
+def test_the_setup_of_the_bench_is_the_one_of_development_with_kubernetes_auth() -> None:
+    setup = SETUP_SH.read_text(encoding="utf-8")
+    assert "dev-only" not in setup and "-dev" not in setup
+    for line in (
+        "secrets enable -path=argos kv-v2",
+        "for key in argos-release argos-content argos-evidence; do",
+        '"transit/keys/$key" type=ed25519',
+        "pki_int/roles/argos-svc",
+        "auth enable kubernetes",
+        "auth/kubernetes/config",
+    ):
+        assert line in setup, line
+    assert "exportable=true" not in setup, "no signing key leaves Vault"
+
+
+@pytest.mark.skipif(BASH is None, reason="no working bash here")
+def test_the_setup_script_is_valid_sh() -> None:
+    assert BASH is not None
+    script = SETUP_SH.relative_to(ROOT).as_posix()
+    subprocess.run([BASH, "-n", script], check=True, cwd=ROOT)  # noqa: S603
