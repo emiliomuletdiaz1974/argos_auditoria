@@ -325,3 +325,36 @@ def test_only_temporal_reaches_its_database_and_only_argos_services_reach_tempor
     assert itself["from"] == [
         {"podSelector": {"matchLabels": {"app.kubernetes.io/name": "temporal"}}}
     ]
+
+
+# ---------- the WORM store and the test time stamping authority (ARG-061, ARG-065) ----------
+
+
+def test_the_worm_store_takes_its_keys_from_the_generated_secret() -> None:
+    store = _named("StatefulSet", "evidence-store")
+    [container] = _pod(store)["containers"]
+    script = " ".join(container["command"] + container.get("args", []))
+    assert "dev-only" not in script
+    env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container["env"]}
+    assert env["S3_ACCESS_KEY"] == {"name": "evidence-store", "key": "access"}
+    assert env["S3_SECRET_KEY"] == {"name": "evidence-store", "key": "secret"}
+    assert "--versioning-dir" in script, "object lock needs versions"
+    wanted = yaml.safe_load((CORE / "seeder" / "secrets.yaml").read_text("utf-8"))
+    assert {"name": "evidence-store", "keys": ["access", "secret"]} in wanted
+
+
+def test_the_tsa_is_the_test_one_built_by_the_bench() -> None:
+    [container] = _pod(_named("StatefulSet", "tsa"))["containers"]
+    assert container["image"] == "argos-tsa"
+    claims = _named("StatefulSet", "tsa")["spec"]["volumeClaimTemplates"]
+    assert claims, "its test CA lives in its volume, never in the repository"
+
+
+def test_only_the_services_of_argos_reach_the_evidence() -> None:
+    for name, port in (("evidence-store", 7070), ("tsa", 3180)):
+        [rule] = _named("NetworkPolicy", name)["spec"]["ingress"]
+        assert rule["ports"] == [{"protocol": "TCP", "port": port}], name
+        [peer] = rule["from"]
+        assert peer["namespaceSelector"]["matchLabels"] == {
+            "kubernetes.io/metadata.name": "argos-services"
+        }, name

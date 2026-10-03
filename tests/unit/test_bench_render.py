@@ -117,3 +117,8 @@ def test_every_built_image_is_pinned_when_rendered(tmp_path: Path) -> None:
 def test_opa_is_built_with_its_policies_from_the_root_of_the_repository() -> None:
     opa = bench_render.BENCH_IMAGES["argos-opa"]
     assert opa.context == "." and opa.dockerfile == "platform/k8s/images/opa/Dockerfile"
+
+
+def test_the_test_tsa_is_built_from_its_own_folder() -> None:
+    tsa = bench_render.BENCH_IMAGES["argos-tsa"]
+    assert tsa.context == "deploy/dev/tsa" and tsa.dockerfile == "deploy/dev/tsa/Dockerfile"

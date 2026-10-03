@@ -48,6 +48,7 @@ IMAGES = {
 BENCH_IMAGES = {
     "argos-postgres": Image("deploy/dev/postgres/Dockerfile", "ARG-004", "deploy/dev/postgres"),
     "argos-opa": Image("platform/k8s/images/opa/Dockerfile", "ARG-036"),
+    "argos-tsa": Image("deploy/dev/tsa/Dockerfile", "ARG-065", "deploy/dev/tsa"),
 }
 ALL_IMAGES = IMAGES | BENCH_IMAGES
 
