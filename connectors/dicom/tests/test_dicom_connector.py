@@ -172,7 +172,34 @@ def test_the_association_and_its_echo_are_journaled_and_paid(pacs: Pacs) -> None
 
 # ---------- SEC-028 · TLS on the association, unless declared ----------
 
-CA = Path(__file__).resolve().parents[3] / "deploy" / "dev" / "sources" / "certs" / "ca.crt"
+
+@pytest.fixture
+def ca(tmp_path: Path) -> Path:
+    """A CA of its own: the one of the development sources exists only after `make dev`."""
+    import datetime as dt
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "test PACS CA")])
+    now = dt.datetime.now(dt.UTC)
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(now + dt.timedelta(days=1))
+        .add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True)
+        .sign(key, hashes.SHA256())
+    )
+    path = tmp_path / "ca.crt"
+    path.write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
+    return path
 
 
 def test_a_pacs_without_tls_is_refused_unless_declared() -> None:
@@ -182,7 +209,9 @@ def test_a_pacs_without_tls_is_refused_unless_declared() -> None:
         connector.open()
 
 
-def test_with_its_ca_the_association_verifies_the_pacs(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_with_its_ca_the_association_verifies_the_pacs(
+    monkeypatch: pytest.MonkeyPatch, ca: Path
+) -> None:
     seen: dict[str, Any] = {}
 
     class Refused:
@@ -195,7 +224,7 @@ def test_with_its_ca_the_association_verifies_the_pacs(monkeypatch: pytest.Monke
     monkeypatch.setattr(AE, "associate", associate)
     credentials = {"host": "pacs.hospital.local", "port": "11112", "called_ae": "PACS"}
     connector = DicomConnector(
-        SYSTEM_ID, {"timeout_s": 2, "ca_file": str(CA)}, make_context(credentials)
+        SYSTEM_ID, {"timeout_s": 2, "ca_file": str(ca)}, make_context(credentials)
     )
     with pytest.raises(ConnectionError):
         connector.open()

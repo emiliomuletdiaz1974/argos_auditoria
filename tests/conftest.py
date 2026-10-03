@@ -11,5 +11,8 @@ os.environ.setdefault("PGPASSWORD", "dev-only-postgres")
 # issues (tools/dev_tls.py). PostgreSQL speaks TLS only and libpq negotiates it by default; that the
 # server is verified is checked in test_mtls.py. PGSSLMODE is never set: it would also reach the
 # sources of the client, whose TLS each connector decides (F09-31).
+# Only when `make dev` issued it: without the environment (the CI runs the unit tests on a clean
+# clone) a TLS folder that does not exist made every client fail before the test began.
 _HOST_TLS = Path(__file__).resolve().parents[1] / "deploy" / "dev" / "secrets" / "tls-host"
-os.environ.setdefault("ARGOS_TLS_DIR", str(_HOST_TLS))
+if (_HOST_TLS / "tls.crt").is_file():
+    os.environ.setdefault("ARGOS_TLS_DIR", str(_HOST_TLS))
