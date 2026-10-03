@@ -20,7 +20,8 @@ WORKLOADS = {"Deployment", "StatefulSet", "Job", "DaemonSet"}
 def _documents(folder: Path) -> list[dict[str, Any]]:
     documents = []
     for path in sorted(folder.rglob("*.yaml")):
-        documents += [doc for doc in yaml.safe_load_all(path.read_text("utf-8")) if doc]
+        # Only objects of Kubernetes: the seeder keeps its list of secrets as plain YAML.
+        documents += [d for d in yaml.safe_load_all(path.read_text("utf-8")) if isinstance(d, dict)]
     return documents
 
 
@@ -65,11 +66,25 @@ def test_every_workload_meets_the_restricted_standard() -> None:
             assert context["readOnlyRootFilesystem"] is True, (name, container["name"])
 
 
+def _built_by_the_bench() -> set[str]:
+    import importlib.util
+
+    tool = K8S.parents[1] / "tools" / "bench_render.py"
+    spec = importlib.util.spec_from_file_location("bench_render", tool)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return set(module.ALL_IMAGES)
+
+
 def test_every_image_is_pinned_by_digest() -> None:
+    """Third-party images by digest here; the ones the bench builds, by digest when rendered."""
+    built = _built_by_the_bench()
     for workload in _workloads():
         for container in _containers(workload):
             image = container["image"]
-            assert "@sha256:" in image, f"{container['name']}: {image} can move under the tag"
+            pinned = "@sha256:" in image or image in built
+            assert pinned, f"{container['name']}: {image} can move under the tag"
 
 
 def test_what_keeps_data_keeps_it_in_a_persistent_volume() -> None:
@@ -116,3 +131,59 @@ def test_only_the_namespaces_of_argos_reach_vault_and_only_on_its_port() -> None
 def test_the_base_includes_the_core() -> None:
     kustomization = yaml.safe_load((K8S / "base" / "kustomization.yaml").read_text("utf-8"))
     assert "core" in kustomization["resources"]
+
+
+# ---------- the secrets of the cluster are generated in it, never versioned ----------
+
+
+def test_the_seeder_may_only_read_and_create_secrets_in_argos_core() -> None:
+    role = _named("Role", "secret-seeder")
+    assert role["metadata"]["namespace"] == "argos-core"
+    [rule] = role["rules"]
+    assert rule["resources"] == ["secrets"] and sorted(rule["verbs"]) == ["create", "get"]
+
+
+def test_the_seeder_creates_what_is_missing_and_never_shows_a_value() -> None:
+    seeder = CORE / "seeder"
+    script = (seeder / "seed.py").read_text(encoding="utf-8")
+    assert "secrets.token_urlsafe" in script
+    assert "404" in script, "it creates only the secrets that do not exist"
+    assert "print(value" not in script and "print(data" not in script
+    wanted = yaml.safe_load((seeder / "secrets.yaml").read_text(encoding="utf-8"))
+    assert {"name": "postgres-superuser", "keys": ["password"]} in wanted
+
+
+def test_the_seeder_job_is_recreated_when_it_changes() -> None:
+    job = _named("Job", "secret-seeder")
+    annotations = job["metadata"]["annotations"]
+    assert annotations["kustomize.toolkit.fluxcd.io/force"] == "enabled"
+    assert _pod(job)["serviceAccountName"] == "secret-seeder"
+
+
+# ---------- PostgreSQL with AGE and pgvector ----------
+
+
+def test_postgres_takes_its_password_from_the_generated_secret() -> None:
+    [container] = _pod(_named("StatefulSet", "postgres"))["containers"]
+    env = {e["name"]: e for e in container["env"]}
+    assert env["POSTGRES_PASSWORD"]["valueFrom"]["secretKeyRef"] == {
+        "name": "postgres-superuser",
+        "key": "password",
+    }
+    assert "value" not in env["POSTGRES_PASSWORD"]
+    args = " ".join(container["args"])
+    assert "shared_preload_libraries=age" in args
+
+
+def test_postgres_asks_every_network_client_for_scram() -> None:
+    hba = _named("ConfigMap", "postgres-hba")["data"]["pg_hba.conf"]
+    rules = [line.split() for line in hba.splitlines() if line and not line.startswith("#")]
+    network = [r for r in rules if r[0].startswith("host")]
+    assert network and all(r[-1] == "scram-sha-256" for r in network)
+    assert not any(r[-1] == "trust" for r in network)
+
+
+def test_only_the_namespaces_of_argos_reach_postgres() -> None:
+    policy = _named("NetworkPolicy", "postgres")
+    [rule] = policy["spec"]["ingress"]
+    assert rule["ports"] == [{"protocol": "TCP", "port": 5432}]

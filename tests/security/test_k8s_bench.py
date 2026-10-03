@@ -29,7 +29,8 @@ SECRET_LIKE = re.compile(
 def _documents(folder: Path) -> list[dict[str, Any]]:
     documents = []
     for path in sorted(folder.rglob("*.yaml")):
-        documents += [doc for doc in yaml.safe_load_all(path.read_text("utf-8")) if doc]
+        # Only objects of Kubernetes: the seeder keeps its list of secrets as plain YAML.
+        documents += [d for d in yaml.safe_load_all(path.read_text("utf-8")) if isinstance(d, dict)]
     return documents
 
 

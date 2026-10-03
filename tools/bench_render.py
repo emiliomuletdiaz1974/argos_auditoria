@@ -30,6 +30,7 @@ DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 class Image:
     dockerfile: str
     component: str
+    context: str = "."
 
 
 # The images `make build` builds, by the name the manifests use for them.
@@ -42,6 +43,12 @@ IMAGES = {
     "argos-verifier": Image("services/verifier/Dockerfile", "ARG-069"),
     "argos-health": Image("services/health/Dockerfile", "ARG-094"),
 }
+# Images the bench builds that are not services of ARGOS: they come from the development
+# environment, each from its own folder (K-03).
+BENCH_IMAGES = {
+    "argos-postgres": Image("deploy/dev/postgres/Dockerfile", "ARG-004", "deploy/dev/postgres"),
+}
+ALL_IMAGES = IMAGES | BENCH_IMAGES
 
 
 def version_of(tag: str) -> str:
@@ -56,7 +63,7 @@ def render(digests: dict[str, str], owner: str, out: Path) -> dict[str, Any]:
     """Write `out/kustomization.yaml`: the bench overlay with every image pinned by digest."""
     registry = f"ghcr.io/{owner.lower()}"
     images = []
-    for name in IMAGES:
+    for name in ALL_IMAGES:
         digest = digests.get(name, "")
         if not DIGEST.fullmatch(digest):
             raise ValueError(f"{name}: no sha256 digest from the build")
@@ -88,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         digests = {
             name: (args.digests / name).read_text(encoding="utf-8").strip()
-            for name in IMAGES
+            for name in ALL_IMAGES
             if (args.digests / name).is_file()
         }
         render(digests, args.owner, args.out)

@@ -53,11 +53,11 @@ def test_the_images_are_the_ones_make_build_builds() -> None:
 
 
 def test_each_image_is_replaced_by_its_digest_in_ghcr(tmp_path: Path) -> None:
-    digests = dict.fromkeys(bench_render.IMAGES, DIGEST)
+    digests = dict.fromkeys(bench_render.ALL_IMAGES, DIGEST)
     kustomization = bench_render.render(digests, owner="Emilio-Org", out=tmp_path / "rendered")
     assert len(kustomization["resources"]) == 1, "only the bench overlay"
     images = {entry["name"]: entry for entry in kustomization["images"]}
-    assert set(images) == set(bench_render.IMAGES)
+    assert set(images) == set(bench_render.ALL_IMAGES)
     for name, entry in images.items():
         assert entry == {"name": name, "newName": f"ghcr.io/emilio-org/{name}", "digest": DIGEST}
     written = yaml.safe_load((tmp_path / "rendered" / "kustomization.yaml").read_text("utf-8"))
@@ -66,7 +66,7 @@ def test_each_image_is_replaced_by_its_digest_in_ghcr(tmp_path: Path) -> None:
 
 def test_the_overlay_is_reachable_from_where_it_is_rendered(tmp_path: Path) -> None:
     out = tmp_path / "rendered"
-    bench_render.render(dict.fromkeys(bench_render.IMAGES, DIGEST), owner="o", out=out)
+    bench_render.render(dict.fromkeys(bench_render.ALL_IMAGES, DIGEST), owner="o", out=out)
     resource = yaml.safe_load((out / "kustomization.yaml").read_text("utf-8"))["resources"][0]
     assert (out / resource / "kustomization.yaml").resolve() == (
         bench_render.OVERLAY / "kustomization.yaml"
@@ -75,13 +75,13 @@ def test_the_overlay_is_reachable_from_where_it_is_rendered(tmp_path: Path) -> N
 
 @pytest.mark.parametrize("digest", ["sha256:short", "latest", "sha512:" + "a" * 128, ""])
 def test_a_digest_that_is_not_one_is_refused(tmp_path: Path, digest: str) -> None:
-    digests = dict.fromkeys(bench_render.IMAGES, DIGEST) | {"argos-api": digest}
+    digests = dict.fromkeys(bench_render.ALL_IMAGES, DIGEST) | {"argos-api": digest}
     with pytest.raises(ValueError, match="argos-api"):
         bench_render.render(digests, owner="o", out=tmp_path / "rendered")
 
 
 def test_an_image_without_digest_is_refused(tmp_path: Path) -> None:
-    digests = dict.fromkeys(bench_render.IMAGES, DIGEST)
+    digests = dict.fromkeys(bench_render.ALL_IMAGES, DIGEST)
     del digests["argos-api"]
     with pytest.raises(ValueError, match="argos-api"):
         bench_render.render(digests, owner="o", out=tmp_path / "rendered")
@@ -90,7 +90,7 @@ def test_an_image_without_digest_is_refused(tmp_path: Path) -> None:
 def test_the_cli_reads_one_digest_file_per_image(tmp_path: Path) -> None:
     folder = tmp_path / "digests"
     folder.mkdir()
-    for name in bench_render.IMAGES:
+    for name in bench_render.ALL_IMAGES:
         (folder / name).write_text(DIGEST + "\n", encoding="utf-8")
     out = tmp_path / "rendered"
     assert (
@@ -98,3 +98,17 @@ def test_the_cli_reads_one_digest_file_per_image(tmp_path: Path) -> None:
         == 0
     )
     assert (out / "kustomization.yaml").is_file()
+
+
+def test_the_images_of_the_bench_are_built_from_their_own_context() -> None:
+    """PostgreSQL with AGE and pgvector is not a service of ARGOS, but the bench builds it too."""
+    assert "argos-postgres" in bench_render.BENCH_IMAGES
+    for name, image in bench_render.ALL_IMAGES.items():
+        assert (ROOT / image.dockerfile).is_file(), name
+        assert (ROOT / image.dockerfile).resolve().is_relative_to((ROOT / image.context).resolve())
+
+
+def test_every_built_image_is_pinned_when_rendered(tmp_path: Path) -> None:
+    digests = dict.fromkeys(bench_render.ALL_IMAGES, DIGEST)
+    kustomization = bench_render.render(digests, owner="o", out=tmp_path / "rendered")
+    assert {entry["name"] for entry in kustomization["images"]} == set(bench_render.ALL_IMAGES)

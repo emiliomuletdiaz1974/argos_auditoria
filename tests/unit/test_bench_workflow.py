@@ -43,7 +43,7 @@ def _images() -> set[str]:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return set(module.IMAGES)
+    return set(module.ALL_IMAGES)
 
 
 def test_it_runs_only_on_a_bench_tag() -> None:
@@ -61,8 +61,9 @@ def test_the_token_reads_by_default_and_each_job_asks_only_for_what_it_uses() ->
 
 def test_every_image_of_argos_is_built() -> None:
     [images_job] = [j for j in _workflow()["jobs"].values() if "matrix" in j.get("strategy", {})]
-    names = {entry["name"] for entry in images_job["strategy"]["matrix"]["image"]}
-    assert names == _images()
+    entries = images_job["strategy"]["matrix"]["image"]
+    assert {entry["name"] for entry in entries} == _images()
+    assert all("context" in entry for entry in entries), "each image builds from its own context"
 
 
 def test_each_image_is_signed_by_its_digest() -> None:

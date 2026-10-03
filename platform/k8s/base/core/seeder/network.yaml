@@ -1,0 +1,18 @@
+# K-03 · the seeder only talks to the API of Kubernetes. On k3s that is the address of the node
+# (port 6443) behind the service kubernetes.default (443).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: secret-seeder
+  namespace: argos-core
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: secret-seeder
+  policyTypes: [Egress]
+  egress:
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443

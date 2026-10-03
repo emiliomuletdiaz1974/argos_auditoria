@@ -32,13 +32,14 @@ jobs:
       fail-fast: true
       matrix:
         image:
-          - { name: argos-example, dockerfile: services/example/Dockerfile, component: ARG-001 }
-          - { name: argos-challenge-engine, dockerfile: services/challenge-engine/Dockerfile, component: ARG-043 }
-          - { name: argos-ai-gateway, dockerfile: services/ai-gateway/Dockerfile, component: ARG-052 }
-          - { name: argos-api, dockerfile: services/api/Dockerfile, component: ARG-071 }
-          - { name: argos-evidence, dockerfile: services/evidence/Dockerfile, component: ARG-061 }
-          - { name: argos-verifier, dockerfile: services/verifier/Dockerfile, component: ARG-069 }
-          - { name: argos-health, dockerfile: services/health/Dockerfile, component: ARG-094 }
+          - { name: argos-example, dockerfile: services/example/Dockerfile, component: ARG-001, context: . }
+          - { name: argos-challenge-engine, dockerfile: services/challenge-engine/Dockerfile, component: ARG-043, context: . }
+          - { name: argos-ai-gateway, dockerfile: services/ai-gateway/Dockerfile, component: ARG-052, context: . }
+          - { name: argos-api, dockerfile: services/api/Dockerfile, component: ARG-071, context: . }
+          - { name: argos-evidence, dockerfile: services/evidence/Dockerfile, component: ARG-061, context: . }
+          - { name: argos-verifier, dockerfile: services/verifier/Dockerfile, component: ARG-069, context: . }
+          - { name: argos-health, dockerfile: services/health/Dockerfile, component: ARG-094, context: . }
+          - { name: argos-postgres, dockerfile: deploy/dev/postgres/Dockerfile, component: ARG-004, context: deploy/dev/postgres }
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -55,7 +56,7 @@ jobs:
       - id: build
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ matrix.image.context }}
           file: ${{ matrix.image.dockerfile }}
           push: true
           tags: ghcr.io/${{ steps.tag.outputs.owner }}/${{ matrix.image.name }}:${{ steps.tag.outputs.version }}

@@ -1,0 +1,52 @@
+# K-03 · creates the missing secrets of argos-core (seed.py). Flux recreates it when its script or
+# its list change, and running it again changes nothing that already exists.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: secret-seeder
+  namespace: argos-core
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+  labels:
+    app.kubernetes.io/name: secret-seeder
+    app.kubernetes.io/part-of: argos
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: secret-seeder
+        app.kubernetes.io/part-of: argos
+    spec:
+      serviceAccountName: secret-seeder
+      automountServiceAccountToken: true
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: seeder
+          image: python:3.12.15-slim@sha256:29113dcae7aad06daa8e95260fa09f27d62be33b9687ea3774f771d601a02256
+          command: ["python", "/seeder/seed.py"]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: seeder
+              mountPath: /seeder
+              readOnly: true
+      volumes:
+        - name: seeder
+          configMap:
+            name: secret-seeder

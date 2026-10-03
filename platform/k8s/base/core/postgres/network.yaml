@@ -1,0 +1,21 @@
+# K-03 · only the namespaces of ARGOS reach PostgreSQL, and only its port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres
+  namespace: argos-core
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values: [argos-ai, argos-connect, argos-core, argos-services]
+      ports:
+        - protocol: TCP
+          port: 5432
