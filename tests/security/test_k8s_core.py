@@ -276,3 +276,52 @@ def test_only_the_services_of_argos_reach_opa() -> None:
     assert peer["namespaceSelector"]["matchLabels"] == {
         "kubernetes.io/metadata.name": "argos-services"
     }
+
+
+# ---------- Temporal and its own database ----------
+
+
+def test_temporal_writes_its_configuration_only_in_an_empty_volume() -> None:
+    temporal = _named("Deployment", "temporal")
+    pod = _pod(temporal)
+    [init] = pod["initContainers"]
+    [server] = pod["containers"]
+    assert init["image"] == server["image"], "the template is copied from the same image"
+    mounts = {m["mountPath"]: m["name"] for m in server["volumeMounts"]}
+    assert mounts["/etc/temporal/config"] == "config"
+    volumes = {v["name"]: v for v in pod["volumes"]}
+    assert "emptyDir" in volumes["config"]
+
+
+def test_temporal_and_its_database_share_a_generated_password() -> None:
+    [server] = _pod(_named("Deployment", "temporal"))["containers"]
+    env = {e["name"]: e for e in server["env"]}
+    assert env["POSTGRES_PWD"]["valueFrom"]["secretKeyRef"] == {
+        "name": "temporal-db",
+        "key": "password",
+    }
+    [database] = _pod(_named("StatefulSet", "temporal-db"))["containers"]
+    db_env = {e["name"]: e for e in database["env"]}
+    assert db_env["POSTGRES_PASSWORD"]["valueFrom"]["secretKeyRef"] == {
+        "name": "temporal-db",
+        "key": "password",
+    }
+    assert "POSTGRES_HOST_AUTH_METHOD" not in db_env, "never trust, as development does"
+    wanted = yaml.safe_load((CORE / "seeder" / "secrets.yaml").read_text("utf-8"))
+    assert {"name": "temporal-db", "keys": ["password"]} in wanted
+
+
+def test_only_temporal_reaches_its_database_and_only_argos_services_reach_temporal() -> None:
+    [db_rule] = _named("NetworkPolicy", "temporal-db")["spec"]["ingress"]
+    [peer] = db_rule["from"]
+    assert peer == {"podSelector": {"matchLabels": {"app.kubernetes.io/name": "temporal"}}}
+    services, itself = _named("NetworkPolicy", "temporal")["spec"]["ingress"]
+    assert services["ports"] == [{"protocol": "TCP", "port": 7233}]
+    [frontend] = services["from"]
+    assert frontend["namespaceSelector"]["matchLabels"] == {
+        "kubernetes.io/metadata.name": "argos-services"
+    }
+    # The services of the server talk to each other through the address of the pod.
+    assert itself["from"] == [
+        {"podSelector": {"matchLabels": {"app.kubernetes.io/name": "temporal"}}}
+    ]

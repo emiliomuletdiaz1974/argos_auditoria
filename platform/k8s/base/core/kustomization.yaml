@@ -7,3 +7,4 @@ resources:
   - postgres
   - nats
   - opa
+  - temporal
