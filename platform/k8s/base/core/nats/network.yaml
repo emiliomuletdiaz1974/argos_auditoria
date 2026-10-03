@@ -1,0 +1,22 @@
+# K-03 · only the namespaces of ARGOS reach NATS, and only its client port: the monitoring port
+# answers the probes of the kubelet on the node, never another pod.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: nats
+  namespace: argos-core
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: nats
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values: [argos-ai, argos-connect, argos-core, argos-services]
+      ports:
+        - protocol: TCP
+          port: 4222

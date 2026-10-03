@@ -1,0 +1,105 @@
+# K-03 · NATS JetStream of the bench, with the users and permissions of the development environment
+# (deploy/dev/nats/nats.conf, SEC-026). The passwords are not here: NATS reads each one from an
+# environment variable of the pod, which comes from the secret nats-users the seeder generated. The
+# user of the developer's host does not exist in the bench, and TLS comes with cert-manager (K-06).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nats-config
+  namespace: argos-core
+  labels:
+    app.kubernetes.io/name: nats
+    app.kubernetes.io/part-of: argos
+data:
+  nats.conf: |
+    http_port: 8222
+
+    jetstream {
+      store_dir: /data
+    }
+
+
+    authorization {
+      users = [
+        {
+          user: inventory
+          password: $NATS_PASSWORD_INVENTORY
+          permissions: {
+            publish: { allow: ["argos.discovery.>",
+              "$JS.API.INFO", "$JS.API.STREAM.NAMES", "$JS.API.STREAM.INFO.DISCOVERY",
+              "$JS.API.CONSUMER.INFO.DISCOVERY.inventory-ingest",
+              "$JS.API.CONSUMER.CREATE.DISCOVERY.inventory-ingest",
+              "$JS.API.CONSUMER.CREATE.DISCOVERY.inventory-ingest.>",
+              "$JS.API.CONSUMER.DURABLE.CREATE.DISCOVERY.inventory-ingest",
+              "$JS.ACK.DISCOVERY.inventory-ingest.>", "$JS.FC.>"] }
+            subscribe: { allow: ["_INBOX.>"] }
+          }
+        }
+        {
+          user: challenge
+          password: $NATS_PASSWORD_CHALLENGE
+          permissions: {
+            publish: { allow: ["argos.challenge.>", "argos.campaign.>",
+              "$JS.API.INFO", "$JS.API.STREAM.NAMES", "$JS.API.STREAM.INFO.CHALLENGE",
+              "$JS.API.CONSUMER.INFO.CHALLENGE.campaign-circuit",
+              "$JS.API.CONSUMER.CREATE.CHALLENGE.campaign-circuit",
+              "$JS.API.CONSUMER.CREATE.CHALLENGE.campaign-circuit.>",
+              "$JS.API.CONSUMER.DURABLE.CREATE.CHALLENGE.campaign-circuit",
+              "$JS.ACK.CHALLENGE.campaign-circuit.>", "$JS.FC.>"] }
+            subscribe: { allow: ["_INBOX.>"] }
+          }
+        }
+        {
+          user: evidence
+          password: $NATS_PASSWORD_EVIDENCE
+          permissions: {
+            publish: { allow: ["argos.evidence.>",
+              "$JS.API.INFO", "$JS.API.STREAM.NAMES", "$JS.API.STREAM.INFO.CHALLENGE",
+              "$JS.API.STREAM.INFO.EVIDENCE",
+              "$JS.API.CONSUMER.INFO.CHALLENGE.evidence-on-seal",
+              "$JS.API.CONSUMER.CREATE.CHALLENGE.evidence-on-seal",
+              "$JS.API.CONSUMER.CREATE.CHALLENGE.evidence-on-seal.>",
+              "$JS.API.CONSUMER.DURABLE.CREATE.CHALLENGE.evidence-on-seal",
+              "$JS.ACK.CHALLENGE.evidence-on-seal.>", "$JS.FC.>"] }
+            subscribe: { allow: ["_INBOX.>"] }
+          }
+        }
+        {
+          # The webhook worker only listens: it publishes nothing of its own on argos.*. One durable
+          # per subject it listens to.
+          user: webhook
+          password: $NATS_PASSWORD_WEBHOOK
+          permissions: {
+            publish: { allow: [
+              "$JS.API.INFO", "$JS.API.STREAM.NAMES", "$JS.API.STREAM.INFO.CHALLENGE",
+              "$JS.API.CONSUMER.INFO.CHALLENGE.webhooks-finding_opened",
+              "$JS.API.CONSUMER.CREATE.CHALLENGE.webhooks-finding_opened",
+              "$JS.API.CONSUMER.CREATE.CHALLENGE.webhooks-finding_opened.>",
+              "$JS.API.CONSUMER.DURABLE.CREATE.CHALLENGE.webhooks-finding_opened",
+              "$JS.ACK.CHALLENGE.webhooks-finding_opened.>",
+              "$JS.API.CONSUMER.INFO.CHALLENGE.webhooks-campaign_sealed",
+              "$JS.API.CONSUMER.CREATE.CHALLENGE.webhooks-campaign_sealed",
+              "$JS.API.CONSUMER.CREATE.CHALLENGE.webhooks-campaign_sealed.>",
+              "$JS.API.CONSUMER.DURABLE.CREATE.CHALLENGE.webhooks-campaign_sealed",
+              "$JS.ACK.CHALLENGE.webhooks-campaign_sealed.>",
+              "$JS.API.CONSUMER.INFO.CHALLENGE.webhooks-approval_requested",
+              "$JS.API.CONSUMER.CREATE.CHALLENGE.webhooks-approval_requested",
+              "$JS.API.CONSUMER.CREATE.CHALLENGE.webhooks-approval_requested.>",
+              "$JS.API.CONSUMER.DURABLE.CREATE.CHALLENGE.webhooks-approval_requested",
+              "$JS.ACK.CHALLENGE.webhooks-approval_requested.>",
+              "$JS.FC.>"] }
+            subscribe: { allow: ["_INBOX.>"] }
+          }
+        }
+        {
+          # The platform: creates and updates the streams once, at start. Nothing else.
+          user: platform
+          password: $NATS_PASSWORD_PLATFORM
+          permissions: {
+            publish: { allow: ["$JS.API.INFO", "$JS.API.STREAM.NAMES", "$JS.API.STREAM.INFO.*",
+              "$JS.API.STREAM.CREATE.*", "$JS.API.STREAM.UPDATE.*"] }
+            subscribe: { allow: ["_INBOX.>"] }
+          }
+        }
+      ]
+    }

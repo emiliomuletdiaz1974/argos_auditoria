@@ -20,9 +20,10 @@ BASE = K8S / "base"
 OVERLAY = K8S / "overlays" / "bench-gcp"
 ARGOS_NAMESPACES = {"argos-core", "argos-services", "argos-ai", "argos-connect"}
 BENCH_NAMESPACES = {"bench-sources"}
-# A key named password or token (not `automountServiceAccountToken`), or a private key.
+# A key named password or token with a value written in it (not `automountServiceAccountToken`, nor
+# a `$VARIABLE` the program reads from the environment), or a private key.
 SECRET_LIKE = re.compile(
-    r"dev-only-|(?<![a-z])password\s*:|(?<![a-z])token\s*:|BEGIN [A-Z ]*PRIVATE KEY", re.I
+    r"dev-only-|(?<![a-z])(password|token)\s*:\s*(?![\s$])|BEGIN [A-Z ]*PRIVATE KEY", re.I
 )
 
 

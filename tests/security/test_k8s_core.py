@@ -187,3 +187,56 @@ def test_only_the_namespaces_of_argos_reach_postgres() -> None:
     policy = _named("NetworkPolicy", "postgres")
     [rule] = policy["spec"]["ingress"]
     assert rule["ports"] == [{"protocol": "TCP", "port": 5432}]
+
+
+# ---------- NATS JetStream, one user per service ----------
+
+NATS_USERS = ["inventory", "challenge", "evidence", "webhook", "platform"]
+
+
+def _nats_conf() -> str:
+    conf: str = _named("ConfigMap", "nats-config")["data"]["nats.conf"]
+    return conf
+
+
+def _without_passwords(block: str) -> str:
+    return "\n".join(line for line in block.splitlines() if "password" not in line)
+
+
+def _user_block(conf: str, user: str) -> str:
+    return conf.split(f"user: {user}\n", 1)[1].split("\n    }", 1)[0]
+
+
+def test_nats_keeps_the_users_and_permissions_of_the_development_environment() -> None:
+    development = (K8S.parents[1] / "deploy" / "dev" / "nats" / "nats.conf").read_text("utf-8")
+    bench = _nats_conf()
+    for user in NATS_USERS:
+        assert f"user: {user}\n" in bench, user
+        dev_block = _user_block(development, user)
+        bench_block = _user_block(bench, user)
+        assert _without_passwords(bench_block) == _without_passwords(dev_block), user
+    assert "argos-dev" not in bench, "the user of the developer's host is not in the bench"
+
+
+def test_every_nats_password_comes_from_the_generated_secret() -> None:
+    conf = _nats_conf()
+    assert "dev-only" not in conf
+    for user in NATS_USERS:
+        assert f"password: $NATS_PASSWORD_{user.upper()}" in conf, user
+    [container] = _pod(_named("StatefulSet", "nats"))["containers"]
+    env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container["env"]}
+    for user in NATS_USERS:
+        assert env[f"NATS_PASSWORD_{user.upper()}"] == {"name": "nats-users", "key": user}
+    wanted = yaml.safe_load((CORE / "seeder" / "secrets.yaml").read_text("utf-8"))
+    assert {"name": "nats-users", "keys": NATS_USERS} in wanted
+
+
+def test_jetstream_keeps_its_streams_in_a_volume() -> None:
+    assert "store_dir: /data" in _nats_conf()
+    [claim] = _named("StatefulSet", "nats")["spec"]["volumeClaimTemplates"]
+    assert claim["metadata"]["name"] == "data"
+
+
+def test_only_the_namespaces_of_argos_reach_nats() -> None:
+    [rule] = _named("NetworkPolicy", "nats")["spec"]["ingress"]
+    assert rule["ports"] == [{"protocol": "TCP", "port": 4222}]

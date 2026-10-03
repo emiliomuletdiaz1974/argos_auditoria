@@ -39,13 +39,16 @@ def test_it_creates_what_is_missing_and_keeps_what_exists(
     api = Api(existing=set())
     monkeypatch.setattr(seed, "_request", api)
     assert seed.main() == 0
-    [(name, secret)] = api.created.items()
-    assert name == "postgres-superuser"
-    value = base64.b64decode(secret["data"]["password"]).decode()
-    assert len(value) >= 40, "32 random bytes, url-safe"
-    assert value not in capsys.readouterr().out, "the value is never shown"
+    wanted = {name for name, _ in seed._wanted()}
+    assert set(api.created) == wanted
+    shown = capsys.readouterr().out
+    for secret in api.created.values():
+        for encoded in secret["data"].values():
+            value = base64.b64decode(encoded).decode()
+            assert len(value) >= 40, "32 random bytes, url-safe"
+            assert value not in shown, "the value is never shown"
 
-    again = Api(existing={"postgres-superuser"})
+    again = Api(existing=wanted)
     monkeypatch.setattr(seed, "_request", again)
     assert seed.main() == 0
     assert again.created == {}, "an existing secret is never replaced"
