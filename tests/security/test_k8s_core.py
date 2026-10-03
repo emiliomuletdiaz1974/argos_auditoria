@@ -372,3 +372,42 @@ def test_vault_may_review_tokens_of_service_accounts_and_nothing_more() -> None:
     assert egress == [
         {"ports": [{"protocol": "TCP", "port": 443}, {"protocol": "TCP", "port": 6443}]}
     ]
+
+
+# ---------- the bootstrap Job (K-04) ----------
+
+
+def test_the_bootstrap_runs_from_the_image_of_the_api_with_only_generated_secrets() -> None:
+    job = _named("Job", "argos-bootstrap")
+    assert job["metadata"]["annotations"]["kustomize.toolkit.fluxcd.io/force"] == "enabled"
+    pod = _pod(job)
+    assert pod["serviceAccountName"] == "argos-bootstrap"
+    [container] = pod["containers"]
+    assert container["image"] == "argos-api"
+    env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container["env"] if "valueFrom" in e}
+    assert env == {
+        "ARGOS_PG_PASSWORD": {"name": "postgres-superuser", "key": "password"},
+        "ARGOS_NATS_PLATFORM_PASSWORD": {"name": "nats-users", "key": "platform"},
+    }
+
+
+def test_the_bootstrap_reaches_only_postgres_nats_and_vault() -> None:
+    egress = _named("NetworkPolicy", "argos-bootstrap")["spec"]["egress"]
+    reached = {
+        (rule["to"][0]["podSelector"]["matchLabels"]["app.kubernetes.io/name"], p["port"])
+        for rule in egress
+        for p in rule["ports"]
+    }
+    assert reached == {("postgres", 5432), ("nats", 4222), ("vault", 8200)}
+
+
+def test_vault_lets_the_bootstrap_touch_only_the_database_engine() -> None:
+    setup = (K8S / "bench" / "vault-setup.sh").read_text("utf-8")
+    assert "vault policy write argos-bootstrap" in setup
+    policy = setup.split("argos-bootstrap -", 1)[0].rsplit("printf", 1)[1]
+    paths = [chunk.split('"')[1] for chunk in policy.split("path ")[1:]]
+    assert all(p in ("sys/mounts", "sys/mounts/db") or p.startswith("db/") for p in paths), paths
+    assert (
+        "auth/kubernetes/role/bootstrap bound_service_account_names=argos-bootstrap"
+        " bound_service_account_namespaces=argos-core"
+    ) in setup

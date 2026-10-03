@@ -9,3 +9,4 @@ resources:
   - opa
   - temporal
   - evidence
+  - bootstrap

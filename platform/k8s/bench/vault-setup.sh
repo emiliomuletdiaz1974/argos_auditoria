@@ -58,4 +58,17 @@ done
 enabled kubernetes || vault auth enable kubernetes
 vault write auth/kubernetes/config kubernetes_host="https://kubernetes.default.svc" >/dev/null
 
+# K-04 · the bootstrap Job (argos-core/argos-bootstrap) sets up the database engine and nothing
+# else: mount it, configure its connection, rotate the password of vault_admin and write the role of
+# each service. Its token lives 15 minutes.
+printf '%s\n' \
+  'path "sys/mounts" { capabilities = ["read"] }' \
+  'path "sys/mounts/db" { capabilities = ["create", "read", "update"] }' \
+  'path "db/config/argos" { capabilities = ["create", "read", "update"] }' \
+  'path "db/rotate-root/argos" { capabilities = ["update"] }' \
+  'path "db/roles/svc-*" { capabilities = ["create", "read", "update"] }' \
+  | vault policy write argos-bootstrap - >/dev/null
+vault write auth/kubernetes/role/bootstrap bound_service_account_names=argos-bootstrap bound_service_account_namespaces=argos-core \
+  policies=argos-bootstrap ttl=15m >/dev/null
+
 echo "bench vault configured"
