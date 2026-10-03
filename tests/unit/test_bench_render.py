@@ -112,3 +112,8 @@ def test_every_built_image_is_pinned_when_rendered(tmp_path: Path) -> None:
     digests = dict.fromkeys(bench_render.ALL_IMAGES, DIGEST)
     kustomization = bench_render.render(digests, owner="o", out=tmp_path / "rendered")
     assert {entry["name"] for entry in kustomization["images"]} == set(bench_render.ALL_IMAGES)
+
+
+def test_opa_is_built_with_its_policies_from_the_root_of_the_repository() -> None:
+    opa = bench_render.BENCH_IMAGES["argos-opa"]
+    assert opa.context == "." and opa.dockerfile == "platform/k8s/images/opa/Dockerfile"

@@ -1,0 +1,19 @@
+# K-03 · only argos-services, where the challenge engine runs, reaches OPA, and only its port.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: opa
+  namespace: argos-core
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: opa
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-services
+      ports:
+        - protocol: TCP
+          port: 8181

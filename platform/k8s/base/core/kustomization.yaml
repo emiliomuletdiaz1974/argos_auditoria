@@ -6,3 +6,4 @@ resources:
   - seeder
   - postgres
   - nats
+  - opa

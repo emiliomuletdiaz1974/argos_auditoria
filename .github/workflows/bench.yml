@@ -40,6 +40,7 @@ jobs:
           - { name: argos-verifier, dockerfile: services/verifier/Dockerfile, component: ARG-069, context: . }
           - { name: argos-health, dockerfile: services/health/Dockerfile, component: ARG-094, context: . }
           - { name: argos-postgres, dockerfile: deploy/dev/postgres/Dockerfile, component: ARG-004, context: deploy/dev/postgres }
+          - { name: argos-opa, dockerfile: platform/k8s/images/opa/Dockerfile, component: ARG-036, context: . }
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

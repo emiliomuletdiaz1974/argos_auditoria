@@ -240,3 +240,39 @@ def test_jetstream_keeps_its_streams_in_a_volume() -> None:
 def test_only_the_namespaces_of_argos_reach_nats() -> None:
     [rule] = _named("NetworkPolicy", "nats")["spec"]["ingress"]
     assert rule["ports"] == [{"protocol": "TCP", "port": 4222}]
+
+
+# ---------- OPA, the operational rules of the challenge engine (ARG-036) ----------
+
+
+def test_opa_asks_every_client_for_a_token_it_only_knows_by_its_hash() -> None:
+    deployment = _named("Deployment", "opa")
+    [container] = _pod(deployment)["containers"]
+    args = container["args"]
+    assert "--authentication=token" in args and "--authorization=basic" in args
+    assert container["image"] == "argos-opa", "policies travel in the signed image, not a mount"
+    [init] = _pod(deployment)["initContainers"]
+    script = " ".join(init["command"] + init.get("args", []))
+    assert "sha256" in script and "opa_clients" in script
+    assert "print(token" not in script
+    env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in init["env"]}
+    assert env["OPA_TOKEN_CHALLENGE"] == {"name": "opa-clients", "key": "challenge"}
+    wanted = yaml.safe_load((CORE / "seeder" / "secrets.yaml").read_text("utf-8"))
+    assert {"name": "opa-clients", "keys": ["challenge"]} in wanted
+
+
+def test_the_image_of_opa_carries_the_policies_of_the_library() -> None:
+    dockerfile = (K8S / "images" / "opa" / "Dockerfile").read_text("utf-8")
+    assert "openpolicyagent/opa:1.20.2@sha256:" in dockerfile
+    for source in ("library/policies", "deploy/dev/opa/client", "deploy/dev/opa-auth/authz.rego"):
+        assert source in dockerfile, source
+    assert "clients.json" not in dockerfile, "the hashes of the development tokens stay out"
+
+
+def test_only_the_services_of_argos_reach_opa() -> None:
+    [rule] = _named("NetworkPolicy", "opa")["spec"]["ingress"]
+    assert rule["ports"] == [{"protocol": "TCP", "port": 8181}]
+    [peer] = rule["from"]
+    assert peer["namespaceSelector"]["matchLabels"] == {
+        "kubernetes.io/metadata.name": "argos-services"
+    }

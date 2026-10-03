@@ -47,6 +47,7 @@ IMAGES = {
 # environment, each from its own folder (K-03).
 BENCH_IMAGES = {
     "argos-postgres": Image("deploy/dev/postgres/Dockerfile", "ARG-004", "deploy/dev/postgres"),
+    "argos-opa": Image("platform/k8s/images/opa/Dockerfile", "ARG-036"),
 }
 ALL_IMAGES = IMAGES | BENCH_IMAGES
 
