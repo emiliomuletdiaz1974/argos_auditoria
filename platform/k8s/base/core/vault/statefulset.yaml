@@ -79,6 +79,9 @@ spec:
               mountPath: /tmp
             - name: home
               mountPath: /home/vault
+            - name: postgres-ca
+              mountPath: /run/postgres-ca
+              readOnly: true
       volumes:
         - name: config
           configMap:
@@ -87,6 +90,15 @@ spec:
           emptyDir: {}
         - name: home
           emptyDir: {}
+        # The CA that signed PostgreSQL, so the database engine connects with verify-full (Vault
+        # 1.17 ignores `tls_ca`). Optional: cert-manager needs this very Vault to issue it.
+        - name: postgres-ca
+          secret:
+            secretName: postgres-tls
+            optional: true
+            items:
+              - key: ca.crt
+                path: ca.crt
   volumeClaimTemplates:
     - metadata:
         name: data

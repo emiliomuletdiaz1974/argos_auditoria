@@ -30,8 +30,10 @@ NATS_URL = "nats://nats.argos-core.svc:4222"
 VAULT_ADDR = "http://vault.argos-core.svc:8200"
 ACCOUNT_TOKEN = Path("/var/run/secrets/kubernetes.io/serviceaccount/token")
 MIGRATIONS = Path("/app/services/api/migrations")
-# No TLS until cert-manager issues the certificates (K-06): then it becomes verify-full.
-PG_TLS = "sslmode=disable"
+# PostgreSQL is verified with the CA that signed its certificate: here, mounted by the Job; in
+# Vault, mounted in its pod (Vault 1.17 ignores `tls_ca` in the configuration).
+PG_TLS = "sslmode=verify-full&sslrootcert=/tls/ca.crt"
+VAULT_PG_TLS = "sslmode=verify-full&sslrootcert=/run/postgres-ca/ca.crt"
 DEFAULT_TTL = "24h"
 MAX_TTL = "72h"
 # Vault role -> PostgreSQL role of the service (platform/vault/database-engine.sh).
@@ -99,7 +101,7 @@ def database_engine(vault: Vault, set_admin_password: Callable[[str], None]) -> 
             "plugin_name": "postgresql-database-plugin",
             "allowed_roles": "svc-*",
             "connection_url": (
-                f"postgresql://{{{{username}}}}:{{{{password}}}}@{PG_HOST}/{DB_NAME}?{PG_TLS}"
+                f"postgresql://{{{{username}}}}:{{{{password}}}}@{PG_HOST}/{DB_NAME}?{VAULT_PG_TLS}"
             ),
             "username": "vault_admin",
             "password": password,

@@ -71,4 +71,7 @@ printf '%s\n' \
 vault write auth/kubernetes/role/bootstrap bound_service_account_names=argos-bootstrap bound_service_account_namespaces=argos-core \
   policies=argos-bootstrap ttl=15m >/dev/null
 
+# K-04 · cert-manager signs the certificate of each service with the intermediate CA, and nothing else.
+vault write auth/kubernetes/role/cert-manager bound_service_account_names=cert-manager bound_service_account_namespaces=cert-manager   policies=argos-cert-issuer ttl=15m >/dev/null
+
 echo "bench vault configured"

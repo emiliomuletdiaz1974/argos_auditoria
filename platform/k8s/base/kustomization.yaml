@@ -4,4 +4,5 @@ kind: Kustomization
 resources:
   - namespaces.yaml
   - default-deny.yaml
+  - certs
   - core

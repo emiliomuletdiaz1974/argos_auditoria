@@ -1,0 +1,23 @@
+# K-04 · the certificate of PostgreSQL, from the intermediate CA of the Vault of the bench. 30 days,
+# renewed at 20 with a new key; PostgreSQL reads the renewed files on its next reload.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: postgres
+  namespace: argos-core
+spec:
+  secretName: postgres-tls
+  commonName: postgres.argos-core.svc
+  dnsNames:
+    - postgres.argos-core.svc
+    - postgres.argos-core.svc.cluster.local
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-bench
+    kind: ClusterIssuer

@@ -17,6 +17,8 @@ K3S_VERSION="v1.36.5+k3s1"
 K3S_INSTALLER_SHA256="46177d4c99440b4c0311b67233823a8e8a2fc09693f6c89af1a7161e152fbfad"
 FLUX_VERSION="2.9.6"
 FLUX_SHA256="b4d22673e9246cbd628881f1a9ef3b090085dced291e42d804555cee8e8d42c5"
+CERT_MANAGER_VERSION="v1.21.2"
+CERT_MANAGER_SHA256="e03b668ec8675214af6b0a671699d088f2601fa3878e0dbe1b41d3feafd1879f"
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 KUBECONFIG_FILE="/etc/rancher/k3s/k3s.yaml"
@@ -58,6 +60,14 @@ else
   run tar -xzf "$tarball" -C "$workdir" flux
   as_root install -m 0755 "$workdir/flux" /usr/local/bin/flux
 fi
+
+# cert-manager before the bench: the bench declares certificates, and their kinds must exist.
+echo "== cert-manager $CERT_MANAGER_VERSION"
+manifest="$workdir/cert-manager.yaml"
+run curl -fsSL -o "$manifest" "https://github.com/cert-manager/cert-manager/releases/download/${CERT_MANAGER_VERSION}/cert-manager.yaml"
+if [[ "$DRY_RUN" == 0 ]]; then echo "$CERT_MANAGER_SHA256  $manifest" | sha256sum -c -; fi
+as_root env KUBECONFIG="$KUBECONFIG_FILE" k3s kubectl apply -f "$manifest"
+as_root env KUBECONFIG="$KUBECONFIG_FILE" k3s kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=300s
 
 echo "== flux controllers and the bench source"
 as_root env KUBECONFIG="$KUBECONFIG_FILE" flux install --version="v$FLUX_VERSION"

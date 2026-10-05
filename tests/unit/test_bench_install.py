@@ -61,7 +61,7 @@ def test_every_download_is_checked_before_it_is_used() -> None:
     script = _script()
     assert not re.search(r"\|\s*(sudo\s+)?(ba)?sh\b", script), "nothing is piped into a shell"
     downloads = re.findall(r'curl [^\n]*-o "([^"]+)"', script)
-    assert len(downloads) == 2
+    assert len(downloads) == 3, "k3s, flux and cert-manager"
     checks = [line for line in script.splitlines() if "sha256sum -c" in line]
     for target in downloads:
         assert any(target in line for line in checks), f"{target} is used without its checksum"
@@ -201,3 +201,26 @@ def test_the_setup_script_is_valid_sh() -> None:
     assert BASH is not None
     script = SETUP_SH.relative_to(ROOT).as_posix()
     subprocess.run([BASH, "-n", script], check=True, cwd=ROOT)  # noqa: S603
+
+
+def test_cert_manager_is_installed_once_pinned_and_verified() -> None:
+    assert re.fullmatch(r"v\d+\.\d+\.\d+", _pinned("CERT_MANAGER_VERSION"))
+    assert re.fullmatch(r"[0-9a-f]{64}", _pinned("CERT_MANAGER_SHA256"))
+
+
+def test_vault_lets_cert_manager_only_sign_certificates() -> None:
+    setup = SETUP_SH.read_text(encoding="utf-8")
+    assert (
+        "auth/kubernetes/role/cert-manager bound_service_account_names=cert-manager"
+        " bound_service_account_namespaces=cert-manager"
+    ) in setup
+    assert "policies=argos-cert-issuer" in setup
+
+
+def test_the_bootstrap_verifies_postgres_with_the_ca_of_the_bench() -> None:
+    script = (ROOT / "platform" / "k8s" / "base" / "core" / "bootstrap" / "bootstrap.py").read_text(
+        encoding="utf-8"
+    )
+    assert "sslmode=verify-full" in script and "sslrootcert=" in script
+    # Vault 1.17 ignores `tls_ca`: it reads the CA from a file mounted in its pod.
+    assert "sslrootcert=/run/postgres-ca/ca.crt" in script, "Vault verifies with the same CA"

@@ -1,8 +1,8 @@
 # K-03 · who may connect to PostgreSQL of the bench, and how. The socket is trusted, as in the
 # development environment: whoever reaches it already runs inside the pod, and the init scripts of
 # the image use it as `argos` while the process is the user postgres (so `peer` refuses them). Over
-# the network every client proves its password with SCRAM. TLS on the network comes with
-# cert-manager (K-06): then these `host` lines become `hostssl`.
+# the network, only TLS (K-04, the certificate of cert-manager) and a password proved with SCRAM;
+# a connection without TLS is refused, whoever it is.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -14,5 +14,5 @@ metadata:
 data:
   pg_hba.conf: |
     local  all  all                 trust
-    host   all  all  127.0.0.1/32  scram-sha-256
-    host   all  all  all           scram-sha-256
+    hostssl    all  all  all  scram-sha-256
+    hostnossl  all  all  all  reject

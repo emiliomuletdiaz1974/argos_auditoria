@@ -42,6 +42,14 @@ spec:
             - hba_file=/etc/postgresql/pg_hba.conf
             - -c
             - password_encryption=scram-sha-256
+            - -c
+            - ssl=on
+            - -c
+            - ssl_min_protocol_version=TLSv1.3
+            - -c
+            - ssl_cert_file=/tls/tls.crt
+            - -c
+            - ssl_key_file=/tls/tls.key
           env:
             - name: POSTGRES_USER
               value: argos
@@ -87,6 +95,9 @@ spec:
               mountPath: /var/run/postgresql
             - name: tmp
               mountPath: /tmp
+            - name: tls
+              mountPath: /tls
+              readOnly: true
       volumes:
         - name: hba
           configMap:
@@ -95,6 +106,12 @@ spec:
           emptyDir: {}
         - name: tmp
           emptyDir: {}
+        # The certificate cert-manager issues (certificate.yaml). PostgreSQL takes a key owned by
+        # root only with mode 0640 or less; the group is the fsGroup of the pod.
+        - name: tls
+          secret:
+            secretName: postgres-tls
+            defaultMode: 0640
   volumeClaimTemplates:
     - metadata:
         name: data

@@ -1,0 +1,46 @@
+# K-04 · cert-manager signs the certificates of the bench with the intermediate CA of its Vault
+# (pki_int, role argos-svc), as cert-issuer does in development (F09-06). It signs in to Vault with
+# its own service account (kubernetes auth, role cert-manager, policy argos-cert-issuer). Vault
+# speaks HTTP inside the cluster until it has its own certificate; only the namespaces of ARGOS
+# and cert-manager reach it.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: vault-bench
+spec:
+  vault:
+    server: http://vault.argos-core.svc:8200
+    path: pki_int/sign/argos-svc
+    auth:
+      kubernetes:
+        role: cert-manager
+        mountPath: /v1/auth/kubernetes
+        serviceAccountRef:
+          name: cert-manager
+---
+# cert-manager asks the API of Kubernetes for a token of its own account to present to Vault. It may
+# do that for this account, and for nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: cert-manager-vault-token
+  namespace: cert-manager
+rules:
+  - apiGroups: [""]
+    resources: ["serviceaccounts/token"]
+    resourceNames: ["cert-manager"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: cert-manager-vault-token
+  namespace: cert-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: cert-manager-vault-token
+subjects:
+  - kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager

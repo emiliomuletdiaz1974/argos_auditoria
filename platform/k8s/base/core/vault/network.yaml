@@ -1,4 +1,5 @@
-# K-03 · only the namespaces of ARGOS reach Vault, and only its API. Out of it, only the API of
+# K-03 · only the namespaces of ARGOS, and cert-manager to sign certificates (K-04), reach Vault,
+# and only its API. Out of it, only the API of
 # Kubernetes, to review the tokens of the services that sign in (K-04); on k3s that is the address
 # of the node (6443) behind the service kubernetes.default (443).
 apiVersion: networking.k8s.io/v1
@@ -17,7 +18,7 @@ spec:
             matchExpressions:
               - key: kubernetes.io/metadata.name
                 operator: In
-                values: [argos-ai, argos-connect, argos-core, argos-services]
+                values: [argos-ai, argos-connect, argos-core, argos-services, cert-manager]
       ports:
         - protocol: TCP
           port: 8200

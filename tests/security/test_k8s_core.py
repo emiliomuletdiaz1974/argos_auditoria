@@ -41,7 +41,9 @@ def _containers(workload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def _named(kind: str, name: str) -> dict[str, Any]:
     [found] = [
-        d for d in _documents(CORE) if d.get("kind") == kind and d["metadata"]["name"] == name
+        d
+        for d in _documents(K8S / "base")
+        if d.get("kind") == kind and d["metadata"]["name"] == name
     ]
     return found
 
@@ -121,10 +123,11 @@ def test_only_the_namespaces_of_argos_reach_vault_and_only_on_its_port() -> None
     assert rule["ports"] == [{"protocol": "TCP", "port": 8200}]
     [peer] = rule["from"]
     expression = peer["namespaceSelector"]["matchExpressions"][0]
+    # The namespaces of ARGOS, and cert-manager, which signs in to sign certificates (K-04).
     assert expression == {
         "key": "kubernetes.io/metadata.name",
         "operator": "In",
-        "values": sorted(ARGOS_NAMESPACES),
+        "values": sorted(ARGOS_NAMESPACES | {"cert-manager"}),
     }
 
 
@@ -178,9 +181,9 @@ def test_postgres_takes_its_password_from_the_generated_secret() -> None:
 def test_postgres_asks_every_network_client_for_scram() -> None:
     hba = _named("ConfigMap", "postgres-hba")["data"]["pg_hba.conf"]
     rules = [line.split() for line in hba.splitlines() if line and not line.startswith("#")]
-    network = [r for r in rules if r[0].startswith("host")]
-    assert network and all(r[-1] == "scram-sha-256" for r in network)
-    assert not any(r[-1] == "trust" for r in network)
+    over_tls = [r for r in rules if r[0] == "hostssl"]
+    assert over_tls and all(r[-1] == "scram-sha-256" for r in over_tls)
+    assert not any(r[-1] == "trust" for r in rules if r[0].startswith("host"))
 
 
 def test_only_the_namespaces_of_argos_reach_postgres() -> None:
@@ -411,3 +414,68 @@ def test_vault_lets_the_bootstrap_touch_only_the_database_engine() -> None:
         "auth/kubernetes/role/bootstrap bound_service_account_names=argos-bootstrap"
         " bound_service_account_namespaces=argos-core"
     ) in setup
+
+
+# ---------- TLS of PostgreSQL with cert-manager and Vault (K-04, ahead of K-06) ----------
+
+
+def test_cert_manager_signs_with_the_intermediate_of_the_bench() -> None:
+    issuer = _named("ClusterIssuer", "vault-bench")
+    vault = issuer["spec"]["vault"]
+    assert vault["path"] == "pki_int/sign/argos-svc"
+    assert vault["auth"]["kubernetes"]["role"] == "cert-manager"
+    assert vault["auth"]["kubernetes"]["serviceAccountRef"]["name"] == "cert-manager"
+
+
+def test_postgres_has_a_certificate_with_the_names_of_the_cluster() -> None:
+    certificate = _named("Certificate", "postgres")
+    spec = certificate["spec"]
+    assert spec["secretName"] == "postgres-tls"
+    assert set(spec["dnsNames"]) == {
+        "postgres.argos-core.svc",
+        "postgres.argos-core.svc.cluster.local",
+    }
+    assert spec["issuerRef"] == {"name": "vault-bench", "kind": "ClusterIssuer"}
+    assert spec["privateKey"]["rotationPolicy"] == "Always"
+
+
+def test_postgres_speaks_only_tls_on_the_network() -> None:
+    [container] = _pod(_named("StatefulSet", "postgres"))["containers"]
+    args = " ".join(container["args"])
+    assert "ssl=on" in args and "ssl_min_protocol_version=TLSv1.3" in args
+    hba = _named("ConfigMap", "postgres-hba")["data"]["pg_hba.conf"]
+    rules = [line.split() for line in hba.splitlines() if line and not line.startswith("#")]
+    assert [r for r in rules if r[0] == "host"] == [], "no clear connection over the network"
+    assert ["hostnossl", "all", "all", "all", "reject"] in rules
+    volumes = {v["name"]: v for v in _pod(_named("StatefulSet", "postgres"))["volumes"]}
+    # PostgreSQL takes a key owned by root only with mode 0640 or less.
+    assert volumes["tls"]["secret"] == {"secretName": "postgres-tls", "defaultMode": 0o640}
+
+
+def test_cert_manager_reaches_vault_and_may_ask_for_its_own_token() -> None:
+    [rule] = _named("NetworkPolicy", "vault")["spec"]["ingress"]
+    allowed = rule["from"][0]["namespaceSelector"]["matchExpressions"][0]["values"]
+    assert "cert-manager" in allowed
+    role = _named("Role", "cert-manager-vault-token")
+    assert role["metadata"]["namespace"] == "cert-manager"
+    [permission] = role["rules"]
+    assert permission == {
+        "apiGroups": [""],
+        "resources": ["serviceaccounts/token"],
+        "resourceNames": ["cert-manager"],
+        "verbs": ["create"],
+    }
+
+
+def test_vault_reads_the_ca_of_postgres_without_waiting_for_it() -> None:
+    """Optional: cert-manager needs Vault to issue that very certificate."""
+    pod = _pod(_named("StatefulSet", "vault"))
+    volumes = {v["name"]: v for v in pod["volumes"]}
+    assert volumes["postgres-ca"]["secret"] == {
+        "secretName": "postgres-tls",
+        "optional": True,
+        "items": [{"key": "ca.crt", "path": "ca.crt"}],
+    }
+    [container] = pod["containers"]
+    mounts = {m["mountPath"]: m for m in container["volumeMounts"]}
+    assert mounts["/run/postgres-ca"]["readOnly"] is True
