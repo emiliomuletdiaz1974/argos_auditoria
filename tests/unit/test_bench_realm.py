@@ -13,10 +13,15 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[2]
 TOOL = ROOT / "tools" / "bench_realm.py"
 DEVELOPMENT = ROOT / "deploy" / "dev" / "keycloak" / "realm-argos.json"
 BENCH = ROOT / "platform" / "k8s" / "base" / "core" / "keycloak" / "realm-bench.json"
+API_DEPLOYMENT = ROOT / "platform" / "k8s" / "base" / "services" / "api.yaml"
+# K-08A (DP-23): the front end of the bench is developed on the laptop of its team.
+FRONT = "http://localhost:5173"
 
 
 def _tool() -> ModuleType:
@@ -65,3 +70,28 @@ def test_only_the_clients_argos_uses_and_none_made_for_tests() -> None:
     assert clients == {"argos-console", "argos-api", "argos-tests"}
     users = {u["username"] for u in _json(BENCH)["users"]}
     assert "lockout.test" not in users, "the account of the lockout test stays in development"
+
+
+def _client(realm: dict[str, Any], client_id: str) -> dict[str, Any]:
+    return next(c for c in realm["clients"] if c["clientId"] == client_id)
+
+
+def test_the_console_client_takes_back_only_the_front_end_of_the_bench() -> None:
+    """Not the addresses of development (127.0.0.1): a bench open to the internet lists the one
+    front end it was told about, and Keycloak refuses any other return address."""
+    console = _client(_json(BENCH), "argos-console")
+    assert console["redirectUris"] == [f"{FRONT}/*"]
+    assert console["webOrigins"] == [FRONT]
+
+
+def test_the_api_of_the_bench_answers_the_same_origin_the_realm_takes_back() -> None:
+    """The realm and the API must name the same front end, or the sign-in works and the first
+    call from the page is refused by CORS (or the other way round)."""
+    documents = yaml.safe_load_all(API_DEPLOYMENT.read_text(encoding="utf-8"))
+    deployment = next(d for d in documents if d)
+    env = {
+        e["name"]: e.get("value")
+        for e in deployment["spec"]["template"]["spec"]["containers"][0]["env"]
+    }
+    assert env["ARGOS_FRONTEND_ORIGINS"] == FRONT
+    assert _client(_json(BENCH), "argos-console")["webOrigins"] == [env["ARGOS_FRONTEND_ORIGINS"]]

@@ -5,6 +5,8 @@
 
 It keeps the roles, the flows, the second factor and the policies of development, and the clients
 ARGOS uses (`argos-tests` serves the Postman collection and the access battery on synthetic data).
+The console client returns only to the front end of the bench (`FRONT_ORIGIN`), not to the
+addresses of development.
 It drops the clients made only for tests and the account of the lockout test, and every credential:
 the users set their password, and the people who decide their TOTP, the first time they sign in.
 """
@@ -22,11 +24,18 @@ BENCH = ROOT / "platform" / "k8s" / "base" / "core" / "keycloak" / "realm-bench.
 CLIENTS = ("argos-console", "argos-api", "argos-tests")
 TEST_ONLY_USERS = ("lockout.test",)
 DECIDE = {"platform_admin", "dpo_reviewer"}
+# K-08A (DP-23): the front end is developed on the laptop of its team. The bench takes back this
+# origin and no other; the same value is ARGOS_FRONTEND_ORIGINS in the API deployment (api.yaml).
+FRONT_ORIGIN = "http://localhost:5173"
 
 
 def bench_realm(development: dict[str, Any]) -> dict[str, Any]:
     realm = copy.deepcopy(development)
     realm["clients"] = [c for c in realm["clients"] if c["clientId"] in CLIENTS]
+    for client in realm["clients"]:
+        if client["clientId"] == "argos-console":
+            client["redirectUris"] = [f"{FRONT_ORIGIN}/*"]
+            client["webOrigins"] = [FRONT_ORIGIN]
     users = []
     for user in realm["users"]:
         if user["username"] in TEST_ONLY_USERS:

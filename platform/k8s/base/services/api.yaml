@@ -59,6 +59,10 @@ spec:
               value: http://keycloak.argos-core.svc:8080/realms/argos
             - name: ARGOS_OIDC_AUDIENCE
               value: argos-api
+            # K-08A (DP-23): the front end of the bench, on the laptop of its team. It is the same
+            # origin the realm takes back (tools/bench_realm.py); `staging` allows plain http here.
+            - name: ARGOS_FRONTEND_ORIGINS
+              value: http://localhost:5173
             - name: ARGOS_RUNBOOKS_DIR
               value: /app/docs/operacion/runbooks
             - name: ARGOS_SIZE

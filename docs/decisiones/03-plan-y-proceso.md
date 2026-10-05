@@ -162,6 +162,22 @@ La fuente de todas es la bitácora del plan (`.scratch/plan/BITACORA.md`), que n
 - **Por qué:** el programa no puede quedarse parado por dependencias externas. Cada informe de cierre las declara como pendientes y ningún documento las presenta como hechas.
 - **Excepción:** la Fase 06 **no tiene tag**, porque F06-99 depende de F06-05 (pesos del modelo, MANUAL). Ver [revisión](04-revision-2026-09-23.md).
 
+### DP-23
+**El banco usa nombres sslip.io y admite un único front: `http://localhost:5173`** · 2026-10-05
+
+- **Decidimos:**
+  - sin dominio propio por ahora: la API en `api.34-134-21-66.sslip.io` y Keycloak en `id.34-134-21-66.sslip.io`, con certificados de Let's Encrypt (HTTP-01, que necesita el puerto 80 abierto);
+  - el front se desarrolla en el portátil de su equipo, así que el único origen admitido es `http://localhost:5173`: es `ARGOS_FRONTEND_ORIGINS` de la API del banco y el único retorno y origen web del cliente `argos-console` del realm del banco (en `tools/bench_realm.py`, no el `127.0.0.1` de desarrollo);
+  - un test exige que los dos valores coincidan.
+- **Por qué:** el equipo del front trabaja fuera del clúster y no hay DNS propio. En un banco abierto a internet, el realm solo devuelve a quien se nombró.
+- **Qué comprobamos antes:** con un Chrome real, la API detrás de HTTPS en un sitio distinto del front y el inicio de sesión completo contra el realm de desarrollo:
+  - con las cookies como las envía Chrome, la sesión se abre, la cookie `SameSite=None; Secure; HttpOnly` se guarda, `/auth/refresh` funciona entre sitios, sin la cabecera `X-Argos-Session` da 403, y tras cerrar la sesión el refresco y el token antiguo dan 401;
+  - con `http://localhost:5173`, Keycloak rechazaba el `redirect_uri` y la API el CORS: el realm y el compose solo admitían `127.0.0.1:5173`. De ahí el cambio;
+  - con las cookies de terceros bloqueadas (Safari, Firefox, incógnito) Chrome no guarda la cookie: el refresco da 401 y el cierre de sesión no invalida el token de acceso hasta que caduca. Con `localhost` y `sslip.io` no se puede evitar, porque son sitios distintos.
+  - No comprobamos el certificado real de Let's Encrypt ni el firewall de la VM, que sigue cerrado (lo abre la compañía). Tampoco el valor de `ARGOS_OIDC_ISSUER` frente a un Keycloak con nombre público (K-08).
+- **Descartamos:** admitir también `127.0.0.1:5173` (el banco no lo necesita) y un comodín de orígenes (la configuración los exige exactos). Cuando haya dominio propio, el front y la API deberían compartir dominio (`app.` y `api.`) para no depender de las cookies de terceros; en `production` la API exige `https` también para el front.
+- **Aplicado en:** K-08 (primera parte: origen del front en la API y en el realm). Un realm ya importado no se actualiza solo: Keycloak ignora el archivo si el realm existe, así que en la VM hay que actualizar el cliente `argos-console` por la API de administración.
+
 ### DP-22
 **El CI comprueba en cada push lo que funciona en un runner limpio, y el banco se monta por capas** · 2026-10-03
 
