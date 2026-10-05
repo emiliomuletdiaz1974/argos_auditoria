@@ -14,6 +14,7 @@ from argos_common.config import ArgosConfig, get_config
 from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
+from argos_common.vault_auth import service_token
 from argos_events import Bus, bus_from_config
 
 from .activities import ChallengeActivities, record_in_journal, smoke_probe
@@ -62,8 +63,7 @@ def campaign_activities(
     on it (the evidence service) listens. The campaign never waits for them.
     """
     config = cfg or get_config()
-    token = config.VAULT_TOKEN.get_secret_value() if config.VAULT_TOKEN else ""
-    secrets = VaultSecretStore(config.VAULT_ADDR, token)
+    secrets = VaultSecretStore(config.VAULT_ADDR, service_token(config))
     opa_token = config.OPA_TOKEN.get_secret_value() if config.OPA_TOKEN else None
     return ChallengeActivities(
         config.DATABASE_URL, secrets, config.OPA_URL, bus, opa_token=opa_token

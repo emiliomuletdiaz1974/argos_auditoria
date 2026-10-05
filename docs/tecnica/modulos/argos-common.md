@@ -4,9 +4,9 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.17.0-alpha
-commit: 8a64174
-date: 2026-09-29
+version: 0.18.0-alpha
+commit: pendiente
+date: 2026-10-05
 status: current
 confidentiality: client
 ---
@@ -36,6 +36,7 @@ Base compartida por todos los servicios de ARGOS: configuración validada al arr
 | `journal` | Diario encadenado v1: canonicalización, hash y verificación independientes de la base de datos |
 | `security_log` | Registro de seguridad (F09-08): `log(dsn).record(kind, actor, outcome, detail, source=)` añade a `security.events`, una cadena propia con el algoritmo del diario v1 y otro génesis; `verify_chain(dsn)` la verifica con el verificador del diario y comprueba que las columnas coinciden con lo que cubre el hash; las ráfagas de un mismo origen se pliegan en un resumen |
 | `dynamic_db` | Credenciales dinámicas de base de datos (F09-05, ARG-085): `DynamicCredentials` pide a Vault un usuario efímero, lo escribe en el fichero de servicio de libpq y lo renueva antes de que venza; `start_from_config(cfg)` al arrancar cada servicio, o `python -m argos_common.dynamic_db` como proceso aparte |
+| `vault_auth` | Cómo entra un servicio en Vault (K-06): en el clúster, con el token de su cuenta de servicio de Kubernetes (`kubernetes_login`); fuera, con su AppRole (`approle_login`) o el token fijo. `Renewing` guarda el token y vuelve a entrar un minuto antes de que caduque. `service_token(cfg)` da el token de los secretos y la firma; `database_login(cfg)` el de la credencial de base de datos |
 | `journal_pg` | Cliente PostgreSQL del diario: añadir, leer y verificar. `argos_common.PostgresJournal` se carga al primer uso, no con el paquete: importar las partes puras (hash y forma canónica del diario, errores) no arrastra el cliente de PostgreSQL, y así las usa el comprobador público (ARG-069) |
 | `migrations` | Migrador de SQL numerado con suma de control y un asiento por migración |
 | `secret_stores` | Interfaz única de secretos: Vault, fichero cifrado (solo desarrollo) y TPM (pendiente) |
@@ -69,6 +70,7 @@ Variables con prefijo `ARGOS_`:
 - `UPDATE_DIR` y `RELEASE_PUBLIC_KEY_FILE` (F09-10): la carpeta del actualizador y la clave de release fijada con la que la API verifica un paquete antes de encolarlo;
 - `TLS_DIR` (F09-06, ARG-083): carpeta con el certificado, la clave y la CA interna del servicio (`argos-tls`);
 - `DATABASE_VAULT_ROLE`, `DATABASE_SERVICE_FILE` (por defecto `/tmp/argos-db/pg_service.conf`) y `VAULT_APPROLE_DIR` (F09-05): el rol del motor `db/` de Vault, dónde deja la credencial y dónde están `role_id` y `secret_id`;
+- `VAULT_KUBERNETES_ROLE` y `VAULT_KUBERNETES_TOKEN_FILE` (K-06): en el clúster, el rol del método `kubernetes` de Vault con el que entra el servicio y el token de su cuenta (por defecto el que monta el kubelet). Si está, se usa antes que el AppRole y el token fijo; `VaultSecretStore` y `VaultTransitSigner` aceptan un token fijo o una función que da el vigente;
 - `DATABASE_URL` (obligatoria) y `DATABASE_PASSWORD_FILE` (F09-04: fichero con la contraseña, que se añade a la cadena de conexión; es un error que la cadena ya traiga otra), `NATS_URL`, `NATS_USER`, `NATS_PASSWORD` (secreto), `TEMPORAL_ADDRESS`;
 - `OPA_URL` y `OPA_TOKEN` (secreto);
 - `OIDC_ISSUER` y `OIDC_AUDIENCE`;
@@ -171,3 +173,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.15.0-alpha | 2026-09-28 | Resumen de ráfagas por temporizador y todo el contexto de `extra` en los logs | QA-33 (QA-002, 007) |
 | 0.16.0-alpha | 2026-09-28 | SBOM obligatorio, verify-full en producción, migrador que avisa y hora del diario tras el cerrojo | QA-34 (QA-008, 010, 012, 014) |
 | 0.17.0-alpha | 2026-09-29 | `FRONTEND_ORIGINS` y `frontend_origins()`, validados al arrancar | C-03 (DP-19) |
+| 0.18.0-alpha | 2026-10-05 | `vault_auth`: entrada en Vault con la cuenta de servicio de Kubernetes y token que se renueva; `VAULT_KUBERNETES_ROLE`, `VAULT_KUBERNETES_TOKEN_FILE` | K-06 |

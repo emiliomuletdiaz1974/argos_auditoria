@@ -7,6 +7,7 @@ import base64
 import hashlib
 import hmac
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -91,13 +92,20 @@ class VaultTransitSigner:
     """Ed25519 signing with a key that never leaves Vault (transit engine, not exportable)."""
 
     def __init__(
-        self, url: str, token: str, key: str = "argos-release", mount: str = "transit"
+        self,
+        url: str,
+        token: str | Callable[[], str],
+        key: str = "argos-release",
+        mount: str = "transit",
     ) -> None:
-        self._client = hvac.Client(url=url, token=token)
+        # A string is a fixed token; a callable gives the current one (vault_auth, K-06).
+        self._token = token if callable(token) else (lambda: token)
+        self._client = hvac.Client(url=url)
         self._key_name = key
         self._mount = mount
 
     def sign(self, data: bytes) -> bytes:
+        self._client.token = self._token()
         response = self._client.secrets.transit.sign_data(  # type: ignore[no-untyped-call]
             name=self._key_name,
             hash_input=base64.b64encode(data).decode("ascii"),
@@ -107,6 +115,7 @@ class VaultTransitSigner:
         return base64.b64decode(signature.split(":", 2)[2])
 
     def public_key(self) -> bytes:
+        self._client.token = self._token()
         transit = self._client.secrets.transit
         response = transit.read_key(  # type: ignore[no-untyped-call]
             name=self._key_name, mount_point=self._mount

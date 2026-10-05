@@ -20,16 +20,16 @@ from argos_common.config import ArgosConfig, get_config
 from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
+from argos_common.vault_auth import service_token
 from argos_events import Bus, bus_from_config
 
 SERVICE = "argos-webhook-worker"
 
 
 def activities(cfg: ArgosConfig) -> WebhookActivities:
-    token = cfg.VAULT_TOKEN.get_secret_value() if cfg.VAULT_TOKEN else ""
     return WebhookActivities(
         cfg.DATABASE_URL,
-        VaultSecretStore(cfg.VAULT_ADDR, token),
+        VaultSecretStore(cfg.VAULT_ADDR, service_token(cfg)),
         allowed=allowed_targets(cfg),
     )
 

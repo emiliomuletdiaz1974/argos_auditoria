@@ -42,6 +42,7 @@ from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging
 from argos_common.release import key_fingerprint
 from argos_common.secret_stores import VaultSecretStore
+from argos_common.vault_auth import service_token
 from argos_ontology.bundle import load_bundle
 from argos_support import DiagnosticsStore
 
@@ -125,7 +126,6 @@ def _evidence(cfg: ArgosConfig) -> Any:
 def build_app(cfg: ArgosConfig) -> Any:
     realm = Keycloak(cfg.OIDC_ISSUER)
     gateway = os.environ.get("ARGOS_AI_GATEWAY_URL")
-    token = cfg.VAULT_TOKEN.get_secret_value() if cfg.VAULT_TOKEN else ""
     evidence, updates, diagnostics = _evidence(cfg), _updates(cfg), _support(cfg)
     return create_app(
         JwtValidator(cfg.OIDC_ISSUER, cfg.OIDC_AUDIENCE),
@@ -138,7 +138,7 @@ def build_app(cfg: ArgosConfig) -> Any:
         campaign_runner=TemporalCampaigns(cfg.TEMPORAL_ADDRESS),
         evidence=evidence,
         assistant=AssistantClient(gateway, tls_dir=cfg.TLS_DIR) if gateway else None,
-        webhook_secrets=VaultSecretStore(cfg.VAULT_ADDR, token),
+        webhook_secrets=VaultSecretStore(cfg.VAULT_ADDR, service_token(cfg)),
         publish_docs=cfg.ENVIRONMENT is Environment.DEVELOPMENT,
         updates=updates,
         support=diagnostics,

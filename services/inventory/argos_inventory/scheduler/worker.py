@@ -20,6 +20,7 @@ from temporalio.worker import Worker
 from argos_common.config import ArgosConfig, get_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
+from argos_common.vault_auth import service_token
 from argos_events import bus_from_config
 from argos_inventory.ingest.main import DURABLE as INGEST_DURABLE
 from argos_inventory.scheduler.activities import InventoryActivities
@@ -71,13 +72,15 @@ async def ensure_schedule(
 
 
 async def run(cfg: ArgosConfig) -> None:
-    if cfg.VAULT_TOKEN is None:
-        raise ValueError("ARGOS_VAULT_TOKEN is required by the inventory scheduler")
+    if cfg.VAULT_TOKEN is None and not cfg.VAULT_KUBERNETES_ROLE:
+        raise ValueError(
+            "the inventory scheduler needs ARGOS_VAULT_TOKEN or ARGOS_VAULT_KUBERNETES_ROLE"
+        )
     bus = bus_from_config("inventory-scheduler", cfg)
     await bus.connect()
     try:
         client = await Client.connect(cfg.TEMPORAL_ADDRESS, namespace="default")
-        secrets = VaultSecretStore(cfg.VAULT_ADDR, cfg.VAULT_TOKEN.get_secret_value())
+        secrets = VaultSecretStore(cfg.VAULT_ADDR, service_token(cfg))
 
         async def ingestion_backlog() -> int:
             info = await bus.js.consumer_info("DISCOVERY", INGEST_DURABLE)

@@ -1,6 +1,7 @@
 """Secret access through a single interface (ARG-009). Values are never logged."""
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
@@ -18,11 +19,14 @@ class SecretStore(Protocol):
 class VaultSecretStore:
     """Vault kv-v2; each token only sees the paths its policy allows."""
 
-    def __init__(self, url: str, token: str, mount: str = "argos") -> None:
-        self._client = hvac.Client(url=url, token=token)
+    def __init__(self, url: str, token: str | Callable[[], str], mount: str = "argos") -> None:
+        # A string is a fixed token; a callable gives the current one (vault_auth, K-06).
+        self._token = token if callable(token) else (lambda: token)
+        self._client = hvac.Client(url=url)
         self._mount = mount
 
     def read(self, path: str) -> dict[str, str]:
+        self._client.token = self._token()
         try:
             response = self._client.secrets.kv.v2.read_secret_version(
                 path=path, mount_point=self._mount, raise_on_deleted_version=True
@@ -36,6 +40,7 @@ class VaultSecretStore:
 
     def write(self, path: str, data: dict[str, str]) -> None:
         """Keep a secret that arrives from outside (the secret of a webhook, for instance)."""
+        self._client.token = self._token()
         try:
             self._client.secrets.kv.v2.create_or_update_secret(
                 path=path, secret=dict(data), mount_point=self._mount

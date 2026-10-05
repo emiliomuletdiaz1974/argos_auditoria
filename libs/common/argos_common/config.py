@@ -70,6 +70,10 @@ class ArgosConfig(BaseSettings):
     DATABASE_VAULT_ROLE: str | None = None
     DATABASE_SERVICE_FILE: str = "/tmp/argos-db/pg_service.conf"  # noqa: S108 - tmpfs of the container
     VAULT_APPROLE_DIR: str | None = None
+    # K-06: in the cluster, the role of Vault's kubernetes auth the service signs in with, using
+    # the token of its service account. Set, it is used before the AppRole and the fixed token.
+    VAULT_KUBERNETES_ROLE: str | None = None
+    VAULT_KUBERNETES_TOKEN_FILE: str = "/var/run/secrets/kubernetes.io/serviceaccount/token"  # noqa: S105 - a path
     # F09-06 (ARG-083): the folder with this service's certificate, key and internal CA
     # (tls.crt, tls.key, ca.crt). Set, the service speaks mutual TLS to the other ARGOS services.
     TLS_DIR: str | None = None

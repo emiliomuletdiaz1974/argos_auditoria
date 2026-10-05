@@ -12,24 +12,23 @@ opened with. Nothing here writes the user or the password to a log.
 
 The same code runs in two ways: inside the service (`start_from_config`), or as its own process
 next to a service that must not reach Vault (`python -m argos_common.dynamic_db`), which writes the
-file to a volume the two share.
+file to a volume the two share. How it signs in to Vault is `vault_auth` (K-06).
 """
 
 import argparse
-import json
 import logging
 import os
 import sys
 import tempfile
 import threading
 import time
-import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 from .config import ArgosConfig
+from .vault_auth import database_login, vault_request
 
 logger = logging.getLogger(__name__)
 
@@ -63,35 +62,6 @@ def renewal_delay(ttl: float) -> float:
     return ttl - RENEW_BEFORE if ttl >= 2 * RENEW_BEFORE else ttl / 2
 
 
-def _vault_request(addr: str, path: str, token: str | None, body: Any = None) -> dict[str, Any]:
-    request = urllib.request.Request(  # noqa: S310 - the address comes from the configuration
-        f"{addr.rstrip('/')}/v1/{path}",
-        data=json.dumps(body).encode() if body is not None else None,
-        method="POST" if body is not None else "GET",
-        headers={"Content-Type": "application/json", **({"X-Vault-Token": token} if token else {})},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:  # noqa: S310
-            answer: dict[str, Any] = json.loads(response.read())
-    except OSError as exc:  # the message names the path, never a secret
-        raise ConnectionError(f"vault did not answer {path}: {type(exc).__name__}") from None
-    return answer
-
-
-def approle_login(addr: str, approle_dir: Path) -> Callable[[], str]:
-    """A token provider that logs in with the AppRole delivered as files, never as variables."""
-
-    def login() -> str:
-        role_id = (approle_dir / "role_id").read_text(encoding="utf-8").strip()
-        secret_id = (approle_dir / "secret_id").read_text(encoding="utf-8").strip()
-        answer = _vault_request(
-            addr, "auth/approle/login", None, {"role_id": role_id, "secret_id": secret_id}
-        )
-        return str(answer["auth"]["client_token"])
-
-    return login
-
-
 @dataclass(frozen=True, slots=True)
 class VaultDatabaseSource:
     """Credentials of one role of the `db/` engine."""
@@ -101,7 +71,7 @@ class VaultDatabaseSource:
     token: Callable[[], str] = field(repr=False)
 
     def issue(self) -> Lease:
-        answer = _vault_request(self.addr, f"db/creds/{self.role}", self.token())
+        answer = vault_request(self.addr, f"db/creds/{self.role}", self.token())
         data = answer["data"]
         return Lease(str(data["username"]), str(data["password"]), float(answer["lease_duration"]))
 
@@ -196,13 +166,10 @@ def from_config(cfg: ArgosConfig) -> DynamicCredentials | None:
     """The renewal this service is configured for, or None when it uses a fixed credential."""
     if not cfg.DATABASE_VAULT_ROLE:
         return None
-    if not cfg.VAULT_APPROLE_DIR:
-        raise ValueError("DATABASE_VAULT_ROLE needs VAULT_APPROLE_DIR")
-    source = VaultDatabaseSource(
-        cfg.VAULT_ADDR,
-        cfg.DATABASE_VAULT_ROLE,
-        approle_login(cfg.VAULT_ADDR, Path(cfg.VAULT_APPROLE_DIR)),
-    )
+    login = database_login(cfg)
+    if login is None:
+        raise ValueError("DATABASE_VAULT_ROLE needs VAULT_KUBERNETES_ROLE or VAULT_APPROLE_DIR")
+    source = VaultDatabaseSource(cfg.VAULT_ADDR, cfg.DATABASE_VAULT_ROLE, login)
     return DynamicCredentials(source, Path(cfg.DATABASE_SERVICE_FILE))
 
 

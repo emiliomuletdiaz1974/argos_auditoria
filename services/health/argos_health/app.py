@@ -23,9 +23,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from argos_common.capacity import limits_of
 from argos_common.config import ArgosConfig, get_config
-from argos_common.dynamic_db import approle_login, start_from_config
+from argos_common.dynamic_db import start_from_config
 from argos_common.health import mount_health
 from argos_common.logs import configure_logging, get_logger
+from argos_common.vault_auth import database_login
 from argos_evidence.worm import WormStore
 
 from .measures import render_metrics
@@ -68,9 +69,7 @@ def build_monitor(dsn: str, settings: HealthSettings, config: ArgosConfig | None
         store = WormStore(client)
     certificates = None
     if settings.PKI_URL:
-        token = None
-        if config is not None and config.VAULT_APPROLE_DIR:
-            token = approle_login(config.VAULT_ADDR, Path(config.VAULT_APPROLE_DIR))
+        token = database_login(config) if config is not None else None
         certificates = vault_certificates(settings.PKI_URL, token)
     release = (
         settings.VERSION_FILE.read_text(encoding="utf-8").strip()

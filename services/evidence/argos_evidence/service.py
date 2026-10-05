@@ -9,6 +9,7 @@ import httpx
 
 from argos_common.config import ArgosConfig
 from argos_common.release import VaultTransitSigner
+from argos_common.vault_auth import service_token
 from argos_evidence.activities import EvidenceActivities
 from argos_evidence.settings import EvidenceSettings
 from argos_evidence.tsa import http_transport
@@ -35,8 +36,7 @@ def build_activities(config: ArgosConfig, settings: EvidenceSettings) -> Evidenc
         region_name="us-east-1",
     )
     ensure_buckets(client, default_retention_days=settings.RETENTION_DAYS)
-    token = config.VAULT_TOKEN.get_secret_value() if config.VAULT_TOKEN else ""
-    signer = VaultTransitSigner(config.VAULT_ADDR, token, key=settings.SIGNING_KEY)
+    signer = VaultTransitSigner(config.VAULT_ADDR, service_token(config), key=settings.SIGNING_KEY)
     return EvidenceActivities(
         config.DATABASE_URL,
         WormStore(client),
