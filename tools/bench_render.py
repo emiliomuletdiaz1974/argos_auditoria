@@ -50,6 +50,7 @@ BENCH_IMAGES = {
     "argos-opa": Image("platform/k8s/images/opa/Dockerfile", "ARG-036"),
     "argos-tsa": Image("deploy/dev/tsa/Dockerfile", "ARG-065", "deploy/dev/tsa"),
     "argos-keycloak": Image("platform/k8s/images/keycloak/Dockerfile", "ARG-008"),
+    "argos-bench-seed": Image("platform/k8s/images/bench-seed/Dockerfile", "ARG-014"),
 }
 ALL_IMAGES = IMAGES | BENCH_IMAGES
 

@@ -4,8 +4,13 @@ Generates, deterministically and outside git: the SMB file tree, the S3 bucket d
 development TLS certificates for LDAPS and the directory LDIF. Every name and value is synthetic.
 
 Usage: uv run python tools/prepare_dev_sources.py
+       python prepare_dev_sources.py --files DIR --bucket DIR --ldif DIR   (only those parts)
+
+The bench (K-07) runs it inside the pods of bench-sources with the parts each one needs, writing to
+their volumes; the certificates of the bench come from cert-manager instead.
 """
 
+import argparse
 import hashlib
 import ipaddress
 import os
@@ -186,12 +191,28 @@ def build_ldif(directory: Path, users: int = 300) -> None:
     (directory / "50-synthetic.ldif").write_text("\n".join(blocks), encoding="utf-8")
 
 
-def main() -> int:
-    build_file_tree(SOURCES / "files" / "clinical")
-    build_bucket(SOURCES / "s3" / "clinical-archive")
-    build_certificates(SOURCES / "certs")
-    build_ldif(SOURCES / "ldap")
-    print("development file and directory sources prepared")
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    for part in ("files", "bucket", "certs", "ldif"):
+        parser.add_argument(f"--{part}", type=Path)
+    args = parser.parse_args(argv)
+    builders = {
+        "files": build_file_tree,
+        "bucket": build_bucket,
+        "certs": build_certificates,
+        "ldif": build_ldif,
+    }
+    chosen = {part: getattr(args, part) for part in builders if getattr(args, part)}
+    if not chosen:  # make dev: every part, in the development folders
+        chosen = {
+            "files": SOURCES / "files" / "clinical",
+            "bucket": SOURCES / "s3" / "clinical-archive",
+            "certs": SOURCES / "certs",
+            "ldif": SOURCES / "ldap",
+        }
+    for part, folder in chosen.items():
+        builders[part](folder)
+    print(f"simulated sources prepared: {', '.join(chosen)}")
     return 0
 
 

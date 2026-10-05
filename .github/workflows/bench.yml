@@ -43,6 +43,7 @@ jobs:
           - { name: argos-opa, dockerfile: platform/k8s/images/opa/Dockerfile, component: ARG-036, context: . }
           - { name: argos-tsa, dockerfile: deploy/dev/tsa/Dockerfile, component: ARG-065, context: deploy/dev/tsa }
           - { name: argos-keycloak, dockerfile: platform/k8s/images/keycloak/Dockerfile, component: ARG-008, context: . }
+          - { name: argos-bench-seed, dockerfile: platform/k8s/images/bench-seed/Dockerfile, component: ARG-014, context: . }
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

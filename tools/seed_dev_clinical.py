@@ -3,10 +3,14 @@
 Every identifier is SYN-prefixed and every name is "Synthetic": no real person.
 
 Usage: uv run python tools/seed_dev_clinical.py
+
+The bench (K-07) runs it as a Job, with ARGOS_SEED_FHIR_URL and ARGOS_SEED_ORTHANC_URL pointing to
+the services of bench-sources.
 """
 
 import base64
 import io
+import os
 import time
 import uuid
 from typing import Any
@@ -15,8 +19,8 @@ import httpx
 from pydicom.dataset import FileDataset, FileMetaDataset
 from pydicom.uid import ExplicitVRLittleEndian, SecondaryCaptureImageStorage, generate_uid
 
-FHIR = "http://127.0.0.1:8090/fhir"
-ORTHANC = "http://127.0.0.1:8042"
+FHIR = os.environ.get("ARGOS_SEED_FHIR_URL", "http://127.0.0.1:8090/fhir")
+ORTHANC = os.environ.get("ARGOS_SEED_ORTHANC_URL", "http://127.0.0.1:8042")
 PATIENTS = 200
 STUDIES = 40
 CONSENT_SCOPE = "http://terminology.hl7.org/CodeSystem/consentscope"
@@ -139,7 +143,7 @@ def main() -> int:
                 content=synthetic_instance(i),
                 headers={"Content-Type": "application/dicom"},
             ).raise_for_status()
-    print("development clinical sources seeded")
+    print(f"clinical sources seeded: {FHIR}, {ORTHANC}")
     return 0
 
 
