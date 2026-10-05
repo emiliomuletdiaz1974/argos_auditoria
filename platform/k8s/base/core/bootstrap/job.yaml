@@ -60,6 +60,26 @@ spec:
                 secretKeyRef:
                   name: keycloak-db
                   key: password
+            - name: ARGOS_SOURCE_SMB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bench-sources
+                  key: smb
+            - name: ARGOS_SOURCE_S3_ACCESS
+              valueFrom:
+                secretKeyRef:
+                  name: bench-sources
+                  key: s3-access
+            - name: ARGOS_SOURCE_S3_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bench-sources
+                  key: s3-secret
+            - name: ARGOS_SOURCE_LDAP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bench-sources
+                  key: ldap-ro
           resources:
             requests:
               cpu: 50m

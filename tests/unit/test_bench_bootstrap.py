@@ -100,8 +100,9 @@ def test_the_steps_run_in_order_and_no_secret_is_shown(
     monkeypatch.setattr(
         bootstrap, "keycloak_database", lambda dsn, password: done.append("keycloak")
     )
+    monkeypatch.setattr(bootstrap, "register_sources", lambda *args: done.append("sources") or 7)
     assert bootstrap.main() == 0
-    assert done == ["migrate", "engine", "streams", "keycloak"]
+    assert done == ["migrate", "engine", "streams", "keycloak", "sources"]
     shown = capsys.readouterr().out
     assert "the-superuser-password" not in shown and "the-platform-password" not in shown
     assert "the-keycloak-password" not in shown
@@ -135,3 +136,79 @@ def test_the_database_of_keycloak_has_the_schema_age_expects() -> None:
     bootstrap = _bootstrap()
     inside = [q.as_string(None) for q in bootstrap.keycloak_database_statements()]
     assert inside == ["CREATE EXTENSION IF NOT EXISTS age"]
+
+
+# ---------- K-07 · the simulated sources, registered with the names of the cluster ----------
+
+
+class KeptVault(Vault):
+    """Answers the secret of a connector that already exists, with its hash key."""
+
+    def __init__(self, kept: dict[str, dict[str, str]], refused: type[Exception]) -> None:
+        super().__init__()
+        self.kept = kept
+        self.refused = refused
+
+    def __call__(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+        self.calls.append((method, path, body))
+        if method == "GET" and path.startswith("argos/data/connectors/"):
+            system = path.rsplit("/", 1)[1]
+            if system not in self.kept:
+                raise self.refused(method, path, 404, [])
+            return {"data": self.kept[system], "metadata": {}}
+        return {}
+
+
+ENV = {
+    "ARGOS_SOURCE_SMB_PASSWORD": "smb-from-the-seeder",
+    "ARGOS_SOURCE_S3_ACCESS": "s3-access-from-the-seeder",
+    "ARGOS_SOURCE_S3_SECRET": "s3-secret-from-the-seeder",
+    "ARGOS_SOURCE_LDAP_PASSWORD": "ldap-from-the-seeder",
+}
+
+
+def test_every_source_is_registered_with_the_credentials_of_the_cluster(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    bootstrap = _bootstrap()
+    systems = bootstrap.load_systems()
+    vault, rows = KeptVault({}, bootstrap.VaultRefusedError), []
+    assert bootstrap.register_sources(vault, systems, ENV, rows.extend) == len(systems)
+    assert {r["id"] for r in rows} == {s["id"] for s in systems}
+    assert all(".bench-sources.svc" in json_text(s["credentials"]) for s in systems)
+    written = {p.rsplit("/", 1)[1]: b["data"] for m, p, b in vault.calls if m == "POST" and b}
+    smb = written["01920000-0000-7000-8000-00000000b002"]
+    assert smb["password"] == "smb-from-the-seeder"
+    assert len(smb["hash_key"]) == 64
+    for row in rows:
+        assert row["connection"]["secret"] == f"connectors/{row['id']}", "the row names the path"
+        assert "from-the-seeder" not in json_text(row), "no credential in the database"
+    assert "from-the-seeder" not in capsys.readouterr().out
+
+
+def test_the_hash_key_of_a_registered_source_is_kept() -> None:
+    """Sample digests stay comparable between runs (tools/register_dev_sources.py)."""
+    bootstrap = _bootstrap()
+    [postgres] = [s for s in bootstrap.load_systems() if s["name"] == "bench-source-postgres"]
+    vault = KeptVault({postgres["id"]: {"hash_key": "k" * 64}}, bootstrap.VaultRefusedError)
+    bootstrap.register_sources(vault, [postgres], ENV, lambda rows: None)
+    [(_, _, body)] = [c for c in vault.calls if c[0] == "POST"]
+    assert body is not None and body["data"]["hash_key"] == "k" * 64
+
+
+def test_a_credential_missing_from_the_environment_stops_the_registration() -> None:
+    bootstrap = _bootstrap()
+    with pytest.raises(KeyError):
+        vault = KeptVault({}, bootstrap.VaultRefusedError)
+        bootstrap.register_sources(vault, bootstrap.load_systems(), {}, lambda rows: None)
+
+
+def test_the_catalog_of_the_bench_writes_no_secret() -> None:
+    text = (SCRIPT.parent / "systems.json").read_text(encoding="utf-8")
+    assert "dev-only" not in text and "127.0.0.1" not in text
+
+
+def json_text(value: Any) -> str:
+    import json
+
+    return json.dumps(value)

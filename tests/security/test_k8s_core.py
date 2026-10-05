@@ -446,6 +446,11 @@ def test_the_bootstrap_runs_from_the_image_of_the_api_with_only_generated_secret
         "ARGOS_PG_PASSWORD": {"name": "postgres-superuser", "key": "password"},
         "ARGOS_NATS_PLATFORM_PASSWORD": {"name": "nats-users", "key": "platform"},
         "ARGOS_KEYCLOAK_DB_PASSWORD": {"name": "keycloak-db", "key": "password"},
+        # K-07: the credentials of the simulated sources, for Vault
+        "ARGOS_SOURCE_SMB_PASSWORD": {"name": "bench-sources", "key": "smb"},
+        "ARGOS_SOURCE_S3_ACCESS": {"name": "bench-sources", "key": "s3-access"},
+        "ARGOS_SOURCE_S3_SECRET": {"name": "bench-sources", "key": "s3-secret"},
+        "ARGOS_SOURCE_LDAP_PASSWORD": {"name": "bench-sources", "key": "ldap-ro"},
     }
 
 
@@ -464,7 +469,8 @@ def test_vault_lets_the_bootstrap_touch_only_the_database_engine() -> None:
     assert "vault policy write argos-bootstrap" in setup
     policy = setup.split("argos-bootstrap -", 1)[0].rsplit("printf", 1)[1]
     paths = [chunk.split('"')[1] for chunk in policy.split("path ")[1:]]
-    assert all(p in ("sys/mounts", "sys/mounts/db") or p.startswith("db/") for p in paths), paths
+    allowed = ("sys/mounts", "sys/mounts/db", "argos/data/connectors/*")  # K-07: the sources
+    assert all(p in allowed or p.startswith("db/") for p in paths), paths
     assert (
         "auth/kubernetes/role/bootstrap bound_service_account_names=argos-bootstrap"
         " bound_service_account_namespaces=argos-core"

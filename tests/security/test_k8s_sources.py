@@ -1,8 +1,8 @@
-"""K-07 · the simulated sources of the bench in `bench-sources`, validated before they reach the cluster.
+"""K-07 · the simulated sources of the bench in `bench-sources`, checked before the cluster.
 
 They play the client's systems with the synthetic data of development (F02-04, F02-08, F02-12): the
-same SQL, files, directory and clinical records. Their credentials are generated in the cluster by the
-seeder, never written here; only the pods of ARGOS that read sources reach them, and they reach
+same SQL, files, directory and clinical records. Their credentials are generated in the cluster by
+the seeder, never written here; only the pods of ARGOS that read sources reach them, and they reach
 nothing. MSSQL and Oracle (the `heavy` profile, several GB) stay out of the bench.
 """
 
@@ -79,7 +79,7 @@ def test_the_directory_speaks_ldaps_with_a_certificate_of_the_bench() -> None:
 
 
 def test_only_the_readers_of_argos_reach_each_source() -> None:
-    for name, ports in PORTS.items():
+    for name in PORTS:
         policy = _named("NetworkPolicy", name)
         assert policy["spec"]["podSelector"]["matchLabels"] == {"app.kubernetes.io/name": name}
         readers = set()

@@ -8,3 +8,4 @@ configMapGenerator:
     namespace: argos-core
     files:
       - bootstrap.py
+      - systems.json

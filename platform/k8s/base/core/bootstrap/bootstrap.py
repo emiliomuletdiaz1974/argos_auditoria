@@ -23,7 +23,7 @@ import secrets
 import ssl
 import urllib.error
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,8 @@ TLS_DIR = Path("/tls")  # its certificate, key and the CA of the bench (certific
 VAULT_ADDR = "http://vault.argos-core.svc:8200"
 ACCOUNT_TOKEN = Path("/var/run/secrets/kubernetes.io/serviceaccount/token")
 MIGRATIONS = Path("/app/services/api/migrations")
+# K-07: the simulated sources of the bench, next to this script in its ConfigMap.
+SYSTEMS = Path(__file__).with_name("systems.json")
 # PostgreSQL is verified with the CA that signed its certificate: here, mounted by the Job; in
 # Vault, mounted in its pod (Vault 1.17 ignores `tls_ca` in the configuration).
 PG_TLS = "sslmode=verify-full&sslrootcert=/tls/ca.crt"
@@ -60,6 +62,7 @@ class VaultRefusedError(RuntimeError):
 
     def __init__(self, method: str, path: str, status: int, errors: list[str]) -> None:
         super().__init__(f"Vault refused {method} {path} ({status}): {'; '.join(errors)}")
+        self.status = status
 
 
 def _superuser_dsn() -> str:
@@ -147,6 +150,78 @@ def database_engine(vault: Vault, set_admin_password: Callable[[str], None]) -> 
         )
 
 
+def load_systems(path: Path = SYSTEMS) -> list[dict[str, Any]]:
+    systems: list[dict[str, Any]] = json.loads(path.read_text(encoding="utf-8"))["systems"]
+    return systems
+
+
+def _credentials(credentials: dict[str, Any], env: Mapping[str, str]) -> dict[str, str]:
+    """A literal value stays; {"env": NAME} is taken from the environment (secret bench-sources)."""
+    return {
+        key: env[value["env"]] if isinstance(value, dict) else str(value)
+        for key, value in credentials.items()
+    }
+
+
+def register_sources(
+    vault: Vault,
+    systems: list[dict[str, Any]],
+    env: Mapping[str, str],
+    upsert: Callable[[list[dict[str, Any]]], None],
+) -> int:
+    """The rows of argos.systems and the secret of each connector, as register_dev_sources.py.
+
+    The hash key of a source already registered is kept, so its sample digests stay comparable.
+    No credential goes to the database or to the output: the row names the path in Vault.
+    """
+    rows = []
+    for system in systems:
+        path = f"argos/data/connectors/{system['id']}"
+        credentials = _credentials(system["credentials"], env)
+        try:
+            kept = vault("GET", path, None).get("data", {})
+        except VaultRefusedError as refused:
+            if refused.status != 404:
+                raise
+            kept = {}
+        hash_key = kept.get("hash_key") or secrets.token_hex(32)
+        vault("POST", path, {"data": {**credentials, "hash_key": hash_key}})
+        rows.append(
+            {
+                "id": system["id"],
+                "name": system["name"],
+                "kind": system["kind"],
+                "connection": {
+                    "secret": f"connectors/{system['id']}",
+                    "connector": system["connector"],
+                    "config": system.get("config", {}),
+                },
+            }
+        )
+    upsert(rows)
+    return len(rows)
+
+
+def _systems_upsert(dsn: str) -> Callable[[list[dict[str, Any]]], None]:
+    def upsert(rows: list[dict[str, Any]]) -> None:
+        import psycopg
+
+        with psycopg.connect(dsn) as conn:
+            for row in rows:
+                conn.execute(
+                    """
+                    INSERT INTO argos.systems (id, name, kind, environment, connection)
+                    VALUES (%s, %s, %s, 'staging', %s::jsonb)
+                    ON CONFLICT (id) DO UPDATE
+                       SET name = EXCLUDED.name, kind = EXCLUDED.kind,
+                           connection = EXCLUDED.connection, updated_at = now()
+                    """,
+                    (row["id"], row["name"], row["kind"], json.dumps(row["connection"])),
+                )
+
+    return upsert
+
+
 def _admin_password_setter(dsn: str) -> Callable[[str], None]:
     def set_password(password: str) -> None:
         import psycopg
@@ -221,12 +296,15 @@ def main() -> int:
     dsn = _superuser_dsn()
     applied = migrate(dsn)
     print(f"migrations: {len(applied)} applied, schema up to date")
-    database_engine(vault_client(), _admin_password_setter(dsn))
+    vault = vault_client()
+    database_engine(vault, _admin_password_setter(dsn))
     print(f"dynamic credentials: {len(SERVICE_ROLES)} roles, ttl {DEFAULT_TTL}, at most {MAX_TTL}")
     count = streams(os.environ["ARGOS_NATS_PLATFORM_PASSWORD"])
     print(f"streams: {count} ready")
     keycloak_database(dsn, os.environ["ARGOS_KEYCLOAK_DB_PASSWORD"])
     print("keycloak: role and database ready")
+    count = register_sources(vault, load_systems(), os.environ, _systems_upsert(dsn))
+    print(f"sources: {count} systems registered with their credentials in Vault")
     return 0
 
 
