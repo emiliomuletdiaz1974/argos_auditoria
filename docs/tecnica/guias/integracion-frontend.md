@@ -4,7 +4,7 @@ kind: guide
 title: Guía de integración del front end con la API v1
 phases: ["08"]
 version: 0.3.0
-commit: pendiente
+commit: 0383398
 date: 2026-10-05
 status: current
 confidentiality: client
