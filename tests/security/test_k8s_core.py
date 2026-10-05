@@ -39,11 +39,13 @@ def _containers(workload: dict[str, Any]) -> list[dict[str, Any]]:
     return [*pod.get("initContainers", []), *pod["containers"]]
 
 
-def _named(kind: str, name: str) -> dict[str, Any]:
+def _named(kind: str, name: str, namespace: str | None = None) -> dict[str, Any]:
     [found] = [
         d
         for d in _documents(K8S / "base")
-        if d.get("kind") == kind and d["metadata"]["name"] == name
+        if d.get("kind") == kind
+        and d["metadata"]["name"] == name
+        and namespace in (None, d["metadata"].get("namespace"))
     ]
     return found
 
@@ -140,10 +142,20 @@ def test_the_base_includes_the_core() -> None:
 
 
 def test_the_seeder_may_only_read_and_create_secrets_in_argos_core() -> None:
-    role = _named("Role", "secret-seeder")
-    assert role["metadata"]["namespace"] == "argos-core"
+    role = _named("Role", "secret-seeder", "argos-core")
     [rule] = role["rules"]
     assert rule["resources"] == ["secrets"] and sorted(rule["verbs"]) == ["create", "get"]
+
+
+def test_the_seeder_may_only_read_and_create_the_copies_in_argos_services() -> None:
+    """K-06: the copies of the secrets the services sign in with, and nothing more."""
+    role = _named("Role", "secret-seeder", "argos-services")
+    [rule] = role["rules"]
+    assert rule["resources"] == ["secrets"] and sorted(rule["verbs"]) == ["create", "get"]
+    binding = _named("RoleBinding", "secret-seeder", "argos-services")
+    assert binding["subjects"] == [
+        {"kind": "ServiceAccount", "name": "secret-seeder", "namespace": "argos-core"}
+    ]
 
 
 def test_the_seeder_creates_what_is_missing_and_never_shows_a_value() -> None:
@@ -154,6 +166,8 @@ def test_the_seeder_creates_what_is_missing_and_never_shows_a_value() -> None:
     assert "print(value" not in script and "print(data" not in script
     wanted = yaml.safe_load((seeder / "secrets.yaml").read_text(encoding="utf-8"))
     assert {"name": "postgres-superuser", "keys": ["password"]} in wanted
+    copied = {w["name"] for w in wanted if w.get("copy_to")}
+    assert copied == {"nats-users", "opa-clients", "evidence-store"}, "only what services use"
 
 
 def test_the_seeder_job_is_recreated_when_it_changes() -> None:
@@ -231,7 +245,7 @@ def test_every_nats_password_comes_from_the_generated_secret() -> None:
     for user in NATS_USERS:
         assert env[f"NATS_PASSWORD_{user.upper()}"] == {"name": "nats-users", "key": user}
     wanted = yaml.safe_load((CORE / "seeder" / "secrets.yaml").read_text("utf-8"))
-    assert {"name": "nats-users", "keys": NATS_USERS} in wanted
+    assert {"name": "nats-users", "keys": NATS_USERS, "copy_to": ["argos-services"]} in wanted
 
 
 def test_jetstream_keeps_its_streams_in_a_volume() -> None:
@@ -261,7 +275,7 @@ def test_opa_asks_every_client_for_a_token_it_only_knows_by_its_hash() -> None:
     env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in init["env"]}
     assert env["OPA_TOKEN_CHALLENGE"] == {"name": "opa-clients", "key": "challenge"}
     wanted = yaml.safe_load((CORE / "seeder" / "secrets.yaml").read_text("utf-8"))
-    assert {"name": "opa-clients", "keys": ["challenge"]} in wanted
+    assert {"name": "opa-clients", "keys": ["challenge"], "copy_to": ["argos-services"]} in wanted
 
 
 def test_the_image_of_opa_carries_the_policies_of_the_library() -> None:
@@ -343,7 +357,11 @@ def test_the_worm_store_takes_its_keys_from_the_generated_secret() -> None:
     assert env["S3_SECRET_KEY"] == {"name": "evidence-store", "key": "secret"}
     assert "--versioning-dir" in script, "object lock needs versions"
     wanted = yaml.safe_load((CORE / "seeder" / "secrets.yaml").read_text("utf-8"))
-    assert {"name": "evidence-store", "keys": ["access", "secret"]} in wanted
+    assert {
+        "name": "evidence-store",
+        "keys": ["access", "secret"],
+        "copy_to": ["argos-services"],
+    } in wanted
 
 
 def test_the_tsa_is_the_test_one_built_by_the_bench() -> None:
