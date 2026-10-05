@@ -1,5 +1,6 @@
 # K-08 · the sign-in of the bench on its public name, only on 443. Only what a browser needs to sign
-# in is published (/realms and /resources); the administration console and its API stay inside.
+# in is published (/realms/argos and /resources); the administration console, its API and the master
+# realm, which signs in the administrator of Keycloak, stay inside.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -17,7 +18,7 @@ spec:
     - host: id.34-134-21-66.sslip.io
       http:
         paths:
-          - path: /realms
+          - path: /realms/argos
             pathType: Prefix
             backend:
               service:

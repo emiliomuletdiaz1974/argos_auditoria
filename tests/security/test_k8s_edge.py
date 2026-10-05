@@ -2,7 +2,8 @@
 
 Two names, no domain of our own (K-08A, DP-23): the API at api.34-134-21-66.sslip.io and the sign-in
 of Keycloak at id.34-134-21-66.sslip.io, each with a certificate of Let's Encrypt and only on 443.
-From Keycloak only what a browser needs (`/realms`, `/resources`): its administration stays inside.
+From Keycloak only what a browser needs (`/realms/argos`, `/resources`): its administration and the
+master realm stay inside.
 Nothing else of the cluster has a way in: no other Ingress, no LoadBalancer, no NodePort.
 """
 
@@ -90,7 +91,9 @@ def test_the_api_is_published_whole_on_its_name() -> None:
 
 def test_from_keycloak_only_what_a_browser_signs_in_with() -> None:
     paths = _check_ingress(_named("Ingress", "keycloak", "argos-core"), ID_HOST, "keycloak", 8080)
-    assert sorted(paths) == ["/realms", "/resources"], "the administration is not published"
+    # Only the realm of ARGOS: the master realm signs in the administrator of Keycloak, and
+    # publishing it opens that sign-in to the internet (found by the curl tests of the bench).
+    assert sorted(paths) == ["/realms/argos", "/resources"], "nor the administration nor master"
 
 
 def test_keycloak_names_itself_by_the_public_name_and_answers_inside_too() -> None:
