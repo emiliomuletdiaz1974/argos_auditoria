@@ -1,0 +1,109 @@
+# K-07 · the billing MariaDB of the simulated client (F02-04), with the SQL of development (billing,
+# inventory signals and planted findings). `argos_ro` reads without a password, as in development;
+# root gets a random password nobody keeps. Its general log records every query.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: source-mariadb
+  namespace: bench-sources
+  labels:
+    app.kubernetes.io/name: source-mariadb
+    app.kubernetes.io/part-of: argos-bench
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: source-mariadb
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: source-mariadb
+        app.kubernetes.io/part-of: argos-bench
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: sql
+          image: argos-bench-seed
+          command: ["sh", "-c", "cp /app/sources/mariadb/*.sql /initdb/"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: initdb
+              mountPath: /initdb
+      containers:
+        - name: source-mariadb
+          image: mariadb:11.4@sha256:80494b9810694179889f7281ec44ca928241df577159c0356a1070e2e94616a1
+          args: ["--general-log=1", "--log-output=TABLE"]
+          env:
+            - name: MARIADB_RANDOM_ROOT_PASSWORD
+              value: "1"
+            - name: MARIADB_DATABASE
+              value: billing
+          ports:
+            - containerPort: 3306
+          readinessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect", "--innodb_initialized"]
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: initdb
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: source-mariadb
+  namespace: bench-sources
+spec:
+  selector:
+    app.kubernetes.io/name: source-mariadb
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: 3306
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: source-mariadb
+  namespace: bench-sources
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: source-mariadb
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-services
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [challenge-worker, inventory-scheduler]
+      ports:
+        - protocol: TCP
+          port: 3306

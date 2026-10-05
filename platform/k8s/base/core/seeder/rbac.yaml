@@ -55,3 +55,28 @@ subjects:
   - kind: ServiceAccount
     name: secret-seeder
     namespace: argos-core
+---
+# K-07 · the copy of the credentials of the simulated sources, in bench-sources.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: secret-seeder
+  namespace: bench-sources
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: secret-seeder
+  namespace: bench-sources
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: secret-seeder
+subjects:
+  - kind: ServiceAccount
+    name: secret-seeder
+    namespace: argos-core

@@ -60,6 +60,8 @@ def test_every_workload_meets_the_restricted_standard() -> None:
     assert workloads, "no workload yet"
     for workload in workloads:
         name = workload["metadata"]["name"]
+        if workload["metadata"]["namespace"] == "bench-sources":
+            continue  # the simulated client: baseline, below
         assert workload["metadata"]["namespace"] in ARGOS_NAMESPACES, name
         pod = _pod(workload)
         assert pod["securityContext"]["runAsNonRoot"] is True, name
@@ -73,6 +75,25 @@ def test_every_workload_meets_the_restricted_standard() -> None:
             assert context["allowPrivilegeEscalation"] is False, (name, container["name"])
             assert context["capabilities"] == {"drop": ["ALL"]}, (name, container["name"])
             assert context["readOnlyRootFilesystem"] is True, (name, container["name"])
+
+
+def test_the_simulated_sources_meet_the_baseline_standard() -> None:
+    """K-07: third-party images of the simulated client (Samba, OpenLDAP, Orthanc) start as root,
+    which bench-sources admits (baseline); nothing privileged, nothing of the node."""
+    sources = [w for w in _workloads() if w["metadata"]["namespace"] == "bench-sources"]
+    assert sources
+    for workload in sources:
+        name = workload["metadata"]["name"]
+        pod = _pod(workload)
+        assert pod["securityContext"]["seccompProfile"] == {"type": "RuntimeDefault"}, name
+        assert pod["automountServiceAccountToken"] is False, name
+        for key in ("hostNetwork", "hostPID", "hostIPC"):
+            assert not pod.get(key), (name, key)
+        assert all("hostPath" not in v for v in pod.get("volumes", [])), name
+        for container in _containers(workload):
+            context = container.get("securityContext", {})
+            assert not context.get("privileged"), (name, container["name"])
+            assert "add" not in context.get("capabilities", {}), (name, container["name"])
 
 
 def _built_by_the_bench() -> set[str]:
@@ -172,7 +193,7 @@ def test_the_seeder_creates_what_is_missing_and_never_shows_a_value() -> None:
     wanted = yaml.safe_load((seeder / "secrets.yaml").read_text(encoding="utf-8"))
     assert {"name": "postgres-superuser", "keys": ["password"]} in wanted
     copied = {w["name"] for w in wanted if w.get("copy_to")}
-    assert copied == {"nats-users", "opa-clients", "evidence-store"}, "only what services use"
+    assert copied == {"nats-users", "opa-clients", "evidence-store", "bench-sources"}
 
 
 def test_the_seeder_job_is_recreated_when_it_changes() -> None:

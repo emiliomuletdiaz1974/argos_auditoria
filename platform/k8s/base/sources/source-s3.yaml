@@ -1,0 +1,110 @@
+# K-07 · the S3 archive of the simulated client (F02-08): VersityGW read-only over the synthetic
+# bucket of development, generated again by the init container. Its keys come from the seeder.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: source-s3
+  namespace: bench-sources
+  labels:
+    app.kubernetes.io/name: source-s3
+    app.kubernetes.io/part-of: argos-bench
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: source-s3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: source-s3
+        app.kubernetes.io/part-of: argos-bench
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: prepare
+          image: argos-bench-seed
+          command: ["/app/.venv/bin/python", "/app/tools/prepare_dev_sources.py", "--bucket", "/data/clinical-archive"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: source-s3
+          image: versity/versitygw:v1.8.0@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499
+          args: ["--access", "$(S3_ACCESS)", "--secret", "$(S3_SECRET)", "--port", ":7070", "--readonly", "posix", "/data"]
+          env:
+            - name: S3_ACCESS
+              valueFrom:
+                secretKeyRef:
+                  name: bench-sources
+                  key: s3-access
+            - name: S3_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bench-sources
+                  key: s3-secret
+          ports:
+            - containerPort: 7070
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: data
+              mountPath: /data
+              readOnly: true
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: source-s3
+  namespace: bench-sources
+spec:
+  selector:
+    app.kubernetes.io/name: source-s3
+  ports:
+    - name: s3
+      port: 7070
+      targetPort: 7070
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: source-s3
+  namespace: bench-sources
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: source-s3
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-services
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [challenge-worker, inventory-scheduler]
+      ports:
+        - protocol: TCP
+          port: 7070

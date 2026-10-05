@@ -1,0 +1,112 @@
+# K-07 · the clinical PostgreSQL of the simulated client (F02-04), with the SQL of development: the
+# clinic schema, the inventory signals and the special category. Its data lives in the pod and is
+# built again, the same, when the pod starts. `argos_ro` reads without a password (trust), as in
+# development: only the readers of ARGOS reach it. Every statement goes to its log.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: source-postgres
+  namespace: bench-sources
+  labels:
+    app.kubernetes.io/name: source-postgres
+    app.kubernetes.io/part-of: argos-bench
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: source-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: source-postgres
+        app.kubernetes.io/part-of: argos-bench
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: sql
+          image: argos-bench-seed
+          command: ["sh", "-c", "cp /app/sources/postgres/*.sql /initdb/"]
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: initdb
+              mountPath: /initdb
+      containers:
+        - name: source-postgres
+          image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+          args: ["postgres", "-c", "log_statement=all", "-c", "log_line_prefix=%m [%p] user=%u db=%d "]
+          env:
+            - name: POSTGRES_USER
+              value: owner
+            - name: POSTGRES_DB
+              value: clinic
+            - name: POSTGRES_HOST_AUTH_METHOD
+              value: trust
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "owner", "-d", "clinic"]
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+          volumeMounts:
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: initdb
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: source-postgres
+  namespace: bench-sources
+spec:
+  selector:
+    app.kubernetes.io/name: source-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: source-postgres
+  namespace: bench-sources
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: source-postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-services
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [challenge-worker, inventory-scheduler]
+      ports:
+        - protocol: TCP
+          port: 5432

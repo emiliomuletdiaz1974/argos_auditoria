@@ -30,9 +30,10 @@ if ! vault list pki_int/issuers >/dev/null 2>&1; then
   CERT=$(vault write -field=certificate pki/root/sign-intermediate csr="$CSR" format=pem_bundle ttl=8760h)
   vault write pki_int/intermediate/set-signed certificate="$CERT" >/dev/null
 fi
-# One certificate per service, 30 days, the names of the services of the cluster.
+# One certificate per service, 30 days, the names of the services of the cluster (and, K-07, of
+# the simulated sources of bench-sources, which present one to the connectors).
 vault write pki_int/roles/argos-svc \
-  allowed_domains="argos-core.svc,argos-services.svc,argos-ai.svc,argos-connect.svc,svc.cluster.local" \
+  allowed_domains="argos-core.svc,argos-services.svc,argos-ai.svc,argos-connect.svc,bench-sources.svc,svc.cluster.local" \
   allow_subdomains=true allow_bare_domains=false allow_localhost=true allow_ip_sans=true \
   key_type=ec key_bits=256 max_ttl=720h ttl=720h >/dev/null
 printf 'path "pki_int/issue/argos-svc" { capabilities = ["update"] }\npath "pki_int/sign/argos-svc" { capabilities = ["update"] }\n' \

@@ -1,0 +1,107 @@
+# K-07 · the PACS of the simulated client (F02-12): Orthanc answers C-ECHO and C-FIND on 4242 and
+# nothing that writes or moves images. Its REST port takes the synthetic studies of clinical-seed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: source-dicom
+  namespace: bench-sources
+  labels:
+    app.kubernetes.io/name: source-dicom
+    app.kubernetes.io/part-of: argos-bench
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: source-dicom
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: source-dicom
+        app.kubernetes.io/part-of: argos-bench
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: source-dicom
+          image: orthancteam/orthanc:26.9.0@sha256:1ca07ad4a70f67f815e55a558e76718d572ed9d0571268a3fbc1516a9155c5ca
+          env:
+            - name: ORTHANC__NAME
+              value: argos-bench-pacs
+            - name: ORTHANC__AUTHENTICATION_ENABLED
+              value: "false"
+            - name: ORTHANC__DICOM_AET
+              value: ORTHANC
+            - name: ORTHANC__DICOM_CHECK_CALLED_AET
+              value: "false"
+            - name: ORTHANC__DICOM_ALWAYS_ALLOW_ECHO
+              value: "true"
+            - name: ORTHANC__DICOM_ALWAYS_ALLOW_FIND
+              value: "true"
+            - name: ORTHANC__DICOM_ALWAYS_ALLOW_STORE
+              value: "false"
+            - name: ORTHANC__DICOM_ALWAYS_ALLOW_MOVE
+              value: "false"
+            - name: ORTHANC__DICOM_ALWAYS_ALLOW_GET
+              value: "false"
+          ports:
+            - containerPort: 4242
+            - containerPort: 8042
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: source-dicom
+  namespace: bench-sources
+spec:
+  selector:
+    app.kubernetes.io/name: source-dicom
+  ports:
+    - name: dicom
+      port: 4242
+      targetPort: 4242
+    - name: rest
+      port: 8042
+      targetPort: 8042
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: source-dicom
+  namespace: bench-sources
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: source-dicom
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-services
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [challenge-worker, inventory-scheduler]
+      ports:
+        - protocol: TCP
+          port: 4242
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: clinical-seed
+      ports:
+        - protocol: TCP
+          port: 8042

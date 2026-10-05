@@ -1,0 +1,79 @@
+# K-07 · loads the synthetic patients and studies of development into FHIR and Orthanc
+# (tools/seed_dev_clinical.py), and checks again every ten minutes: the seed is idempotent, and a
+# source that restarted comes back empty. It reaches those two and nothing else.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clinical-seed
+  namespace: bench-sources
+  labels:
+    app.kubernetes.io/name: clinical-seed
+    app.kubernetes.io/part-of: argos-bench
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: clinical-seed
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: clinical-seed
+        app.kubernetes.io/part-of: argos-bench
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: clinical-seed
+          image: argos-bench-seed
+          command:
+            - sh
+            - -c
+            - while true; do /app/.venv/bin/python /app/tools/seed_dev_clinical.py; sleep 600; done
+          env:
+            - name: ARGOS_SEED_FHIR_URL
+              value: http://source-fhir.bench-sources.svc:8080/fhir
+            - name: ARGOS_SEED_ORTHANC_URL
+              value: http://source-dicom.bench-sources.svc:8042
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clinical-seed
+  namespace: bench-sources
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: clinical-seed
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: source-fhir
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: source-dicom
+      ports:
+        - protocol: TCP
+          port: 8042

@@ -1,0 +1,93 @@
+# K-07 · the FHIR R4 server of the simulated client (F02-12): HAPI with the synthetic patients that
+# clinical-seed loads. Its data lives in the pod; the seeder loads it again when it is missing.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: source-fhir
+  namespace: bench-sources
+  labels:
+    app.kubernetes.io/name: source-fhir
+    app.kubernetes.io/part-of: argos-bench
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: source-fhir
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: source-fhir
+        app.kubernetes.io/part-of: argos-bench
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: source-fhir
+          image: hapiproject/hapi:v8.10.0-3@sha256:55213612779ab3eeec919226b7bad378f0061ade823393a61d7dd46dd5087a3d
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: -Xmx768m
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /fhir/metadata
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 768Mi
+            limits:
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: source-fhir
+  namespace: bench-sources
+spec:
+  selector:
+    app.kubernetes.io/name: source-fhir
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: source-fhir
+  namespace: bench-sources
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: source-fhir
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-services
+          podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [challenge-worker, inventory-scheduler]
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: clinical-seed
+      ports:
+        - protocol: TCP
+          port: 8080

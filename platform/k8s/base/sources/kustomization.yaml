@@ -1,0 +1,12 @@
+# K-07 · capa 3 del banco (DP-22): the simulated client in bench-sources, with synthetic data only.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - source-postgres.yaml
+  - source-mariadb.yaml
+  - source-smb.yaml
+  - source-s3.yaml
+  - source-ldap.yaml
+  - source-fhir.yaml
+  - source-dicom.yaml
+  - clinical-seed.yaml
