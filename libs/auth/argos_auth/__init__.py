@@ -58,10 +58,21 @@ def _realm_roles(realm_access: Any) -> frozenset[str]:
 
 
 class JwtValidator:
-    def __init__(self, issuer: str, audience: str, keys: KeyProvider | None = None) -> None:
+    def __init__(
+        self,
+        issuer: str,
+        audience: str,
+        keys: KeyProvider | None = None,
+        *,
+        realm_url: str | None = None,
+    ) -> None:
+        """`issuer` is what a token must carry; `realm_url`, where its keys are fetched when the
+        issuer is a public address the service cannot reach from inside (K-08). By default, the
+        issuer itself."""
         self._issuer = issuer
         self._audience = audience
-        self._keys = keys or PyJWKClient(f"{issuer}/protocol/openid-connect/certs", cache_keys=True)
+        certs = f"{(realm_url or issuer).rstrip('/')}/protocol/openid-connect/certs"
+        self._keys = keys or PyJWKClient(certs, cache_keys=True)
 
     def validate(self, token: str, required_role: str | None = None) -> Identity:
         if required_role is not None and required_role not in ROLES:
@@ -94,7 +105,7 @@ class JwtValidator:
 @lru_cache(maxsize=1)
 def _default_validator() -> JwtValidator:
     cfg = get_config()
-    return JwtValidator(cfg.OIDC_ISSUER, cfg.OIDC_AUDIENCE)
+    return JwtValidator(cfg.OIDC_ISSUER, cfg.OIDC_AUDIENCE, realm_url=cfg.oidc_realm_url())
 
 
 def validate(token: str, required_role: str | None = None) -> Identity:

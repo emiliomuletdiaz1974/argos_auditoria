@@ -241,3 +241,17 @@ def test_a_local_http_front_end_is_refused_in_production(monkeypatch: pytest.Mon
     with pytest.raises(ConfigurationError) as refused:
         load_config()
     assert "FRONTEND_ORIGINS" in str(refused.value.details)
+
+
+def test_the_realm_is_reached_inside_when_its_issuer_is_public(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """K-08: tokens carry the public issuer; the services ask the realm by its inner address."""
+    monkeypatch.setenv("ARGOS_DATABASE_URL", "postgresql://argos@127.0.0.1:55432/argos")
+    monkeypatch.setenv("ARGOS_OIDC_ISSUER", "https://id.34-134-21-66.sslip.io/realms/argos")
+    monkeypatch.delenv("ARGOS_OIDC_INTERNAL_URL", raising=False)
+    assert load_config().oidc_realm_url() == "https://id.34-134-21-66.sslip.io/realms/argos"
+    monkeypatch.setenv(
+        "ARGOS_OIDC_INTERNAL_URL", "http://keycloak.argos-core.svc:8080/realms/argos/"
+    )
+    assert load_config().oidc_realm_url() == "http://keycloak.argos-core.svc:8080/realms/argos"

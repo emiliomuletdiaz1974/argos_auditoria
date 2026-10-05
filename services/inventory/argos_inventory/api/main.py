@@ -12,7 +12,8 @@ from argos_inventory.graph.store import GraphStore
 def main() -> None:  # pragma: no cover - process entry point
     cfg = get_config()
     configure_logging(SERVICE_NAME, cfg.LOG_LEVEL)
-    app = create_app(GraphStore(cfg.DATABASE_URL), JwtValidator(cfg.OIDC_ISSUER, cfg.OIDC_AUDIENCE))
+    validator = JwtValidator(cfg.OIDC_ISSUER, cfg.OIDC_AUDIENCE, realm_url=cfg.oidc_realm_url())
+    app = create_app(GraphStore(cfg.DATABASE_URL), validator)
     uvicorn.run(app, host=DEV_HOST, port=DEV_PORT, log_config=None)
 
 

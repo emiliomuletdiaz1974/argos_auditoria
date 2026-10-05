@@ -124,11 +124,11 @@ def _evidence(cfg: ArgosConfig) -> Any:
 
 
 def build_app(cfg: ArgosConfig) -> Any:
-    realm = Keycloak(cfg.OIDC_ISSUER)
+    realm = Keycloak(cfg.oidc_realm_url())  # K-08: the inner address when the issuer is public
     gateway = os.environ.get("ARGOS_AI_GATEWAY_URL")
     evidence, updates, diagnostics = _evidence(cfg), _updates(cfg), _support(cfg)
     return create_app(
-        JwtValidator(cfg.OIDC_ISSUER, cfg.OIDC_AUDIENCE),
+        JwtValidator(cfg.OIDC_ISSUER, cfg.OIDC_AUDIENCE, realm_url=cfg.oidc_realm_url()),
         dsn=cfg.DATABASE_URL,
         refresher=realm.refresh,
         code_exchanger=realm.exchange,

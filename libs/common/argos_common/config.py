@@ -109,6 +109,10 @@ class ArgosConfig(BaseSettings):
     TEMPORAL_ADDRESS: str = "127.0.0.1:7233"
     OIDC_ISSUER: str = "http://127.0.0.1:8180/realms/argos"
     OIDC_AUDIENCE: str = "argos-api"
+    # K-08: where the services reach the realm when OIDC_ISSUER is a public address they cannot
+    # reach from inside (the bench publishes Keycloak behind its own name). Tokens still have to
+    # carry OIDC_ISSUER; only the keys and the token endpoint are asked here. Unset: the issuer.
+    OIDC_INTERNAL_URL: str | None = None
     WORM_STORAGE_PATH: str = "./data/worm"
     LOG_LEVEL: LogLevel = LogLevel.INFO
     LOG_FORMAT_JSON: bool = True
@@ -125,6 +129,10 @@ class ArgosConfig(BaseSettings):
     # The front end lives on its own origin (C-03): the exact origins, comma-separated, that may
     # change anything from a browser and that CORS answers. Empty: no browser page but the API's.
     FRONTEND_ORIGINS: str = ""
+
+    def oidc_realm_url(self) -> str:
+        """Where the realm answers this service: its inner address, or the issuer itself."""
+        return (self.OIDC_INTERNAL_URL or self.OIDC_ISSUER).rstrip("/")
 
     def frontend_origins(self) -> tuple[str, ...]:
         """The listed origins, lower case and without a trailing slash."""

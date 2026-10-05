@@ -130,3 +130,18 @@ def test_realm_roles_of_the_wrong_shape_give_no_role_and_no_500(
 ) -> None:
     identity = validator.validate(_token(realm_access=realm_access))
     assert identity.roles == frozenset()
+
+
+def test_the_keys_come_from_inside_while_the_issuer_stays_the_public_one() -> None:
+    """K-08: the bench publishes Keycloak at https://id.<host>; the API reaches it inside."""
+    public = "https://id.34-134-21-66.sslip.io/realms/argos"
+    inside = "http://keycloak.argos-core.svc:8080/realms/argos"
+    validator = JwtValidator(public, "argos-api", realm_url=inside)
+    assert validator._keys.uri == f"{inside}/protocol/openid-connect/certs"  # type: ignore[union-attr]
+    assert validator._issuer == public
+
+
+def test_without_an_inner_address_the_keys_come_from_the_issuer() -> None:
+    validator = JwtValidator("http://127.0.0.1:8180/realms/argos", "argos-api")
+    expected = "http://127.0.0.1:8180/realms/argos/protocol/openid-connect/certs"
+    assert validator._keys.uri == expected  # type: ignore[union-attr]
