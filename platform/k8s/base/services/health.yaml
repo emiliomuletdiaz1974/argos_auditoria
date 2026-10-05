@@ -66,7 +66,7 @@ spec:
             - name: ARGOS_HEALTH_PKI_URL
               value: http://vault.argos-core.svc:8200/v1/pki_int
             - name: ARGOS_HEALTH_TLS_SERVICES
-              value: api=api.argos-services.svc;webhook=webhook.argos-services.svc;challenge=challenge.argos-services.svc;evidence=evidence.argos-services.svc;health=health.argos-services.svc;postgres=postgres.argos-core.svc
+              value: api=api.argos-services.svc;webhook=webhook.argos-services.svc;challenge=challenge.argos-services.svc;evidence=evidence.argos-services.svc;health=health.argos-services.svc;inventory=inventory.argos-services.svc;postgres=postgres.argos-core.svc;nats=nats.argos-core.svc
             - name: ARGOS_SIZE
               value: M
             - name: ARGOS_SIZES_FILE

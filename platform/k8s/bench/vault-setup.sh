@@ -111,6 +111,12 @@ path "db/creds/svc-health" { capabilities = ["read"] }
 path "pki_int/certs" { capabilities = ["list"] }
 path "pki_int/cert/*" { capabilities = ["read"] }
 POLICY
+# K-07 · the inventory: its scanner reads the credential of each connector to explore the sources.
+service_role inventory <<'POLICY'
+path "db/creds/svc-inventory" { capabilities = ["read"] }
+path "argos/data/connectors/*" { capabilities = ["read"] }
+path "argos/data/services/inventory/*" { capabilities = ["read"] }
+POLICY
 # The public key of the evidence, for the trust of the verifier, which reaches nothing itself.
 service_role verifier-trust <<'POLICY'
 path "transit/keys/argos-evidence" { capabilities = ["read"] }

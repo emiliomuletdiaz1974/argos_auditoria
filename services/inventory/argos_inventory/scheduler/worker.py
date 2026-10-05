@@ -18,6 +18,7 @@ from temporalio.client import (
 from temporalio.worker import Worker
 
 from argos_common.config import ArgosConfig, get_config
+from argos_common.dynamic_db import start_from_config
 from argos_common.logs import configure_logging, get_logger
 from argos_common.secret_stores import VaultSecretStore
 from argos_common.vault_auth import service_token
@@ -99,6 +100,7 @@ async def run(cfg: ArgosConfig) -> None:
 def main() -> None:  # pragma: no cover - process entry point
     cfg = get_config()
     configure_logging("argos-inventory-scheduler", cfg.LOG_LEVEL)
+    start_from_config(cfg)  # F09-05: the dynamic credential, before any connection
     asyncio.run(run(cfg))
 
 

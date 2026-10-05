@@ -43,7 +43,25 @@ SERVICES = {
     "evidence-api": ("evidence", "argos-evidence", "argos_evidence.api", "svc-evidence", None),
     "health": ("health", "argos-health", "argos_health.app", "svc-health", None),
     "verifier": ("verifier", "argos-verifier", "argos_verifier.main", None, None),
+    # K-07: the inventory, which reads the simulated sources and fills the graph.
+    "inventory-scheduler": (
+        "inventory",
+        "argos-api",
+        "argos_inventory.scheduler.worker",
+        "svc-inventory",
+        "inventory",
+    ),
+    "inventory-ingest": (
+        "inventory",
+        "argos-api",
+        "argos_inventory.ingest.main",
+        "svc-inventory",
+        "inventory",
+    ),
 }
+# K-07: who reads the simulated sources (bench-sources), and on which ports.
+SOURCE_PORTS = [5432, 3306, 445, 7070, 636, 8080, 4242]
+READ_SOURCES = {"inventory-scheduler", "challenge-worker"}
 CORE = {
     "postgres": 5432,
     "vault": 8200,
@@ -62,6 +80,8 @@ REACHES = {
     "evidence-api": {"postgres", "vault", "evidence-store", "tsa"},
     "health": {"postgres", "vault", "evidence-store"},
     "verifier": set(),
+    "inventory-scheduler": {"postgres", "vault", "temporal", "nats"},
+    "inventory-ingest": {"postgres", "vault", "nats"},
 }
 
 
@@ -168,8 +188,16 @@ def test_each_service_reaches_only_what_it_uses() -> None:
         policy = _named("NetworkPolicy", name)
         assert policy["spec"]["podSelector"]["matchLabels"] == {"app.kubernetes.io/name": name}
         reached = set()
+        reads_sources = False
         for rule in policy["spec"].get("egress", []):
             [target] = rule["to"]
+            if target["namespaceSelector"]["matchLabels"] == {
+                "kubernetes.io/metadata.name": "bench-sources"
+            }:
+                assert "podSelector" not in target
+                assert sorted(p["port"] for p in rule["ports"]) == sorted(SOURCE_PORTS), name
+                reads_sources = True
+                continue
             assert target["namespaceSelector"]["matchLabels"] == {
                 "kubernetes.io/metadata.name": "argos-core"
             }
@@ -178,6 +206,7 @@ def test_each_service_reaches_only_what_it_uses() -> None:
             assert port["port"] == CORE[component], (name, component)
             reached.add(component)
         assert reached == wanted, name
+        assert reads_sources == (name in READ_SOURCES), name
 
 
 def test_the_assistant_is_off_without_a_gpu() -> None:

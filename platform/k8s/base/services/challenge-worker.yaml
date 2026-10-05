@@ -1,6 +1,6 @@
 # K-06 · the campaign worker (ARG-043): it runs the workflows of Temporal, asks OPA for the
 # operational rules and reads the credential of each connector from Vault. It never reaches the AI
-# gateway (F06-01). The simulated sources arrive with K-07, and with them its way to bench-sources.
+# gateway (F06-01). Its probes read the simulated sources of bench-sources (K-07).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -160,3 +160,22 @@ spec:
       ports:
         - protocol: TCP
           port: 8181
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: bench-sources
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 3306
+        - protocol: TCP
+          port: 445
+        - protocol: TCP
+          port: 7070
+        - protocol: TCP
+          port: 636
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 4242

@@ -649,6 +649,12 @@ SERVICE_POLICIES = {
         ("pki_int/cert/*", ("read",)),
     },
     "verifier-trust": {("transit/keys/argos-evidence", ("read",))},
+    # K-07: the inventory reads the credentials of the connectors to scan the sources.
+    "inventory": {
+        ("db/creds/svc-inventory", ("read",)),
+        ("argos/data/connectors/*", ("read",)),
+        ("argos/data/services/inventory/*", ("read",)),
+    },
 }
 
 

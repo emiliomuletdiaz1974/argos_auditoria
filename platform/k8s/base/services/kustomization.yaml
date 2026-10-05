@@ -8,4 +8,5 @@ resources:
   - challenge-worker.yaml
   - evidence.yaml
   - health.yaml
+  - inventory.yaml
   - verifier

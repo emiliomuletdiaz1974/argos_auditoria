@@ -41,6 +41,13 @@ automountServiceAccountToken: false
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  name: inventory
+  namespace: argos-services
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
   name: verifier
   namespace: argos-services
 automountServiceAccountToken: false
@@ -144,6 +151,28 @@ spec:
   dnsNames:
     - health.argos-services.svc
     - health.argos-services.svc.cluster.local
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-bench
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: inventory
+  namespace: argos-services
+spec:
+  secretName: inventory-tls
+  commonName: inventory.argos-services.svc
+  dnsNames:
+    - inventory.argos-services.svc
+    - inventory.argos-services.svc.cluster.local
   duration: 720h
   renewBefore: 240h
   usages: ["server auth", "client auth", "digital signature", "key encipherment"]
