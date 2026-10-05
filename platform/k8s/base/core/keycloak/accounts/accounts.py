@@ -6,6 +6,11 @@ temporary one (Keycloak makes its owner change it at the first sign-in) and keep
 `bench-accounts` of argos-core. The person reads them on the VM with
 platform/k8s/bench/accounts.sh. If that secret exists, nothing is touched again; a password an
 account already has is never replaced. No password reaches the logs.
+
+K-08: Keycloak imports a realm only once, so a change of the realm of the bench (the origin of the
+front end, for instance) would never arrive. On every run the redirects and the web origins of each
+client are put back in line with the realm the Job mounts (`realm-bench.json`); nothing else of a
+client is touched.
 """
 
 import base64
@@ -27,12 +32,22 @@ ACCOUNT = Path("/var/run/secrets/kubernetes.io/serviceaccount")
 API = "https://kubernetes.default.svc"
 NAMESPACE = "argos-core"
 KEPT_IN = "bench-accounts"
+REALM_FILE = Path("/realm/realm-bench.json")
+SYNCED = ("redirectUris", "webOrigins")
 
 
 class Realm(Protocol):
     def users_of_realm(self) -> dict[str, str]: ...
 
     def has_password(self, user_id: str) -> bool: ...
+
+    def client(self, client_id: str) -> dict[str, Any] | None:
+        query = urllib.parse.urlencode({"clientId": client_id})
+        found = _call("GET", f"{self._base}/clients?{query}", token=self._token)
+        return dict(found[0]) if found else None
+
+    def update_client(self, internal_id: str, representation: dict[str, Any]) -> None:
+        _call("PUT", f"{self._base}/clients/{internal_id}", token=self._token, body=representation)
 
     def reset_password(self, user_id: str, credential: dict[str, Any]) -> None: ...
 
@@ -50,6 +65,27 @@ def provision(realm: Realm, keep: Callable[[dict[str, str]], None], *, secret_ex
         given[name] = password
     keep(given)
     return len(given)
+
+
+class Clients(Protocol):
+    def client(self, client_id: str) -> dict[str, Any] | None: ...
+
+    def update_client(self, internal_id: str, representation: dict[str, Any]) -> None: ...
+
+
+def sync_clients(realm: Clients, wanted: list[dict[str, Any]]) -> list[str]:
+    """The clients whose redirects or web origins differ from the realm of the bench, put back."""
+    changed = []
+    for client in wanted:
+        current = realm.client(client["clientId"])
+        if current is None:
+            continue
+        fields = {key: client.get(key, []) for key in SYNCED}
+        if all(current.get(key, []) == value for key, value in fields.items()):
+            continue
+        realm.update_client(str(current["id"]), {**current, **fields})
+        changed.append(str(client["clientId"]))
+    return changed
 
 
 def _call(method: str, url: str, *, token: str = "", body: Any = None, form: bool = False) -> Any:
@@ -93,6 +129,14 @@ class KeycloakRealm:
         credentials = _call("GET", f"{self._base}/users/{user_id}/credentials", token=self._token)
         return any(c.get("type") == "password" for c in credentials)
 
+    def client(self, client_id: str) -> dict[str, Any] | None:
+        query = urllib.parse.urlencode({"clientId": client_id})
+        found = _call("GET", f"{self._base}/clients?{query}", token=self._token)
+        return dict(found[0]) if found else None
+
+    def update_client(self, internal_id: str, representation: dict[str, Any]) -> None:
+        _call("PUT", f"{self._base}/clients/{internal_id}", token=self._token, body=representation)
+
     def reset_password(self, user_id: str, credential: dict[str, Any]) -> None:
         _call(
             "PUT",
@@ -128,9 +172,10 @@ def main() -> int:
         if status not in (200, 201):
             raise RuntimeError(f"the secret {KEPT_IN} was not created: {status}")
 
-    count = provision(
-        KeycloakRealm(os.environ["KEYCLOAK_ADMIN_PASSWORD"]), keep, secret_exists=exists
-    )
+    realm = KeycloakRealm(os.environ["KEYCLOAK_ADMIN_PASSWORD"])
+    wanted = json.loads(REALM_FILE.read_text(encoding="utf-8"))["clients"]
+    print(f"clients put back in line with the realm: {sync_clients(realm, wanted) or 'none'}")
+    count = provision(realm, keep, secret_exists=exists)
     print(
         f"{KEPT_IN} already there: nothing to do"
         if exists

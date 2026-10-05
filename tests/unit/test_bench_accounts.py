@@ -68,3 +68,49 @@ def test_once_the_secret_exists_nothing_is_touched() -> None:
     keycloak, kept = Keycloak(with_password=set()), {}
     accounts.provision(keycloak, kept.update, secret_exists=True)
     assert keycloak.set == {} and kept == {}
+
+
+# ---------- K-08 · the clients follow the realm of the bench, without a manual step ----------
+
+
+class Clients:
+    def __init__(self, current: dict[str, dict[str, Any]]) -> None:
+        self.current = current
+        self.updated: dict[str, dict[str, Any]] = {}
+
+    def client(self, client_id: str) -> dict[str, Any] | None:
+        return self.current.get(client_id)
+
+    def update_client(self, internal_id: str, representation: dict[str, Any]) -> None:
+        self.updated[internal_id] = representation
+
+
+def test_a_client_that_drifted_from_the_realm_of_the_bench_is_put_back() -> None:
+    """An imported realm is not imported again: a changed redirect would never arrive."""
+    accounts = _accounts()
+    keycloak = Clients(
+        {
+            "argos-console": {
+                "id": "c-1",
+                "clientId": "argos-console",
+                "redirectUris": ["http://127.0.0.1:5173/*"],
+                "webOrigins": ["http://127.0.0.1:5173"],
+                "publicClient": True,
+            },
+            "argos-api": {"id": "c-2", "clientId": "argos-api", "redirectUris": []},
+        }
+    )
+    wanted = [
+        {
+            "clientId": "argos-console",
+            "redirectUris": ["http://localhost:5173/*"],
+            "webOrigins": ["http://localhost:5173"],
+        },
+        {"clientId": "argos-api", "redirectUris": []},
+    ]
+    assert accounts.sync_clients(keycloak, wanted) == ["argos-console"]
+    updated = keycloak.updated["c-1"]
+    assert updated["redirectUris"] == ["http://localhost:5173/*"]
+    assert updated["webOrigins"] == ["http://localhost:5173"]
+    assert updated["publicClient"] is True, "everything else of the client stays"
+    assert "c-2" not in keycloak.updated, "a client already in line is not touched"
