@@ -31,3 +31,5 @@ c5fd428fbf69436c3684dbcfb6a7e2f986abcf7a:services/updater/tests/test_updater_pur
 # Not a secret: the synthetic token the diagnostics tests plant on purpose to prove it never
 # reaches the package (F09-11).
 34fc10a476793bc5abf76f04b89712e53a073c6e:services/support/tests/test_diagnostics_pure.py:generic-api-key:32
+# K-08: the public host name of the bench API (sslip.io), not a key: the rule reads "API" and a dotted value.
+8d367a58fbe10fb276812170080afb191854630e:tests/security/test_k8s_edge.py:generic-api-key:15
