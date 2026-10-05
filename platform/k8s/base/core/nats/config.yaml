@@ -1,7 +1,8 @@
 # K-03 · NATS JetStream of the bench, with the users and permissions of the development environment
 # (deploy/dev/nats/nats.conf, SEC-026). The passwords are not here: NATS reads each one from an
 # environment variable of the pod, which comes from the secret nats-users the seeder generated. The
-# user of the developer's host does not exist in the bench, and TLS comes with cert-manager (K-06).
+# user of the developer's host does not exist in the bench. TLS (K-06): the certificate of cert-manager,
+# and every client shows its own, as in development (F09-06).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -16,6 +17,15 @@ data:
 
     jetstream {
       store_dir: /data
+    }
+
+    tls {
+      cert_file: "/run/tls/tls.crt"
+      key_file: "/run/tls/tls.key"
+      ca_file: "/run/tls/ca.crt"
+      verify: true
+      min_version: "1.3"
+      timeout: 5
     }
 
 

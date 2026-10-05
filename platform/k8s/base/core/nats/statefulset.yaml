@@ -22,6 +22,8 @@ spec:
         app.kubernetes.io/part-of: argos
     spec:
       automountServiceAccountToken: false
+      # tls-reload signals the server when cert-manager renews its certificate.
+      shareProcessNamespace: true
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -92,10 +94,48 @@ spec:
               readOnly: true
             - name: data
               mountPath: /data
+            - name: tls
+              mountPath: /run/tls
+              readOnly: true
+        # Renewed at day 20 of 30 (certificate.yaml): NATS keeps the old one until it reloads.
+        - name: tls-reload
+          image: nats:2.10.29-alpine@sha256:b83efabe3e7def1e0a4a31ec6e078999bb17c80363f881df35edc70fcb6bb927
+          command:
+            - sh
+            - -c
+            - |
+              sum() { cat /run/tls/tls.crt /run/tls/tls.key | md5sum; }
+              last=$(sum)
+              while sleep 60; do
+                now=$(sum)
+                if [ "$now" != "$last" ] && pid=$(pgrep -x nats-server) && kill -HUP "$pid"; then
+                  last=$now
+                  echo "certificate renewed: nats-server reloaded"
+                fi
+              done
+          resources:
+            requests:
+              cpu: 5m
+              memory: 8Mi
+            limits:
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tls
+              mountPath: /run/tls
+              readOnly: true
       volumes:
         - name: config
           configMap:
             name: nats-config
+        - name: tls
+          secret:
+            secretName: nats-tls
+            defaultMode: 0440
   volumeClaimTemplates:
     - metadata:
         name: data

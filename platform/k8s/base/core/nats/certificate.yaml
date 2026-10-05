@@ -1,0 +1,23 @@
+# K-06 · the certificate of NATS, from the intermediate CA of the bench: 30 days, renewed at 20 with a
+# new key. The container tls-reload of the pod tells NATS to read it again (statefulset.yaml).
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: nats
+  namespace: argos-core
+spec:
+  secretName: nats-tls
+  commonName: nats.argos-core.svc
+  dnsNames:
+    - nats.argos-core.svc
+    - nats.argos-core.svc.cluster.local
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-bench
+    kind: ClusterIssuer

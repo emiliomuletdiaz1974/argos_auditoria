@@ -35,6 +35,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 10001
         runAsGroup: 10001
+        fsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -85,12 +86,12 @@ spec:
             name: argos-bootstrap
         - name: tmp
           emptyDir: {}
+        # Its own certificate (certificate.yaml): NATS asks every client for one (K-06); its ca.crt
+        # also verifies PostgreSQL, signed by the same intermediate.
         - name: tls
           secret:
-            secretName: postgres-tls
-            items:
-              - key: ca.crt
-                path: ca.crt
+            secretName: bootstrap-tls
+            defaultMode: 0440
 ---
 # It reaches PostgreSQL, NATS and Vault, and nothing else.
 apiVersion: networking.k8s.io/v1

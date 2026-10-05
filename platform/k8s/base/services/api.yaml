@@ -1,0 +1,219 @@
+# K-06 · the single API (ADR-0012). It serves no page (deviation note ARG-073); the front reaches it
+# from its own origin once the bench has a public entry (K-08), and its tokens are checked against
+# Keycloak. Without a GPU there is no assistant: ARGOS_AI_GATEWAY_URL is not set and the API answers
+# 503 there. The updater, the diagnostics and the airlock are features of the appliance: off here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: argos-services
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/part-of: argos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: api
+        app.kubernetes.io/part-of: argos
+    spec:
+      serviceAccountName: api
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: argos-api
+          command: ["/app/.venv/bin/python", "-m", "argos_api.main"]
+          env:
+            - name: ARGOS_ENVIRONMENT
+              value: staging
+            - name: ARGOS_LOG_LEVEL
+              value: INFO
+            - name: ARGOS_API_BIND
+              value: 0.0.0.0
+            - name: ARGOS_DATABASE_URL
+              value: postgresql://postgres.argos-core.svc:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
+            - name: ARGOS_DATABASE_VAULT_ROLE
+              value: svc-api
+            - name: PGSERVICEFILE
+              value: /tmp/argos-db/pg_service.conf
+            - name: ARGOS_VAULT_ADDR
+              value: http://vault.argos-core.svc:8200
+            - name: ARGOS_VAULT_KUBERNETES_ROLE
+              value: api
+            - name: ARGOS_TLS_DIR
+              value: /run/tls
+            - name: ARGOS_TEMPORAL_ADDRESS
+              value: temporal.argos-core.svc:7233
+            - name: ARGOS_OIDC_ISSUER
+              value: http://keycloak.argos-core.svc:8080/realms/argos
+            - name: ARGOS_OIDC_AUDIENCE
+              value: argos-api
+            - name: ARGOS_RUNBOOKS_DIR
+              value: /app/docs/operacion/runbooks
+            - name: ARGOS_SIZE
+              value: M
+            - name: ARGOS_SIZES_FILE
+              value: /app/platform/operation/sizes.yaml
+            - name: ARGOS_EVIDENCE_ISSUER_DID
+              value: did:web:evidence-api.argos-services.svc%3A8008
+            - name: ARGOS_EVIDENCE_STATUS_BASE_URL
+              value: http://evidence-api.argos-services.svc:8008/status
+            - name: ARGOS_EVIDENCE_CREDENTIAL_BASE_URL
+              value: http://evidence-api.argos-services.svc:8008/credentials
+            - name: ARGOS_EVIDENCE_VERIFIER_URL
+              value: http://verifier.argos-services.svc:8007/verify
+            - name: ARGOS_EVIDENCE_RETENTION_DAYS
+              value: "30"
+            - name: ARGOS_EVIDENCE_S3_ENDPOINT
+              value: http://evidence-store.argos-core.svc:7070
+            - name: ARGOS_EVIDENCE_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: evidence-store
+                  key: access
+            - name: ARGOS_EVIDENCE_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: evidence-store
+                  key: secret
+            - name: ARGOS_EVIDENCE_TSA_URL
+              value: http://tsa.argos-core.svc:3180
+            - name: ARGOS_EVIDENCE_TSA_ROOTS_URL
+              value: http://tsa.argos-core.svc:3180/ca.pem
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tls
+              mountPath: /run/tls
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tls
+          secret:
+            secretName: api-tls
+            defaultMode: 0440
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: argos-services
+spec:
+  selector:
+    app.kubernetes.io/name: api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api
+  namespace: argos-services
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vault
+      ports:
+        - protocol: TCP
+          port: 8200
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: temporal
+      ports:
+        - protocol: TCP
+          port: 7233
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: keycloak
+      ports:
+        - protocol: TCP
+          port: 8080
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: evidence-store
+      ports:
+        - protocol: TCP
+          port: 7070
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: tsa
+      ports:
+        - protocol: TCP
+          port: 3180

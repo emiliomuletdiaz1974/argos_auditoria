@@ -1,0 +1,11 @@
+# K-06 · capa 2 del banco (DP-22): the seven services of ARGOS in argos-services, without the AI.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - accounts.yaml
+  - api.yaml
+  - webhook-worker.yaml
+  - challenge-worker.yaml
+  - evidence.yaml
+  - health.yaml
+  - verifier

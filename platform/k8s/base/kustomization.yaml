@@ -6,3 +6,4 @@ resources:
   - default-deny.yaml
   - certs
   - core
+  - services

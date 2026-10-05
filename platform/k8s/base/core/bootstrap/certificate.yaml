@@ -1,0 +1,22 @@
+# K-06 · the certificate the bootstrap shows to NATS, which asks every client for its own. It lives
+# 30 days like the others; the Job uses it the minutes it runs.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: bootstrap
+  namespace: argos-core
+spec:
+  secretName: bootstrap-tls
+  commonName: bootstrap.argos-core.svc
+  dnsNames:
+    - bootstrap.argos-core.svc
+  duration: 720h
+  renewBefore: 240h
+  usages: ["client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-bench
+    kind: ClusterIssuer

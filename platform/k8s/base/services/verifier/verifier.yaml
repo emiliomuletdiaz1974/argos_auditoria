@@ -1,0 +1,227 @@
+# K-06 · the public verifier (ARG-069): it checks an evidence bundle with nothing but what the bundle
+# carries and what its trust file names. It reaches no other service (no rule of egress) and mounts
+# no token. The trust file is the ConfigMap verifier-trust, written by the Job below.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: verifier
+  namespace: argos-services
+  labels:
+    app.kubernetes.io/name: verifier
+    app.kubernetes.io/part-of: argos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: verifier
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: verifier
+        app.kubernetes.io/part-of: argos
+    spec:
+      serviceAccountName: verifier
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: verifier
+          image: argos-verifier
+          command: ["/app/.venv/bin/python", "-m", "argos_verifier.main"]
+          env:
+            - name: ARGOS_API_BIND
+              value: 0.0.0.0
+            - name: ARGOS_VERIFIER_TRUST_FILE
+              value: /etc/argos-verifier/trust.json
+          ports:
+            - name: http
+              containerPort: 8007
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: trust
+              mountPath: /etc/argos-verifier
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: trust
+          configMap:
+            name: verifier-trust
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: verifier
+  namespace: argos-services
+spec:
+  selector:
+    app.kubernetes.io/name: verifier
+  ports:
+    - name: http
+      port: 8007
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: verifier
+  namespace: argos-services
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: verifier
+  policyTypes: [Egress]
+---
+# The Job: it reads the public key of argos-evidence from Vault (role verifier-trust) and the root
+# of the TSA, and writes the ConfigMap verifier-trust, the only object it may change.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: verifier-trust
+  namespace: argos-services
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: verifier-trust
+  namespace: argos-services
+rules:
+  # create cannot be limited to a name; get and update are.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["verifier-trust"]
+    verbs: ["get", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: verifier-trust
+  namespace: argos-services
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: verifier-trust
+subjects:
+  - kind: ServiceAccount
+    name: verifier-trust
+    namespace: argos-services
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: verifier-trust
+  namespace: argos-services
+  annotations:
+    kustomize.toolkit.fluxcd.io/force: enabled
+  labels:
+    app.kubernetes.io/name: verifier-trust
+    app.kubernetes.io/part-of: argos
+spec:
+  backoffLimit: 20
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: verifier-trust
+        app.kubernetes.io/part-of: argos
+    spec:
+      serviceAccountName: verifier-trust
+      automountServiceAccountToken: true
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: trust
+          image: argos-evidence
+          command: ["/app/.venv/bin/python", "/trust/trust.py"]
+          env:
+            - name: PYTHONDONTWRITEBYTECODE
+              value: "1"
+            - name: ARGOS_VAULT_KUBERNETES_ROLE
+              value: verifier-trust
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: trust
+              mountPath: /trust
+              readOnly: true
+      volumes:
+        - name: trust
+          configMap:
+            name: verifier-trust-job
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: verifier-trust
+  namespace: argos-services
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: verifier-trust
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vault
+      ports:
+        - protocol: TCP
+          port: 8200
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: tsa
+      ports:
+        - protocol: TCP
+          port: 3180
+    - ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443

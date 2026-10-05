@@ -1,5 +1,5 @@
 # K-04 · the certificate of PostgreSQL, from the intermediate CA of the Vault of the bench. 30 days,
-# renewed at 20 with a new key; PostgreSQL reads the renewed files on its next reload.
+# renewed at 20 with a new key; the container tls-reload of the pod asks PostgreSQL to read it again.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:

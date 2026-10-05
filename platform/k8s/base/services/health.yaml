@@ -1,0 +1,169 @@
+# K-06 · the health of the domain (ARG-094): what no standard exporter measures. It reads what it
+# measures and writes only its own facts; it lists the certificates of the intermediate CA to warn
+# before one of the services expires. The evidence volume is the store's own here (a StatefulSet),
+# so its size is measured by the canary of the store, not by a shared mount.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: health
+  namespace: argos-services
+  labels:
+    app.kubernetes.io/name: health
+    app.kubernetes.io/part-of: argos
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: health
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: health
+        app.kubernetes.io/part-of: argos
+    spec:
+      serviceAccountName: health
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: health
+          image: argos-health
+          command: ["/app/.venv/bin/python", "-m", "argos_health.app"]
+          env:
+            - name: ARGOS_ENVIRONMENT
+              value: staging
+            - name: ARGOS_LOG_LEVEL
+              value: INFO
+            - name: ARGOS_DATABASE_URL
+              value: postgresql://postgres.argos-core.svc:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
+            - name: ARGOS_DATABASE_VAULT_ROLE
+              value: svc-health
+            - name: PGSERVICEFILE
+              value: /tmp/argos-db/pg_service.conf
+            - name: ARGOS_VAULT_ADDR
+              value: http://vault.argos-core.svc:8200
+            - name: ARGOS_VAULT_KUBERNETES_ROLE
+              value: health
+            - name: ARGOS_TLS_DIR
+              value: /run/tls
+            - name: ARGOS_HEALTH_S3_ENDPOINT
+              value: http://evidence-store.argos-core.svc:7070
+            - name: ARGOS_HEALTH_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: evidence-store
+                  key: access
+            - name: ARGOS_HEALTH_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: evidence-store
+                  key: secret
+            - name: ARGOS_HEALTH_PKI_URL
+              value: http://vault.argos-core.svc:8200/v1/pki_int
+            - name: ARGOS_HEALTH_TLS_SERVICES
+              value: api=api.argos-services.svc;webhook=webhook.argos-services.svc;challenge=challenge.argos-services.svc;evidence=evidence.argos-services.svc;health=health.argos-services.svc;postgres=postgres.argos-core.svc
+            - name: ARGOS_SIZE
+              value: M
+            - name: ARGOS_SIZES_FILE
+              value: /app/platform/operation/sizes.yaml
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tls
+              mountPath: /run/tls
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tls
+          secret:
+            secretName: health-tls
+            defaultMode: 0440
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: health
+  namespace: argos-services
+spec:
+  selector:
+    app.kubernetes.io/name: health
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: health
+  namespace: argos-services
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: health
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vault
+      ports:
+        - protocol: TCP
+          port: 8200
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: evidence-store
+      ports:
+        - protocol: TCP
+          port: 7070

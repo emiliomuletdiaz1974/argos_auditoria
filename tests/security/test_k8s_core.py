@@ -39,6 +39,11 @@ def _containers(workload: dict[str, Any]) -> list[dict[str, Any]]:
     return [*pod.get("initContainers", []), *pod["containers"]]
 
 
+def _container(workload: dict[str, Any], name: str) -> dict[str, Any]:
+    [found] = [c for c in _pod(workload)["containers"] if c["name"] == name]
+    return found
+
+
 def _named(kind: str, name: str, namespace: str | None = None) -> dict[str, Any]:
     [found] = [
         d
@@ -181,7 +186,7 @@ def test_the_seeder_job_is_recreated_when_it_changes() -> None:
 
 
 def test_postgres_takes_its_password_from_the_generated_secret() -> None:
-    [container] = _pod(_named("StatefulSet", "postgres"))["containers"]
+    container = _container(_named("StatefulSet", "postgres"), "postgres")
     env = {e["name"]: e for e in container["env"]}
     assert env["POSTGRES_PASSWORD"]["valueFrom"]["secretKeyRef"] == {
         "name": "postgres-superuser",
@@ -240,7 +245,7 @@ def test_every_nats_password_comes_from_the_generated_secret() -> None:
     assert "dev-only" not in conf
     for user in NATS_USERS:
         assert f"password: $NATS_PASSWORD_{user.upper()}" in conf, user
-    [container] = _pod(_named("StatefulSet", "nats"))["containers"]
+    container = _container(_named("StatefulSet", "nats"), "nats")
     env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container["env"]}
     for user in NATS_USERS:
         assert env[f"NATS_PASSWORD_{user.upper()}"] == {"name": "nats-users", "key": user}
@@ -469,7 +474,7 @@ def test_postgres_has_a_certificate_with_the_names_of_the_cluster() -> None:
 
 
 def test_postgres_speaks_only_tls_on_the_network() -> None:
-    [container] = _pod(_named("StatefulSet", "postgres"))["containers"]
+    container = _container(_named("StatefulSet", "postgres"), "postgres")
     args = " ".join(container["args"])
     assert "ssl=on" in args and "ssl_min_protocol_version=TLSv1.3" in args
     hba = _named("ConfigMap", "postgres-hba")["data"]["pg_hba.conf"]
@@ -587,7 +592,7 @@ def test_the_accounts_job_reaches_keycloak_and_keycloak_lets_it_in() -> None:
     } in sources
 
 
-# ---------- The services of argos-services sign in to Vault with their own account (K-06) ----------
+# ---------- The services of argos-services sign in to Vault with their own account (K-06) ---------
 
 SERVICE_POLICIES = {
     "api": {
@@ -647,3 +652,48 @@ def test_each_vault_role_is_bound_to_its_own_account_in_argos_services() -> None
     # A lease dies with the token that asked for it: the token lives as long as the longest
     # database credential (72 h, bootstrap.py).
     assert "ttl=72h" in function and "max_ttl=72h" in function
+
+
+# ---------- TLS of NATS and the reload of renewed certificates (K-06) ----------
+
+
+def test_nats_speaks_tls_and_asks_each_client_for_its_certificate() -> None:
+    conf = _nats_conf()
+    tls = conf.split("tls {", 1)[1].split("}", 1)[0]
+    assert 'cert_file: "/run/tls/tls.crt"' in tls and 'key_file: "/run/tls/tls.key"' in tls
+    assert 'ca_file: "/run/tls/ca.crt"' in tls
+    assert "verify: true" in tls and 'min_version: "1.3"' in tls
+    spec = _named("Certificate", "nats")["spec"]
+    assert spec["secretName"] == "nats-tls"
+    assert set(spec["dnsNames"]) == {"nats.argos-core.svc", "nats.argos-core.svc.cluster.local"}
+    volumes = {v["name"]: v for v in _pod(_named("StatefulSet", "nats"))["volumes"]}
+    assert volumes["tls"]["secret"]["secretName"] == "nats-tls"
+
+
+def test_postgres_rereads_its_certificate_when_cert_manager_renews_it() -> None:
+    """Renewed at day 20 of 30: without a reload the server would serve an expired one."""
+    pod = _pod(_named("StatefulSet", "postgres"))
+    [reload] = [c for c in pod["containers"] if c["name"] == "tls-reload"]
+    script = " ".join(reload["command"])
+    assert "pg_reload_conf()" in script and "/tls/tls.crt" in script
+    mounts = {m["mountPath"] for m in reload["volumeMounts"]}
+    assert {"/tls", "/var/run/postgresql"} <= mounts, "the certificate and the local socket"
+
+
+def test_nats_rereads_its_certificate_when_cert_manager_renews_it() -> None:
+    pod = _pod(_named("StatefulSet", "nats"))
+    assert pod["shareProcessNamespace"] is True, "the reloader signals the server"
+    [reload] = [c for c in pod["containers"] if c["name"] == "tls-reload"]
+    script = " ".join(reload["command"])
+    assert "kill -HUP" in script and "/run/tls/tls.crt" in script
+
+
+def test_the_bootstrap_signs_in_to_nats_with_its_own_certificate() -> None:
+    spec = _named("Certificate", "bootstrap")["spec"]
+    assert spec["secretName"] == "bootstrap-tls" and "client auth" in spec["usages"]
+    pod = _pod(_named("Job", "argos-bootstrap"))
+    volumes = {v["name"]: v for v in pod["volumes"]}
+    assert volumes["tls"]["secret"]["secretName"] == "bootstrap-tls"
+    script = (CORE / "bootstrap" / "bootstrap.py").read_text("utf-8")
+    assert 'NATS_URL = "tls://nats.argos-core.svc:4222"' in script
+    assert "load_cert_chain" in script

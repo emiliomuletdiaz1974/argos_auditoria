@@ -98,6 +98,40 @@ spec:
             - name: tls
               mountPath: /tls
               readOnly: true
+        # Renewed at day 20 of 30 (certificate.yaml): PostgreSQL keeps the old one until it reloads,
+        # which it is asked for through the local socket (pg_hba: local trust).
+        - name: tls-reload
+          image: argos-postgres
+          command:
+            - sh
+            - -c
+            - |
+              sum() { cat /tls/tls.crt /tls/tls.key | md5sum; }
+              last=$(sum)
+              while sleep 60; do
+                now=$(sum)
+                if [ "$now" != "$last" ] && psql -h /var/run/postgresql -U argos -d argos -qtAc "select pg_reload_conf()" >/dev/null; then
+                  last=$now
+                  echo "certificate renewed: postgres reloaded"
+                fi
+              done
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+            - name: run
+              mountPath: /var/run/postgresql
       volumes:
         - name: hba
           configMap:

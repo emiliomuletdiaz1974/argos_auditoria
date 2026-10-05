@@ -1,0 +1,156 @@
+# K-06 · one service account per service, and a certificate for each one that reaches the database.
+# The account is how the service signs in to Vault (auth kubernetes, platform/k8s/bench/vault-setup.sh):
+# only the pods of that service mount its token. The certificate comes from the intermediate CA of the
+# bench (30 days, renewed at 20 with a new key): the mutual TLS of ARGOS, NATS, and the CA that checks
+# PostgreSQL. The services reload it by themselves (argos_tls.ReloadingTLS).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api
+  namespace: argos-services
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: webhook
+  namespace: argos-services
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: challenge
+  namespace: argos-services
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: evidence
+  namespace: argos-services
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: health
+  namespace: argos-services
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: verifier
+  namespace: argos-services
+automountServiceAccountToken: false
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: api
+  namespace: argos-services
+spec:
+  secretName: api-tls
+  commonName: api.argos-services.svc
+  dnsNames:
+    - api.argos-services.svc
+    - api.argos-services.svc.cluster.local
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-bench
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: webhook
+  namespace: argos-services
+spec:
+  secretName: webhook-tls
+  commonName: webhook.argos-services.svc
+  dnsNames:
+    - webhook.argos-services.svc
+    - webhook.argos-services.svc.cluster.local
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-bench
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: challenge
+  namespace: argos-services
+spec:
+  secretName: challenge-tls
+  commonName: challenge.argos-services.svc
+  dnsNames:
+    - challenge.argos-services.svc
+    - challenge.argos-services.svc.cluster.local
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-bench
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: evidence
+  namespace: argos-services
+spec:
+  secretName: evidence-tls
+  commonName: evidence.argos-services.svc
+  dnsNames:
+    - evidence.argos-services.svc
+    - evidence.argos-services.svc.cluster.local
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-bench
+    kind: ClusterIssuer
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: health
+  namespace: argos-services
+spec:
+  secretName: health-tls
+  commonName: health.argos-services.svc
+  dnsNames:
+    - health.argos-services.svc
+    - health.argos-services.svc.cluster.local
+  duration: 720h
+  renewBefore: 240h
+  usages: ["server auth", "client auth", "digital signature", "key encipherment"]
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+    rotationPolicy: Always
+  issuerRef:
+    name: vault-bench
+    kind: ClusterIssuer

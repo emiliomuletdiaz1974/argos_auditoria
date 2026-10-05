@@ -20,6 +20,7 @@ import asyncio
 import json
 import os
 import secrets
+import ssl
 import urllib.error
 import urllib.request
 from collections.abc import Callable
@@ -28,7 +29,8 @@ from typing import Any
 
 PG_HOST = "postgres.argos-core.svc:5432"
 DB_NAME = "argos"
-NATS_URL = "nats://nats.argos-core.svc:4222"
+NATS_URL = "tls://nats.argos-core.svc:4222"
+TLS_DIR = Path("/tls")  # its certificate, key and the CA of the bench (certificate.yaml)
 VAULT_ADDR = "http://vault.argos-core.svc:8200"
 ACCOUNT_TOKEN = Path("/var/run/secrets/kubernetes.io/serviceaccount/token")
 MIGRATIONS = Path("/app/services/api/migrations")
@@ -203,7 +205,9 @@ def streams(password: str) -> int:
     from argos_events import STREAMS, ensure_streams
 
     async def run() -> None:
-        nc = await nats.connect(NATS_URL, user="platform", password=password)
+        context = ssl.create_default_context(cafile=str(TLS_DIR / "ca.crt"))
+        context.load_cert_chain(TLS_DIR / "tls.crt", TLS_DIR / "tls.key")
+        nc = await nats.connect(NATS_URL, user="platform", password=password, tls=context)
         try:
             await ensure_streams(nc.jetstream())
         finally:
