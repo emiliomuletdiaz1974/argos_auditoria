@@ -74,4 +74,43 @@ vault write auth/kubernetes/role/bootstrap bound_service_account_names=argos-boo
 # K-04 · cert-manager signs the certificate of each service with the intermediate CA, and nothing else.
 vault write auth/kubernetes/role/cert-manager bound_service_account_names=cert-manager bound_service_account_namespaces=cert-manager   policies=argos-cert-issuer ttl=15m >/dev/null
 
+# K-06 · each service of argos-services signs in with its own service account
+# (argos_common.vault_auth) and gets what it uses, nothing more: its database credential, the secrets
+# it reads and the keys it signs with. A lease dies with the token that asked for it, so the token
+# lives as long as the longest database credential (72 h, bootstrap.py).
+service_role() {
+  vault policy write "k8s-$1" - >/dev/null
+  vault write "auth/kubernetes/role/$1" bound_service_account_names="$1"     bound_service_account_namespaces=argos-services policies="k8s-$1"     ttl=72h max_ttl=72h token_no_default_policy=true >/dev/null
+}
+service_role api <<'POLICY'
+path "db/creds/svc-api" { capabilities = ["read"] }
+path "argos/data/webhooks/*" { capabilities = ["create", "update", "read"] }
+path "argos/data/services/api/*" { capabilities = ["read"] }
+path "transit/sign/argos-evidence" { capabilities = ["update"] }
+path "transit/keys/argos-evidence" { capabilities = ["read"] }
+POLICY
+service_role webhook <<'POLICY'
+path "db/creds/svc-webhook" { capabilities = ["read"] }
+path "argos/data/webhooks/*" { capabilities = ["read"] }
+POLICY
+service_role challenge <<'POLICY'
+path "db/creds/svc-challenge" { capabilities = ["read"] }
+path "argos/data/connectors/*" { capabilities = ["read"] }
+path "argos/data/services/challenge/*" { capabilities = ["read"] }
+POLICY
+service_role evidence <<'POLICY'
+path "db/creds/svc-evidence" { capabilities = ["read"] }
+path "transit/sign/argos-evidence" { capabilities = ["update"] }
+path "transit/keys/argos-evidence" { capabilities = ["read"] }
+POLICY
+service_role health <<'POLICY'
+path "db/creds/svc-health" { capabilities = ["read"] }
+path "pki_int/certs" { capabilities = ["list"] }
+path "pki_int/cert/*" { capabilities = ["read"] }
+POLICY
+# The public key of the evidence, for the trust of the verifier, which reaches nothing itself.
+service_role verifier-trust <<'POLICY'
+path "transit/keys/argos-evidence" { capabilities = ["read"] }
+POLICY
+
 echo "bench vault configured"

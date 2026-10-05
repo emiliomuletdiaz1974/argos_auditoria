@@ -585,3 +585,65 @@ def test_the_accounts_job_reaches_keycloak_and_keycloak_lets_it_in() -> None:
         "from": [{"podSelector": {"matchLabels": {"app.kubernetes.io/name": "keycloak-accounts"}}}],
         "ports": [{"protocol": "TCP", "port": 8080}],
     } in sources
+
+
+# ---------- The services of argos-services sign in to Vault with their own account (K-06) ----------
+
+SERVICE_POLICIES = {
+    "api": {
+        ("db/creds/svc-api", ("read",)),
+        ("argos/data/webhooks/*", ("create", "read", "update")),
+        ("argos/data/services/api/*", ("read",)),
+        ("transit/sign/argos-evidence", ("update",)),
+        ("transit/keys/argos-evidence", ("read",)),
+    },
+    "webhook": {
+        ("db/creds/svc-webhook", ("read",)),
+        ("argos/data/webhooks/*", ("read",)),
+    },
+    "challenge": {
+        ("db/creds/svc-challenge", ("read",)),
+        ("argos/data/connectors/*", ("read",)),
+        ("argos/data/services/challenge/*", ("read",)),
+    },
+    "evidence": {
+        ("db/creds/svc-evidence", ("read",)),
+        ("transit/sign/argos-evidence", ("update",)),
+        ("transit/keys/argos-evidence", ("read",)),
+    },
+    "health": {
+        ("db/creds/svc-health", ("read",)),
+        ("pki_int/certs", ("list",)),
+        ("pki_int/cert/*", ("read",)),
+    },
+    "verifier-trust": {("transit/keys/argos-evidence", ("read",))},
+}
+
+
+def _service_policies() -> dict[str, set[tuple[str, tuple[str, ...]]]]:
+    import re
+
+    setup = (K8S / "bench" / "vault-setup.sh").read_text("utf-8")
+    found = {}
+    for name, body in re.findall(r"service_role (\S+) <<'POLICY'\n(.*?)\nPOLICY", setup, re.S):
+        rules = re.findall(r'path "([^"]+)" \{ capabilities = \[([^\]]*)\] \}', body)
+        found[name] = {
+            (path, tuple(sorted(c.strip().strip('"') for c in caps.split(","))))
+            for path, caps in rules
+        }
+    return found
+
+
+def test_each_service_reads_from_vault_only_what_it_uses() -> None:
+    assert _service_policies() == SERVICE_POLICIES
+
+
+def test_each_vault_role_is_bound_to_its_own_account_in_argos_services() -> None:
+    setup = (K8S / "bench" / "vault-setup.sh").read_text("utf-8")
+    function = setup.split("service_role() {", 1)[1].split("\n}", 1)[0]
+    assert 'bound_service_account_names="$1"' in function
+    assert "bound_service_account_namespaces=argos-services" in function
+    assert 'policies="k8s-$1"' in function
+    # A lease dies with the token that asked for it: the token lives as long as the longest
+    # database credential (72 h, bootstrap.py).
+    assert "ttl=72h" in function and "max_ttl=72h" in function
