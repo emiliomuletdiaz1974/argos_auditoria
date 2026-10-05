@@ -4,9 +4,9 @@ kind: module
 title: Inventario y grafo de conocimiento (argos-inventory)
 module: argos-inventory
 phases: ["03", "04"]
-version: 0.8.2-alpha
-commit: b43d879
-date: 2026-09-29
+version: 0.8.3-alpha
+commit: 6c1d0a8
+date: 2026-10-05
 status: current
 confidentiality: client
 ---
@@ -154,3 +154,4 @@ Dependencias: `argos-common`, `argos-events`, `argos-auth`, `argos-connector-sdk
 | 0.8.0-alpha | 2026-09-28 | Diccionario con tildes, siglas y plurales; revisiones del DPO respetadas; flujos estructurales estables | QA-27 (QA-034, 041, 042) |
 | 0.8.1-alpha | 2026-09-28 | `decide_review(note=)` | QA-31 (QA-067) |
 | 0.8.2-alpha | 2026-09-29 | `EXECUTE` sobre `agtype_text` a los lectores de `catalog_freshness` (migración 0050): la cobertura de la API deja de dar 503 | Corrección de permisos |
+| 0.8.3-alpha | 2026-10-05 | El planificador (`scheduler.worker`) y la ingesta (`ingest.main`) piden su credencial dinámica al arrancar (`start_from_config`); el planificador también entra en Vault con su cuenta de servicio | K-07 |
