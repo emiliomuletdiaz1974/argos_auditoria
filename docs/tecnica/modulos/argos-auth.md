@@ -4,9 +4,9 @@ kind: module
 title: Validación de identidades (argos-auth)
 module: argos-auth
 phases: ["01"]
-version: 0.5.0-alpha
-commit: fa8933e
-date: 2026-09-30
+version: 0.6.0-alpha
+commit: 38002bb
+date: 2026-10-05
 status: current
 confidentiality: client
 ---
@@ -43,7 +43,7 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 
 ## 5. Configuración
 
-`ARGOS_OIDC_ISSUER` (URL del realm; `https` obligatorio en producción) y `ARGOS_OIDC_AUDIENCE`.
+`ARGOS_OIDC_ISSUER` (URL del realm; `https` obligatorio en producción) y `ARGOS_OIDC_AUDIENCE`. Con `ARGOS_OIDC_INTERNAL_URL` (K-08), las claves se piden a esa dirección interna del realm y el token tiene que seguir llevando `ARGOS_OIDC_ISSUER`: es lo que hace falta cuando Keycloak se publica con un nombre que el servicio no alcanza desde dentro. `JwtValidator(issuer, audience, realm_url=…)`.
 
 ## 6. Seguridad y tratamiento de datos
 
@@ -85,3 +85,4 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 | 0.3.0-alpha | 2026-09-24 | `Identity.sid`: la sesión del realm del token | F09-32 (SEC-060) |
 | 0.4.0-alpha | 2026-09-28 | Margen de reloj y roles del realm con forma inesperada | QA-34 (QA-009) |
 | 0.5.0-alpha | 2026-09-30 | El realm conserva `amr` en los tokens renovados y en la SSO (`default.reference.maxAge`) | F09-07 (ARG-072) |
+| 0.6.0-alpha | 2026-10-05 | `JwtValidator(realm_url=)`: claves del realm por su dirección interna, con el emisor público | K-08 |

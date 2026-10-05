@@ -4,8 +4,8 @@ kind: module
 title: Librería común de la plataforma (argos-common)
 module: argos-common
 phases: ["01", "03", "07"]
-version: 0.18.0-alpha
-commit: 7e05f43
+version: 0.19.0-alpha
+commit: 38002bb
 date: 2026-10-05
 status: current
 confidentiality: client
@@ -73,7 +73,7 @@ Variables con prefijo `ARGOS_`:
 - `VAULT_KUBERNETES_ROLE` y `VAULT_KUBERNETES_TOKEN_FILE` (K-06): en el clúster, el rol del método `kubernetes` de Vault con el que entra el servicio y el token de su cuenta (por defecto el que monta el kubelet). Si está, se usa antes que el AppRole y el token fijo; `VaultSecretStore` y `VaultTransitSigner` aceptan un token fijo o una función que da el vigente;
 - `DATABASE_URL` (obligatoria) y `DATABASE_PASSWORD_FILE` (F09-04: fichero con la contraseña, que se añade a la cadena de conexión; es un error que la cadena ya traiga otra), `NATS_URL`, `NATS_USER`, `NATS_PASSWORD` (secreto), `TEMPORAL_ADDRESS`;
 - `OPA_URL` y `OPA_TOKEN` (secreto);
-- `OIDC_ISSUER` y `OIDC_AUDIENCE`;
+- `OIDC_ISSUER` y `OIDC_AUDIENCE`; `OIDC_INTERNAL_URL` (K-08) y `oidc_realm_url()`: dónde alcanza el servicio el realm cuando su emisor es una dirección pública;
 - `WORM_STORAGE_PATH`, `LOG_LEVEL`, `LOG_FORMAT_JSON`, `LLM_LOCAL_ENDPOINT`, `LLM_MODEL` y `EMBEDDING_MODEL` (nombre del modelo de embeddings servido, por defecto `argos-embed`);
 - `WEBHOOK_ALLOWED_TARGETS`: destinos privados que un webhook puede alcanzar (el ITSM del cliente), nombres o redes separados por comas. Vacío por defecto: solo destinos `https` públicos;
 - `VAULT_ADDR` y `VAULT_TOKEN`, solo para los servicios que abren conectores; el token se guarda como secreto y no se registra.
@@ -174,3 +174,4 @@ Los secretos viven en Vault (kv-v2, montaje `argos`). Cada servicio lee solo su 
 | 0.16.0-alpha | 2026-09-28 | SBOM obligatorio, verify-full en producción, migrador que avisa y hora del diario tras el cerrojo | QA-34 (QA-008, 010, 012, 014) |
 | 0.17.0-alpha | 2026-09-29 | `FRONTEND_ORIGINS` y `frontend_origins()`, validados al arrancar | C-03 (DP-19) |
 | 0.18.0-alpha | 2026-10-05 | `vault_auth`: entrada en Vault con la cuenta de servicio de Kubernetes y token que se renueva; `VAULT_KUBERNETES_ROLE`, `VAULT_KUBERNETES_TOKEN_FILE` | K-06 |
+| 0.19.0-alpha | 2026-10-05 | `OIDC_INTERNAL_URL` y `oidc_realm_url()` | K-08 |
