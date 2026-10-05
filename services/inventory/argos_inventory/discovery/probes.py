@@ -1,6 +1,7 @@
 """Open the read-only connector of a registered system (ARG-022, deviation note ARG-021-023)."""
 
 import importlib
+import threading
 from dataclasses import dataclass
 from typing import Any
 
@@ -54,12 +55,18 @@ def load_system(dsn: str, system_id: str) -> RegisteredSystem:
     )
 
 
+_IMPORT_LOCK = threading.Lock()
+
+
 def connector_class(path: str) -> type[Connector]:
     module_name, _, class_name = path.partition(":")
     if not class_name or not module_name.startswith(ALLOWED_CONNECTOR_PACKAGES):
         raise ValueError(f"connector not allowed: {path!r}")
     try:
-        candidate = getattr(importlib.import_module(module_name), class_name)
+        # Scans that start at once load their connectors from several threads; importing two
+        # modules of one package at the same moment can deadlock importlib (K-07).
+        with _IMPORT_LOCK:
+            candidate = getattr(importlib.import_module(module_name), class_name)
     except (ImportError, AttributeError):
         raise ValueError(f"connector not found: {path!r}") from None
     if not (isinstance(candidate, type) and issubclass(candidate, Connector)):

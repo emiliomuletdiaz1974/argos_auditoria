@@ -4,9 +4,9 @@ kind: module
 title: SDK de conectores de solo lectura (argos-connector-sdk)
 module: argos-connector-sdk
 phases: ["02", "03"]
-version: 0.8.1-alpha
-commit: e1610ef
-date: 2026-09-28
+version: 0.8.2-alpha
+commit: pendiente
+date: 2026-10-05
 status: current
 confidentiality: client
 ---
@@ -57,7 +57,7 @@ Otras piezas:
 | Funciones | `validate_read_only_sql`, `assert_safe_http_method` | Validación de solo lectura |
 | Función | `require_tls(encrypted, config, target)` | Rechaza al abrir un transporte sin cifrar salvo que el sistema declare `allow_insecure: true` |
 | Funciones | `is_valid_dni`, `is_valid_nie`, `is_valid_nuss`, `is_valid_iban_es`, `mrn_validator`, `acceptance_rates` | Validadores con dígito de control (Fase 03) |
-| Tabla | `argos.connector_queries` (migración `0002_connectors.sql`) | Estados `emitted`, `completed`, `failed`, `rejected`; un trigger impide borrar filas y modificar las cerradas |
+| Tabla | `argos.connector_queries` (migración `0002_connectors.sql`) | Estados `emitted`, `completed`, `failed`, `rejected`; un trigger impide borrar filas y modificar las cerradas. Los roles que sondean (`svc_api`, `svc_challenge`, `svc_evidence`, `svc_inventory`, `svc_ontology`) leen solo `journal_seq`, `system_id` y `finished_at`, lo que pide el `WHERE` que cierra la fila (migración `0051`) |
 | Arnés | `argos_connector.testing` | `assert_no_write_surface`, `assert_sql_writes_rejected`, `assert_http_writes_rejected` para los tests de cualquier conector |
 
 ## 5. Configuración
@@ -122,3 +122,4 @@ El presupuesto de carga vive en la memoria de cada proceso; con varias réplicas
 | 0.7.0-alpha | 2026-09-28 | `check_config` solo con esquemas de catálogo y sin texto SQL de otras sesiones; `sample_size` | QA-23 (QA-015, 027) |
 | 0.8.0-alpha | 2026-09-28 | Validadores con separadores, sin cero inicial y solo ASCII; blancos fuera de la tasa; ventanas nocturnas; `TokenError` y barra invertida como violaciones | QA-24 (QA-017, 018, 019, 023) |
 | 0.8.1-alpha | 2026-09-28 | `scrub_identifiers` sin caracteres de ancho cero | QA-30 (QA-071) |
+| 0.8.2-alpha | 2026-10-05 | Los roles de servicio pueden cerrar sus entradas del diario previo (migración 0051); hasta ahora solo funcionaba como propietario | K-07 (banco) |

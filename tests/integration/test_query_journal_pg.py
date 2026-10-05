@@ -166,3 +166,22 @@ def test_connector_is_journaled_before_it_touches_the_system(
     assert connector.open_rows_seen == [1]
     assert _row(migrated_db, result.journal_seq)["status"] == "completed"
     assert PostgresJournal(migrated_db).verify().intact
+
+
+def _as(dsn: str, role: str) -> str:
+    return f"{dsn}?options=-c%20role%3D{role}"
+
+
+@pytest.mark.parametrize("role", ["svc_inventory", "svc_challenge", "svc_api"])
+def test_every_role_that_probes_closes_its_own_entries(
+    migrated_db: str, system_id: str, role: str
+) -> None:
+    """K-07: closing an entry reads the columns of its WHERE, which the roles could not.
+
+    In development the inventory ran as the owner; in the bench, as svc_inventory, every scan of
+    a source ended in "permission denied for table connector_queries".
+    """
+    journal = QueryJournal(_as(migrated_db, role), system_id)
+    seq = journal.register(SPEC)
+    journal.complete(seq, ok=True, duration_ms=4, rows=1)
+    assert _row(migrated_db, seq)["status"] == "completed"
