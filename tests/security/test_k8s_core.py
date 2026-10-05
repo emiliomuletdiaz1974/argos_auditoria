@@ -517,7 +517,7 @@ def test_keycloak_starts_prebuilt_for_postgres_with_the_bench_realm() -> None:
 
 def test_keycloak_is_reached_only_by_argos_services_and_reaches_only_postgres() -> None:
     policy = _named("NetworkPolicy", "keycloak")["spec"]
-    [rule] = policy["ingress"]
+    rule = policy["ingress"][0]
     assert rule["ports"] == [{"protocol": "TCP", "port": 8080}]
     assert rule["from"][0]["namespaceSelector"]["matchLabels"] == {
         "kubernetes.io/metadata.name": "argos-services"
@@ -540,3 +540,30 @@ def test_the_bootstrap_gives_keycloak_its_own_database() -> None:
     wanted = yaml.safe_load((CORE / "seeder" / "secrets.yaml").read_text("utf-8"))
     assert {"name": "keycloak-db", "keys": ["password"]} in wanted
     assert {"name": "keycloak-admin", "keys": ["password"]} in wanted
+
+
+# ---------- the accounts of the bench (K-05) ----------
+
+
+def test_the_accounts_job_may_only_read_and_create_secrets() -> None:
+    role = _named("Role", "keycloak-accounts")
+    [rule] = role["rules"]
+    assert rule["resources"] == ["secrets"] and sorted(rule["verbs"]) == ["create", "get"]
+    pod = _pod(_named("Job", "keycloak-accounts"))
+    assert pod["serviceAccountName"] == "keycloak-accounts"
+    [container] = pod["containers"]
+    env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container["env"] if "valueFrom" in e}
+    assert env == {"KEYCLOAK_ADMIN_PASSWORD": {"name": "keycloak-admin", "key": "password"}}
+
+
+def test_the_accounts_job_reaches_keycloak_and_keycloak_lets_it_in() -> None:
+    egress = _named("NetworkPolicy", "keycloak-accounts")["spec"]["egress"]
+    assert {
+        "to": [{"podSelector": {"matchLabels": {"app.kubernetes.io/name": "keycloak"}}}],
+        "ports": [{"protocol": "TCP", "port": 8080}],
+    } in egress
+    sources = _named("NetworkPolicy", "keycloak")["spec"]["ingress"]
+    assert {
+        "from": [{"podSelector": {"matchLabels": {"app.kubernetes.io/name": "keycloak-accounts"}}}],
+        "ports": [{"protocol": "TCP", "port": 8080}],
+    } in sources

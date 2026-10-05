@@ -224,3 +224,13 @@ def test_the_bootstrap_verifies_postgres_with_the_ca_of_the_bench() -> None:
     assert "sslmode=verify-full" in script and "sslrootcert=" in script
     # Vault 1.17 ignores `tls_ca`: it reads the CA from a file mounted in its pod.
     assert "sslrootcert=/run/postgres-ca/ca.crt" in script, "Vault verifies with the same CA"
+
+
+ACCOUNTS_SH = ROOT / "platform" / "k8s" / "bench" / "accounts.sh"
+
+
+def test_the_person_reads_the_accounts_on_the_vm_and_nothing_writes_them() -> None:
+    script = ACCOUNTS_SH.read_text(encoding="utf-8")
+    assert "get secret bench-accounts" in script
+    assert ">" not in script.split("get secret", 1)[1].split("\n", 1)[0], "shown, never written"
+    assert "tee" not in script
