@@ -41,14 +41,6 @@ class Realm(Protocol):
 
     def has_password(self, user_id: str) -> bool: ...
 
-    def client(self, client_id: str) -> dict[str, Any] | None:
-        query = urllib.parse.urlencode({"clientId": client_id})
-        found = _call("GET", f"{self._base}/clients?{query}", token=self._token)
-        return dict(found[0]) if found else None
-
-    def update_client(self, internal_id: str, representation: dict[str, Any]) -> None:
-        _call("PUT", f"{self._base}/clients/{internal_id}", token=self._token, body=representation)
-
     def reset_password(self, user_id: str, credential: dict[str, Any]) -> None: ...
 
 
