@@ -96,10 +96,15 @@ def test_the_steps_run_in_order_and_no_secret_is_shown(
         bootstrap, "database_engine", lambda vault, set_password: done.append("engine")
     )
     monkeypatch.setattr(bootstrap, "streams", lambda password: done.append("streams") or 3)
+    monkeypatch.setenv("ARGOS_KEYCLOAK_DB_PASSWORD", "the-keycloak-password")
+    monkeypatch.setattr(
+        bootstrap, "keycloak_database", lambda dsn, password: done.append("keycloak")
+    )
     assert bootstrap.main() == 0
-    assert done == ["migrate", "engine", "streams"]
+    assert done == ["migrate", "engine", "streams", "keycloak"]
     shown = capsys.readouterr().out
     assert "the-superuser-password" not in shown and "the-platform-password" not in shown
+    assert "the-keycloak-password" not in shown
 
 
 def test_a_refusal_of_vault_says_what_and_why_without_secrets() -> None:
@@ -108,3 +113,25 @@ def test_a_refusal_of_vault_says_what_and_why_without_secrets() -> None:
         "POST", "db/config/argos", 400, ["error verifying connection"]
     )
     assert "POST db/config/argos" in str(error) and "error verifying connection" in str(error)
+
+
+def test_keycloak_gets_its_role_and_database_once() -> None:
+    bootstrap = _bootstrap()
+    first = [
+        q.as_string(None) for q in bootstrap.keycloak_statements("pw'1", database_exists=False)
+    ]
+    assert any(q.startswith("CREATE DATABASE keycloak OWNER keycloak") for q in first)
+    assert any("PASSWORD 'pw''1'" in q for q in first), "the password is a literal, escaped"
+    again = [q.as_string(None) for q in bootstrap.keycloak_statements("pw", database_exists=True)]
+    assert not any("CREATE DATABASE" in q for q in again), "an existing database is kept"
+    assert any(q.startswith("ALTER ROLE keycloak") for q in again), (
+        "its password follows the secret"
+    )
+
+
+def test_the_database_of_keycloak_has_the_schema_age_expects() -> None:
+    """AGE is preloaded for the whole server: in a database without `ag_catalog` its hook breaks
+    the DDL of others (Keycloak's Liquibase failed on the bench test, K-05)."""
+    bootstrap = _bootstrap()
+    inside = [q.as_string(None) for q in bootstrap.keycloak_database_statements()]
+    assert inside == ["CREATE EXTENSION IF NOT EXISTS age"]

@@ -54,6 +54,11 @@ spec:
                 secretKeyRef:
                   name: nats-users
                   key: platform
+            - name: ARGOS_KEYCLOAK_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-db
+                  key: password
           resources:
             requests:
               cpu: 50m

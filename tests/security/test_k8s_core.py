@@ -401,6 +401,7 @@ def test_the_bootstrap_runs_from_the_image_of_the_api_with_only_generated_secret
     assert env == {
         "ARGOS_PG_PASSWORD": {"name": "postgres-superuser", "key": "password"},
         "ARGOS_NATS_PLATFORM_PASSWORD": {"name": "nats-users", "key": "platform"},
+        "ARGOS_KEYCLOAK_DB_PASSWORD": {"name": "keycloak-db", "key": "password"},
     }
 
 
@@ -489,3 +490,53 @@ def test_vault_reads_the_ca_of_postgres_without_waiting_for_it() -> None:
     [container] = pod["containers"]
     mounts = {m["mountPath"]: m for m in container["volumeMounts"]}
     assert mounts["/run/postgres-ca"]["readOnly"] is True
+
+
+# ---------- Keycloak in production mode (K-05) ----------
+
+
+def test_keycloak_starts_prebuilt_for_postgres_with_the_bench_realm() -> None:
+    [container] = _pod(_named("Deployment", "keycloak"))["containers"]
+    assert container["image"] == "argos-keycloak"
+    args = container["args"]
+    assert args[0] == "start" and "--optimized" in args and "--import-realm" in args
+    assert "start-dev" not in args
+    env = {e["name"]: e for e in container["env"]}
+    assert "sslmode=verify-full" in env["KC_DB_URL"]["value"]
+    assert env["KC_DB_PASSWORD"]["valueFrom"]["secretKeyRef"] == {
+        "name": "keycloak-db",
+        "key": "password",
+    }
+    assert env["KC_BOOTSTRAP_ADMIN_PASSWORD"]["valueFrom"]["secretKeyRef"] == {
+        "name": "keycloak-admin",
+        "key": "password",
+    }
+    dockerfile = (K8S / "images" / "keycloak" / "Dockerfile").read_text("utf-8")
+    assert "kc.sh build" in dockerfile and "KC_DB=postgres" in dockerfile
+
+
+def test_keycloak_is_reached_only_by_argos_services_and_reaches_only_postgres() -> None:
+    policy = _named("NetworkPolicy", "keycloak")["spec"]
+    [rule] = policy["ingress"]
+    assert rule["ports"] == [{"protocol": "TCP", "port": 8080}]
+    assert rule["from"][0]["namespaceSelector"]["matchLabels"] == {
+        "kubernetes.io/metadata.name": "argos-services"
+    }
+    assert policy["egress"] == [
+        {
+            "to": [{"podSelector": {"matchLabels": {"app.kubernetes.io/name": "postgres"}}}],
+            "ports": [{"protocol": "TCP", "port": 5432}],
+        }
+    ]
+
+
+def test_the_bootstrap_gives_keycloak_its_own_database() -> None:
+    [container] = _pod(_named("Job", "argos-bootstrap"))["containers"]
+    env = {e["name"]: e for e in container["env"]}
+    assert env["ARGOS_KEYCLOAK_DB_PASSWORD"]["valueFrom"]["secretKeyRef"] == {
+        "name": "keycloak-db",
+        "key": "password",
+    }
+    wanted = yaml.safe_load((CORE / "seeder" / "secrets.yaml").read_text("utf-8"))
+    assert {"name": "keycloak-db", "keys": ["password"]} in wanted
+    assert {"name": "keycloak-admin", "keys": ["password"]} in wanted

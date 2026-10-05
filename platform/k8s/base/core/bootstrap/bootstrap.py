@@ -8,7 +8,8 @@ platform/vault/database-engine.sh) and tools/nats_streams.py, as one idempotent 
    Vault in the body of a request and lets Vault rotate it at once: afterwards only Vault knows it.
    Each service gets its Vault role, which creates an ephemeral user inside the PostgreSQL role of
    that service (migration 0033), for 24 h and never more than 72 h;
-3. creates or updates the JetStream streams with the user `platform`.
+3. creates or updates the JetStream streams with the user `platform`;
+4. gives Keycloak its own role and database (K-05), with the password the seeder generated.
 
 It signs in to Vault with its own service account (kubernetes auth, role `bootstrap`). It shows no
 password and no token. Running it again changes nothing that matters: the admin password is simply
@@ -157,6 +158,45 @@ def _admin_password_setter(dsn: str) -> Callable[[str], None]:
     return set_password
 
 
+def keycloak_statements(password: str, *, database_exists: bool) -> list[Any]:
+    """The role of Keycloak always follows its secret; its database is created only once."""
+    from psycopg import sql
+
+    statements = [
+        sql.SQL(
+            "DO $$ BEGIN CREATE ROLE keycloak LOGIN; "
+            "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+        ),
+        sql.SQL("ALTER ROLE keycloak LOGIN PASSWORD {}").format(sql.Literal(password)),
+    ]
+    if not database_exists:
+        statements.append(sql.SQL("CREATE DATABASE keycloak OWNER keycloak"))
+    return statements
+
+
+def keycloak_database_statements() -> list[Any]:
+    """Inside the database of Keycloak. AGE is preloaded for the whole server, and in a database
+    without `ag_catalog` its hook breaks the DDL of others: Keycloak's migrations failed with
+    "schema ag_catalog does not exist" in the test of the bench. Keycloak never uses it."""
+    from psycopg import sql
+
+    return [sql.SQL("CREATE EXTENSION IF NOT EXISTS age")]
+
+
+def keycloak_database(dsn: str, password: str) -> None:
+    import psycopg
+
+    # CREATE DATABASE cannot run inside a transaction.
+    with psycopg.connect(dsn, autocommit=True) as conn:
+        exists = conn.execute("SELECT 1 FROM pg_database WHERE datname = 'keycloak'").fetchone()
+        for statement in keycloak_statements(password, database_exists=exists is not None):
+            conn.execute(statement)
+    inside = dsn.replace(f"/{DB_NAME}?", "/keycloak?", 1)
+    with psycopg.connect(inside, autocommit=True) as conn:
+        for statement in keycloak_database_statements():
+            conn.execute(statement)
+
+
 def streams(password: str) -> int:
     import nats
 
@@ -181,6 +221,8 @@ def main() -> int:
     print(f"dynamic credentials: {len(SERVICE_ROLES)} roles, ttl {DEFAULT_TTL}, at most {MAX_TTL}")
     count = streams(os.environ["ARGOS_NATS_PLATFORM_PASSWORD"])
     print(f"streams: {count} ready")
+    keycloak_database(dsn, os.environ["ARGOS_KEYCLOAK_DB_PASSWORD"])
+    print("keycloak: role and database ready")
     return 0
 
 

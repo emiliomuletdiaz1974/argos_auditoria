@@ -10,3 +10,4 @@ resources:
   - temporal
   - evidence
   - bootstrap
+  - keycloak
