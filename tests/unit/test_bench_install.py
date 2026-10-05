@@ -234,3 +234,13 @@ def test_the_person_reads_the_accounts_on_the_vm_and_nothing_writes_them() -> No
     assert "get secret bench-accounts" in script
     assert ">" not in script.split("get secret", 1)[1].split("\n", 1)[0], "shown, never written"
     assert "tee" not in script
+
+
+def test_the_tunnel_takes_only_port_443_and_only_for_this_computer() -> None:
+    """K-08: while 80 and 443 stay closed, the bench is tested through SSH on its final names."""
+    script = (ROOT / "platform" / "k8s" / "bench" / "tunnel.sh").read_text(encoding="utf-8")
+    [command] = [line for line in script.splitlines() if line.startswith("exec ssh")]
+    assert "-L 127.0.0.1:443:127.0.0.1:443" in command, "listens only on this computer"
+    assert command.count(" -L ") == 1 and " -R " not in command and " -D " not in command
+    assert "127.0.0.1 api.34-134-21-66.sslip.io" in script
+    assert "127.0.0.1 id.34-134-21-66.sslip.io" in script

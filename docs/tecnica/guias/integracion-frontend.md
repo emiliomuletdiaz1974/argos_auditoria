@@ -3,9 +3,9 @@ id: GUIA-integracion-frontend
 kind: guide
 title: Guía de integración del front end con la API v1
 phases: ["08"]
-version: 0.2.0
-commit: 8a64174
-date: 2026-09-29
+version: 0.3.0
+commit: pendiente
+date: 2026-10-05
 status: current
 confidentiality: client
 ---
@@ -96,6 +96,21 @@ Front y API viven en dominios distintos (decisión C-02, 2026-09-29). Desde C-03
 **Cuando el navegador bloquea la cookie.** Con dominios distintos, `argos_refresh` es una cookie de terceros. Safari la bloquea por defecto, y otros navegadores pueden hacerlo según su configuración. Entonces `POST /auth/refresh` responde `401` ("no session cookie"). El front no debe tratarlo como un error: redirige a la persona a Keycloak (§2.2, paso 2) y, si su sesión en el realm sigue viva, Keycloak devuelve el código al momento, sin pedir la contraseña. Lo que se pierde es el estado de la pantalla, así que conviene guardar en `sessionStorage` la ruta en la que estaba la persona (nunca el token) para devolverla allí.
 
 **En desarrollo:** `make dev` configura `ARGOS_FRONTEND_ORIGINS=http://127.0.0.1:5173`, que el realm ya admite como vuelta. Un front servido en ese puerto funciona contra `http://127.0.0.1:8000` sin más cambios.
+
+**Contra el banco de pruebas** (datos sintéticos, K-08):
+
+| Qué | Dirección |
+|---|---|
+| API | `https://api.34-134-21-66.sslip.io/api/v1` |
+| Emisor (realm) | `https://id.34-134-21-66.sslip.io/realms/argos` |
+| Autorización (PKCE) | `https://id.34-134-21-66.sslip.io/realms/argos/protocol/openid-connect/auth` |
+| Origen admitido | `http://localhost:5173` (cliente `argos-console`) |
+
+- El front se sirve en `http://localhost:5173` y vuelve a `http://localhost:5173/...`. Otro puerto u otro nombre (`127.0.0.1`) no se admite: el origen tiene que ser exactamente ese.
+- El banco corre en `staging` y no publica `/api/v1/docs` ni `/api/v1/openapi.json`. El contrato está en el repositorio (§8).
+- Las cuentas tienen una contraseña temporal que se cambia en el primer acceso. `platform_admin` y `dpo_reviewer` configuran además su TOTP.
+- El asistente responde `503`: el banco no tiene modelo de IA.
+- **Mientras la VM tenga cerrados los puertos 80 y 443:** se entra por un túnel SSH (`platform/k8s/bench/tunnel.sh`), con los dos nombres apuntando a `127.0.0.1` en el fichero `hosts`. Las direcciones son las mismas, pero el certificado es el propio de Traefik: hay que aceptar el aviso una vez en el navegador, abriendo cada uno de los dos nombres, y desactivar la verificación SSL en Postman.
 
 ## 4. Convenciones comunes
 
@@ -317,3 +332,4 @@ Lo que la consola de la Fase 08 ya resolvía y el front real también debe cumpl
 |---|---|---|
 | 0.1.0 | 2026-09-29 | Primera versión, con la retirada de la consola de la API. Borrador hasta que la API admita otros orígenes |
 | 0.2.0 | 2026-09-29 | La API admite el front en otro dominio (C-03): orígenes permitidos, CORS, cookie `SameSite=None`, cabecera `X-Argos-Session` y qué hacer si el navegador bloquea la cookie |
+| 0.3.0 | 2026-10-05 | Direcciones del banco de pruebas, origen admitido y túnel mientras los puertos sigan cerrados (K-08) |
