@@ -1,6 +1,6 @@
 """K-05 · the realm of the bench, generated from the realm of development without what is public.
 
-  uv run python tools/bench_realm.py          writes platform/k8s/base/core/keycloak/realm-bench.json
+  uv run python tools/bench_realm.py          writes the realm of the bench (realm-bench.json)
   uv run python tools/bench_realm.py --check  fails if the versioned file is not the generated one
 
 It keeps the roles, the flows, the second factor and the policies of development, and the clients
