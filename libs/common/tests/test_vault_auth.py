@@ -122,6 +122,10 @@ def test_the_database_credential_signs_in_with_the_account_before_the_approle(
     assert login is not None
     login()
     assert vault.logins[-1][0] == "auth/kubernetes/login"
+    login()
+    # Vault revokes a lease when the token that asked for it expires: each credential is asked
+    # for with a fresh token, never with one that may be about to expire.
+    assert len(vault.logins) == 2
     only_approle = vault_auth.database_login(_config(VAULT_APPROLE_DIR=str(approle)))
     assert only_approle is not None
     only_approle()

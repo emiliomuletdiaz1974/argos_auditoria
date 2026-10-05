@@ -112,8 +112,15 @@ def service_token(cfg: ArgosConfig) -> Callable[[], str]:
 
 
 def database_login(cfg: ArgosConfig) -> Callable[[], str] | None:
-    """The token for the database credential: its account, or its AppRole; None without either."""
+    """The token for the database credential: its account, or its AppRole; None without either.
+
+    A fresh login each time, never a kept token: Vault revokes a lease when the token that asked
+    for it expires, so a credential asked for with an old token would die before its time.
+    """
     login = _kubernetes(cfg)
     if login is None and cfg.VAULT_APPROLE_DIR:
         login = approle_login(cfg.VAULT_ADDR, Path(cfg.VAULT_APPROLE_DIR))
-    return Renewing(login) if login is not None else None
+    if login is None:
+        return None
+    fresh = login
+    return lambda: fresh()[0]
