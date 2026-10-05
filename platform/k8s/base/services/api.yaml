@@ -55,7 +55,11 @@ spec:
               value: /run/tls
             - name: ARGOS_TEMPORAL_ADDRESS
               value: temporal.argos-core.svc:7233
+            # K-08: the tokens carry the public name of the sign-in; the keys and the token endpoint
+            # are asked inside the cluster.
             - name: ARGOS_OIDC_ISSUER
+              value: https://id.34-134-21-66.sslip.io/realms/argos
+            - name: ARGOS_OIDC_INTERNAL_URL
               value: http://keycloak.argos-core.svc:8080/realms/argos
             - name: ARGOS_OIDC_AUDIENCE
               value: argos-api

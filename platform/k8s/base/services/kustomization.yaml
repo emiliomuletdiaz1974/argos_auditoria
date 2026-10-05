@@ -9,4 +9,5 @@ resources:
   - evidence.yaml
   - health.yaml
   - inventory.yaml
+  - edge.yaml
   - verifier

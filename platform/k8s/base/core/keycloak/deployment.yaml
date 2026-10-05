@@ -37,8 +37,16 @@ spec:
             - --optimized
             - --import-realm
             - --http-enabled=true
-            - --hostname-strict=false
           env:
+            # K-08 (DP-23): the public name of the sign-in, behind Traefik, which ends the TLS. The
+            # tokens carry it as their issuer wherever they are asked; the services and the Jobs of
+            # the cluster keep talking to keycloak.argos-core.svc (backchannel dynamic).
+            - name: KC_HOSTNAME
+              value: https://id.34-134-21-66.sslip.io
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
+            - name: KC_PROXY_HEADERS
+              value: xforwarded
             - name: KC_DB_URL
               value: jdbc:postgresql://postgres.argos-core.svc:5432/keycloak?sslmode=verify-full&sslrootcert=/tls/ca.crt
             - name: KC_DB_USERNAME
@@ -146,6 +154,17 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: argos-services
+      ports:
+        - protocol: TCP
+          port: 8080
+    # K-08: Traefik, for the public sign-in (only /realms and /resources, edge.yaml).
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
       ports:
         - protocol: TCP
           port: 8080

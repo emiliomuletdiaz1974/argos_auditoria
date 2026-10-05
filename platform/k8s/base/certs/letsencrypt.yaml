@@ -1,0 +1,17 @@
+# K-08 · the certificates of the two public names of the bench (api. and id.34-134-21-66.sslip.io,
+# DP-23), from Let's Encrypt by HTTP-01 through the Traefik of k3s. The challenge needs port 80 open
+# from the internet; while it is closed, cert-manager keeps trying and the names have no certificate.
+# The internal certificates stay with the CA of the bench (vault-bench).
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-account
+    solvers:
+      - http01:
+          ingress:
+            ingressClassName: traefik
