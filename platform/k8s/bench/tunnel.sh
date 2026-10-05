@@ -4,6 +4,11 @@
 #
 #   bash platform/k8s/bench/tunnel.sh geographoss2000@34.134.21.66
 #
+# In PowerShell `bash` is the one of WSL, not Git Bash; there, the same tunnel is the ssh line at
+# the end of this script:
+#
+#   ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:443:127.0.0.1:443 geographoss2000@34.134.21.66
+#
 # It takes port 443 of this computer to the Traefik of the VM, so the API and the sign-in answer on
 # their final names. Point those names here first, with these two lines in the hosts file
 # (C:\Windows\System32\drivers\etc\hosts on Windows, /etc/hosts elsewhere), and take them out the
