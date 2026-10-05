@@ -372,9 +372,19 @@ def test_vault_may_review_tokens_of_service_accounts_and_nothing_more() -> None:
         {"kind": "ServiceAccount", "name": "vault", "namespace": "argos-core"}
     ]
     egress = _named("NetworkPolicy", "vault")["spec"]["egress"]
-    assert egress == [
-        {"ports": [{"protocol": "TCP", "port": 443}, {"protocol": "TCP", "port": 6443}]}
-    ]
+    assert {
+        "ports": [{"protocol": "TCP", "port": 443}, {"protocol": "TCP", "port": 6443}]
+    } in egress
+
+
+def test_vault_reaches_postgres_for_the_dynamic_credentials() -> None:
+    """Seen on the bench (banco-v0.8.1): with only the API of Kubernetes open, the database engine
+    could not verify its connection and the bootstrap got a 400."""
+    egress = _named("NetworkPolicy", "vault")["spec"]["egress"]
+    assert {
+        "to": [{"podSelector": {"matchLabels": {"app.kubernetes.io/name": "postgres"}}}],
+        "ports": [{"protocol": "TCP", "port": 5432}],
+    } in egress
 
 
 # ---------- the bootstrap Job (K-04) ----------

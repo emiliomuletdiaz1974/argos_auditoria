@@ -19,6 +19,7 @@ import asyncio
 import json
 import os
 import secrets
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -51,6 +52,13 @@ SERVICE_ROLES = {
 Vault = Callable[[str, str, dict[str, Any] | None], Any]
 
 
+class VaultRefusedError(RuntimeError):
+    """Vault said no: what was asked and the reasons Vault gave, never the body that was sent."""
+
+    def __init__(self, method: str, path: str, status: int, errors: list[str]) -> None:
+        super().__init__(f"Vault refused {method} {path} ({status}): {'; '.join(errors)}")
+
+
 def _superuser_dsn() -> str:
     from urllib.parse import quote
 
@@ -74,8 +82,15 @@ def vault_client() -> Vault:
             data=json.dumps(body).encode() if body is not None else None,
             headers={"X-Vault-Token": token, "Content-Type": "application/json"},
         )
-        with urllib.request.urlopen(request, timeout=30) as answer:  # noqa: S310
-            raw = answer.read()
+        try:
+            with urllib.request.urlopen(request, timeout=30) as answer:  # noqa: S310
+                raw = answer.read()
+        except urllib.error.HTTPError as refused:
+            try:
+                errors = [str(e) for e in json.loads(refused.read() or b"{}").get("errors", [])]
+            except ValueError:
+                errors = []
+            raise VaultRefusedError(method, path, refused.code, errors) from None
         return json.loads(raw) if raw else {}
 
     jwt = ACCOUNT_TOKEN.read_text(encoding="utf-8").strip()

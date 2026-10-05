@@ -100,3 +100,11 @@ def test_the_steps_run_in_order_and_no_secret_is_shown(
     assert done == ["migrate", "engine", "streams"]
     shown = capsys.readouterr().out
     assert "the-superuser-password" not in shown and "the-platform-password" not in shown
+
+
+def test_a_refusal_of_vault_says_what_and_why_without_secrets() -> None:
+    bootstrap = _bootstrap()
+    error = bootstrap.VaultRefusedError(
+        "POST", "db/config/argos", 400, ["error verifying connection"]
+    )
+    assert "POST db/config/argos" in str(error) and "error verifying connection" in str(error)

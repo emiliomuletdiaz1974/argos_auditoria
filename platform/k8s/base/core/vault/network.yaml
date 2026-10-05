@@ -1,7 +1,7 @@
 # K-03 · only the namespaces of ARGOS, and cert-manager to sign certificates (K-04), reach Vault,
-# and only its API. Out of it, only the API of
-# Kubernetes, to review the tokens of the services that sign in (K-04); on k3s that is the address
-# of the node (6443) behind the service kubernetes.default (443).
+# and only its API. Out of it, the API of Kubernetes, to review the tokens of the services that sign
+# in (on k3s, the address of the node, 6443, behind the service kubernetes.default, 443), and
+# PostgreSQL, for the dynamic credentials (K-04).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -28,3 +28,11 @@ spec:
           port: 443
         - protocol: TCP
           port: 6443
+    # The database engine connects to PostgreSQL to create the ephemeral users (K-04).
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
