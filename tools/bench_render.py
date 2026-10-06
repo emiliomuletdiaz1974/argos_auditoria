@@ -53,6 +53,12 @@ BENCH_IMAGES = {
     "argos-bench-seed": Image("platform/k8s/images/bench-seed/Dockerfile", "ARG-014"),
 }
 ALL_IMAGES = IMAGES | BENCH_IMAGES
+# K-99: what the bench does not deploy, and why; the workflow neither builds nor pins it.
+NOT_IN_THE_BENCH = {
+    "argos-example": "the example service of F1-06, a template, not part of the product",
+    "argos-ai-gateway": "the AI layer waits for a GPU (F06-05); the API answers 503 meanwhile",
+}
+BUILT = {name: image for name, image in ALL_IMAGES.items() if name not in NOT_IN_THE_BENCH}
 
 
 def version_of(tag: str) -> str:
@@ -67,7 +73,7 @@ def render(digests: dict[str, str], owner: str, out: Path) -> dict[str, Any]:
     """Write `out/kustomization.yaml`: the bench overlay with every image pinned by digest."""
     registry = f"ghcr.io/{owner.lower()}"
     images = []
-    for name in ALL_IMAGES:
+    for name in BUILT:
         digest = digests.get(name, "")
         if not DIGEST.fullmatch(digest):
             raise ValueError(f"{name}: no sha256 digest from the build")
@@ -99,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         digests = {
             name: (args.digests / name).read_text(encoding="utf-8").strip()
-            for name in ALL_IMAGES
+            for name in BUILT
             if (args.digests / name).is_file()
         }
         render(digests, args.owner, args.out)

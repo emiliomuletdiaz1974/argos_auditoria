@@ -29,12 +29,11 @@ jobs:
       packages: write
       id-token: write
     strategy:
-      fail-fast: true
+      # K-99: one image that fails (a cut of PyPI) does not cancel the others; re-run the failed one.
+      fail-fast: false
       matrix:
         image:
-          - { name: argos-example, dockerfile: services/example/Dockerfile, component: ARG-001, context: . }
           - { name: argos-challenge-engine, dockerfile: services/challenge-engine/Dockerfile, component: ARG-043, context: . }
-          - { name: argos-ai-gateway, dockerfile: services/ai-gateway/Dockerfile, component: ARG-052, context: . }
           - { name: argos-api, dockerfile: services/api/Dockerfile, component: ARG-071, context: . }
           - { name: argos-evidence, dockerfile: services/evidence/Dockerfile, component: ARG-061, context: . }
           - { name: argos-verifier, dockerfile: services/verifier/Dockerfile, component: ARG-069, context: . }

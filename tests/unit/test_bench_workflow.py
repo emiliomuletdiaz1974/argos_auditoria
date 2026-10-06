@@ -43,7 +43,7 @@ def _images() -> set[str]:
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return set(module.ALL_IMAGES)
+    return set(module.BUILT)
 
 
 def test_it_runs_only_on_a_bench_tag() -> None:
@@ -93,3 +93,10 @@ def test_the_tag_is_checked_before_building() -> None:
     [images_job] = [j for j in _workflow()["jobs"].values() if "matrix" in j.get("strategy", {})]
     first_run = next(step["run"] for step in _steps(images_job) if "run" in step)
     assert "tools/bench_render.py version" in first_run
+
+
+def test_one_image_that_fails_does_not_cancel_the_others() -> None:
+    """K-99: a cut of PyPI while building one image cancelled the other twelve (banco-v0.12.1).
+    Without fail-fast the others finish, and only the failed one is run again."""
+    [images_job] = [j for j in _workflow()["jobs"].values() if "matrix" in j.get("strategy", {})]
+    assert images_job["strategy"]["fail-fast"] is False

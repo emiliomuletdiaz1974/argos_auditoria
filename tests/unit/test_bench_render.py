@@ -57,7 +57,7 @@ def test_each_image_is_replaced_by_its_digest_in_ghcr(tmp_path: Path) -> None:
     kustomization = bench_render.render(digests, owner="Emilio-Org", out=tmp_path / "rendered")
     assert len(kustomization["resources"]) == 1, "only the bench overlay"
     images = {entry["name"]: entry for entry in kustomization["images"]}
-    assert set(images) == set(bench_render.ALL_IMAGES)
+    assert set(images) == set(bench_render.BUILT)
     for name, entry in images.items():
         assert entry == {"name": name, "newName": f"ghcr.io/emilio-org/{name}", "digest": DIGEST}
     written = yaml.safe_load((tmp_path / "rendered" / "kustomization.yaml").read_text("utf-8"))
@@ -111,7 +111,7 @@ def test_the_images_of_the_bench_are_built_from_their_own_context() -> None:
 def test_every_built_image_is_pinned_when_rendered(tmp_path: Path) -> None:
     digests = dict.fromkeys(bench_render.ALL_IMAGES, DIGEST)
     kustomization = bench_render.render(digests, owner="o", out=tmp_path / "rendered")
-    assert {entry["name"] for entry in kustomization["images"]} == set(bench_render.ALL_IMAGES)
+    assert {entry["name"] for entry in kustomization["images"]} == set(bench_render.BUILT)
 
 
 def test_opa_is_built_with_its_policies_from_the_root_of_the_repository() -> None:
@@ -122,3 +122,26 @@ def test_opa_is_built_with_its_policies_from_the_root_of_the_repository() -> Non
 def test_the_test_tsa_is_built_from_its_own_folder() -> None:
     tsa = bench_render.BENCH_IMAGES["argos-tsa"]
     assert tsa.context == "deploy/dev/tsa" and tsa.dockerfile == "deploy/dev/tsa/Dockerfile"
+
+
+def test_the_bench_builds_exactly_the_images_its_manifests_use() -> None:
+    """K-99: an image the bench does not deploy is not built (one less to fail on a tag), and an
+    image it deploys is never left without its digest."""
+    import shutil
+    import subprocess
+
+    if shutil.which("kubectl") is None:
+        pytest.skip("kubectl is not installed here")
+    command = ["kubectl", "kustomize", "--load-restrictor=LoadRestrictionsNone"]
+    built = subprocess.run(  # noqa: S603 - fixed command
+        [*command, str(bench_render.OVERLAY)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout
+    used = set(re.findall(r"image: (argos-[a-z-]+)\s*$", built, re.MULTILINE))
+    assert used == set(bench_render.BUILT)
+    assert set(bench_render.BUILT) | set(bench_render.NOT_IN_THE_BENCH) == set(
+        bench_render.ALL_IMAGES
+    )
