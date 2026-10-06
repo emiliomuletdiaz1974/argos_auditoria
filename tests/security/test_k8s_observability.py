@@ -74,8 +74,17 @@ def test_the_alerts_follow_the_route_of_development_to_the_console() -> None:
     dev = yaml.safe_load(
         (ROOT / "deploy" / "dev" / "alertmanager" / "alertmanager.yml").read_text()
     )
-    assert bench["route"] == dev["route"] and bench["inhibit_rules"] == dev["inhibit_rules"]
-    [receiver] = bench["receivers"]
+    # K-99: the bench keeps no backups (the client's, decision of the user), so the alert of the
+    # restore tests is silenced there: first route, to a receiver that delivers nothing.
+    silence, *routes = bench["route"]["routes"]
+    assert silence == {
+        "matchers": ['alertname="BackupRestoreTestStale"'],
+        "receiver": "silenced",
+    }
+    assert {**bench["route"], "routes": routes} == dev["route"]
+    assert bench["inhibit_rules"] == dev["inhibit_rules"]
+    receiver, silenced = bench["receivers"]
+    assert silenced == {"name": "silenced"}, "no configuration: it delivers nothing"
     [hook] = receiver["webhook_configs"]
     assert hook["url"] == "http://api.argos-services.svc:8000/internal/alertmanager"
     assert hook["http_config"]["authorization"]["credentials_file"] == (

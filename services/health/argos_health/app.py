@@ -43,6 +43,8 @@ class HealthSettings(BaseSettings):
     S3_SECRET_KEY: SecretStr = SecretStr("")
     PKI_URL: str | None = None
     EVIDENCE_PATH: Path | None = None
+    # K-99: when the volume cannot be mounted here, the address where the store publishes its usage.
+    EVIDENCE_USAGE_URL: str | None = None
     JOURNAL_TAIL: int = 10_000
     JOURNAL_TAIL_SECONDS: int = 300
     JOURNAL_FULL_SECONDS: int = 86_400
@@ -93,6 +95,7 @@ def build_monitor(dsn: str, settings: HealthSettings, config: ArgosConfig | None
         release=release,
         size=size,
         expected_certificates=expected or None,
+        evidence_usage_url=settings.EVIDENCE_USAGE_URL,
     )
 
 

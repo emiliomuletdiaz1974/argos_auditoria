@@ -109,3 +109,39 @@ def test_the_health_service_expects_the_certificates_the_issuer_renews() -> None
     issuer = compose["services"]["cert-issuer"]["environment"]["ARGOS_TLS_SERVICES"]
     health = compose["services"]["health"]["environment"]["ARGOS_HEALTH_TLS_SERVICES"]
     assert health == issuer
+
+
+def test_the_volume_is_measured_through_the_store_when_it_cannot_be_mounted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """K-99: in the bench the evidence volume belongs to the store, in another namespace; a helper
+    next to the store publishes used and total, and the health service reads them."""
+    import argos_health.measures as measures
+
+    usage = "http://evidence-store.argos-core.svc:9101/usage"
+    monkeypatch.setattr(measures, "_get_json", {usage: {"used": 250, "total": 1000}}.__getitem__)
+    assert measures.volume_used_ratio_from(usage) == 0.25
+
+
+def test_a_store_that_does_not_answer_its_usage_is_not_healthy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import argos_health.measures as measures
+
+    def refuse(url: str) -> dict[str, int]:
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(measures, "_get_json", refuse)
+    assert measures.volume_used_ratio_from("http://evidence-store.argos-core.svc:9101/x") is None
+    monkeypatch.setattr(measures, "_get_json", lambda url: {"used": 1, "total": 0})
+    assert measures.volume_used_ratio_from("http://x/usage") is None
+
+
+def test_the_monitor_takes_the_usage_of_the_store_when_it_has_no_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(monitor_module, "volume_used_ratio_from", lambda url: 0.4)
+    health = Monitor("postgresql://unused", None, None, None, evidence_usage_url="http://x/usage")
+    health.check_volume()
+    assert _gauge(health, "argos_health_check_ok", check="volume") == 1
+    assert _gauge(health, "argos_evidence_volume_used_ratio") == 0.4

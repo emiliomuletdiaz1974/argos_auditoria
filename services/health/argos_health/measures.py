@@ -10,7 +10,9 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import json
 import shutil
+import urllib.request
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -119,6 +121,24 @@ def volume_used_ratio(path: Path | None) -> float | None:
         return None
     usage = shutil.disk_usage(path)
     return usage.used / usage.total if usage.total else None
+
+
+def _get_json(url: str) -> dict[str, Any]:
+    with urllib.request.urlopen(url, timeout=5) as answer:  # noqa: S310 - an address of the cluster
+        data: dict[str, Any] = json.loads(answer.read())
+    return data
+
+
+def volume_used_ratio_from(url: str) -> float | None:
+    """How full the evidence volume is, as the helper next to the store publishes it (used and
+    total, nothing else); None when it does not answer. For when the volume cannot be mounted here
+    (the bench: it belongs to the store, in another namespace)."""
+    try:
+        usage = _get_json(url)
+        used, total = int(usage["used"]), int(usage["total"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return used / total if total > 0 else None
 
 
 # ---------- over the database ----------

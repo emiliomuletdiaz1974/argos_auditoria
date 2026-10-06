@@ -3,3 +3,8 @@ kind: Kustomization
 resources:
   - store.yaml
   - tsa.yaml
+configMapGenerator:
+  - name: evidence-usage
+    namespace: argos-core
+    files:
+      - usage.py

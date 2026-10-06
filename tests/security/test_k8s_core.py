@@ -385,7 +385,7 @@ def test_only_temporal_reaches_its_database_and_only_argos_services_reach_tempor
 
 def test_the_worm_store_takes_its_keys_from_the_generated_secret() -> None:
     store = _named("StatefulSet", "evidence-store")
-    [container] = _pod(store)["containers"]
+    container = _container(store, "versitygw")
     script = " ".join(container["command"] + container.get("args", []))
     assert "dev-only" not in script
     env = {e["name"]: e["valueFrom"]["secretKeyRef"] for e in container["env"]}
@@ -409,7 +409,7 @@ def test_the_tsa_is_the_test_one_built_by_the_bench() -> None:
 
 def test_only_the_services_of_argos_reach_the_evidence() -> None:
     for name, port in (("evidence-store", 7070), ("tsa", 3180)):
-        [rule] = _named("NetworkPolicy", name)["spec"]["ingress"]
+        rule = _named("NetworkPolicy", name)["spec"]["ingress"][0]
         assert rule["ports"] == [{"protocol": "TCP", "port": port}], name
         [peer] = rule["from"]
         assert peer["namespaceSelector"]["matchLabels"] == {
@@ -740,3 +740,16 @@ def test_the_bootstrap_signs_in_to_nats_with_its_own_certificate() -> None:
     script = (CORE / "bootstrap" / "bootstrap.py").read_text("utf-8")
     assert 'NATS_URL = "tls://nats.argos-core.svc:4222"' in script
     assert "load_cert_chain" in script
+
+
+def test_only_the_health_service_reads_how_full_the_evidence_volume_is() -> None:
+    """K-99: the helper next to the store says used and total, read-only, to the health service."""
+    store = _named("StatefulSet", "evidence-store")
+    usage = _container(store, "usage")
+    assert usage["command"] == ["python", "/usage/usage.py"]
+    mounts = {m["name"]: m for m in usage["volumeMounts"]}
+    assert mounts["data"]["readOnly"] is True
+    [_, rule] = _named("NetworkPolicy", "evidence-store")["spec"]["ingress"]
+    assert rule["ports"] == [{"protocol": "TCP", "port": 9101}]
+    [peer] = rule["from"]
+    assert peer["podSelector"]["matchLabels"] == {"app.kubernetes.io/name": "health"}

@@ -1,7 +1,7 @@
 # K-06 · the health of the domain (ARG-094): what no standard exporter measures. It reads what it
 # measures and writes only its own facts; it lists the certificates of the intermediate CA to warn
-# before one of the services expires. The evidence volume is the store's own here (a StatefulSet),
-# so its size is measured by the canary of the store, not by a shared mount.
+# before one of the services expires. The evidence volume is the store's own here (a StatefulSet):
+# its usage comes from the helper next to the store (core/evidence/usage.py), not from a mount.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -65,6 +65,8 @@ spec:
                 secretKeyRef:
                   name: evidence-store
                   key: secret
+            - name: ARGOS_HEALTH_EVIDENCE_USAGE_URL
+              value: http://evidence-store.argos-core.svc:9101/usage
             - name: ARGOS_HEALTH_PKI_URL
               value: http://vault.argos-core.svc:8200/v1/pki_int
             - name: ARGOS_HEALTH_TLS_SERVICES
@@ -179,3 +181,5 @@ spec:
       ports:
         - protocol: TCP
           port: 7070
+        - protocol: TCP
+          port: 9101

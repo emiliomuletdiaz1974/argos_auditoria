@@ -33,6 +33,7 @@ from .measures import (
     publish_facts,
     security_log_ok,
     volume_used_ratio,
+    volume_used_ratio_from,
     worm_canary,
 )
 
@@ -66,8 +67,10 @@ class Monitor:
         release: str = "unknown",
         size: tuple[str, dict[str, int]] | None = None,
         expected_certificates: frozenset[str] | None = None,
+        evidence_usage_url: str | None = None,
     ) -> None:
         self._expected_certificates = expected_certificates
+        self._evidence_usage_url = evidence_usage_url
         self._release = release
         self._size = size
         self._dsn = dsn
@@ -182,7 +185,11 @@ class Monitor:
         )
 
     def check_volume(self) -> None:
-        ratio = volume_used_ratio(self._evidence_path)
+        # Mounted read-only (development), or published by the helper next to the store (K-99).
+        if self._evidence_path is None and self._evidence_usage_url:
+            ratio = volume_used_ratio_from(self._evidence_usage_url)
+        else:
+            ratio = volume_used_ratio(self._evidence_path)
         self._keep(
             "volume",
             []

@@ -13,6 +13,10 @@ route:
   group_interval: 5m
   repeat_interval: 24h
   routes:
+    # K-99: the bench keeps no backups (they are the client's), so no restore test ever passes
+    # here: the alert is silenced, and only in the bench. Prometheus still evaluates it.
+    - matchers: ['alertname="BackupRestoreTestStale"']
+      receiver: silenced
     - matchers: ['severity="critical"']
       receiver: console
       group_wait: 10s
@@ -26,6 +30,7 @@ receivers:
         http_config:
           authorization:
             credentials_file: /etc/alertmanager/token/token
+  - name: silenced
   # The organisation's own channel, when it has one (installer, F10-10). Uncomment and add it as a
   # second receiver of both routes with `continue: true`:
   #

@@ -213,8 +213,10 @@ def test_each_service_reaches_only_what_it_uses() -> None:
                 "kubernetes.io/metadata.name": "argos-core"
             }
             component = target["podSelector"]["matchLabels"]["app.kubernetes.io/name"]
-            [port] = rule["ports"]
-            assert port["port"] == CORE[component], (name, component)
+            ports = [p["port"] for p in rule["ports"]]
+            # K-99: the health service also reads how full the evidence volume is (9101).
+            extra = [9101] if (name, component) == ("health", "evidence-store") else []
+            assert ports == [CORE[component], *extra], (name, component)
             reached.add(component)
         assert reached == wanted, name
         assert reads_sources == (name in READ_SOURCES), name
