@@ -5,6 +5,7 @@ The password of `vault_admin` is random, reaches Vault only in the body of a req
 rotates it at once: after the bootstrap, nobody but Vault knows it.
 """
 
+import base64
 import importlib.util
 from pathlib import Path
 from types import ModuleType
@@ -118,8 +119,9 @@ def test_the_steps_run_in_order_and_no_secret_is_shown(
         bootstrap, "keycloak_database", lambda dsn, password: done.append("keycloak")
     )
     monkeypatch.setattr(bootstrap, "register_sources", lambda *args: done.append("sources") or 7)
+    monkeypatch.setattr(bootstrap, "publish_content", lambda *args: done.append("content") or "")
     assert bootstrap.main() == 0
-    assert done == ["migrate", "engine", "streams", "keycloak", "sources"]
+    assert done == ["migrate", "engine", "streams", "keycloak", "sources", "content"]
     shown = capsys.readouterr().out
     assert "the-superuser-password" not in shown and "the-platform-password" not in shown
     assert "the-keycloak-password" not in shown
@@ -229,3 +231,61 @@ def json_text(value: Any) -> str:
     import json
 
     return json.dumps(value)
+
+
+# ---------- K-99 · the bench runs the library of its image as signed content ----------
+
+
+def test_the_library_already_in_force_is_not_published_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bootstrap = _bootstrap()
+    monkeypatch.setattr(bootstrap, "_in_force", lambda dsn: ("1.0.3", True))
+    published: list[str] = []
+    monkeypatch.setattr(
+        bootstrap, "_publish", lambda dsn, version, signer: published.append(version)
+    )
+    assert bootstrap.publish_content("dsn", Vault()) == "content 1.0.3 in force, as on disk"
+    assert published == []
+
+
+def test_a_library_that_changed_is_published_as_the_next_version(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without signed content the engine compiles no campaign (SEC-011); the bench had none."""
+    bootstrap = _bootstrap()
+    published: list[str] = []
+    monkeypatch.setattr(
+        bootstrap, "_publish", lambda dsn, version, signer: published.append(version)
+    )
+    monkeypatch.setattr(bootstrap, "_in_force", lambda dsn: ("1.0.3", False))
+    monkeypatch.setattr(bootstrap, "_newest_loaded", lambda dsn: "1.0.3")
+    assert bootstrap.publish_content("dsn", Vault()) == "content 1.0.4 published"
+    monkeypatch.setattr(bootstrap, "_in_force", lambda dsn: (None, False))
+    monkeypatch.setattr(bootstrap, "_newest_loaded", lambda dsn: None)
+    bootstrap.publish_content("dsn", Vault())
+    assert published == ["1.0.4", "1.0.0"]
+
+
+class TransitVault(Vault):
+    def __call__(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
+        self.calls.append((method, path, body))
+        if path == "transit/sign/argos-content":
+            return {"signature": "vault:v2:" + base64.b64encode(b"signed").decode()}
+        if path == "transit/keys/argos-content":
+            return {
+                "keys": {
+                    "1": {"public_key": base64.b64encode(b"old").decode()},
+                    "2": {"public_key": base64.b64encode(b"new").decode()},
+                }
+            }
+        return {}
+
+
+def test_the_content_is_signed_by_the_vault_of_the_bench_with_its_newest_key() -> None:
+    bootstrap = _bootstrap()
+    vault = TransitVault()
+    signer = bootstrap.VaultContentSigner(vault)
+    assert signer.sign(b"manifest") == b"signed"
+    assert vault.calls[-1][2] == {"input": base64.b64encode(b"manifest").decode()}
+    assert signer.public_key() == b"new"

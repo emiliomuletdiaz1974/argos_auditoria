@@ -247,6 +247,91 @@ def _systems_upsert(dsn: str) -> Callable[[list[dict[str, Any]]], None]:
     return upsert
 
 
+CONTENT_KEY = "argos-content"
+
+
+class VaultContentSigner:
+    """Signs with the transit key argos-content of the Vault of the bench, which never leaves it."""
+
+    def __init__(self, vault: Vault) -> None:
+        self._vault = vault
+
+    def sign(self, data: bytes) -> bytes:
+        import base64
+
+        answer = self._vault(
+            "POST", f"transit/sign/{CONTENT_KEY}", {"input": base64.b64encode(data).decode()}
+        )
+        return base64.b64decode(str(answer["signature"]).split(":", 2)[2])
+
+    def public_key(self) -> bytes:
+        import base64
+
+        keys = self._vault("GET", f"transit/keys/{CONTENT_KEY}", None)["keys"]
+        newest = keys[str(max(int(version) for version in keys))]
+        return base64.b64decode(str(newest["public_key"]))
+
+
+def _in_force(dsn: str) -> tuple[str | None, bool]:
+    """The version in force, and whether the library of this image is exactly that bundle.
+
+    It compares the hashes without verify_on_disk, which leaves a security event when they differ:
+    here a different library is the normal case after it changed, not an alarm.
+    """
+    import hashlib
+
+    from argos_ontology.bundle import bundle_files, signed_files
+    from argos_ontology.store import version_in_force
+    from argos_ontology.vocabulary import LIBRARY_DIR
+
+    try:
+        version = version_in_force(dsn)
+    except LookupError:
+        return None, False
+    _, signed = signed_files(dsn, version)
+    on_disk = {n: hashlib.sha256(d).hexdigest() for n, d in bundle_files(LIBRARY_DIR).items()}
+    return version, signed == on_disk
+
+
+def _newest_loaded(dsn: str) -> str | None:
+    import psycopg
+
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute("SELECT version FROM argos.ontology_bundles").fetchall()
+    versions = [str(r[0]) for r in rows if str(r[0]).count(".") == 2]
+    return max(versions, key=lambda v: tuple(int(p) for p in v.split("."))) if versions else None
+
+
+def _publish(dsn: str, version: str, signer: VaultContentSigner) -> None:
+    from datetime import UTC, datetime
+
+    from argos_ontology.bundle import publish_library
+    from argos_ontology.vocabulary import LIBRARY_DIR
+
+    publish_library(dsn, LIBRARY_DIR, version, datetime.now(UTC).date(), signer)
+
+
+def publish_content(dsn: str, vault: Vault) -> str:
+    """K-99 · the library of this image as the signed content in force (SEC-011).
+
+    The engine compiles no campaign without signed content, and the bench had none. If the content
+    in force is already this library, nothing is done; else it is published as the next version,
+    signed by the Vault of the bench and pinned to its own key, as selfcheck --publish-content does
+    in development. An appliance loads instead the bundles that arrive signed, through the airlock.
+    """
+    version, same = _in_force(dsn)
+    if version is not None and same:
+        return f"content {version} in force, as on disk"
+    newest = _newest_loaded(dsn)
+    if newest is None:
+        following = "1.0.0"
+    else:
+        major, minor, patch = (int(part) for part in newest.split("."))
+        following = f"{major}.{minor}.{patch + 1}"
+    _publish(dsn, following, VaultContentSigner(vault))
+    return f"content {following} published"
+
+
 def _admin_password_setter(dsn: str) -> Callable[[str], None]:
     def set_password(password: str) -> None:
         import psycopg
@@ -330,6 +415,7 @@ def main() -> int:
     print("keycloak: role and database ready")
     count = register_sources(vault, load_systems(), os.environ, _systems_upsert(dsn))
     print(f"sources: {count} systems registered with their credentials in Vault")
+    print(publish_content(dsn, vault))
     return 0
 
 

@@ -479,7 +479,14 @@ def test_vault_lets_the_bootstrap_touch_only_the_database_engine() -> None:
     assert "vault policy write argos-bootstrap" in setup
     policy = setup.split("argos-bootstrap -", 1)[0].rsplit("printf", 1)[1]
     paths = [chunk.split('"')[1] for chunk in policy.split("path ")[1:]]
-    allowed = ("sys/mounts", "sys/mounts/db", "argos/data/connectors/*")  # K-07: the sources
+    # K-07: the sources; K-99: the signed content (only the key argos-content).
+    allowed = (
+        "sys/mounts",
+        "sys/mounts/db",
+        "argos/data/connectors/*",
+        "transit/sign/argos-content",
+        "transit/keys/argos-content",
+    )
     assert all(p in allowed or p.startswith("db/") for p in paths), paths
     assert (
         "auth/kubernetes/role/bootstrap bound_service_account_names=argos-bootstrap"

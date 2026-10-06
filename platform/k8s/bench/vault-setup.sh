@@ -62,7 +62,7 @@ vault write auth/kubernetes/config kubernetes_host="https://kubernetes.default.s
 # K-04 · the bootstrap Job (argos-core/argos-bootstrap) sets up the database engine and, K-07, the
 # credentials of the simulated sources for their connectors; nothing else: mount the engine, configure
 # its connection, rotate the password of vault_admin, write the role of each service and the secret of
-# each source. Its token lives 15 minutes.
+# each source, and (K-99) sign the library as the content in force. Its token lives 15 minutes.
 printf '%s\n' \
   'path "sys/mounts" { capabilities = ["read"] }' \
   'path "sys/mounts/db" { capabilities = ["create", "read", "update"] }' \
@@ -70,6 +70,8 @@ printf '%s\n' \
   'path "db/rotate-root/argos" { capabilities = ["update"] }' \
   'path "db/roles/svc-*" { capabilities = ["create", "read", "update"] }' \
   'path "argos/data/connectors/*" { capabilities = ["create", "read", "update"] }' \
+  'path "transit/sign/argos-content" { capabilities = ["update"] }' \
+  'path "transit/keys/argos-content" { capabilities = ["read"] }' \
   | vault policy write argos-bootstrap - >/dev/null
 vault write auth/kubernetes/role/bootstrap bound_service_account_names=argos-bootstrap bound_service_account_namespaces=argos-core \
   policies=argos-bootstrap ttl=15m >/dev/null
