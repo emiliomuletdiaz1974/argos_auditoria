@@ -197,7 +197,13 @@ def test_the_seeder_creates_what_is_missing_and_never_shows_a_value() -> None:
     wanted = yaml.safe_load((seeder / "secrets.yaml").read_text(encoding="utf-8"))
     assert {"name": "postgres-superuser", "keys": ["password"]} in wanted
     copied = {w["name"] for w in wanted if w.get("copy_to")}
-    assert copied == {"nats-users", "opa-clients", "evidence-store", "bench-sources"}
+    assert copied == {
+        "nats-users",
+        "opa-clients",
+        "evidence-store",
+        "bench-sources",
+        "alertmanager-token",
+    }
 
 
 def test_the_seeder_job_is_recreated_when_it_changes() -> None:

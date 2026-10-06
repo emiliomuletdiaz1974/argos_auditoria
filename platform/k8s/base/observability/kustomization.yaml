@@ -1,0 +1,43 @@
+# K-10 · capa 3 del banco (DP-22): the observability, inside the cluster only. The rules, the
+# dashboards, Loki and the provider of dashboards are the files of development and of
+# platform/observability, read by the render of the workflow (--load-restrictor=LoadRestrictionsNone):
+# one source for both. Prometheus, Alertmanager and the data sources name the services of the cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - prometheus.yaml
+  - alertmanager.yaml
+  - loki.yaml
+  - grafana.yaml
+  - network.yaml
+configMapGenerator:
+  - name: prometheus-config
+    namespace: argos-core
+    files:
+      - prometheus.yml
+  - name: prometheus-rules
+    namespace: argos-core
+    files:
+      - ../../../observability/rules/argos.rules.yml
+      - ../../../../deploy/dev/prometheus/rules/security.yml
+      - ../../../../deploy/dev/prometheus/rules/backup.yml
+  - name: alertmanager-config
+    namespace: argos-core
+    files:
+      - alertmanager.yml
+  - name: loki-config
+    namespace: argos-core
+    files:
+      - argos.yaml=../../../../deploy/dev/loki/loki.yaml
+  - name: grafana-provisioning
+    namespace: argos-core
+    files:
+      - datasources.yaml
+      - dashboards.yaml=../../../../deploy/dev/grafana/dashboards.yaml
+  - name: grafana-dashboards
+    namespace: argos-core
+    files:
+      - ../../../observability/dashboards/ai-platform.json
+      - ../../../observability/dashboards/compliance.json
+      - ../../../observability/dashboards/logs.json
+      - ../../../observability/dashboards/operation.json

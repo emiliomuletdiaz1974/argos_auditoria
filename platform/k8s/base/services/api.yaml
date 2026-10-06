@@ -39,6 +39,8 @@ spec:
               value: staging
             - name: ARGOS_LOG_LEVEL
               value: INFO
+            - name: ARGOS_LOKI_URL
+              value: http://loki.argos-core.svc:3100/loki/api/v1/push
             - name: ARGOS_API_BIND
               value: 0.0.0.0
             - name: ARGOS_DATABASE_URL
@@ -69,6 +71,12 @@ spec:
               value: http://localhost:5173
             - name: ARGOS_RUNBOOKS_DIR
               value: /app/docs/operacion/runbooks
+            # K-10: the lights of the operation screen come from Prometheus; Alertmanager delivers
+            # the alerts with the token of the seeder (secret alertmanager-token).
+            - name: ARGOS_PROMETHEUS_URL
+              value: http://prometheus.argos-core.svc:9090
+            - name: ARGOS_ALERTMANAGER_TOKEN_FILE
+              value: /run/secrets/alertmanager/token
             - name: ARGOS_SIZE
               value: M
             - name: ARGOS_SIZES_FILE
@@ -131,10 +139,17 @@ spec:
               readOnly: true
             - name: tmp
               mountPath: /tmp
+            - name: alertmanager-token
+              mountPath: /run/secrets/alertmanager
+              readOnly: true
       volumes:
         - name: tls
           secret:
             secretName: api-tls
+            defaultMode: 0440
+        - name: alertmanager-token
+          secret:
+            secretName: alertmanager-token
             defaultMode: 0440
         - name: tmp
           emptyDir:
@@ -165,6 +180,26 @@ spec:
       app.kubernetes.io/name: api
   policyTypes: [Egress]
   egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: loki
+      ports:
+        - protocol: TCP
+          port: 3100
     - to:
         - namespaceSelector:
             matchLabels:

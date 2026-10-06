@@ -1,0 +1,21 @@
+# K-10 · the data sources of development (deploy/dev/grafana/datasources.yaml), named by the cluster.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus   # the dashboards of F10-04 name it by uid
+    type: prometheus
+    access: proxy
+    url: http://prometheus.argos-core.svc:9090
+    isDefault: true
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki.argos-core.svc:3100
+    jsonData:
+      # F10-05 (ARG-093): from a log line to every other line of the same journal entry.
+      derivedFields:
+        - name: journal_seq
+          matcherRegex: '"journal_seq": (\d+)'
+          datasourceUid: loki
+          url: '{service=~"argos-.+"} |= `"journal_seq": ${__value.raw}`'

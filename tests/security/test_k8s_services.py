@@ -71,17 +71,28 @@ CORE = {
     "keycloak": 8080,
     "evidence-store": 7070,
     "tsa": 3180,
+    "loki": 3100,  # K-10: every service pushes its own logs
+    "prometheus": 9090,  # K-10: the operation screen of the API
 }
 REACHES = {
-    "api": {"postgres", "vault", "temporal", "keycloak", "evidence-store", "tsa"},
-    "webhook-worker": {"postgres", "vault", "temporal", "nats"},
-    "challenge-worker": {"postgres", "vault", "temporal", "nats", "opa"},
-    "evidence-worker": {"postgres", "vault", "temporal", "nats", "evidence-store", "tsa"},
-    "evidence-api": {"postgres", "vault", "evidence-store", "tsa"},
-    "health": {"postgres", "vault", "evidence-store"},
+    "api": {
+        "postgres",
+        "vault",
+        "temporal",
+        "keycloak",
+        "evidence-store",
+        "tsa",
+        "loki",
+        "prometheus",
+    },
+    "webhook-worker": {"postgres", "vault", "temporal", "nats", "loki"},
+    "challenge-worker": {"postgres", "vault", "temporal", "nats", "opa", "loki"},
+    "evidence-worker": {"postgres", "vault", "temporal", "nats", "evidence-store", "tsa", "loki"},
+    "evidence-api": {"postgres", "vault", "evidence-store", "tsa", "loki"},
+    "health": {"postgres", "vault", "evidence-store", "loki"},
     "verifier": set(),
-    "inventory-scheduler": {"postgres", "vault", "temporal", "nats"},
-    "inventory-ingest": {"postgres", "vault", "nats"},
+    "inventory-scheduler": {"postgres", "vault", "temporal", "nats", "loki"},
+    "inventory-ingest": {"postgres", "vault", "nats", "loki"},
 }
 
 

@@ -39,6 +39,8 @@ spec:
               value: staging
             - name: ARGOS_LOG_LEVEL
               value: INFO
+            - name: ARGOS_LOKI_URL
+              value: http://loki.argos-core.svc:3100/loki/api/v1/push
             - name: ARGOS_DATABASE_URL
               value: postgresql://postgres.argos-core.svc:5432/argos?service=argos&sslmode=verify-full&sslrootcert=/run/tls/ca.crt
             - name: ARGOS_DATABASE_VAULT_ROLE
@@ -137,6 +139,16 @@ spec:
       app.kubernetes.io/name: health
   policyTypes: [Egress]
   egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: argos-core
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: loki
+      ports:
+        - protocol: TCP
+          port: 3100
     - to:
         - namespaceSelector:
             matchLabels:

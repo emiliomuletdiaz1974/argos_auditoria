@@ -100,9 +100,11 @@ def test_nothing_secret_is_versioned_with_the_manifests() -> None:
 @pytest.mark.skipif(shutil.which("kubectl") is None, reason="kubectl is not installed here")
 def test_kustomize_builds_the_overlay() -> None:
     built = subprocess.run(  # noqa: S603 - fixed command
-        ["kubectl", "kustomize", str(OVERLAY)],  # noqa: S607
+        # K-10: as the workflow renders it, reading the files of development and observability.
+        ["kubectl", "kustomize", "--load-restrictor=LoadRestrictionsNone", str(OVERLAY)],  # noqa: S607
         capture_output=True,
         text=True,
+        encoding="utf-8",  # the dashboards are not ASCII; Windows would decode them as cp1252
         check=True,
     ).stdout
     documents = [doc for doc in yaml.safe_load_all(built) if doc]

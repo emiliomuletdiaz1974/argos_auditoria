@@ -100,7 +100,8 @@ jobs:
         run: |
           uv run --no-project --with pyyaml python tools/bench_render.py render --digests digests --owner "${{ steps.tag.outputs.owner }}" --out rendered
           mkdir -p out
-          kubectl kustomize rendered > out/bench.yaml
+          # K-10: the bench reads rules, dashboards and Loki from the files of development.
+          kubectl kustomize --load-restrictor=LoadRestrictionsNone rendered > out/bench.yaml
       - uses: fluxcd/flux2/action@v2.9.6
         with:
           version: 2.9.6
