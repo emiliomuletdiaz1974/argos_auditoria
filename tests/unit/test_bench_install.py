@@ -61,7 +61,7 @@ def test_every_download_is_checked_before_it_is_used() -> None:
     script = _script()
     assert not re.search(r"\|\s*(sudo\s+)?(ba)?sh\b", script), "nothing is piped into a shell"
     downloads = re.findall(r'curl [^\n]*-o "([^"]+)"', script)
-    assert len(downloads) == 3, "k3s, flux and cert-manager"
+    assert len(downloads) == 4, "k3s, flux, cert-manager and kyverno"
     checks = [line for line in script.splitlines() if "sha256sum -c" in line]
     for target in downloads:
         assert any(target in line for line in checks), f"{target} is used without its checksum"
@@ -244,3 +244,24 @@ def test_the_tunnel_takes_only_port_443_and_only_for_this_computer() -> None:
     assert command.count(" -L ") == 1 and " -R " not in command and " -D " not in command
     assert "127.0.0.1 api.34-134-21-66.sslip.io" in script
     assert "127.0.0.1 id.34-134-21-66.sslip.io" in script
+
+
+def test_kyverno_is_installed_pinned_verified_and_before_the_bench() -> None:
+    """K-09 (ADR-0014): the bench applies argos-pod-baseline; its kinds must exist first."""
+    assert re.fullmatch(r"v\d+\.\d+\.\d+", _pinned("KYVERNO_VERSION"))
+    assert re.fullmatch(r"[0-9a-f]{64}", _pinned("KYVERNO_SHA256"))
+    script = _script()
+    # Its CRDs do not fit in the annotation of a client-side apply.
+    assert re.search(r"kubectl apply --server-side[^\n]*kyverno", script)
+    assert script.index("== kyverno") < script.index("== flux controllers and the bench source")
+
+
+def test_the_security_profiles_are_on_the_node_before_a_pod_asks_for_them() -> None:
+    """K-09: a pod that names a Localhost profile missing on the node does not start."""
+    script = _script()
+    assert "/var/lib/kubelet/seccomp/argos" in script
+    assert "platform/k8s/security/seccomp" in script
+    assert "apparmor_parser -r" in script and "platform/k8s/security/apparmor" in script
+    assert script.index("== security profiles") < script.index(
+        "== flux controllers and the bench source"
+    )

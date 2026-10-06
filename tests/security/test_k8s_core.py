@@ -65,7 +65,11 @@ def test_every_workload_meets_the_restricted_standard() -> None:
         assert workload["metadata"]["namespace"] in ARGOS_NAMESPACES, name
         pod = _pod(workload)
         assert pod["securityContext"]["runAsNonRoot"] is True, name
-        assert pod["securityContext"]["seccompProfile"] == {"type": "RuntimeDefault"}, name
+        seccomp = pod["securityContext"]["seccompProfile"]
+        # RuntimeDefault, or a profile of ARGOS loaded on the node (K-09, platform/k8s/security).
+        assert seccomp == {"type": "RuntimeDefault"} or (
+            seccomp["type"] == "Localhost" and seccomp["localhostProfile"].startswith("argos/")
+        ), name
         # The token of the service account goes only to the pods that talk to Kubernetes.
         assert pod.get("automountServiceAccountToken") is False or pod.get("serviceAccountName"), (
             name

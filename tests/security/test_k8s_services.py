@@ -240,3 +240,21 @@ def test_the_trust_of_the_verifier_is_written_by_a_job_that_touches_only_that() 
         if "to" in rule
     }
     assert reached == {"vault", "tsa"}
+
+
+def test_the_evidence_runs_under_its_own_seccomp_profile() -> None:
+    """K-09: the profile of ARG-084, loaded on the node by install.sh (argos/evidence.json)."""
+    for name in ("evidence-worker", "evidence-api"):
+        assert _pod(name)["securityContext"]["seccompProfile"] == {
+            "type": "Localhost",
+            "localhostProfile": "argos/evidence.json",
+        }, name
+
+
+def test_the_cluster_applies_the_posture_of_argos() -> None:
+    """K-09 (ADR-0014): argos-pod-baseline, the same file the appliance will apply."""
+    base = yaml.safe_load((K8S / "base" / "kustomization.yaml").read_text("utf-8"))
+    assert "../security" in base["resources"]
+    security = yaml.safe_load((K8S / "security" / "kustomization.yaml").read_text("utf-8"))
+    # The issuer and the image verification of the appliance are not the bench's (deviation note).
+    assert security["resources"] == ["pod-baseline.yaml"]

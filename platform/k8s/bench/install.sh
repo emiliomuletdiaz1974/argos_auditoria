@@ -19,6 +19,8 @@ FLUX_VERSION="2.9.6"
 FLUX_SHA256="b4d22673e9246cbd628881f1a9ef3b090085dced291e42d804555cee8e8d42c5"
 CERT_MANAGER_VERSION="v1.21.2"
 CERT_MANAGER_SHA256="e03b668ec8675214af6b0a671699d088f2601fa3878e0dbe1b41d3feafd1879f"
+KYVERNO_VERSION="v1.19.1"
+KYVERNO_SHA256="d3322cb346d3d42dd0f41e230b0d1d7bc5619960e1c36fdac4d9151d724b88e6"
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 KUBECONFIG_FILE="/etc/rancher/k3s/k3s.yaml"
@@ -68,6 +70,26 @@ run curl -fsSL -o "$manifest" "https://github.com/cert-manager/cert-manager/rele
 if [[ "$DRY_RUN" == 0 ]]; then echo "$CERT_MANAGER_SHA256  $manifest" | sha256sum -c -; fi
 as_root env KUBECONFIG="$KUBECONFIG_FILE" k3s kubectl apply -f "$manifest"
 as_root env KUBECONFIG="$KUBECONFIG_FILE" k3s kubectl -n cert-manager rollout status deploy/cert-manager-webhook --timeout=300s
+
+# K-09 (ADR-0014) · Kyverno before the bench: the bench declares argos-pod-baseline (Enforce), and
+# its kinds must exist. Server-side: its CRDs do not fit in the annotation of a client-side apply.
+echo "== kyverno $KYVERNO_VERSION"
+kyverno="$workdir/kyverno.yaml"
+run curl -fsSL -o "$kyverno" "https://github.com/kyverno/kyverno/releases/download/${KYVERNO_VERSION}/install.yaml"
+if [[ "$DRY_RUN" == 0 ]]; then echo "$KYVERNO_SHA256  $kyverno" | sha256sum -c -; fi
+as_root env KUBECONFIG="$KUBECONFIG_FILE" k3s kubectl apply --server-side --force-conflicts -f "$kyverno"
+as_root env KUBECONFIG="$KUBECONFIG_FILE" k3s kubectl -n kyverno rollout status deploy/kyverno-admission-controller --timeout=300s
+
+# K-09 · the seccomp and AppArmor profiles of ARGOS on the node, before any pod names one: a pod that
+# names a Localhost profile missing here does not start. Loading them again replaces them.
+echo "== security profiles"
+as_root install -d -m 0755 /var/lib/kubelet/seccomp/argos
+for profile in "$REPO"/platform/k8s/security/seccomp/*.json; do
+  as_root install -m 0644 "$profile" /var/lib/kubelet/seccomp/argos/
+done
+for profile in "$REPO"/platform/k8s/security/apparmor/*; do
+  as_root apparmor_parser -r "$profile"
+done
 
 echo "== flux controllers and the bench source"
 as_root env KUBECONFIG="$KUBECONFIG_FILE" flux install --version="v$FLUX_VERSION"

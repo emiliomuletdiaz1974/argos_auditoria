@@ -28,8 +28,10 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001
+        # K-09 (ARG-084): the profile of the evidence, loaded on the node by install.sh.
         seccompProfile:
-          type: RuntimeDefault
+          type: Localhost
+          localhostProfile: argos/evidence.json
       containers:
         - name: evidence-worker
           image: argos-evidence
@@ -217,8 +219,10 @@ spec:
         runAsUser: 10001
         runAsGroup: 10001
         fsGroup: 10001
+        # K-09 (ARG-084): the profile of the evidence, loaded on the node by install.sh.
         seccompProfile:
-          type: RuntimeDefault
+          type: Localhost
+          localhostProfile: argos/evidence.json
       containers:
         - name: evidence-api
           image: argos-evidence

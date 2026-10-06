@@ -76,7 +76,6 @@ def test_the_posture_rule_asks_for_everything_the_compose_asks_for() -> None:
     rules = _baseline()["spec"]["rules"]
     [rule] = [r for r in rules if r["name"] == "require-restricted-posture"]
     container = rule["validate"]["pattern"]["spec"]["containers"][0]["securityContext"]
-    assert container["runAsNonRoot"] is True
     assert container["allowPrivilegeEscalation"] is False
     assert container["readOnlyRootFilesystem"] is True
     assert container["capabilities"]["drop"] == ["ALL"]
@@ -151,3 +150,21 @@ def test_the_appliance_admits_only_signed_images_pinned_by_digest() -> None:
     [attestor] = verify["attestors"]
     [key] = attestor["entries"]
     assert "publicKeys" in key["keys"], "signed with the release key, verified offline"
+
+
+def test_not_root_may_be_said_by_the_pod_or_by_each_container() -> None:
+    """K-09: the bench says runAsNonRoot on the pod, as Kubernetes allows; asking it of every
+    container would have stopped 22 workloads of the bench. No container may say false."""
+    rules = _baseline()["spec"]["rules"]
+    [rule] = [r for r in rules if r["name"] == "require-non-root"]
+    by_pod, by_container = rule["validate"]["anyPattern"]
+    assert by_pod["spec"]["securityContext"]["runAsNonRoot"] is True
+    not_false = [{"=(securityContext)": {"=(runAsNonRoot)": True}}]
+    assert by_pod["spec"]["containers"] == not_false
+    assert by_pod["spec"]["=(initContainers)"] == not_false
+    assert by_container["spec"]["containers"] == [{"securityContext": {"runAsNonRoot": True}}]
+    assert by_container["spec"]["=(initContainers)"] == [
+        {"securityContext": {"runAsNonRoot": True}}
+    ]
+    covered = set(rule["match"]["any"][0]["resources"]["namespaces"])
+    assert covered >= NAMESPACES
