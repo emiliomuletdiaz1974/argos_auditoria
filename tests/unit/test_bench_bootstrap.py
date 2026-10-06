@@ -34,12 +34,15 @@ def _bootstrap() -> ModuleType:
 class Vault:
     def __init__(self, mounted: bool = False) -> None:
         self.mounted = mounted
+        self.configured = False
         self.calls: list[tuple[str, str, dict[str, Any] | None]] = []
 
     def __call__(self, method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         self.calls.append((method, path, body))
         if path == "sys/mounts":
             return {"db/": {}} if self.mounted else {}
+        if method == "GET" and path == "db/config/argos" and self.configured:
+            return {"plugin_name": "postgresql-database-plugin", "connection_details": {}}
         return {}
 
     def paths(self) -> list[str]:
@@ -68,6 +71,20 @@ def test_an_engine_already_mounted_is_not_mounted_again() -> None:
     vault = Vault(mounted=True)
     bootstrap.database_engine(vault, lambda password: None)
     assert "POST sys/mounts/db" not in vault.paths()
+
+
+def test_an_engine_already_configured_keeps_its_connection_and_only_rewrites_the_roles() -> None:
+    """K-07/K-10: the bootstrap runs again with every tag. Changing the password of vault_admin and
+    rotating it each time left the services without credentials while it lasted, and they
+    restarted; the roles, written again, change nothing that is in use."""
+    bootstrap = _bootstrap()
+    vault, admin = Vault(mounted=True), []
+    vault.configured = True
+    bootstrap.database_engine(vault, admin.append)
+    assert admin == [], "the password of vault_admin is not changed"
+    paths = vault.paths()
+    assert "POST db/config/argos" not in paths and "POST db/rotate-root/argos" not in paths
+    assert "POST db/roles/svc-api" in paths
 
 
 def test_each_service_gets_its_ephemeral_role_inside_its_own_postgres_role() -> None:

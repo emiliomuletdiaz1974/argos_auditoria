@@ -110,9 +110,31 @@ def vault_client() -> Vault:
     return vault
 
 
+def _engine_configured(vault: Vault) -> bool:
+    try:
+        config = vault("GET", f"db/config/{DB_NAME}", None)
+    except VaultRefusedError as refused:
+        if refused.status == 404:
+            return False
+        raise
+    return bool(config.get("plugin_name"))
+
+
 def database_engine(vault: Vault, set_admin_password: Callable[[str], None]) -> None:
+    """The engine and its connection once; the roles of the services on every run.
+
+    The bootstrap runs again with every tag. Setting a new password for vault_admin and rotating it
+    each time left the services without credentials while it lasted, and they restarted (K-07);
+    a connection already in place is left as it is. Writing the roles again changes nothing in use.
+    """
     if "db/" not in vault("GET", "sys/mounts", None):
         vault("POST", "sys/mounts/db", {"type": "database"})
+    if not _engine_configured(vault):
+        _connect_engine(vault, set_admin_password)
+    _write_roles(vault)
+
+
+def _connect_engine(vault: Vault, set_admin_password: Callable[[str], None]) -> None:
     password = secrets.token_urlsafe(32)
     set_admin_password(password)
     vault(
@@ -130,6 +152,9 @@ def database_engine(vault: Vault, set_admin_password: Callable[[str], None]) -> 
         },
     )
     vault("POST", f"db/rotate-root/{DB_NAME}", {})
+
+
+def _write_roles(vault: Vault) -> None:
     for service, role in SERVICE_ROLES.items():
         vault(
             "POST",
