@@ -4,9 +4,9 @@ kind: module
 title: Servicio de salud del dominio (argos-health)
 module: argos-health
 phases: ["10"]
-version: 0.7.0-alpha
-commit: 614dfaf
-date: 2026-09-28
+version: 0.8.0-alpha
+commit: c64895f
+date: 2026-10-06
 status: current
 confidentiality: client
 ---
@@ -103,6 +103,7 @@ Además, una vez al día toma la foto de la capacidad frente a la talla (`argos.
 | `ARGOS_HEALTH_PKI_URL` | PKI intermedia de Vault (`…/v1/pki_int`); sin ella, los certificados dan -1 | — |
 | `ARGOS_HEALTH_TLS_SERVICES` | Los servicios que renueva el emisor de certificados, con el mismo formato que su `ARGOS_TLS_SERVICES`; solo cuentan sus certificados, y uno que falte cuenta como a punto de caducar (QA-088). Un test comprueba que el compose da a los dos el mismo valor | vacío: cuentan todos |
 | `ARGOS_HEALTH_EVIDENCE_PATH` | Volumen de evidencia montado en solo lectura; sin él no hay métrica de ocupación | — |
+| `ARGOS_HEALTH_EVIDENCE_USAGE_URL` | Si no se puede montar el volumen: la dirección donde el almacén publica su ocupación (`{"used", "total"}`); en el banco, el contenedor auxiliar de `evidence-store` | — |
 | `ARGOS_HEALTH_JOURNAL_TAIL` | Asientos del tramo | 10 000 |
 | `ARGOS_HEALTH_*_SECONDS` | Cadencias | las de la tabla del punto 3 |
 
@@ -153,3 +154,4 @@ Además, una vez al día toma la foto de la capacidad frente a la talla (`argos.
 | 0.5.0-alpha | 2026-09-25 | Foto diaria de la capacidad frente a la talla | F10-08 (ARG-098) |
 | 0.6.0-alpha | 2026-09-28 | `argos_health_check_ok` y su alerta, hechos con la hora de su comprobación, y certificados solo de los servicios esperados | QA-22 (QA-078, 079, 088) |
 | 0.7.0-alpha | 2026-09-28 | `argos_events_dead_letters` y la alerta `EventsDeadLettered` | QA-25 (QA-001) |
+| 0.8.0-alpha | 2026-10-06 | `ARGOS_HEALTH_EVIDENCE_USAGE_URL` y `volume_used_ratio_from`: la ocupación del volumen de evidencia publicada por el almacén cuando no se puede montar | K-99 (banco) |
