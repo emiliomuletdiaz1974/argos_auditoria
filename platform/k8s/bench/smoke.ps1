@@ -21,6 +21,10 @@ $form = "grant_type=password&client_id=argos-tests&scope=openid&username=" +
 $plain = $null
 $answer = $form | curl.exe -s $Insecure --data "@-" "$Realm/protocol/openid-connect/token"
 $form = $null
+if (-not $answer) {
+    Write-Host "no answer from $Realm : is the tunnel open in another window (tunnel.sh)?"
+    exit 1
+}
 $tokens = $answer | ConvertFrom-Json
 if (-not $tokens.access_token) {
     Write-Host "sign-in refused: $($tokens.error_description)"
