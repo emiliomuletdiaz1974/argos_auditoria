@@ -145,3 +145,47 @@ def test_the_bench_builds_exactly_the_images_its_manifests_use() -> None:
     assert set(bench_render.BUILT) | set(bench_render.NOT_IN_THE_BENCH) == set(
         bench_render.ALL_IMAGES
     )
+
+
+# ---------- K-99 · an image whose inputs did not change keeps its digest ----------
+
+
+def test_each_image_of_infrastructure_declares_everything_its_dockerfile_copies() -> None:
+    """A reused image must be the one these files build: every COPY of its Dockerfile has to be
+    under one of its inputs, or a change there would be deployed with the old image."""
+    for name in ("argos-postgres", "argos-opa", "argos-tsa", "argos-keycloak", "argos-bench-seed"):
+        image = bench_render.ALL_IMAGES[name]
+        assert image.inputs, name
+        assert image.dockerfile in image.inputs or any(
+            image.dockerfile.startswith(f"{i}/") for i in image.inputs
+        ), name
+        dockerfile = (ROOT / image.dockerfile).read_text(encoding="utf-8")
+        for line in dockerfile.splitlines():
+            if not line.startswith("COPY") or "--from=" in line:
+                continue
+            *sources, _ = [p for p in line.split()[1:] if not p.startswith("--")]
+            for source in sources:
+                path = (Path(image.context) / source.rstrip("/")).as_posix()
+                assert any(path == i or path.startswith(f"{i}/") for i in image.inputs), (
+                    name,
+                    path,
+                )
+
+
+def test_the_services_of_argos_are_always_built() -> None:
+    """They change with the code: no reuse, so a change is never left out."""
+    for name, image in bench_render.IMAGES.items():
+        assert image.inputs == (), name
+
+
+def test_the_fingerprint_of_the_inputs_follows_their_content(tmp_path: Path) -> None:
+    (tmp_path / "a").write_text("one", encoding="utf-8")
+    (tmp_path / "b").write_text("two", encoding="utf-8")
+    first = bench_render.fingerprint(tmp_path, ["a", "b"])
+    assert first == bench_render.fingerprint(tmp_path, ["b", "a"]), "the order does not count"
+    assert len(first) == 32
+    (tmp_path / "b").write_text("three", encoding="utf-8")
+    assert bench_render.fingerprint(tmp_path, ["a", "b"]) != first
+    (tmp_path / "b").write_text("two", encoding="utf-8")
+    (tmp_path / "c").write_text("two", encoding="utf-8")
+    assert bench_render.fingerprint(tmp_path, ["a", "c"]) != first, "the names count too"

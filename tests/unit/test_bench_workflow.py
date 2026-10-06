@@ -100,3 +100,17 @@ def test_one_image_that_fails_does_not_cancel_the_others() -> None:
     Without fail-fast the others finish, and only the failed one is run again."""
     [images_job] = [j for j in _workflow()["jobs"].values() if "matrix" in j.get("strategy", {})]
     assert images_job["strategy"]["fail-fast"] is False
+
+
+def test_an_image_whose_inputs_did_not_change_is_reused_not_built() -> None:
+    """K-99: rebuilding PostgreSQL gave it a new digest on every tag, and the pod was recreated
+    with each version: the services that started meanwhile found no database credential."""
+    [images_job] = [j for j in _workflow()["jobs"].values() if "matrix" in j.get("strategy", {})]
+    steps = {step.get("id") or step.get("name"): step for step in images_job["steps"]}
+    assert "bench_render.py inputs" in steps["inputs"]["run"]
+    assert "imagetools inspect" in steps["reuse"]["run"]
+    assert steps["build"]["if"] == "steps.reuse.outputs.digest == ''"
+    assert ":inputs-{2}" in steps["build"]["with"]["tags"], "tagged with its fingerprint"
+    assert steps["sign the image by its digest"]["if"] == "steps.reuse.outputs.digest == ''"
+    keep = steps["keep the digest for the manifests"]["run"]
+    assert "steps.reuse.outputs.digest || steps.build.outputs.digest" in keep

@@ -50,27 +50,44 @@ jobs:
         run: |
           echo "version=$(uv run --no-project --with pyyaml python tools/bench_render.py version "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
           echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      # K-99: the fingerprint of what the image is built from ("" for the services of ARGOS).
+      - id: inputs
+        run: echo "hash=$(uv run --no-project --with pyyaml python tools/bench_render.py inputs "${{ matrix.image.name }}")" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # An image already built from the same inputs keeps its digest: building it again gave a new
+      # one on every tag, and its pod (PostgreSQL among them) was recreated with each version.
+      - id: reuse
+        if: steps.inputs.outputs.hash != ''
+        run: |
+          ref="ghcr.io/${{ steps.tag.outputs.owner }}/${{ matrix.image.name }}:inputs-${{ steps.inputs.outputs.hash }}"
+          if digest=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest.Digest}}' 2>/dev/null); then
+            echo "digest=$(echo "$digest" | tr -d '"')" >> "$GITHUB_OUTPUT"
+            echo "reused $ref"
+          fi
       - id: build
+        if: steps.reuse.outputs.digest == ''
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.image.context }}
           file: ${{ matrix.image.dockerfile }}
           push: true
-          tags: ghcr.io/${{ steps.tag.outputs.owner }}/${{ matrix.image.name }}:${{ steps.tag.outputs.version }}
+          tags: |
+            ghcr.io/${{ steps.tag.outputs.owner }}/${{ matrix.image.name }}:${{ steps.tag.outputs.version }}
+            ${{ steps.inputs.outputs.hash != '' && format('ghcr.io/{0}/{1}:inputs-{2}', steps.tag.outputs.owner, matrix.image.name, steps.inputs.outputs.hash) || '' }}
           labels: |
             org.argos.component=${{ matrix.image.component }}
             org.argos.version=${{ steps.tag.outputs.version }}
       - uses: sigstore/cosign-installer@v3
       - name: sign the image by its digest
+        if: steps.reuse.outputs.digest == ''
         run: cosign sign --yes "ghcr.io/${{ steps.tag.outputs.owner }}/${{ matrix.image.name }}@${{ steps.build.outputs.digest }}"
       - name: keep the digest for the manifests
-        run: mkdir -p digests && echo "${{ steps.build.outputs.digest }}" > "digests/${{ matrix.image.name }}"
+        run: mkdir -p digests && echo "${{ steps.reuse.outputs.digest || steps.build.outputs.digest }}" > "digests/${{ matrix.image.name }}"
       - uses: actions/upload-artifact@v4
         with:
           name: digest-${{ matrix.image.name }}
