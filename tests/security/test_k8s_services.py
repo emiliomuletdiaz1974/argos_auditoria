@@ -271,3 +271,12 @@ def test_the_cluster_applies_the_posture_of_argos() -> None:
     security = yaml.safe_load((K8S / "security" / "kustomization.yaml").read_text("utf-8"))
     # The issuer and the image verification of the appliance are not the bench's (deviation note).
     assert security["resources"] == ["pod-baseline.yaml"]
+
+
+def test_a_durable_subscriber_of_the_bus_never_runs_twice() -> None:
+    """K-99: a durable consumer of JetStream takes one subscriber at a time. With a rolling update
+    the new pod met the old one ("consumer is already bound to a subscription", banco-v0.15.2)
+    and restarted until the old one stopped: the old one stops first."""
+    subscribers = {"challenge-worker", "evidence-worker", "inventory-ingest", "webhook-worker"}
+    for name in subscribers:
+        assert _named("Deployment", name)["spec"]["strategy"] == {"type": "Recreate"}, name
