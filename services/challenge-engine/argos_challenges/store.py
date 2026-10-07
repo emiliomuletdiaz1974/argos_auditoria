@@ -18,6 +18,7 @@ from argos_common.ids import uuid7
 from argos_common.journal_pg import PostgresJournal
 
 STATUSES = ("planned", "pinned", "running", "sealed", "failed")
+CLOSED_STATUSES = ("sealed", "failed")
 # Which status can follow which: a campaign never goes back.
 TRANSITIONS: Mapping[str, frozenset[str]] = {
     "planned": frozenset({"pinned", "failed"}),
@@ -46,19 +47,32 @@ class CampaignStateError(ArgosError):
     """The campaign, the gate or the verdict was used out of its state."""
 
 
-def create_campaign(dsn: str, name: str, scope: Mapping[str, Any], created_by: str) -> str:
+def create_campaign(
+    dsn: str,
+    name: str,
+    scope: Mapping[str, Any],
+    created_by: str,
+    journal_actor: str | None = None,
+) -> str:
+    """Create a campaign for a person. `journal_actor` is who writes the entry when it is not them.
+
+    The worker runs as a service role that journals only `system:%`; a campaign it opens on
+    behalf of a person (a remediation run) is journalled as the system and names the person in
+    the entry, while `created_by` stays theirs, because it is what keeps them from approving it.
+    """
     if not created_by.startswith("user:"):
         raise CampaignStateError("a campaign is created by a person: user:<sub>")
     campaign_id = str(uuid7())
     journal = PostgresJournal(dsn)
+    payload: dict[str, Any] = {"campaign": campaign_id, "name": name}
+    if journal_actor is not None:
+        payload["requested_by"] = created_by
     with psycopg.connect(dsn) as conn:
         conn.execute(
             "INSERT INTO argos.campaigns (id, name, scope, created_by) VALUES (%s, %s, %s, %s)",
             (campaign_id, name, Jsonb(dict(scope)), created_by),
         )
-        journal.append(
-            created_by, "campaign.create", {"campaign": campaign_id, "name": name}, conn=conn
-        )
+        journal.append(journal_actor or created_by, "campaign.create", payload, conn=conn)
     return campaign_id
 
 
@@ -231,8 +245,11 @@ def grant_approval(
         if request is None:
             raise CampaignStateError(f"the gate {gate} was not requested")
         owner = conn.execute(
-            "SELECT created_by FROM argos.campaigns WHERE id = %s", (campaign_id,)
+            "SELECT created_by, status FROM argos.campaigns WHERE id = %s", (campaign_id,)
         ).fetchone()
+        if owner is not None and owner[1] in CLOSED_STATUSES:
+            # The seal covers the approvals as they were; one more afterwards would break its check.
+            raise CampaignStateError(f"the campaign is {owner[1]} and takes no more approvals")
         if owner is not None and owner[0] == approver:
             # Whatever roles the realm gave them, nobody approves what they asked for (SEC-008).
             raise CampaignStateError(f"{approver} created the campaign and does not approve it")

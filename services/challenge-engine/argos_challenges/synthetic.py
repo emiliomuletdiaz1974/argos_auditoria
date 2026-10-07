@@ -433,3 +433,91 @@ def campaign_subject(dsn: str, campaign_id: str) -> SyntheticSubject | None:
         return None
     seed, index = str(row[0]), int(row[1])
     return generate_subjects(seed, index + 1)[index]
+
+
+def generate_for_campaign(dsn: str, campaign_id: str, count: int) -> list[SyntheticSubject]:
+    """Generate and register the subjects of a campaign, once.
+
+    The seed comes from the campaign, so the same campaign always means the same people and the
+    worker can regenerate them in memory (`campaign_subject`). A campaign that already has
+    subjects, or that is closed, takes no more.
+    """
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT status,"
+            " (SELECT count(*) FROM argos.synthetic_subjects WHERE campaign_id = c.id)"
+            " FROM argos.campaigns c WHERE id = %s",
+            (campaign_id,),
+        ).fetchone()
+    if row is None:
+        raise SyntheticError(f"unknown campaign: {campaign_id}")
+    if row[0] in ("sealed", "failed"):
+        raise SyntheticError(f"the campaign is {row[0]} and takes no new subjects")
+    if row[1]:
+        raise SyntheticError("the subjects of this campaign were already generated")
+    subjects = generate_subjects(f"campaign-{campaign_id}", count)
+    try:
+        register_subjects(dsn, campaign_id, subjects)
+    except psycopg.errors.UniqueViolation:
+        raise SyntheticError("the subjects of this campaign were already generated") from None
+    return subjects
+
+
+def campaign_subjects(dsn: str, campaign_id: str) -> list[dict[str, Any]]:
+    """The subjects of a campaign, without their clear values."""
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(
+            "SELECT id::text, subject_index, created_at FROM argos.synthetic_subjects"
+            " WHERE campaign_id = %s ORDER BY subject_index",
+            (campaign_id,),
+        ).fetchall()
+    return [{"id": r[0], "index": int(r[1]), "created_at": r[2].isoformat()} for r in rows]
+
+
+def authorized_injections(
+    dsn: str, campaign_id: str, subject_id: str | None = None
+) -> list[dict[str, Any]]:
+    """Every authorised injection of a campaign, with how far the client has got."""
+    query = (
+        "SELECT i.id::text, i.subject_id::text, i.system_id::text, i.point, i.method,"
+        " i.revert_procedure, i.injected_confirmed_by IS NOT NULL, i.exercised_at IS NOT NULL,"
+        " i.reverted_by IS NOT NULL FROM argos.synthetic_injections i"
+        " JOIN argos.synthetic_subjects s ON s.id = i.subject_id WHERE s.campaign_id = %s"
+    )
+    args: tuple[Any, ...] = (campaign_id,)
+    if subject_id is not None:
+        query += " AND i.subject_id = %s"
+        args += (subject_id,)
+    with psycopg.connect(dsn) as conn:
+        rows = conn.execute(query + " ORDER BY i.authorized_at, i.id", args).fetchall()
+
+    def state(injected: bool, exercised: bool, reverted: bool) -> str:
+        if reverted:
+            return "reverted"
+        return "exercised" if exercised else "injected" if injected else "authorized"
+
+    return [
+        {
+            "id": r[0],
+            "subject_id": r[1],
+            "system_id": r[2],
+            "point": r[3],
+            "method": r[4],
+            "revert_procedure": r[5],
+            "state": state(r[6], r[7], r[8]),
+        }
+        for r in rows
+    ]
+
+
+def subject_of_campaign(dsn: str, campaign_id: str, subject_id: str) -> SyntheticSubject | None:
+    """One subject of the campaign, regenerated from its seed; none if it belongs to another."""
+    with psycopg.connect(dsn) as conn:
+        row = conn.execute(
+            "SELECT seed, subject_index FROM argos.synthetic_subjects"
+            " WHERE id = %s AND campaign_id = %s",
+            (subject_id, campaign_id),
+        ).fetchone()
+    if row is None:
+        return None
+    return generate_subjects(str(row[0]), int(row[1]) + 1)[int(row[1])]

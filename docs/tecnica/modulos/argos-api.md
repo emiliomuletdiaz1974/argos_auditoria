@@ -4,9 +4,9 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.44.0-alpha
-commit: 8a64174
-date: 2026-09-29
+version: 0.45.0-alpha
+commit: 64e911e
+date: 2026-10-07
 status: current
 confidentiality: client
 ---
@@ -223,3 +223,4 @@ La imagen (`services/api/Dockerfile`) solo lleva la API: desde el 2026-09-29 no 
 | 0.42.0-alpha | 2026-09-28 | Capacidad sin carreras, campañas que cuentan desde el lanzamiento y receptor de alertas robusto | QA-32 (QA-006, 060, 061, 066) |
 | 0.43.0-alpha | 2026-09-29 | Deja de construir y servir la consola: lo que no es ruta de la API responde 404 problem+json; `create_app` ya no recibe `console` | ARG-073 (desviación) |
 | 0.44.0-alpha | 2026-09-29 | Front en otro dominio: `frontend_origins`, CORS con credenciales, cookie `SameSite=None` y cabecera `X-Argos-Session` en `/auth/*` (contrato v1: resúmenes de la sesión) | C-03 (DP-19) |
+| 0.45.0-alpha | 2026-10-07 | Rutas de sujeto sintético (`POST /campaigns/{id}/synthetic/subjects`, `GET /campaigns/{id}/synthetic`, `GET …/subjects/{subject_id}/package`) con los permisos `synthetic.generate` y `synthetic.read`; el listado de veredictos pagina sin repetir ni perder elementos | QA-36 |

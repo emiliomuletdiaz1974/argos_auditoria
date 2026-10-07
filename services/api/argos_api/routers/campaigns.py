@@ -32,7 +32,15 @@ from argos_challenges.store import (
     list_campaigns,
     list_verdicts,
 )
-from argos_challenges.synthetic import SyntheticError, authorize_injection
+from argos_challenges.synthetic import (
+    SyntheticError,
+    authorize_injection,
+    authorized_injections,
+    campaign_subjects,
+    client_package,
+    generate_for_campaign,
+    subject_of_campaign,
+)
 from argos_common.journal_pg import PostgresJournal
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"], route_class=CoreRoute)
@@ -246,7 +254,60 @@ def verdicts(request: Request, campaign_id: UUID, paging: Paging) -> Page:
     dsn = database(request)
     _record(dsn, str(campaign_id))
     rows = list_verdicts(dsn, str(campaign_id), paging.limit + 1, paging.position)
-    return paginate(rows, paging.limit)
+    return paginate(rows, paging.limit, ascending=True)
+
+
+class Subjects(BaseModel):
+    count: int = Field(default=1, ge=1, le=5, description="how many subjects to generate")
+
+
+@router.post(
+    "/{campaign_id}/synthetic/subjects",
+    status_code=status.HTTP_201_CREATED,
+    summary="Generate the synthetic subjects of the campaign",
+    dependencies=[Depends(require_perm("synthetic.generate"))],
+)
+def generate_subjects(request: Request, campaign_id: UUID, body: Subjects) -> dict[str, Any]:
+    dsn = database(request)
+    _record(dsn, str(campaign_id))
+    try:
+        generate_for_campaign(dsn, str(campaign_id), body.count)
+    except SyntheticError as refused:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(refused)) from None
+    return {"campaign_id": str(campaign_id), "subjects": campaign_subjects(dsn, str(campaign_id))}
+
+
+@router.get(
+    "/{campaign_id}/synthetic",
+    summary="Subjects and authorised injections of the campaign, with their state",
+    dependencies=[Depends(require_perm("synthetic.read"))],
+)
+def synthetic_state(request: Request, campaign_id: UUID) -> dict[str, Any]:
+    dsn = database(request)
+    _record(dsn, str(campaign_id))
+    injections = authorized_injections(dsn, str(campaign_id))
+    keys = ("id", "subject_id", "system_id", "point", "state")
+    return {
+        "campaign_id": str(campaign_id),
+        "subjects": campaign_subjects(dsn, str(campaign_id)),
+        "injections": [{key: item[key] for key in keys} for item in injections],
+    }
+
+
+@router.get(
+    "/{campaign_id}/synthetic/subjects/{subject_id}/package",
+    summary="What the client receives to inject one subject, and how to undo it",
+    dependencies=[Depends(require_perm("synthetic.read"))],
+)
+def subject_package(request: Request, campaign_id: UUID, subject_id: UUID) -> dict[str, Any]:
+    dsn = database(request)
+    _record(dsn, str(campaign_id))
+    subject = subject_of_campaign(dsn, str(campaign_id), str(subject_id))
+    if subject is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"no subject {subject_id} in campaign {campaign_id}"
+        )
+    return client_package(subject, authorized_injections(dsn, str(campaign_id), str(subject_id)))
 
 
 @router.post(

@@ -52,6 +52,9 @@ campaigns.remediate: [campaign_manager]
 # campaign manager— confirms each step it really did. Never the same person for both.
 synthetic.authorize: [dpo_reviewer]
 synthetic.confirm: [campaign_manager]
+# QA-36: the campaign manager asks for the subjects; whoever authorises and whoever confirms read them.
+synthetic.generate: [campaign_manager]
+synthetic.read: [campaign_manager, dpo_reviewer]
 approvals.read: [campaign_manager, dpo_reviewer]
 
 findings.read: [platform_admin, campaign_manager, dpo_reviewer, read_only_auditor]

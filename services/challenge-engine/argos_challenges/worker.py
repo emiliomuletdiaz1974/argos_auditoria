@@ -19,10 +19,12 @@ from argos_events import Bus, bus_from_config
 
 from .activities import ChallengeActivities, record_in_journal, smoke_probe
 from .bridge import DURABLE, SIGNAL, SUBJECT, on_circuit_open
+from .findings import expire_risk_acceptances
 from .store import running_campaigns
 from .workflows import CampaignWorkflow, RemediationRun, SmokeCampaign, SystemRun
 
 TASK_QUEUE = "argos-campaigns"
+RISK_EXPIRY_SECONDS = 3600
 
 
 async def create_worker(
@@ -80,6 +82,23 @@ async def listen_for_open_circuits(client: Client, bus: Bus, dsn: str) -> None:
     await bus.subscribe(SUBJECT, DURABLE, on_circuit_open(lambda: running_campaigns(dsn), signal))
 
 
+async def expire_periodically(expire: Callable[[], list[str]], interval: float) -> None:
+    """An accepted risk comes back as reopened once its date passes: someone has to ask (QA-36).
+
+    A round that fails is logged and the next one tries again; the loop only ends when it is
+    cancelled.
+    """
+    log = get_logger(__name__, "ARG-048")
+    while True:
+        try:
+            reopened = await asyncio.to_thread(expire)
+            if reopened:
+                log.info(f"{len(reopened)} accepted risks expired and were reopened")
+        except Exception as failed:  # the next round is the retry
+            log.error(f"expiring accepted risks failed: {failed}")
+        await asyncio.sleep(interval)
+
+
 async def main() -> None:
     cfg = get_config()
     configure_logging("argos-campaign-worker", cfg.LOG_LEVEL)
@@ -89,8 +108,14 @@ async def main() -> None:
     await bus.connect()
     await listen_for_open_circuits(client, bus, cfg.DATABASE_URL)
     worker = await create_worker(client, campaign=campaign_activities(cfg, bus))
+    expiry = asyncio.create_task(
+        expire_periodically(lambda: expire_risk_acceptances(cfg.DATABASE_URL), RISK_EXPIRY_SECONDS)
+    )
     get_logger(__name__, "ARG-007").info(f"worker ready on queue {TASK_QUEUE}")
-    await worker.run()
+    try:
+        await worker.run()
+    finally:
+        expiry.cancel()
 
 
 if __name__ == "__main__":

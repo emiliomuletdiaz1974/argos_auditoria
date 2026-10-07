@@ -25,6 +25,8 @@ platform_admin:
   campaigns.remediate: false
   synthetic.authorize: false
   synthetic.confirm: false
+  synthetic.generate: false
+  synthetic.read: false
   approvals.read: false
   findings.read: true
   findings.transition: false
@@ -56,6 +58,8 @@ campaign_manager:
   campaigns.remediate: true
   synthetic.authorize: false
   synthetic.confirm: true
+  synthetic.generate: true
+  synthetic.read: true
   approvals.read: true
   findings.read: true
   findings.transition: false
@@ -87,6 +91,8 @@ dpo_reviewer:
   campaigns.remediate: false
   synthetic.authorize: true
   synthetic.confirm: false
+  synthetic.generate: false
+  synthetic.read: true
   approvals.read: true
   findings.read: true
   findings.transition: true
@@ -118,6 +124,8 @@ read_only_auditor:
   campaigns.remediate: false
   synthetic.authorize: false
   synthetic.confirm: false
+  synthetic.generate: false
+  synthetic.read: false
   approvals.read: false
   findings.read: true
   findings.transition: false

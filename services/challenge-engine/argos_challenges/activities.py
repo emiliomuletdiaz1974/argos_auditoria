@@ -415,6 +415,7 @@ class ChallengeActivities:
             f"Subsanación {scope.get('campaign_id', 'general')}",
             dict(scope),
             requested_by,
+            journal_actor=REMEDIATION_ACTOR,
         )
         # What the client fixed is measured on the inventory as it is now: a new snapshot, and
         # every unit points to it instead of the one that found the problem (SEC-036).

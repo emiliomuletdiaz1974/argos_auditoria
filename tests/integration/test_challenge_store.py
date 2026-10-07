@@ -11,6 +11,7 @@ from argos_challenges.store import (
     campaign_record,
     create_campaign,
     grant_approval,
+    list_verdicts,
     persist_verdict,
     pin_campaign,
     request_approval,
@@ -164,3 +165,43 @@ def test_the_status_moves_only_through_declared_states(migrated_db: str) -> None
     assert campaign_record(migrated_db, campaign_id)["status"] == "running"
     with pytest.raises(CampaignStateError, match="status"):
         set_status(migrated_db, campaign_id, "finished")
+
+
+@pytest.mark.parametrize("closed", ["sealed", "failed"])
+def test_a_gate_of_a_closed_campaign_is_not_approved(migrated_db: str, closed: str) -> None:
+    """QA-36: an approval after the seal changes what the seal covers and breaks its check."""
+    campaign_id = _pinned(migrated_db)
+    request_approval(migrated_db, campaign_id, "plan", {"units": 1})
+    with psycopg.connect(migrated_db) as conn:
+        conn.execute("UPDATE argos.campaigns SET status = %s WHERE id = %s", (closed, campaign_id))
+    with pytest.raises(CampaignStateError, match=closed):
+        grant_approval(migrated_db, campaign_id, "plan", DPO, 1)
+    with psycopg.connect(migrated_db) as conn:
+        row = conn.execute(
+            "SELECT count(*) FROM argos.approvals WHERE campaign_id = %s", (campaign_id,)
+        ).fetchone()
+    assert row == (0,)
+
+
+def test_the_verdicts_are_paged_without_repeats_or_losses(migrated_db: str) -> None:
+    """QA-36: the SQL order is ascending and the page builder re-sorted descending, so with more
+    verdicts than the limit one page repeated rows and the oldest never showed."""
+    from argos_api.paging import cursor_for, paginate, position_of
+
+    campaign_id = _pinned(migrated_db)
+    written: list[str] = []
+    for n in range(7):
+        unit = {**UNIT, "unit_id": f"{n:x}" * 64}
+        save_units(migrated_db, campaign_id, [unit])
+        verdict_id, _ = persist_verdict(migrated_db, campaign_id, unit, evaluate(unit, PROBE))
+        written.append(verdict_id)
+    limit, seen, cursor = 3, [], None
+    for _ in range(10):
+        rows = list_verdicts(migrated_db, campaign_id, limit + 1, position_of(cursor))
+        page = paginate(rows, limit, ascending=True)
+        seen += [item["id"] for item in page.items]
+        cursor = page.next
+        if cursor is None:
+            break
+    assert seen == written
+    assert cursor_for("a", "b")  # the cursor format is the one every listing shares

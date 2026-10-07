@@ -95,9 +95,18 @@ def page_request(
 Paging = Annotated[PageRequest, Depends(page_request)]
 
 
-def paginate(rows: Sequence[Row], limit: int, at: str = AT, ident: str = ID) -> Page:
-    """The first `limit` rows in listing order, plus the cursor of the last one."""
+def paginate(
+    rows: Sequence[Row], limit: int, at: str = AT, ident: str = ID, *, ascending: bool = False
+) -> Page:
+    """The first `limit` rows in listing order, plus the cursor of the last one.
+
+    A listing that goes oldest first (the verdicts, "as they were written") says so with
+    `ascending`: its SQL predicate is `>`, and re-sorting it newest first here would repeat rows
+    and drop the oldest one (QA-36).
+    """
     ordered = apply_keyset(rows, None, at, ident)
+    if ascending:
+        ordered.reverse()
     items = [dict(row) for row in ordered[:limit]]
     if len(ordered) <= limit or not items:
         return Page(items=items)

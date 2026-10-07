@@ -4,9 +4,9 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.13.2-alpha
-commit: bdbf0f0
-date: 2026-09-28
+version: 0.14.0-alpha
+commit: 64e911e
+date: 2026-10-07
 status: current
 confidentiality: client
 ---
@@ -409,3 +409,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.13.0-alpha | 2026-09-28 | Escalado una vez, reintentos idempotentes con anuncios deduplicables, evaluador en sus bordes y biblioteca independiente de la ruta | QA-28 (QA-044, 046, 047, 048, 049, 051, 053, 054, 056) |
 | 0.13.1-alpha | 2026-09-28 | Una campaña sin unidades termina fallida | QA-29 (QA-050) |
 | 0.13.2-alpha | 2026-09-28 | Listado de hallazgos sin ocurrencias en la clave del cursor | QA-31 (QA-064) |
+| 0.14.0-alpha | 2026-10-07 | La campaña de subsanación se anota como `system:remediation` con el solicitante en el asiento; las compuertas no admiten aprobaciones en una campaña sellada o fallida; el worker hace caducar cada hora las aceptaciones de riesgo; sujetos sintéticos generados por campaña y su estado y paquete legibles | QA-36 |

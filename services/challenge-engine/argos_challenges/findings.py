@@ -251,9 +251,14 @@ def expire_risk_acceptances(dsn: str, today: date | None = None) -> list[str]:
             (moment,),
         ).fetchall()
     expired = [str(row[0]) for row in rows]
+    reopened = []
     for finding_id in expired:
-        transition(dsn, finding_id, "reopened", SYSTEM_ACTOR)
-    return expired
+        try:
+            transition(dsn, finding_id, "reopened", SYSTEM_ACTOR)
+        except FindingError:
+            continue  # another replica or a person moved it between the read and the lock
+        reopened.append(finding_id)
+    return reopened
 
 
 def person_transitions(status: str) -> list[str]:
