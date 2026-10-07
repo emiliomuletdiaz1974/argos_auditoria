@@ -72,6 +72,14 @@ def test_only_the_clients_argos_uses_and_none_made_for_tests() -> None:
     assert "lockout.test" not in users, "the account of the lockout test stays in development"
 
 
+def test_the_bench_has_two_dpo_accounts_because_the_sampling_gate_asks_for_two_people() -> None:
+    users = {u["username"]: u for u in _json(BENCH)["users"]}
+    first, second = users["dpo.test"], users["dpo2.test"]
+    assert second["realmRoles"] == first["realmRoles"] == ["dpo_reviewer"]
+    assert second["email"] != first["email"], "two people, not the same one twice"
+    assert "dpo2.test" not in {u["username"] for u in _json(DEVELOPMENT)["users"]}, "bench only"
+
+
 def _client(realm: dict[str, Any], client_id: str) -> dict[str, Any]:
     return next(c for c in realm["clients"] if c["clientId"] == client_id)
 

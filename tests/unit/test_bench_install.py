@@ -236,6 +236,13 @@ def test_the_person_reads_the_accounts_on_the_vm_and_nothing_writes_them() -> No
     assert "tee" not in script
 
 
+def test_an_account_is_reset_with_a_one_off_job_that_names_only_the_account() -> None:
+    script = ACCOUNTS_SH.read_text(encoding="utf-8")
+    assert "reset" in script and "RESET_USERS" in script
+    assert "keycloak-accounts-reset" in script, "its own Job: the managed one is never touched"
+    assert "delete job keycloak-accounts " not in script
+
+
 def test_the_tunnel_takes_only_port_443_and_only_for_this_computer() -> None:
     """K-08: while 80 and 443 stay closed, the bench is tested through SSH on its final names."""
     script = (ROOT / "platform" / "k8s" / "bench" / "tunnel.sh").read_text(encoding="utf-8")

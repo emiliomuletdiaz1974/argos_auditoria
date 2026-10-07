@@ -27,6 +27,9 @@ DECIDE = {"platform_admin", "dpo_reviewer"}
 # K-08A (DP-23): the front end is developed on the laptop of its team. The bench takes back this
 # origin and no other; the same value is ARGOS_FRONTEND_ORIGINS in the API deployment (api.yaml).
 FRONT_ORIGIN = "http://localhost:5173"
+# K-11: the sampling gate asks for two different DPOs, and development has one. The second is a
+# copy of the first with its own name and address; it exists in the bench only.
+SECOND_DPO = {"username": "dpo2.test", "email": "dpo2.test@argos.local", "lastName": "Synthetic 2"}
 
 
 def bench_realm(development: dict[str, Any]) -> dict[str, Any]:
@@ -46,6 +49,8 @@ def bench_realm(development: dict[str, Any]) -> dict[str, Any]:
             actions.append("CONFIGURE_TOTP")
         user["requiredActions"] = actions
         users.append(user)
+    first = next(u for u in users if u["username"] == "dpo.test")
+    users.append({**copy.deepcopy(first), **SECOND_DPO})
     realm["users"] = users
     return realm
 

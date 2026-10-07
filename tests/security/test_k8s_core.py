@@ -612,10 +612,10 @@ def test_the_bootstrap_gives_keycloak_its_own_database() -> None:
 # ---------- the accounts of the bench (K-05) ----------
 
 
-def test_the_accounts_job_may_only_read_and_create_secrets() -> None:
+def test_the_accounts_job_may_only_read_create_and_add_to_secrets() -> None:
     role = _named("Role", "keycloak-accounts")
     [rule] = role["rules"]
-    assert rule["resources"] == ["secrets"] and sorted(rule["verbs"]) == ["create", "get"]
+    assert rule["resources"] == ["secrets"] and sorted(rule["verbs"]) == ["create", "get", "patch"]
     pod = _pod(_named("Job", "keycloak-accounts"))
     assert pod["serviceAccountName"] == "keycloak-accounts"
     [container] = pod["containers"]

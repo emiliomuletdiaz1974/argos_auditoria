@@ -1,6 +1,7 @@
 # K-05 · temporary passwords for the accounts of the bench (accounts.py), kept in the secret
-# bench-accounts for the person, once; K-08, the clients of Keycloak in line with the realm. It may
-# only read and create secrets in argos-core, and it reaches only Keycloak and the API of Kubernetes.
+# bench-accounts for the person; K-08, the clients of Keycloak in line with the realm; K-11, the
+# accounts of the realm that are missing, and the reset of one. It may only read, create and add to
+# secrets in argos-core, and it reaches only Keycloak and the API of Kubernetes.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -16,7 +17,7 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "create"]
+    verbs: ["get", "create", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

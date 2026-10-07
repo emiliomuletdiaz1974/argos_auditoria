@@ -172,6 +172,21 @@
       "requiredActions": [
         "UPDATE_PASSWORD"
       ]
+    },
+    {
+      "username": "dpo2.test",
+      "enabled": true,
+      "email": "dpo2.test@argos.local",
+      "emailVerified": true,
+      "firstName": "DPO",
+      "lastName": "Synthetic 2",
+      "realmRoles": [
+        "dpo_reviewer"
+      ],
+      "requiredActions": [
+        "UPDATE_PASSWORD",
+        "CONFIGURE_TOTP"
+      ]
     }
   ],
   "identityProviders": [

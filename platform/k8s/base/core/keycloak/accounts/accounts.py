@@ -44,10 +44,28 @@ class Realm(Protocol):
     def reset_password(self, user_id: str, credential: dict[str, Any]) -> None: ...
 
 
-def provision(realm: Realm, keep: Callable[[dict[str, str]], None], *, secret_exists: bool) -> int:
-    """Temporary passwords for the accounts without one; nothing at all once they were kept."""
-    if secret_exists:
-        return 0
+class Accounts(Protocol):
+    def users_of_realm(self) -> dict[str, str]: ...
+
+    def has_password(self, user_id: str) -> bool: ...
+
+    def reset_password(self, user_id: str, credential: dict[str, Any]) -> None: ...
+
+    def create_user(self, representation: dict[str, Any]) -> str: ...
+
+    def grant_roles(self, user_id: str, roles: list[str]) -> None: ...
+
+    def drop_otp(self, user_id: str) -> None: ...
+
+    def set_required_actions(self, user_id: str, actions: list[str]) -> None: ...
+
+
+def provision(realm: Realm, keep: Callable[[dict[str, str]], None]) -> int:
+    """Temporary passwords for the accounts without one; the others are never touched.
+
+    An account that has a password, temporary or its owner's, is left as it is, so this can run on
+    every version: it only reaches the accounts that are new.
+    """
     given: dict[str, str] = {}
     for name, user_id in sorted(realm.users_of_realm().items()):
         if realm.has_password(user_id):
@@ -55,8 +73,58 @@ def provision(realm: Realm, keep: Callable[[dict[str, str]], None], *, secret_ex
         password = secrets.token_urlsafe(18)
         realm.reset_password(user_id, {"type": "password", "value": password, "temporary": True})
         given[name] = password
-    keep(given)
+    if given:
+        keep(given)
     return len(given)
+
+
+def create_missing_users(realm: Accounts, wanted: list[dict[str, Any]]) -> list[str]:
+    """The accounts of the realm file that Keycloak does not have yet.
+
+    Keycloak imports a realm once, so an account added to the realm of the bench later never
+    arrives by itself. It is created here with the same required actions; its roles are mapped
+    with their own call, because creating a user ignores them.
+    """
+    present = realm.users_of_realm()
+    created = []
+    for user in wanted:
+        name = str(user["username"])
+        if name in present:
+            continue
+        roles = [str(role) for role in user.get("realmRoles", [])]
+        user_id = realm.create_user({k: v for k, v in user.items() if k != "realmRoles"})
+        if roles:
+            realm.grant_roles(user_id, roles)
+        created.append(name)
+    return created
+
+
+def reset_accounts(
+    realm: Accounts,
+    names: list[str],
+    wanted: list[dict[str, Any]],
+    keep: Callable[[dict[str, str]], None],
+) -> list[str]:
+    """Another temporary password for these accounts, and their second factor to be set up again.
+
+    For a person who spent their temporary password, or lost their authenticator. Only accounts
+    of the realm file are accepted; nothing is touched if one is not.
+    """
+    present, known = realm.users_of_realm(), {str(u["username"]): u for u in wanted}
+    unknown = [name for name in names if name not in known or name not in present]
+    if unknown:
+        raise ValueError(f"not accounts of the bench: {', '.join(unknown)}")
+    given: dict[str, str] = {}
+    for name in names:
+        user_id = present[name]
+        password = secrets.token_urlsafe(18)
+        realm.drop_otp(user_id)
+        realm.reset_password(user_id, {"type": "password", "value": password, "temporary": True})
+        realm.set_required_actions(user_id, [str(a) for a in known[name]["requiredActions"]])
+        given[name] = password
+    if given:
+        keep(given)
+    return list(given)
 
 
 class Clients(Protocol):
@@ -80,11 +148,19 @@ def sync_clients(realm: Clients, wanted: list[dict[str, Any]]) -> list[str]:
     return changed
 
 
-def _call(method: str, url: str, *, token: str = "", body: Any = None, form: bool = False) -> Any:
-    data, kind = None, "application/json"
+def _call(
+    method: str,
+    url: str,
+    *,
+    token: str = "",
+    body: Any = None,
+    form: bool = False,
+    kind: str = "application/json",
+) -> Any:
+    data = None
     if body is not None:
         data = urllib.parse.urlencode(body).encode() if form else json.dumps(body).encode()
-        kind = "application/x-www-form-urlencoded" if form else "application/json"
+        kind = "application/x-www-form-urlencoded" if form else kind
     headers = {"Content-Type": kind}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -137,11 +213,46 @@ class KeycloakRealm:
             body=credential,
         )
 
+    def create_user(self, representation: dict[str, Any]) -> str:
+        _call("POST", f"{self._base}/users", token=self._token, body=representation)
+        return self.users_of_realm()[str(representation["username"])]
 
-def _kubernetes(method: str, path: str, body: Any = None) -> int:
+    def grant_roles(self, user_id: str, roles: list[str]) -> None:
+        mappings = [
+            _call("GET", f"{self._base}/roles/{urllib.parse.quote(role)}", token=self._token)
+            for role in roles
+        ]
+        _call(
+            "POST",
+            f"{self._base}/users/{user_id}/role-mappings/realm",
+            token=self._token,
+            body=mappings,
+        )
+
+    def drop_otp(self, user_id: str) -> None:
+        credentials = _call("GET", f"{self._base}/users/{user_id}/credentials", token=self._token)
+        for credential in credentials:
+            if credential.get("type") == "otp":
+                _call(
+                    "DELETE",
+                    f"{self._base}/users/{user_id}/credentials/{credential['id']}",
+                    token=self._token,
+                )
+
+    def set_required_actions(self, user_id: str, actions: list[str]) -> None:
+        user = _call("GET", f"{self._base}/users/{user_id}", token=self._token)
+        _call(
+            "PUT",
+            f"{self._base}/users/{user_id}",
+            token=self._token,
+            body={**user, "requiredActions": actions},
+        )
+
+
+def _kubernetes(method: str, path: str, body: Any = None, kind: str = "application/json") -> int:
     token = (ACCOUNT / "token").read_text(encoding="utf-8").strip()
     try:
-        _call(method, f"{API}{path}", token=token, body=body)
+        _call(method, f"{API}{path}", token=token, body=body, kind=kind)
     except urllib.error.HTTPError as refused:
         return int(refused.code)
     return 200
@@ -149,30 +260,37 @@ def _kubernetes(method: str, path: str, body: Any = None) -> int:
 
 def main() -> int:
     path = f"/api/v1/namespaces/{NAMESPACE}/secrets"
-    exists = _kubernetes("GET", f"{path}/{KEPT_IN}") == 200
 
     def keep(given: dict[str, str]) -> None:
+        """Add to the secret what was given now; what is there already stays as it is."""
         data = {name: base64.b64encode(value.encode()).decode() for name, value in given.items()}
-        secret = {
-            "apiVersion": "v1",
-            "kind": "Secret",
-            "metadata": {"name": KEPT_IN, "labels": {"argos/generated": "true"}},
-            "type": "Opaque",
-            "data": data,
-        }
-        status = _kubernetes("POST", path, secret)
+        if _kubernetes("GET", f"{path}/{KEPT_IN}") == 200:
+            status = _kubernetes(
+                "PATCH", f"{path}/{KEPT_IN}", {"data": data}, "application/merge-patch+json"
+            )
+        else:
+            secret = {
+                "apiVersion": "v1",
+                "kind": "Secret",
+                "metadata": {"name": KEPT_IN, "labels": {"argos/generated": "true"}},
+                "type": "Opaque",
+                "data": data,
+            }
+            status = _kubernetes("POST", path, secret)
         if status not in (200, 201):
-            raise RuntimeError(f"the secret {KEPT_IN} was not created: {status}")
+            raise RuntimeError(f"the secret {KEPT_IN} was not written: {status}")
 
     realm = KeycloakRealm(os.environ["KEYCLOAK_ADMIN_PASSWORD"])
-    wanted = json.loads(REALM_FILE.read_text(encoding="utf-8"))["clients"]
-    print(f"clients put back in line with the realm: {sync_clients(realm, wanted) or 'none'}")
-    count = provision(realm, keep, secret_exists=exists)
-    print(
-        f"{KEPT_IN} already there: nothing to do"
-        if exists
-        else f"{count} accounts with a temporary password, kept in {KEPT_IN}"
-    )
+    document = json.loads(REALM_FILE.read_text(encoding="utf-8"))
+    synced = sync_clients(realm, document["clients"]) or "none"
+    print(f"clients put back in line with the realm: {synced}")
+    resets = [name for name in os.environ.get("RESET_USERS", "").split(",") if name]
+    if resets:
+        done = reset_accounts(realm, resets, document["users"], keep)
+        print(f"{len(done)} accounts reset, their new temporary password kept in {KEPT_IN}")
+        return 0
+    print(f"accounts created: {create_missing_users(realm, document['users']) or 'none'}")
+    print(f"{provision(realm, keep)} accounts with a temporary password, kept in {KEPT_IN}")
     return 0
 
 
