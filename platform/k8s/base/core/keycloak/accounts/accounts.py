@@ -34,6 +34,7 @@ NAMESPACE = "argos-core"
 KEPT_IN = "bench-accounts"
 REALM_FILE = Path("/realm/realm-bench.json")
 SYNCED = ("redirectUris", "webOrigins")
+DEFAULT_ROLES = f"default-roles-{REALM}"
 
 
 class Realm(Protocol):
@@ -97,6 +98,19 @@ def create_missing_users(realm: Accounts, wanted: list[dict[str, Any]]) -> list[
             realm.grant_roles(user_id, roles)
         created.append(name)
     return created
+
+
+def ensure_default_roles(realm: Accounts) -> list[str]:
+    """Every account with the default roles of the realm, which it lacks if it was imported.
+
+    An account imported with explicit roles does not get them, and without them its token lacks the
+    audience `account`: the account page of Keycloak answered 401 (checked against 26.0.8). Granting
+    a role the account already has changes nothing, so it is granted to every account, every run.
+    """
+    accounts = realm.users_of_realm()
+    for name in sorted(accounts):
+        realm.grant_roles(accounts[name], [DEFAULT_ROLES])
+    return sorted(accounts)
 
 
 def reset_accounts(
@@ -290,6 +304,7 @@ def main() -> int:
         print(f"{len(done)} accounts reset, their new temporary password kept in {KEPT_IN}")
         return 0
     print(f"accounts created: {create_missing_users(realm, document['users']) or 'none'}")
+    print(f"accounts with the default roles of the realm: {len(ensure_default_roles(realm))}")
     print(f"{provision(realm, keep)} accounts with a temporary password, kept in {KEPT_IN}")
     return 0
 

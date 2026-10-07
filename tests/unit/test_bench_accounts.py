@@ -214,3 +214,15 @@ def test_a_client_that_drifted_from_the_realm_of_the_bench_is_put_back() -> None
     assert updated["webOrigins"] == ["http://localhost:5173"]
     assert updated["publicClient"] is True, "everything else of the client stays"
     assert "c-2" not in keycloak.updated, "a client already in line is not touched"
+
+
+def test_every_account_keeps_the_default_roles_of_the_realm() -> None:
+    """An account imported with explicit roles has no default-roles-argos, and without them its
+    token lacks the audience `account`: the account page of Keycloak answered 401 (the bench;
+    against Keycloak 26.0.8, 401 without them and 200 with them). Granting it again changes nothing.
+    """
+    accounts = _accounts()
+    keycloak = Accounts(with_password=set())
+    assert accounts.ensure_default_roles(keycloak) == sorted(keycloak.users)
+    assert all(roles == ["default-roles-argos"] for roles in keycloak.roles.values())
+    assert set(keycloak.roles) == set(keycloak.users.values())

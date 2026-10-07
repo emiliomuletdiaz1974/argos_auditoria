@@ -123,7 +123,8 @@
       "firstName": "DPO",
       "lastName": "Synthetic",
       "realmRoles": [
-        "dpo_reviewer"
+        "dpo_reviewer",
+        "default-roles-argos"
       ],
       "requiredActions": [
         "UPDATE_PASSWORD",
@@ -138,7 +139,8 @@
       "firstName": "Campaign",
       "lastName": "Manager",
       "realmRoles": [
-        "campaign_manager"
+        "campaign_manager",
+        "default-roles-argos"
       ],
       "requiredActions": [
         "UPDATE_PASSWORD"
@@ -152,7 +154,8 @@
       "firstName": "Admin",
       "lastName": "Synthetic",
       "realmRoles": [
-        "platform_admin"
+        "platform_admin",
+        "default-roles-argos"
       ],
       "requiredActions": [
         "UPDATE_PASSWORD",
@@ -167,7 +170,8 @@
       "firstName": "Auditor",
       "lastName": "Manager",
       "realmRoles": [
-        "read_only_auditor"
+        "read_only_auditor",
+        "default-roles-argos"
       ],
       "requiredActions": [
         "UPDATE_PASSWORD"
@@ -181,7 +185,8 @@
       "firstName": "DPO",
       "lastName": "Synthetic 2",
       "realmRoles": [
-        "dpo_reviewer"
+        "dpo_reviewer",
+        "default-roles-argos"
       ],
       "requiredActions": [
         "UPDATE_PASSWORD",

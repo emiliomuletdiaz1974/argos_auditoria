@@ -75,7 +75,7 @@ def test_only_the_clients_argos_uses_and_none_made_for_tests() -> None:
 def test_the_bench_has_two_dpo_accounts_because_the_sampling_gate_asks_for_two_people() -> None:
     users = {u["username"]: u for u in _json(BENCH)["users"]}
     first, second = users["dpo.test"], users["dpo2.test"]
-    assert second["realmRoles"] == first["realmRoles"] == ["dpo_reviewer"]
+    assert second["realmRoles"] == first["realmRoles"] == ["dpo_reviewer", "default-roles-argos"]
     assert second["email"] != first["email"], "two people, not the same one twice"
     assert "dpo2.test" not in {u["username"] for u in _json(DEVELOPMENT)["users"]}, "bench only"
 
@@ -103,3 +103,9 @@ def test_the_api_of_the_bench_answers_the_same_origin_the_realm_takes_back() -> 
     }
     assert env["ARGOS_FRONTEND_ORIGINS"] == FRONT
     assert _client(_json(BENCH), "argos-console")["webOrigins"] == [env["ARGOS_FRONTEND_ORIGINS"]]
+
+
+def test_every_account_of_the_bench_has_the_default_roles() -> None:
+    """Without default-roles-argos the account page of Keycloak answers 401."""
+    for user in _json(BENCH)["users"]:
+        assert "default-roles-argos" in user["realmRoles"], user["username"]

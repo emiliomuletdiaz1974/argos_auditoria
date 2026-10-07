@@ -24,6 +24,9 @@ BENCH = ROOT / "platform" / "k8s" / "base" / "core" / "keycloak" / "realm-bench.
 CLIENTS = ("argos-console", "argos-api", "argos-tests")
 TEST_ONLY_USERS = ("lockout.test",)
 DECIDE = {"platform_admin", "dpo_reviewer"}
+# An account imported with explicit roles does not get the default ones of the realm, and without
+# them its token lacks the audience `account`: the account page of Keycloak answers 401.
+DEFAULT_ROLES = "default-roles-argos"
 # K-08A (DP-23): the front end is developed on the laptop of its team. The bench takes back this
 # origin and no other; the same value is ARGOS_FRONTEND_ORIGINS in the API deployment (api.yaml).
 FRONT_ORIGIN = "http://localhost:5173"
@@ -51,6 +54,10 @@ def bench_realm(development: dict[str, Any]) -> dict[str, Any]:
         users.append(user)
     first = next(u for u in users if u["username"] == "dpo.test")
     users.append({**copy.deepcopy(first), **SECOND_DPO})
+    for user in users:
+        roles = user.setdefault("realmRoles", [])
+        if DEFAULT_ROLES not in roles:
+            roles.append(DEFAULT_ROLES)
     realm["users"] = users
     return realm
 
