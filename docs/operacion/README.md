@@ -22,3 +22,5 @@ Las pruebas de `tests/docs/test_runbooks.py` comprueban que ninguna alerta se qu
 Los comandos de los runbooks usan el entorno de desarrollo (`docker compose -f deploy/dev/compose.yaml …`). En el appliance, las mismas acciones se hacen sobre k3s; esa adaptación llega con el hardware (F10-90).
 
 La alta disponibilidad de cada talla está en [alta-disponibilidad.md](alta-disponibilidad.md).
+
+La prueba del banco k3s con datos sintéticos (K-99) está en [banco-k3s.md](banco-k3s.md).
