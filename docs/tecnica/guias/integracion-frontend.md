@@ -3,9 +3,9 @@ id: GUIA-integracion-frontend
 kind: guide
 title: Guía de integración del front end con la API v1
 phases: ["08"]
-version: 0.3.0
-commit: 0383398
-date: 2026-10-05
+version: 0.4.0
+commit: 196f33f
+date: 2026-10-08
 status: current
 confidentiality: client
 ---
@@ -66,6 +66,7 @@ El cliente público que usa la API es `argos-console` (`services/api/argos_api/k
 ### 2.3 Llamadas autenticadas y renovación
 
 - Cada llamada lleva `Authorization: Bearer <access_token>`.
+- El front no necesita validar el token: lo valida la API. Si lo decodifica para leer roles o nombre, `aud` es una **lista** (`["argos-api", "account"]` desde `banco-v0.18.1`), no un texto.
 - Un `401` sin más: se llama **una vez** a `POST /api/v1/auth/refresh` (sin cuerpo, con la cookie y `X-Argos-Session: 1`) y se reintenta **una vez**. Si el refresco da `401`, la sesión ha terminado o el navegador no envió la cookie: se vuelve a Keycloak (§3). No hay que entrar en bucle.
 - Un `401` con `WWW-Authenticate: Bearer error="insufficient_user_authentication"` no es una sesión caducada: la acción pide **segundo factor** (§2.4).
 - `POST /api/v1/auth/logout` (con `X-Argos-Session: 1`) revoca el refresco en Keycloak, borra la cookie y cierra la sesión también para los tokens de acceso que siguieran vivos. Responde `204`.
@@ -193,10 +194,10 @@ Leyenda de roles: **A** `platform_admin` · **M** `campaign_manager` · **D** `d
 | `POST /api/v1/campaigns/{id}/launch` | Lanzar. Prepara el plan y se para en la compuerta `start`. `409` si ya estaba lanzada | M |
 | `GET /api/v1/campaigns/{id}/plan` | Lo que la campaña va a preguntar, literal, antes de preguntar nada. `409` hasta que la campaña está preparada | A M D R |
 | `GET /api/v1/campaigns/{id}/gates` | Compuertas con sus aprobaciones: cuántas hay, de quién y cuántas faltan | A M D R |
-| `POST /api/v1/campaigns/{id}/gates/{gate}/approve` | Aprobar `start` o `sampling` (`note` opcional). `sampling` pide dos personas distintas | D · 2FA |
+| `POST /api/v1/campaigns/{id}/gates/{gate}/approve` | Aprobar `start` o `sampling` (`note` opcional). `sampling` pide dos personas distintas. `409` si la campaña aún no pidió esa compuerta o ya está `sealed` o `failed` | D · 2FA |
 | `GET /api/v1/campaigns/{id}/progress` | Progreso del workflow: `status` (`preparing`, `awaiting:<gate>`, `running`), `done`, `total`, `findings`, sistemas en pausa con su motivo. `409` si no está en marcha | A M D R |
-| `GET /api/v1/campaigns/{id}/verdicts` | Veredictos tal como se escribieron (paginado) | A M D R |
-| `POST /api/v1/campaigns/{id}/remediation` | Reejecutar lo que encontró la campaña para verificar la subsanación. `202` | M |
+| `GET /api/v1/campaigns/{id}/verdicts` | Veredictos tal como se escribieron, **del primero al último** (paginado; `next_cursor` lleva a los siguientes) | A M D R |
+| `POST /api/v1/campaigns/{id}/remediation` | Reejecutar lo que encontró la campaña para verificar la subsanación. `202`. La reejecución es una campaña más y espera la aprobación `start` del DPO (§6.2) | M |
 | `GET /api/v1/approvals` | **No usar:** responde `501`. Las compuertas pendientes se leen en `/campaigns/{id}/gates` | M D |
 
 ### 5.5 Hallazgos
@@ -206,7 +207,7 @@ Leyenda de roles: **A** `platform_admin` · **M** `campaign_manager` · **D** `d
 | `GET /api/v1/findings` | Hallazgos, peor primero. Filtros `status`, `severity`, `campaign_id` | A M D R |
 | `GET /api/v1/findings/{id}` | El porqué completo (criterio, valor observado, muestreo, asiento del diario, obligación), `allowed_transitions` e historia | A M D R |
 | `POST /api/v1/findings/{id}/transition` | Mover el hallazgo: `{"to", "note", "risk_expiry"}` | D · 2FA |
-| `POST /api/v1/findings/{id}/verify` | Reejecutar el reto para verificar la subsanación. Solo con el hallazgo en `pending_verification` | M |
+| `POST /api/v1/findings/{id}/verify` | Reejecutar el reto para verificar la subsanación. Solo con el hallazgo en `pending_verification`. Crea una campaña de reejecución que espera la aprobación `start` del DPO (§6.2) | M |
 
 Estados y transiciones que puede pedir una persona:
 
@@ -250,12 +251,15 @@ El front debe enseñar la vista previa completa y pedir una confirmación explí
 
 | Método y ruta | Para qué | Roles |
 |---|---|---|
+| `POST /api/v1/campaigns/{id}/synthetic/subjects` | Generar los sujetos de la campaña: `{"count": 1..5}` (por defecto 1). Una sola vez por campaña; `409` si ya los tiene o está `sealed` o `failed`. `201` con la lista de sujetos | M |
+| `GET /api/v1/campaigns/{id}/synthetic` | Estado: `subjects` y las inyecciones autorizadas (`id`, `subject_id`, `system_id`, `point`, `state`) | M D |
+| `GET /api/v1/campaigns/{id}/synthetic/subjects/{subject_id}/package` | Lo que recibe el cliente para inyectar un sujeto: `seed`, `values` (los datos que debe meter), `value_hashes`, sus `injections` con el procedimiento para deshacerlas y un `warning`. `404` si el sujeto no es de esa campaña | M D |
 | `POST /api/v1/campaigns/{id}/synthetic/authorize` | Autorizar un punto de inyección: `subject_id`, `system_id`, `point`, `method`, `revert_procedure` | D · 2FA |
 | `POST /api/v1/synthetic/{injection_id}/confirm-injection` | El cliente confirma que inyectó | M |
 | `POST /api/v1/synthetic/{injection_id}/confirm-exercise` | El cliente confirma que el sujeto ejerció un derecho: `requested_at`, `answered_at`, `right` | M |
 | `POST /api/v1/synthetic/{injection_id}/confirm-revert` | El cliente confirma que dejó la fuente como estaba | M |
 
-Quien autoriza no puede confirmar.
+Quien autoriza no puede confirmar. El paquete lleva los valores que el cliente inyecta, y el front no debe guardarlos ni reenviarlos fuera de la descarga que pide la persona.
 
 ### 5.9 Asistente
 
@@ -297,12 +301,24 @@ Cada `[n]` del texto remite a una fuente de la respuesta. Un rehúso se enseña 
 5. **Todos** `GET /campaigns/{id}/progress` cada pocos segundos mientras `status` sea `running`: `done` sobre `total`.
 6. **Todos** `GET /findings?campaign_id={id}` y `GET /findings/{id}`.
 7. **D** `transition` a `in_remediation` y, cuando se corrija, a `pending_verification` (2FA).
-8. **M** `POST /findings/{id}/verify` → la reejecución lo deja en `closed_compliant` o `reopened`.
-9. Cuando la campaña está `sealed`: evidencia (§5.6) y credencial (§5.7).
+8. **M** `POST /findings/{id}/verify` → crea una campaña de reejecución, que se para en `start` como cualquier otra.
+9. **D** `POST /campaigns/{id_de_la_reejecución}/gates/start/approve` (2FA). Sin esta aprobación, la reejecución se queda en `pinned` y el hallazgo en `pending_verification`: el front debe enseñarla como pendiente del DPO. La aprobación es obligatoria para que nadie pueda repetir sondas contra el cliente hasta cerrar un hallazgo (SEC-010).
+10. La reejecución corre solo las unidades no conformes, se sella y deja el hallazgo en `closed_compliant` o `reopened`.
+11. Cuando la campaña está `sealed`: evidencia (§5.6) y credencial (§5.7).
 
 Alternativa en el paso 7: **D** `transition` a `risk_accepted` con justificación y caducidad.
 
-### 6.3 Expediente y credencial (DPO)
+### 6.3 Sujeto sintético (ADR-0008)
+
+Una campaña puede medir derechos de los interesados con un sujeto inventado que el cliente mete en sus sistemas y luego retira.
+
+1. **M** `POST /campaigns/{id}/synthetic/subjects` con `count` (antes de que la campaña se selle).
+2. **D** `POST /campaigns/{id}/synthetic/authorize` por cada punto de inyección (2FA).
+3. **M** `GET /campaigns/{id}/synthetic/subjects/{subject_id}/package` y se entrega al cliente.
+4. **M** `confirm-injection`, `confirm-exercise` y `confirm-revert` a medida que el cliente lo hace. Las confirmaciones las hace una persona distinta de la que autorizó.
+5. **Todos** `GET /campaigns/{id}/synthetic` para ver el `state` de cada inyección.
+
+### 6.4 Expediente y credencial (DPO)
 
 1. `GET /evidence/{campaign_id}/chain` para comprobar la cadena.
 2. `GET /evidence/{campaign_id}/dossier.pdf` para descargar el expediente.
@@ -333,3 +349,4 @@ Lo que la consola de la Fase 08 ya resolvía y el front real también debe cumpl
 | 0.1.0 | 2026-09-29 | Primera versión, con la retirada de la consola de la API. Borrador hasta que la API admita otros orígenes |
 | 0.2.0 | 2026-09-29 | La API admite el front en otro dominio (C-03): orígenes permitidos, CORS, cookie `SameSite=None`, cabecera `X-Argos-Session` y qué hacer si el navegador bloquea la cookie |
 | 0.3.0 | 2026-10-05 | Direcciones del banco de pruebas, origen admitido y túnel mientras los puertos sigan cerrados (K-08) |
+| 0.4.0 | 2026-10-08 | Rutas nuevas del sujeto sintético (generar, estado y paquete) y su flujo; veredictos del primero al último; `409` al aprobar compuertas de campañas cerradas; la verificación de una subsanación espera al DPO; `aud` es una lista (QA-36, K-99) |
