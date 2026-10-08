@@ -86,7 +86,7 @@
                 },
                 {
                   "key": "password",
-                  "value": "{{password}}"
+                  "value": "{{login_password}}"
                 },
                 {
                   "key": "scope",
@@ -96,6 +96,16 @@
             }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// La contraseña de cada cuenta: password_manager (banco, en el entorno) o password (desarrollo). Solo en el ámbito de esta petición: no queda guardada en la colección.",
+                  "pm.variables.set('login_password', pm.variables.get('password_manager') || pm.variables.get('password'));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -161,7 +171,7 @@
                 },
                 {
                   "key": "password",
-                  "value": "{{password}}"
+                  "value": "{{login_password}}"
                 },
                 {
                   "key": "scope",
@@ -180,6 +190,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "// La contraseña de cada cuenta: password_dpo (banco, en el entorno) o password (desarrollo). Solo en el ámbito de esta petición: no queda guardada en la colección.",
+                  "pm.variables.set('login_password', pm.variables.get('password_dpo') || pm.variables.get('password'));",
                   "// K-99 · Keycloak shows the key of an authenticator in Base32; the development realm keeps it raw.",
                   "function argosBase32(text) {",
                   "  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';",
@@ -282,7 +294,7 @@
                 },
                 {
                   "key": "password",
-                  "value": "{{password}}"
+                  "value": "{{login_password}}"
                 },
                 {
                   "key": "scope",
@@ -301,6 +313,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
+                  "// La contraseña de cada cuenta: password_admin (banco, en el entorno) o password (desarrollo). Solo en el ámbito de esta petición: no queda guardada en la colección.",
+                  "pm.variables.set('login_password', pm.variables.get('password_admin') || pm.variables.get('password'));",
                   "// K-99 · Keycloak shows the key of an authenticator in Base32; the development realm keeps it raw.",
                   "function argosBase32(text) {",
                   "  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';",
@@ -403,7 +417,7 @@
                 },
                 {
                   "key": "password",
-                  "value": "{{password}}"
+                  "value": "{{login_password}}"
                 },
                 {
                   "key": "scope",
@@ -413,6 +427,16 @@
             }
           },
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// La contraseña de cada cuenta: password_auditor (banco, en el entorno) o password (desarrollo). Solo en el ámbito de esta petición: no queda guardada en la colección.",
+                  "pm.variables.set('login_password', pm.variables.get('password_auditor') || pm.variables.get('password'));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
