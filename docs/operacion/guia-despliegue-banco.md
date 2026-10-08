@@ -283,7 +283,7 @@ sudo k3s kubectl -n bench-sources get pods,jobs
 **Qué:** Traefik (el de k3s) con tres `Ingress` solo por HTTPS:
 - `api.<ip>.sslip.io`, hacia la API;
 - `id.<ip>.sslip.io`, hacia Keycloak, publicando solo `/realms/argos` y `/resources` y nunca el realm `master` ni la consola de administración;
-- `ns.<ip>.sslip.io`, hacia el comprobador, publicando solo `/norms/`: el catálogo normativo, donde se abren las IRI de las obligaciones (nota de desviación ARG-069). `/verify` no se publica.
+- `ns.<ip>.sslip.io`, hacia el comprobador, publicando solo `/norms/` y `/verify`: el catálogo normativo, donde se abren las IRI de las obligaciones, y la comprobación de expedientes, donde lleva su QR (nota de desviación ARG-069). `ARGOS_EVIDENCE_VERIFIER_URL` de la API y del servicio de evidencia vale `https://ns.<ip>.sslip.io/verify`: es lo que va en el QR, así que tiene que ser la dirección pública del entorno.
 
 **El día que tengamos el dominio `ns.argos.eu`:** se apunta su DNS a la IP de la VM y se añade ese nombre al `Ingress` `norms` de `platform/k8s/base/services/edge.yaml` (en `tls.hosts` y como otra regla con la misma ruta). cert-manager pide su certificado como con los demás. Desde ese momento las IRI que ya llevan los hallazgos y la evidencia firmada se abren tal cual; no hay que cambiar nada más.
 

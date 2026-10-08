@@ -9,6 +9,7 @@ They also carry over what the campaign API of Phase 05 proved with real tokens o
 import os
 from typing import Any, cast
 
+import psycopg
 import pytest
 from fastapi.testclient import TestClient
 
@@ -310,6 +311,11 @@ def test_with_real_tokens_the_journal_says_who_approved(migrated_db: str, runner
     grants = [e for e in PostgresJournal(migrated_db).read(1) if e.action == "approval.grant"]
     assert grants and grants[-1].actor.startswith("user:")
     assert campaign_id in grants[-1].payload_canon
+    with psycopg.connect(migrated_db) as conn:
+        row = conn.execute(
+            "SELECT approver_name FROM argos.approvals WHERE campaign_id = %s", (campaign_id,)
+        ).fetchone()
+    assert row == ("DPO Synthetic",), "the full name of the account, as the realm has it"
 
 
 def test_the_tray_says_who_has_approved_so_far(api: TestClient, migrated_db: str) -> None:

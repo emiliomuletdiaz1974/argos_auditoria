@@ -32,6 +32,8 @@ class Identity:
     amr: frozenset[str] = field(default_factory=frozenset)
     # The session of the realm the token belongs to (`sid`), so a closed one is refused (F09-32).
     sid: str | None = None
+    # The full name of the account (claim `name`), for what people read: a printed dossier.
+    full_name: str = ""
 
     @property
     def actor(self) -> str:
@@ -98,7 +100,12 @@ class JwtValidator:
         amr = frozenset(str(m) for m in methods) if isinstance(methods, list) else frozenset()
         sid = str(claims["sid"]) if claims.get("sid") else None
         return Identity(
-            str(claims["sub"]), str(claims.get("preferred_username", "")), roles, amr, sid
+            str(claims["sub"]),
+            str(claims.get("preferred_username", "")),
+            roles,
+            amr,
+            sid,
+            str(claims.get("name", "")),
         )
 
 

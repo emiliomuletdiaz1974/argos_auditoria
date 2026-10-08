@@ -95,11 +95,18 @@ def _results(conn: psycopg.Connection[Any], campaign_id: str) -> tuple[dict[str,
 
 def _approvals(conn: psycopg.Connection[Any], campaign_id: str) -> list[dict[str, Any]]:
     rows = conn.execute(
-        "SELECT gate, approved_by, approved_at FROM argos.approvals WHERE campaign_id = %s"
+        "SELECT gate, approved_by, approved_at, approver_name FROM argos.approvals"
+        " WHERE campaign_id = %s"
         " ORDER BY approved_at, gate, approved_by",
         (campaign_id,),
     ).fetchall()
-    return [{"gate": g, "approved_by": b, "approved_at": _instant(a)} for g, b, a in rows]
+    # The name is only there when it was recorded: a dossier assembled again from approvals made
+    # before it existed stays the same, byte for byte.
+    return [
+        {"gate": g, "approved_by": b, "approved_at": _instant(a)}
+        | ({"approver_name": n} if n else {})
+        for g, b, a, n in rows
+    ]
 
 
 def _findings(conn: psycopg.Connection[Any], campaign_id: str) -> list[dict[str, Any]]:

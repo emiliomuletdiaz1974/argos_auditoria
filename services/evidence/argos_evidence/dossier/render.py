@@ -10,6 +10,7 @@ before reading a single field.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 from io import BytesIO
 from typing import Any
@@ -40,6 +41,7 @@ FINDING_LABELS = (
     ("recommendation", "Recomendación"),
 )
 CAMPAIGN_STATUS = {"sealed": "Sellada"}
+GATE_LABELS = {"start": "Inicio de la campaña", "sampling": "Muestreo (doble control)"}
 SEVERITY_LABELS = {"critical": "Crítica", "high": "Alta", "medium": "Media", "low": "Baja"}
 FINDING_STATUS = {
     "open": "Abierto",
@@ -61,6 +63,34 @@ _MARK = ParagraphStyle("mark", parent=_SMALL, textColor=colors.HexColor("#8a5a00
 
 def qr_payload(verifier_url: str, dossier_sha256: str) -> str:
     return f"{verifier_url}?dossier={dossier_sha256}"
+
+
+# The PDF is read by a person and printed: what the JSON keeps for machines (the IRI of an
+# obligation, the account id of whoever approved, an instant to the microsecond) is shown the way
+# a person reads it. The JSON is still what is verified, untouched.
+NORMS = "https://ns.argos.eu/norms/"
+
+
+def _obligation(value: object) -> str:
+    return str(value).removeprefix(NORMS)
+
+
+def _instant(value: object) -> str:
+    if not value:
+        return "-"
+    try:
+        moment = dt.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return str(value)
+    return moment.astimezone(dt.UTC).strftime("%d/%m/%Y %H:%M:%S UTC")
+
+
+def _approver(approval: dict[str, Any]) -> str:
+    """The name the person had when approving; a short id for approvals recorded without one."""
+    if approval.get("approver_name"):
+        return str(approval["approver_name"])
+    kind, _, account = str(approval["approved_by"]).partition(":")
+    return f"cuenta {account[:8]}…" if account else kind
 
 
 def _p(text: object, style: ParagraphStyle = _BODY) -> Paragraph:
@@ -102,7 +132,7 @@ def _cover(dossier: dict[str, Any], digest: str, verifier_url: str) -> list[Any]
                 ["Campo", "Valor"],
                 ["Campaña", campaign["id"]],
                 ["Estado", CAMPAIGN_STATUS.get(campaign["status"], campaign["status"])],
-                ["Sellada", campaign.get("sealed_at") or "-"],
+                ["Sellada", _instant(campaign.get("sealed_at"))],
                 ["Sello de campaña", campaign.get("seal") or "-"],
                 ["Biblioteca de retos", campaign.get("library_version") or "-"],
                 ["Ontología", campaign.get("ontology_version") or "-"],
@@ -128,7 +158,7 @@ def _results(dossier: dict[str, Any]) -> list[Any]:
     rows.append(["Total", results["units"]])
     by_obligation: list[list[object]] = [["Obligación", *RESULT_LABELS.values()]]
     by_obligation += [
-        [row["obligation"], *(row[k] for k in RESULT_LABELS)]
+        [_obligation(row["obligation"]), *(row[k] for k in RESULT_LABELS)]
         for row in dossier["results_by_obligation"]
     ]
     return [
@@ -145,7 +175,10 @@ def _approvals_and_findings(dossier: dict[str, Any]) -> list[Any]:
     parts.append(
         _table(
             [["Punto de control", "Aprobado por", "Momento"]]
-            + [[a["gate"], a["approved_by"], a["approved_at"]] for a in approvals]
+            + [
+                [GATE_LABELS.get(a["gate"], a["gate"]), _approver(a), _instant(a["approved_at"])]
+                for a in approvals
+            ]
         )
         if approvals
         else _p("Sin aprobaciones registradas.", _SMALL)
@@ -158,7 +191,7 @@ def _approvals_and_findings(dossier: dict[str, Any]) -> list[Any]:
             + [
                 [
                     f["challenge_id"],
-                    f["obligation"],
+                    _obligation(f["obligation"]),
                     SEVERITY_LABELS.get(f["severity"], f["severity"]),
                     FINDING_STATUS.get(f["status"], f["status"]),
                     f["occurrences"],
@@ -200,7 +233,7 @@ def _chain(dossier: dict[str, Any]) -> list[Any]:
     if stamp is None:
         stamp_text = "Sin sellar"
     elif stamp["status"] == "stamped":
-        stamp_text = f"Sellado el {stamp['gen_time']} (política {stamp['policy']})"
+        stamp_text = f"Sellado el {_instant(stamp['gen_time'])} (política {stamp['policy']})"
     else:
         stamp_text = "Firmado, sello en cola"
     if signature is None:

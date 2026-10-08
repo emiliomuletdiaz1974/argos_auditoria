@@ -5,7 +5,8 @@ of Keycloak at id.34-134-21-66.sslip.io, each with a certificate of Let's Encryp
 From Keycloak only what a browser needs (`/realms/argos`, `/resources`): its administration and the
 master realm stay inside.
 The third name, ns.34-134-21-66.sslip.io, stands for ns.argos.eu until that domain is ours: it
-serves only `/norms/`, so the IRIs of the obligations open (public verifier).
+serves `/norms/`, so the IRIs of the obligations open, and `/verify`, where the QR of a dossier
+points (public verifier).
 Nothing else of the cluster has a way in: no other Ingress, no LoadBalancer, no NodePort.
 """
 
@@ -103,11 +104,22 @@ def test_from_keycloak_only_what_a_browser_signs_in_with() -> None:
     assert sorted(paths) == ["/realms/argos", "/resources"], "nor the administration nor master"
 
 
-def test_from_the_verifier_only_the_norms_namespace() -> None:
-    """The IRIs of the obligations open; checking a bundle (`/verify`) is not published by this."""
+def test_from_the_verifier_the_norms_namespace_and_the_check() -> None:
+    """The IRIs of the obligations open, and so does the QR of a dossier; nothing else of it."""
     ingress = _named("Ingress", "norms", "argos-services")
     paths = _check_ingress(ingress, NORMS_HOST, "verifier", 8007)
-    assert paths == ["/norms/"]
+    assert sorted(paths) == ["/norms/", "/verify"]
+
+
+def test_the_dossiers_point_their_qr_to_the_public_verifier_of_the_bench() -> None:
+    """An address inside the cluster in a printed QR opens nowhere (seen on 2026-10-08)."""
+    for kind, name in (
+        ("Deployment", "evidence-worker"),
+        ("Deployment", "evidence-api"),
+        ("Deployment", "api"),
+    ):
+        env = _env(kind, name, "argos-services")
+        assert env["ARGOS_EVIDENCE_VERIFIER_URL"] == f"https://{NORMS_HOST}/verify", name
 
 
 def test_keycloak_names_itself_by_the_public_name_and_answers_inside_too() -> None:

@@ -4,9 +4,9 @@ kind: module
 title: Validación de identidades (argos-auth)
 module: argos-auth
 phases: ["01"]
-version: 0.6.0-alpha
-commit: 38002bb
-date: 2026-10-05
+version: 0.7.0-alpha
+commit: 7cea717
+date: 2026-10-08
 status: current
 confidentiality: client
 ---
@@ -37,7 +37,7 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 |---|---|---|
 | Clase | `JwtValidator(issuer, audience, keys=None)` | Validador con proveedor de claves inyectable |
 | Método o función | `validate(token, required_role=None) -> Identity` | Devuelve la identidad o lanza `AuthError` |
-| Clase | `Identity(sub, name, roles, amr)` | Identidad verificada; `actor` para el diario; `has_second_factor` si `amr` trae `otp` (F09-07) |
+| Clase | `Identity(sub, name, roles, amr, sid, full_name)` | Identidad verificada; `actor` para el diario; `has_second_factor` si `amr` trae `otp` (F09-07) |
 | Constante | `ROLES` | `platform_admin`, `campaign_manager`, `dpo_reviewer`, `read_only_auditor` |
 | Realm | `argos` en Keycloak | Clientes `argos-console` y `argos-api` |
 
@@ -48,6 +48,7 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 ## 6. Seguridad y tratamiento de datos
 
 - **Tokens en sus bordes (QA-009):** 30 s de margen de reloj (`LEEWAY_SECONDS`); `realm_access` o `roles` con otra forma dan un conjunto de roles vacío, no un 500 ni los caracteres de una cadena.
+- **Nombre completo** (2026-10-08): `Identity.full_name` es el claim `name` del token (ámbito `profile`), vacío si la cuenta no lo tiene. Solo sirve para lo que lee una persona, como el expediente impreso; quién es la persona lo dice siempre `sub` (`actor`).
 - **Sesión del token** (F09-32): `Identity.sid` es la sesión del realm a la que pertenece el token (claim `sid`). La API la usa para rechazar los tokens de una sesión cerrada antes de que caduquen.
 - **Segundo factor** (F09-07, DP-14):
   - `platform_admin` y `dpo_reviewer` heredan el rol `mfa_required`, y el flujo de navegador del realm (`argos browser`) les pide TOTP después de la contraseña. Si aún no lo tienen, se lo hace configurar.
@@ -86,3 +87,4 @@ Dependencias: `argos-common` (configuración) y PyJWT con soporte criptográfico
 | 0.4.0-alpha | 2026-09-28 | Margen de reloj y roles del realm con forma inesperada | QA-34 (QA-009) |
 | 0.5.0-alpha | 2026-09-30 | El realm conserva `amr` en los tokens renovados y en la SSO (`default.reference.maxAge`) | F09-07 (ARG-072) |
 | 0.6.0-alpha | 2026-10-05 | `JwtValidator(realm_url=)`: claves del realm por su dirección interna, con el emisor público | K-08 |
+| 0.7.0-alpha | 2026-10-08 | `Identity.full_name` desde el claim `name`, para el expediente impreso | petición directa |

@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.46.0-alpha
-commit: 3322940
+version: 0.47.0-alpha
+commit: 7cea717
 date: 2026-10-08
 status: current
 confidentiality: client
@@ -225,3 +225,4 @@ La imagen (`services/api/Dockerfile`) solo lleva la API: desde el 2026-09-29 no 
 | 0.44.0-alpha | 2026-09-29 | Front en otro dominio: `frontend_origins`, CORS con credenciales, cookie `SameSite=None` y cabecera `X-Argos-Session` en `/auth/*` (contrato v1: resúmenes de la sesión) | C-03 (DP-19) |
 | 0.45.0-alpha | 2026-10-07 | Rutas de sujeto sintético (`POST /campaigns/{id}/synthetic/subjects`, `GET /campaigns/{id}/synthetic`, `GET …/subjects/{subject_id}/package`) con los permisos `synthetic.generate` y `synthetic.read`; el listado de veredictos pagina sin repetir ni perder elementos | QA-36 |
 | 0.46.0-alpha | 2026-10-08 | El detalle de un hallazgo resuelve la obligación también por su IRI, que es lo que guardan los hallazgos (antes devolvía norma, artículo, título y resumen vacíos), y la devuelve con `id` corto e `iri`; la IRI se abre en el catálogo normativo del comprobador | petición directa (nota ARG-069) |
+| 0.47.0-alpha | 2026-10-08 | Al aprobar una compuerta se guarda el nombre y apellidos de la persona (claim `name`, o su usuario si la cuenta no lo tiene) para el expediente impreso | petición directa |

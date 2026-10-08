@@ -71,9 +71,10 @@ spec:
           port: 8089
 ---
 # The IRIs of the obligations (https://ns.argos.eu/norms/…) open: the public verifier answers
-# `/norms/` with a page, Turtle or JSON-LD. This name stands for ns.argos.eu until that domain is
-# ours; then that name is added here with its certificate, and nothing else changes. Only `/norms/`
-# is published: checking a bundle (`/verify`) is not.
+# `/norms/` with a page, Turtle or JSON-LD. And the QR of a printed dossier opens too: `/verify`
+# answers its GET with the dossier it names and how to check it, and takes the POST of a bundle.
+# This name stands for ns.argos.eu until that domain is ours; then that name is added here with its
+# certificate, and nothing else changes.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -92,6 +93,13 @@ spec:
       http:
         paths:
           - path: /norms/
+            pathType: Prefix
+            backend:
+              service:
+                name: verifier
+                port:
+                  number: 8007
+          - path: /verify
             pathType: Prefix
             backend:
               service:

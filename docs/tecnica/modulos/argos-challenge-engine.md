@@ -4,9 +4,9 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.14.0-alpha
-commit: 64e911e
-date: 2026-10-07
+version: 0.15.0-alpha
+commit: 7cea717
+date: 2026-10-08
 status: current
 confidentiality: client
 ---
@@ -254,6 +254,7 @@ Dependencias: `argos-common`, `argos-ontology`, el SDK de Temporal, `jsonschema`
   - **Entrada de OPA:** el `input_map` no puede declarar la evidencia (`EVIDENCE_INPUT_KEYS`) y sus referencias se resuelven. El veredicto OPA guarda el SHA-256 de lo que vio OPA. Un fallo de OPA se reintenta.
   - **Sello v2 (`argos/seal/2`):** cubre también el plan y las aprobaciones, solo se sella una campaña en curso y es válido solo si es el único anclaje. Los disparadores de `0031_campaign_integrity.sql` impiden cambiar el sello o añadir veredictos a una campaña sellada.
   - **Subsanación:** `RemediationRun` exige quién la pide y pasa por las compuertas de su campaña de subsanación, que consulta cada `GATE_POLL`.
+- **Nombre de quien aprueba** (2026-10-08): `grant_approval(..., approver_name=)` guarda en `argos.approvals.approver_name` (migración `0052`) el nombre que traía el token, para el expediente impreso. Ninguna regla lo usa: el sello, la separación de deberes y el doble control siguen con `approved_by`.
 - **Separación de deberes por persona** (F09-24; SEC-008 y SEC-042): `grant_approval` rechaza que apruebe quien creó la campaña (en una subsanación, quien la pidió), y las confirmaciones del sujeto sintético rechazan a quien autorizó el punto. Aceptar un riesgo exige una fecha futura a 365 días como mucho (`RISK_ACCEPTANCE_MAX_DAYS`).
 - **Sujeto sintético medido de verdad** (F09-27; SEC-014 y SEC-015):
   - El plazo de un derecho se mide con las fechas que declara el cliente (`requested_at`, `answered_at`): no futuras y en orden. Van en `argos.synthetic_exercises`, una fila por derecho, que no se puede cambiar ni borrar. El disparador de `synthetic_injections` protege ahora también cada fecha y el derecho.
@@ -410,3 +411,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.13.1-alpha | 2026-09-28 | Una campaña sin unidades termina fallida | QA-29 (QA-050) |
 | 0.13.2-alpha | 2026-09-28 | Listado de hallazgos sin ocurrencias en la clave del cursor | QA-31 (QA-064) |
 | 0.14.0-alpha | 2026-10-07 | La campaña de subsanación se anota como `system:remediation` con el solicitante en el asiento; las compuertas no admiten aprobaciones en una campaña sellada o fallida; el worker hace caducar cada hora las aceptaciones de riesgo; sujetos sintéticos generados por campaña y su estado y paquete legibles | QA-36 |
+| 0.15.0-alpha | 2026-10-08 | `grant_approval(approver_name=)` y columna `argos.approvals.approver_name` (migración 0052) | petición directa |

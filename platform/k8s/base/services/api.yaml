@@ -88,7 +88,7 @@ spec:
             - name: ARGOS_EVIDENCE_CREDENTIAL_BASE_URL
               value: http://evidence-api.argos-services.svc:8008/credentials
             - name: ARGOS_EVIDENCE_VERIFIER_URL
-              value: http://verifier.argos-services.svc:8007/verify
+              value: https://ns.34-134-21-66.sslip.io/verify
             - name: ARGOS_EVIDENCE_RETENTION_DAYS
               value: "30"
             - name: ARGOS_EVIDENCE_S3_ENDPOINT

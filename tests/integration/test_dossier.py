@@ -90,7 +90,7 @@ def _campaign(dsn: str, store: WormStore) -> str:
                 "d" * 64,
             ),
         )
-    running(dsn, campaign_id)
+    running(dsn, campaign_id, approver_name="DPO Synthetic")
     seal_campaign(dsn, campaign_id)
     record_root(dsn, campaign_id, tree_for(verdicts), f"campaigns/{campaign_id}/tree.json")
     signer = VaultTransitSigner(VAULT, "root", key="argos-evidence")
@@ -114,6 +114,8 @@ def test_the_dossier_is_assembled_from_the_campaign_records(migrated_db: str) ->
     assert dossier["results"]["units"] == 2
     assert dossier["results"]["by_result"]["non_compliant"] == 1
     assert [f["challenge_id"] for f in dossier["findings"]] == ["sec-tls-ko"]
+    [approval] = dossier["approvals"]
+    assert (approval["approved_by"], approval["approver_name"]) == ("user:dpo", "DPO Synthetic")
     assert dossier["texts"][0]["generated"] is True
     chain = dossier["evidence_chain"]
     assert len(chain["artifacts"]) == 2

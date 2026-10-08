@@ -19,12 +19,14 @@ from argos_challenges.store import (
 APPROVER = "user:dpo"
 
 
-def running(dsn: str, campaign_id: str, units: Sequence[Mapping[str, Any]] = ()) -> None:
+def running(
+    dsn: str, campaign_id: str, units: Sequence[Mapping[str, Any]] = (), approver_name: str = ""
+) -> None:
     """Plan `units`, approve the start and move the campaign to running."""
     if units:
         save_units(dsn, campaign_id, list(units))
     request_approval(dsn, campaign_id, "start", {"units": len(units)})
-    grant_approval(dsn, campaign_id, "start", APPROVER, 1)
+    grant_approval(dsn, campaign_id, "start", APPROVER, 1, approver_name=approver_name)
     status = campaign_record(dsn, campaign_id)["status"]
     if status == "planned":
         set_status(dsn, campaign_id, "pinned")

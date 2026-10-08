@@ -230,9 +230,19 @@ def request_approval(dsn: str, campaign_id: str, gate: str, payload: Mapping[str
 
 
 def grant_approval(
-    dsn: str, campaign_id: str, gate: str, approver: str, needed: int = DEFAULT_APPROVALS
+    dsn: str,
+    campaign_id: str,
+    gate: str,
+    approver: str,
+    needed: int = DEFAULT_APPROVALS,
+    *,
+    approver_name: str = "",
 ) -> tuple[int, bool]:
-    """Record one approval. Returns how many there are and whether the gate opens."""
+    """Record one approval. Returns how many there are and whether the gate opens.
+
+    `approver_name` is only what a person reads of whoever approved (the printed dossier); who
+    approved, for every rule, is `approver`.
+    """
     if not approver.startswith("user:"):
         raise CampaignStateError("a gate is approved by a person: user:<sub>")
     journal = PostgresJournal(dsn)
@@ -261,8 +271,9 @@ def grant_approval(
         if already is not None:
             raise CampaignStateError(f"the gate {gate} was already approved by {approver}")
         conn.execute(
-            "INSERT INTO argos.approvals (campaign_id, gate, approved_by) VALUES (%s, %s, %s)",
-            (campaign_id, gate, approver),
+            "INSERT INTO argos.approvals (campaign_id, gate, approved_by, approver_name)"
+            " VALUES (%s, %s, %s, %s)",
+            (campaign_id, gate, approver, approver_name or None),
         )
         count = conn.execute(
             "SELECT count(*) FROM argos.approvals WHERE campaign_id = %s AND gate = %s",

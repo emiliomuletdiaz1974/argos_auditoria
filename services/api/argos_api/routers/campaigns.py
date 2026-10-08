@@ -7,6 +7,7 @@ reviewer reads the literal plan and approves the gates, two different people for
 
 import asyncio
 import json
+from functools import partial
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -209,9 +210,15 @@ async def approve(
     request: Request, campaign_id: UUID, gate: GateName, body: GateApproval
 ) -> dict[str, Any]:
     needed = approvals_needed(gate)
+    person = caller(request)
     try:
         granted, enough = await asyncio.to_thread(
-            grant_approval, database(request), str(campaign_id), gate, caller(request).actor, needed
+            partial(grant_approval, approver_name=person.full_name or person.name),
+            database(request),
+            str(campaign_id),
+            gate,
+            person.actor,
+            needed,
         )
     except CampaignStateError as refused:
         raise HTTPException(status.HTTP_409_CONFLICT, str(refused)) from None

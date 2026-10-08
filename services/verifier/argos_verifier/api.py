@@ -41,6 +41,18 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/verify")
+def verify_page(dossier: str | None = None) -> Response:
+    """Where the QR of a printed dossier lands: which dossier it names and how to check it."""
+    if dossier is not None and not norms.DIGEST.match(dossier):
+        page = norms.verify_page(None).replace(
+            "<h1>Comprobar un expediente</h1>",
+            "<h1>Comprobar un expediente</h1><p class=notice>El código no es un SHA-256.</p>",
+        )
+        return Response(page, status_code=400, media_type="text/html", headers=PAGE_HEADERS)
+    return Response(norms.verify_page(dossier), media_type="text/html", headers=PAGE_HEADERS)
+
+
 @app.post("/verify")
 async def verify(request: Request) -> JSONResponse:
     declared = request.headers.get("content-length")

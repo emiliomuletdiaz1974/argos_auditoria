@@ -185,3 +185,64 @@ def test_a_development_signature_is_shown_as_such() -> None:
     content = "".join(_text(render_pdf(_dossier(), URL)))
     assert "no producción" in content
     assert "sello en cola" in content.lower()
+
+
+# ---------- read by a person and printed: no IRIs, no account ids, no raw instants ----------
+
+SUB = "473f7bd3-2730-4d40-9e2f-9e70e3e57b92"
+
+
+def _readable(approvals: list[dict[str, Any]]) -> str:
+    dossier = json.loads(_dossier())
+    dossier.pop("sha256", None)
+    iri = "https://ns.argos.eu/norms/OBL-RGPD-32-3"
+    dossier["results_by_obligation"][0]["obligation"] = iri
+    dossier["findings"][0]["obligation"] = iri
+    dossier["approvals"] = approvals
+    pdf = render_pdf(seal_document(dossier), URL)
+    return "".join(_text(pdf)).replace("\n", " ")
+
+
+def test_an_obligation_is_printed_by_its_id_not_by_its_iri() -> None:
+    content = _readable([])
+    assert "OBL-RGPD-32-3" in content
+    assert "ns.argos.eu/norms" not in content
+
+
+def test_whoever_approved_is_printed_by_name() -> None:
+    content = _readable(
+        [
+            {
+                "gate": "start",
+                "approved_by": f"user:{SUB}",
+                "approver_name": "DPO Synthetic",
+                "approved_at": "2026-10-08T03:14:51.485903Z",
+            }
+        ]
+    )
+    assert "DPO Synthetic" in content
+    assert SUB not in content, "the account id is not for a person to read"
+    assert "Inicio de la campaña" in content, "the gate by what it is, not by its code"
+
+
+def test_an_approval_without_a_name_shows_a_short_id() -> None:
+    content = _readable(
+        [{"gate": "start", "approved_by": f"user:{SUB}", "approved_at": "2026-10-08T03:14:51Z"}]
+    )
+    assert "473f7bd3" in content and SUB not in content
+
+
+def test_instants_are_printed_as_a_person_reads_them() -> None:
+    content = _readable(
+        [
+            {
+                "gate": "start",
+                "approved_by": f"user:{SUB}",
+                "approver_name": "DPO Synthetic",
+                "approved_at": "2026-10-08T03:14:51.485903Z",
+            }
+        ]
+    )
+    assert "08/10/2026 03:14:51 UTC" in content
+    assert "18/09/2026 10:00:00 UTC" in content, "the sealing instant of the cover too"
+    assert "2026-10-08T03:14:51" not in content and ".485903" not in content

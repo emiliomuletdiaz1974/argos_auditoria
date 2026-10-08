@@ -437,3 +437,45 @@ def pdf() -> bytes:
         out, pagesize=A4, title=TITLE, author="ARGOS", leftMargin=20 * mm, rightMargin=20 * mm
     ).build(story)
     return out.getvalue()
+
+
+# ---------- the page the QR of a printed dossier opens ----------
+
+DIGEST = re.compile(r"^[0-9a-f]{64}$")
+
+
+def verify_page(digest: str | None) -> str:
+    """What `/verify?dossier=<SHA-256>` shows: which dossier that is and how to check it."""
+    named = (
+        f"<p>Este código identifica el expediente cuyo JSON tiene este SHA-256:</p>"
+        f"<p><code>{escape(digest)}</code></p>"
+        if digest
+        else ""
+    )
+    content = (
+        '<p class="kind">Comprobador público de ARGOS</p><h1>Comprobar un expediente</h1>'
+        f"{named}"
+        '<p class="lead">Un expediente de campaña se comprueba con su <strong>paquete de '
+        "verificación</strong> (<code>argos/verification-bundle/1</code>): el expediente en JSON, "
+        "la raíz firmada, el sello de tiempo, los artefactos, la credencial y las pruebas de "
+        "inclusión. Pídeselo a quien te entregó el expediente.</p>"
+        "<h2>Cómo comprobarlo</h2><table><tbody>"
+        "<tr><th scope=row>En este servicio</th><td>Envía el paquete en JSON con "
+        "<code>POST</code> a esta misma dirección. La respuesta dice, comprobación a comprobación,"
+        " si pasó, si falló y por qué.</td></tr>"
+        "<tr><th scope=row>Sin red</th><td><code>python tools/verify_evidence.py "
+        "paquete.json</code> hace la misma comprobación en tu equipo.</td></tr>"
+        "<tr><th scope=row>Qué se mira</th><td>Que el SHA-256 del expediente coincide con el de "
+        "este código, que la raíz está firmada por el emisor, que el sello de tiempo la cubre, que "
+        "la credencial respalda este expediente y no está revocada, y que cada artefacto es una "
+        "hoja del árbol de la campaña.</td></tr></tbody></table>"
+        "<h2>Obligaciones</h2><p>Las obligaciones que cita el expediente se consultan en el "
+        '<a href="/norms/">catálogo normativo</a>.</p>'
+    )
+    return (
+        '<!doctype html><html lang="es"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f"<title>Comprobar un expediente · ARGOS</title><style>{STYLE}</style></head><body>"
+        '<header><a class="brand" href="/norms/">ARGOS<small>comprobador público</small></a>'
+        f'</header><main style="max-width:52rem;margin:0 auto">{content}</main></body></html>'
+    )

@@ -26,4 +26,6 @@ def test_the_container_gives_the_report_of_the_library(migrated_db: str) -> None
 
 def test_the_container_has_no_other_door() -> None:
     assert httpx.get(f"{VERIFIER}/docs", timeout=5).status_code == 404
-    assert httpx.get(f"{VERIFIER}/verify", timeout=5).status_code == 405
+    # The GET of /verify is the page the QR of a printed dossier opens (2026-10-08).
+    assert httpx.get(f"{VERIFIER}/verify", timeout=5).status_code == 200
+    assert httpx.delete(f"{VERIFIER}/verify", timeout=5).status_code == 405

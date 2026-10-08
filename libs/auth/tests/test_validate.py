@@ -51,6 +51,12 @@ def test_valid_token_with_role(validator: JwtValidator) -> None:
     assert identity.actor == "user:u-123"
 
 
+def test_the_full_name_of_the_person_comes_from_the_token(validator: JwtValidator) -> None:
+    """What a printed dossier shows of whoever approved (claim `name` of the profile scope)."""
+    assert validator.validate(_token(name="DPO Synthetic")).full_name == "DPO Synthetic"
+    assert validator.validate(_token()).full_name == "", "an account without a name has none"
+
+
 def test_missing_role(validator: JwtValidator) -> None:
     with pytest.raises(AuthError, match="platform_admin"):
         validator.validate(_token(), required_role="platform_admin")

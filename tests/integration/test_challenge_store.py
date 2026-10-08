@@ -147,6 +147,18 @@ def test_a_gate_needs_its_request_and_counts_different_people(migrated_db: str) 
     assert actions.count("approval.request") == 2 and actions.count("approval.grant") == 3
 
 
+def test_an_approval_keeps_the_name_the_person_had(migrated_db: str) -> None:
+    """The printed dossier says who approved by name, not by account id."""
+    campaign_id = _pinned(migrated_db)
+    request_approval(migrated_db, campaign_id, "start", {})
+    grant_approval(migrated_db, campaign_id, "start", DPO, approver_name="DPO Synthetic")
+    with psycopg.connect(migrated_db) as conn:
+        row = conn.execute(
+            "SELECT approver_name FROM argos.approvals WHERE campaign_id = %s", (campaign_id,)
+        ).fetchone()
+    assert row == ("DPO Synthetic",)
+
+
 def test_requesting_the_same_gate_twice_keeps_the_first_request(migrated_db: str) -> None:
     campaign_id = _pinned(migrated_db)
     request_approval(migrated_db, campaign_id, "start", {"units": 1})
