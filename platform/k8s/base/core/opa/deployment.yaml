@@ -72,7 +72,7 @@ spec:
             - --ignore=*_test.rego
             - /policies
             - /data
-            - /authz
+            - /auth
             - /clients
           ports:
             - name: http

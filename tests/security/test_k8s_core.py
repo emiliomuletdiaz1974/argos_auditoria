@@ -322,6 +322,18 @@ def test_the_image_of_opa_carries_the_policies_of_the_library() -> None:
     assert "clients.json" not in dockerfile, "the hashes of the development tokens stay out"
 
 
+def test_the_access_rule_of_opa_lives_where_the_engine_leaves_it_out() -> None:
+    """K-99: the engine compares what OPA runs with the signed bundle, the `auth` mount aside.
+
+    Under any other folder the access rule counted as one more policy, and every campaign failed
+    to prepare with "OPA is not running the signed bundle".
+    """
+    dockerfile = (K8S / "images" / "opa" / "Dockerfile").read_text("utf-8")
+    assert "deploy/dev/opa-auth/authz.rego /auth/authz.rego" in dockerfile
+    [container] = _pod(_named("Deployment", "opa"))["containers"]
+    assert "/auth" in container["args"] and "/authz" not in container["args"]
+
+
 def test_only_the_services_of_argos_reach_opa() -> None:
     [rule] = _named("NetworkPolicy", "opa")["spec"]["ingress"]
     assert rule["ports"] == [{"protocol": "TCP", "port": 8181}]

@@ -5,4 +5,5 @@
 FROM openpolicyagent/opa:1.20.2@sha256:7b15f9d96345dfa639322ad97f65a0b38260f95efcdd7f5c24e284228708f06c
 COPY library/policies /policies
 COPY deploy/dev/opa/client /data
-COPY deploy/dev/opa-auth/authz.rego /authz/authz.rego
+# Under /auth, as in development: the engine leaves that mount out of the comparison (K-99).
+COPY deploy/dev/opa-auth/authz.rego /auth/authz.rego
