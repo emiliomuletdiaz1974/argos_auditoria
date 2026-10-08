@@ -685,6 +685,8 @@ source = { editable = "services/verifier" }
 dependencies = [
     { name = "argos-evidence" },
     { name = "fastapi" },
+    { name = "rdflib" },
+    { name = "reportlab" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -692,6 +694,8 @@ dependencies = [
 requires-dist = [
     { name = "argos-evidence", editable = "services/evidence" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "rdflib", specifier = ">=7.6,<8" },
+    { name = "reportlab", specifier = ">=5,<6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 

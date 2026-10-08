@@ -30,6 +30,7 @@ from argos_challenges.findings import (
     transition,
 )
 from argos_ontology.editorial.compiler import read_obligation
+from argos_ontology.vocabulary import NORMS
 
 router = APIRouter(prefix="/findings", tags=["findings"], route_class=CoreRoute)
 RISK_ACCEPTED = "risk_accepted"
@@ -105,7 +106,8 @@ def finding(request: Request, finding_id: UUID) -> dict[str, Any]:
     found = _found(database(request), finding_id)
     spec = read_obligation(str(found["obligation"]))
     found["obligation"] = {
-        "id": found["obligation"],
+        "id": spec.id if spec else found["obligation"],
+        "iri": f"{NORMS}{spec.id}" if spec else found["obligation"],
         "norm": spec.norm if spec else None,
         "article": spec.article if spec else None,
         "title": spec.title if spec else None,

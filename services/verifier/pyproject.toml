@@ -6,6 +6,8 @@ requires-python = ">=3.12"
 dependencies = [
     "argos-evidence",
     "fastapi>=0.115",
+    "rdflib>=7.6,<8",
+    "reportlab>=5,<6",
     "uvicorn[standard]>=0.32",
 ]
 

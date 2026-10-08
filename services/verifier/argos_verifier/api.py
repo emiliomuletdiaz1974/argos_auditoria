@@ -15,12 +15,21 @@ import logging
 import os
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
+from argos_verifier import norms
 from argos_verifier.checks import Trust, verify_bundle
 
 MAX_BUNDLE_BYTES = 16 * 1024 * 1024
 log = logging.getLogger("argos_verifier")
+PAGE_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"
+    ),
+    "X-Content-Type-Options": "nosniff",
+    "Referrer-Policy": "no-referrer",
+    "Vary": "Accept",
+}
 
 # The verifier is public, but its route map is not a service: nothing is served but the routes
 # (F09-15, SEC-059), as the evidence service and the API outside development.
@@ -52,3 +61,43 @@ async def verify(request: Request) -> JSONResponse:
     report = verify_bundle(bundle, Trust.from_file(os.environ.get("ARGOS_VERIFIER_TRUST_FILE")))
     log.info("bundle %s verified: ok=%s", hashlib.sha256(body).hexdigest(), report.ok)
     return JSONResponse(report.as_dict())
+
+
+@app.get("/norms/")
+def norms_front_page() -> Response:
+    return Response(norms.front_page(), media_type="text/html", headers=PAGE_HEADERS)
+
+
+@app.get("/norms/catalogo.md")
+def norms_markdown() -> Response:
+    headers = {
+        **PAGE_HEADERS,
+        "Content-Disposition": 'attachment; filename="catalogo-normativo.md"',
+    }
+    return Response(norms.markdown(), media_type="text/markdown", headers=headers)
+
+
+@app.get("/norms/catalogo.pdf")
+def norms_pdf() -> Response:
+    headers = {
+        **PAGE_HEADERS,
+        "Content-Disposition": 'attachment; filename="catalogo-normativo.pdf"',
+    }
+    return Response(norms.pdf(), media_type="application/pdf", headers=headers)
+
+
+@app.get("/norms/{name}")
+def norm(name: str, request: Request) -> Response:
+    """The IRI `https://ns.argos.eu/norms/{name}`, dereferenced: a page, Turtle or JSON-LD."""
+    iri = norms.node(name)
+    if iri is None:
+        return JSONResponse({"error": "not in the namespace"}, status_code=404)
+    accept = request.headers.get("accept", "")
+    graph = norms.population()
+    if "text/turtle" in accept:
+        content = norms.description(graph, iri).serialize(format="turtle")
+        return Response(content, media_type="text/turtle", headers=PAGE_HEADERS)
+    if "application/ld+json" in accept:
+        content = norms.description(graph, iri).serialize(format="json-ld")
+        return Response(content, media_type="application/ld+json", headers=PAGE_HEADERS)
+    return Response(norms.page(graph, iri), media_type="text/html", headers=PAGE_HEADERS)

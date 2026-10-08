@@ -12,6 +12,7 @@ from argos_ontology.editorial.compiler import (
     compile_obligation,
     obligation_graph,
     parse_obligation,
+    read_obligation,
 )
 from argos_ontology.vocabulary import ARGOS, LIBRARY_DIR, NORMS
 
@@ -162,3 +163,11 @@ def test_the_tool_writes_and_then_checks_generated_turtle(tmp_path: Path) -> Non
     assert tool.main(["--check", str(source), str(output)]) == 0
     (output / "OBL-RGPD-32-1.ttl").write_bytes(b"# edited by hand\n")
     assert tool.main(["--check", str(source), str(output)]) == 1
+
+
+def test_an_obligation_is_read_by_its_full_iri_as_findings_carry_it() -> None:
+    """Findings keep the IRI of the obligation; the detail of a finding came back empty with it."""
+    spec = read_obligation(f"{NORMS}OBL-RGPD-32-3")
+    assert spec is not None and spec.id == "OBL-RGPD-32-3"
+    assert read_obligation("https://example.org/norms/OBL-RGPD-32-3") is None
+    assert read_obligation(f"{NORMS}../OBL-RGPD-32-3") is None

@@ -3,8 +3,8 @@ id: GUIA-integracion-frontend
 kind: guide
 title: Guía de integración del front end con la API v1
 phases: ["08"]
-version: 0.4.0
-commit: 196f33f
+version: 0.5.0
+commit: 3322940
 date: 2026-10-08
 status: current
 confidentiality: client
@@ -209,6 +209,8 @@ Leyenda de roles: **A** `platform_admin` · **M** `campaign_manager` · **D** `d
 | `POST /api/v1/findings/{id}/transition` | Mover el hallazgo: `{"to", "note", "risk_expiry"}` | D · 2FA |
 | `POST /api/v1/findings/{id}/verify` | Reejecutar el reto para verificar la subsanación. Solo con el hallazgo en `pending_verification`. Crea una campaña de reejecución que espera la aprobación `start` del DPO (§6.2) | M |
 
+**La obligación de un hallazgo se puede enlazar.** El campo `obligation` es una IRI (`https://ns.argos.eu/norms/OBL-RGPD-32-3`). Su página la sirve el catálogo normativo público del comprobador, sin token: en el banco, `https://ns.34-134-21-66.sslip.io/norms/OBL-RGPD-32-3` (mismo tramo `/norms/…`, otro host), y con el dominio propio, la IRI tal cual. Para enlazar, el front toma el host del catálogo de su configuración y le añade el tramo de la IRI desde `/norms/`. El catálogo también da Turtle o JSON-LD por `Accept`, la portada en `/norms/` y la descarga entera en `/norms/catalogo.pdf` y `/norms/catalogo.md`.
+
 Estados y transiciones que puede pedir una persona:
 
 | Desde | Puede pasar a |
@@ -350,3 +352,4 @@ Lo que la consola de la Fase 08 ya resolvía y el front real también debe cumpl
 | 0.2.0 | 2026-09-29 | La API admite el front en otro dominio (C-03): orígenes permitidos, CORS, cookie `SameSite=None`, cabecera `X-Argos-Session` y qué hacer si el navegador bloquea la cookie |
 | 0.3.0 | 2026-10-05 | Direcciones del banco de pruebas, origen admitido y túnel mientras los puertos sigan cerrados (K-08) |
 | 0.4.0 | 2026-10-08 | Rutas nuevas del sujeto sintético (generar, estado y paquete) y su flujo; veredictos del primero al último; `409` al aprobar compuertas de campañas cerradas; la verificación de una subsanación espera al DPO; `aud` es una lista (QA-36, K-99) |
+| 0.5.0 | 2026-10-08 | En el detalle de un hallazgo, `obligation` trae `id` corto e `iri`, y ya no llegan vacíos la norma, el artículo, el título y el resumen. La IRI de una obligación se abre en el catálogo normativo público (§5.5) |

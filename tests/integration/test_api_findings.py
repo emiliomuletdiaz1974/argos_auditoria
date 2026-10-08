@@ -37,7 +37,7 @@ def _unit(campaign_id: str, node_key: str) -> dict[str, Any]:
         "campaign_id": campaign_id,
         "challenge_id": "sec-encryption-in-transit",
         "challenge_version": "1.0",
-        "obligation": "OBL-RGPD-32-1",
+        "obligation": "https://ns.argos.eu/norms/OBL-RGPD-32-1",
         "system_id": SYSTEM,
         "node_key": node_key,
         "probe": {
@@ -140,7 +140,8 @@ def test_a_finding_carries_its_whole_why(api: TestClient, migrated_db: str) -> N
     assert verdict["probe_journal"]["action"] == "probe.issued"
 
     obligation = body["obligation"]
-    assert obligation["id"] == "OBL-RGPD-32-1"
+    assert obligation["id"] == "OBL-RGPD-32-1", "findings carry the IRI; the detail resolves it"
+    assert obligation["iri"] == "https://ns.argos.eu/norms/OBL-RGPD-32-1"
     assert obligation["norm"] and obligation["article"]
 
     assert set(body["allowed_transitions"]) == {"in_remediation", "risk_accepted"}

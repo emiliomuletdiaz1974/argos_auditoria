@@ -280,9 +280,12 @@ sudo k3s kubectl -n bench-sources get pods,jobs
 
 ### 6.6 Entrada pública (K-08)
 
-**Qué:** Traefik (el de k3s) con dos `Ingress` solo por HTTPS:
+**Qué:** Traefik (el de k3s) con tres `Ingress` solo por HTTPS:
 - `api.<ip>.sslip.io`, hacia la API;
-- `id.<ip>.sslip.io`, hacia Keycloak, publicando solo `/realms/argos` y `/resources` y nunca el realm `master` ni la consola de administración.
+- `id.<ip>.sslip.io`, hacia Keycloak, publicando solo `/realms/argos` y `/resources` y nunca el realm `master` ni la consola de administración;
+- `ns.<ip>.sslip.io`, hacia el comprobador, publicando solo `/norms/`: el catálogo normativo, donde se abren las IRI de las obligaciones (nota de desviación ARG-069). `/verify` no se publica.
+
+**El día que tengamos el dominio `ns.argos.eu`:** se apunta su DNS a la IP de la VM y se añade ese nombre al `Ingress` `norms` de `platform/k8s/base/services/edge.yaml` (en `tls.hosts` y como otra regla con la misma ruta). cert-manager pide su certificado como con los demás. Desde ese momento las IRI que ya llevan los hallazgos y la evidencia firmada se abren tal cual; no hay que cambiar nada más.
 
 El certificado lo pide cert-manager a Let's Encrypt por HTTP-01 en cuanto el puerto 80 sea alcanzable. Mientras tanto, Traefik responde con su certificado propio y el navegador avisa una vez.
 
@@ -341,6 +344,7 @@ La prueba completa (campañas, evidencia, credenciales y lo que debe fallar) se 
 |---|---|
 | API | `https://api.34-134-21-66.sslip.io/api/v1` |
 | Keycloak (realm `argos`) | `https://id.34-134-21-66.sslip.io/realms/argos` |
+| Catálogo normativo (sin cuenta) | `https://ns.34-134-21-66.sslip.io/norms/` |
 | Origen permitido del front | `http://localhost:5173` |
 
 `sslip.io` resuelve el nombre a la IP que lleva dentro, así que no hace falta comprar ni configurar un dominio.
@@ -356,6 +360,7 @@ La integración (sesión, cookie de refresco con CSRF y CORS) está en `docs/tec
    ```
    127.0.0.1 api.34-134-21-66.sslip.io
    127.0.0.1 id.34-134-21-66.sslip.io
+   127.0.0.1 ns.34-134-21-66.sslip.io
    ```
 
 2. Abre el túnel y déjalo abierto mientras pruebas:
@@ -371,7 +376,7 @@ La integración (sesión, cookie de refresco con CSRF y CORS) está en `docs/tec
      ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:443:127.0.0.1:443 geographoss2000@34.134.21.66
      ```
 
-3. Quita esas dos líneas del `hosts` el día que se abra el firewall.
+3. Quita esas líneas del `hosts` el día que se abra el firewall.
 
 ---
 

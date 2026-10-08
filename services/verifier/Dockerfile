@@ -1,4 +1,5 @@
-# Public verifier (ARG-069). No database, no store, no secret: it checks what it is sent.
+# Public verifier (ARG-069). No database, no store, no secret: it checks what it is sent and
+# serves the norms namespace from the population it carries.
 # The whole workspace is copied: `uv sync --locked` must see every member listed in pyproject.toml.
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.5.4 /uv /bin/uv
@@ -7,6 +8,8 @@ COPY pyproject.toml uv.lock ./
 COPY libs ./libs
 COPY connectors ./connectors
 COPY services ./services
+# The published population, so the IRIs of the norms namespace open (`/norms/{name}`).
+COPY library/ontology ./library/ontology
 RUN uv sync --locked --no-dev --package argos-verifier
 # ARG-084: no extra shell in the final image (sh stays: it is the base of the system).
 RUN rm -f /bin/bash /usr/bin/bash

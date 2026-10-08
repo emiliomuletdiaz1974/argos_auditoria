@@ -4,6 +4,8 @@ Two names, no domain of our own (K-08A, DP-23): the API at api.34-134-21-66.ssli
 of Keycloak at id.34-134-21-66.sslip.io, each with a certificate of Let's Encrypt and only on 443.
 From Keycloak only what a browser needs (`/realms/argos`, `/resources`): its administration and the
 master realm stay inside.
+The third name, ns.34-134-21-66.sslip.io, stands for ns.argos.eu until that domain is ours: it
+serves only `/norms/`, so the IRIs of the obligations open (public verifier).
 Nothing else of the cluster has a way in: no other Ingress, no LoadBalancer, no NodePort.
 """
 
@@ -15,6 +17,7 @@ import yaml
 K8S = Path(__file__).resolve().parents[2] / "platform" / "k8s"
 API_HOST = "api.34-134-21-66.sslip.io"
 ID_HOST = "id.34-134-21-66.sslip.io"
+NORMS_HOST = "ns.34-134-21-66.sslip.io"
 ISSUER = f"https://{ID_HOST}/realms/argos"
 TRAEFIK = {
     "namespaceSelector": {"matchLabels": {"kubernetes.io/metadata.name": "kube-system"}},
@@ -46,7 +49,7 @@ def _env(kind: str, name: str, namespace: str) -> dict[str, Any]:
     return {e["name"]: e.get("value") for e in container.get("env", [])}
 
 
-def test_lets_encrypt_signs_the_two_names_by_http01_through_traefik() -> None:
+def test_lets_encrypt_signs_the_names_by_http01_through_traefik() -> None:
     [issuer] = [d for d in _documents() if d.get("kind") == "ClusterIssuer" and "acme" in d["spec"]]
     assert issuer["metadata"]["name"] == "letsencrypt"
     acme = issuer["spec"]["acme"]
@@ -54,13 +57,17 @@ def test_lets_encrypt_signs_the_two_names_by_http01_through_traefik() -> None:
     assert acme["solvers"] == [{"http01": {"ingress": {"ingressClassName": "traefik"}}}]
 
 
-def test_only_the_api_and_the_sign_in_have_a_way_in() -> None:
+def test_only_the_api_the_sign_in_and_the_norms_have_a_way_in() -> None:
     ingresses = {
         (d["metadata"]["namespace"], d["metadata"]["name"])
         for d in _documents()
         if d.get("kind") == "Ingress"
     }
-    assert ingresses == {("argos-services", "api"), ("argos-core", "keycloak")}
+    assert ingresses == {
+        ("argos-services", "api"),
+        ("argos-core", "keycloak"),
+        ("argos-services", "norms"),
+    }
     for document in _documents():
         if document.get("kind") == "Service":
             assert document["spec"].get("type", "ClusterIP") == "ClusterIP", document["metadata"]
@@ -96,6 +103,13 @@ def test_from_keycloak_only_what_a_browser_signs_in_with() -> None:
     assert sorted(paths) == ["/realms/argos", "/resources"], "nor the administration nor master"
 
 
+def test_from_the_verifier_only_the_norms_namespace() -> None:
+    """The IRIs of the obligations open; checking a bundle (`/verify`) is not published by this."""
+    ingress = _named("Ingress", "norms", "argos-services")
+    paths = _check_ingress(ingress, NORMS_HOST, "verifier", 8007)
+    assert paths == ["/norms/"]
+
+
 def test_keycloak_names_itself_by_the_public_name_and_answers_inside_too() -> None:
     env = _env("Deployment", "keycloak", "argos-core")
     assert env["KC_HOSTNAME"] == f"https://{ID_HOST}"
@@ -124,6 +138,9 @@ def test_traefik_reaches_the_api_and_keycloak_and_nothing_else_of_them() -> None
     api = _named("NetworkPolicy", "api-from-traefik", "argos-services")
     assert api["spec"]["podSelector"]["matchLabels"] == {"app.kubernetes.io/name": "api"}
     assert _ingress_from(api) == [(TRAEFIK, [8000])]
+    verifier = _named("NetworkPolicy", "verifier-from-traefik", "argos-services")
+    assert verifier["spec"]["podSelector"]["matchLabels"] == {"app.kubernetes.io/name": "verifier"}
+    assert _ingress_from(verifier) == [(TRAEFIK, [8007])]
     keycloak = _named("NetworkPolicy", "keycloak", "argos-core")
     assert (TRAEFIK, [8080]) in _ingress_from(keycloak)
 

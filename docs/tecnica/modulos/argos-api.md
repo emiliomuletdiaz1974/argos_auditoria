@@ -4,9 +4,9 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.45.0-alpha
-commit: 64e911e
-date: 2026-10-07
+version: 0.46.0-alpha
+commit: 3322940
+date: 2026-10-08
 status: current
 confidentiality: client
 ---
@@ -59,7 +59,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Salud | `GET /health` | Sin token |
 | Recursos vivos | `GET /systems`, `GET /inventory/coverage`, `GET /inventory/nodes/{node_key}`, `GET /inventory/review-queue`, `POST /inventory/review-queue/{node_key}` | Llaman a `argos_inventory`; ningún router escribe SQL propio |
 | Campañas | `POST /campaigns` (idempotente), `GET /campaigns`, `GET /campaigns/{id}`, `POST /campaigns/{id}/launch`, `GET /campaigns/{id}/plan`, `GET /campaigns/{id}/progress`, `GET /campaigns/{id}/gates`, `POST /campaigns/{id}/gates/{gate}/approve` | Llaman a `argos_challenges.store`; el plan previo es la lista literal de unidades y lo no verificable, y existe desde que la campaña está preparada (`409` antes) |
-| Hallazgos | `GET /findings` (peor primero, filtros `status`, `severity`, `campaign_id`), `GET /findings/{id}`, `POST /findings/{id}/transition`, `POST /findings/{id}/verify` | El detalle trae el porqué completo —veredicto con sus valores, declaración muestral, asiento del diario de la consulta y la obligación con su artículo—, su historia en el diario (`history`) y `allowed_transitions`, para que el front no duplique la máquina de estados. `closed_compliant` y `reopened` no se alcanzan por transición: solo `verify`, que lanza la reejecución de ARG-049 |
+| Hallazgos | `GET /findings` (peor primero, filtros `status`, `severity`, `campaign_id`), `GET /findings/{id}`, `POST /findings/{id}/transition`, `POST /findings/{id}/verify` | El detalle trae el porqué completo —veredicto con sus valores, declaración muestral, asiento del diario de la consulta y la obligación con su artículo, con `id` corto e `iri`—, su historia en el diario (`history`) y `allowed_transitions`, para que el front no duplique la máquina de estados. `closed_compliant` y `reopened` no se alcanzan por transición: solo `verify`, que lanza la reejecución de ARG-049 |
 | Evidencia | `GET /evidence/{id}/chain`, `/artifacts`, `/artifacts/{verdict_id}`, `/journal/{seq}`, `/dossier.json`, `/dossier.pdf`, `/bundle` | La cadena con su estado real (firma con su marca `non_production`, sello en cola o sellado con su política), cada artefacto con su prueba de inclusión contra la raíz firmada, el asiento del diario que cita un veredicto de la campaña (solo esos: no es una ventana al diario entero) y el expediente en sus bytes exactos (cabecera `X-Dossier-Sha256`). Cada descarga del expediente o del paquete deja un asiento `evidence.download` con quién |
 | Credenciales | `GET /credentials/preview`, `POST /credentials`, `GET /credentials/{id}`, `POST /credentials/{id}/revoke` | Emitir es un acto explícito de `dpo_reviewer`: la vista previa muestra el sujeto exacto y `withheld`, lo que se queda en el expediente, y la emisión nombra por su hash el expediente que se vio; si cambió entremedias, `409`. Revocar exige motivo |
 | Asistente | `POST /assistant/ask` | Reenvía la pregunta al gateway de IA **por HTTP** —el único servicio al que llama la API (ADR-0012)— y devuelve respuesta, citas, herramientas consultadas, `complete`, `refused` y `fragments` (los fragmentos normativos recuperados, para desplegar las citas o juzgar un rehúso); siempre con `assisted: true` y el aviso de que no es un veredicto. Sin modelo local, `503` con el motivo |
@@ -224,3 +224,4 @@ La imagen (`services/api/Dockerfile`) solo lleva la API: desde el 2026-09-29 no 
 | 0.43.0-alpha | 2026-09-29 | Deja de construir y servir la consola: lo que no es ruta de la API responde 404 problem+json; `create_app` ya no recibe `console` | ARG-073 (desviación) |
 | 0.44.0-alpha | 2026-09-29 | Front en otro dominio: `frontend_origins`, CORS con credenciales, cookie `SameSite=None` y cabecera `X-Argos-Session` en `/auth/*` (contrato v1: resúmenes de la sesión) | C-03 (DP-19) |
 | 0.45.0-alpha | 2026-10-07 | Rutas de sujeto sintético (`POST /campaigns/{id}/synthetic/subjects`, `GET /campaigns/{id}/synthetic`, `GET …/subjects/{subject_id}/package`) con los permisos `synthetic.generate` y `synthetic.read`; el listado de veredictos pagina sin repetir ni perder elementos | QA-36 |
+| 0.46.0-alpha | 2026-10-08 | El detalle de un hallazgo resuelve la obligación también por su IRI, que es lo que guardan los hallazgos (antes devolvía norma, artículo, título y resumen vacíos), y la devuelve con `id` corto e `iri`; la IRI se abre en el catálogo normativo del comprobador | petición directa (nota ARG-069) |

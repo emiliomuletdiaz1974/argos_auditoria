@@ -152,9 +152,11 @@ EDITORIAL_DIR = LIBRARY_DIR / "ontology" / "editorial"
 def read_obligation(obligation_id: str, directory: Path = EDITORIAL_DIR) -> ObligationSpec | None:
     """The editorial template of one obligation, parsed; None if the population does not have it.
 
-    The id must look like an obligation id before it becomes a file name, so it cannot walk out of
-    the editorial directory.
+    It takes the id or the IRI of the obligation in the norms namespace, which is what findings
+    carry. The id must look like an obligation id before it becomes a file name, so it cannot walk
+    out of the editorial directory.
     """
+    obligation_id = obligation_id.removeprefix(str(NORMS))
     if not OBLIGATION_ID.match(obligation_id):
         return None
     path = directory / f"{obligation_id}.yaml"
