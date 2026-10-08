@@ -16,7 +16,7 @@ from psycopg.types.json import Jsonb
 from argos_challenges.evaluator import evaluate
 from argos_challenges.findings import open_or_recur
 from argos_challenges.seal import seal_campaign
-from argos_challenges.store import create_campaign, persist_verdict
+from argos_challenges.store import create_campaign, persist_verdict, pin_campaign
 from argos_common.release import VaultTransitSigner
 from argos_evidence.artifacts import write_artifact
 from argos_evidence.core.integrity import file_digest, verify_artifact
@@ -57,6 +57,17 @@ def _campaign(dsn: str, store: WormStore) -> str:
     """A sealed campaign with two verdicts, a finding, a drafted summary and its evidence chain."""
     system_id = register_catalog_system(dsn, "dev-source-postgres")
     campaign_id = create_campaign(dsn, "Campaña del expediente", {}, "user:campaign-manager")
+    snapshot_id = _snapshot(dsn, system_id)
+    pin_campaign(
+        dsn,
+        campaign_id,
+        snapshot_id=snapshot_id,
+        snapshot_hash="e" * 64,
+        ontology_version="1.0.0",
+        library_version="1.0.0",
+        library_sha256="0" * 64,
+        applicability_run=None,
+    )
     verdicts: dict[str, bytes] = {}
     for name, value in (("ok", "on"), ("ko", "off")):
         unit: dict[str, Any] = {
@@ -100,6 +111,24 @@ def _campaign(dsn: str, store: WormStore) -> str:
     return campaign_id
 
 
+def _snapshot(dsn: str, system_id: str) -> str:
+    """The inventory the campaign measured: the column of the failing unit has a name."""
+    snapshot_id = str(uuid.uuid4())
+    with psycopg.connect(dsn) as conn:
+        conn.execute(
+            "INSERT INTO argos.inventory_snapshots (id, label, taken_at, node_count, content_hash)"
+            " VALUES (%s, 'dossier', now(), 1, %s)",
+            (snapshot_id, "e" * 64),
+        )
+        conn.execute(
+            "INSERT INTO argos.inventory_snapshot_nodes"
+            " (snapshot_id, node_key, label, name, qualified_name, system_id)"
+            " VALUES (%s, 'k-ko', 'Column', 'ssn', 'public.patients.ssn', %s)",
+            (snapshot_id, system_id),
+        )
+    return snapshot_id
+
+
 def _roots() -> list[x509.Certificate]:
     return [x509.load_pem_x509_certificate(httpx.get(f"{TSA}/ca.pem").content)]
 
@@ -114,6 +143,14 @@ def test_the_dossier_is_assembled_from_the_campaign_records(migrated_db: str) ->
     assert dossier["results"]["units"] == 2
     assert dossier["results"]["by_result"]["non_compliant"] == 1
     assert [f["challenge_id"] for f in dossier["findings"]] == ["sec-tls-ko"]
+    labels = dossier["labels"]
+    obligation = labels["obligations"]["OBL-RGPD-32-3"]
+    assert obligation["title"] == "Cifrado en tránsito hacia los sistemas con datos personales"
+    assert (obligation["norm"], obligation["article"]) == ("RGPD", "32.1.b")
+    [system] = labels["systems"].values()
+    assert system["name"] and system["kind"] == "rdbms"
+    [finding] = dossier["findings"]
+    assert finding["element"] == "public.patients.ssn", "the element by its name in the inventory"
     [approval] = dossier["approvals"]
     assert (approval["approved_by"], approval["approver_name"]) == ("user:dpo", "DPO Synthetic")
     assert dossier["texts"][0]["generated"] is True
@@ -123,6 +160,19 @@ def test_the_dossier_is_assembled_from_the_campaign_records(migrated_db: str) ->
     assert chain["signature"]["non_production"] is True
     assert chain["time_stamp"]["status"] == "queued"
     assert chain["journal_report"]["key"].endswith("journal-report.json")
+
+
+def test_the_evidence_role_reads_names_but_not_connections(migrated_db: str) -> None:
+    """The dossier names systems and elements; the reference to a secret stays out of reach."""
+    with psycopg.connect(migrated_db) as conn:
+        allowed = conn.execute(
+            "SELECT has_column_privilege('svc_evidence', 'argos.systems', 'name', 'SELECT'),"
+            " has_column_privilege('svc_evidence', 'argos.systems', 'kind', 'SELECT'),"
+            " has_column_privilege('svc_evidence', 'argos.inventory_snapshot_nodes',"
+            "   'qualified_name', 'SELECT'),"
+            " has_column_privilege('svc_evidence', 'argos.systems', 'connection', 'SELECT')"
+        ).fetchone()
+    assert allowed == (True, True, True, False)
 
 
 def test_the_same_state_gives_the_same_dossier(migrated_db: str) -> None:

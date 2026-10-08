@@ -7,6 +7,8 @@ COPY pyproject.toml uv.lock ./
 COPY libs ./libs
 COPY connectors ./connectors
 COPY services ./services
+# The titles of the challenges and the obligations the dossier names (2026-10-08).
+COPY library ./library
 RUN uv sync --locked --no-dev --package argos-evidence
 # ARG-084: no extra shell in the final image (sh stays: it is the base of the system).
 RUN rm -f /bin/bash /usr/bin/bash

@@ -246,3 +246,66 @@ def test_instants_are_printed_as_a_person_reads_them() -> None:
     assert "08/10/2026 03:14:51 UTC" in content
     assert "18/09/2026 10:00:00 UTC" in content, "the sealing instant of the cover too"
     assert "2026-10-08T03:14:51" not in content and ".485903" not in content
+
+
+# ---------- a document for people: what was audited, what to fix, and the technique last ----------
+
+SYSTEM = "01920000-0000-7000-8000-00000000a001"
+LABELS = {
+    "systems": {SYSTEM: {"name": "historia-clinica", "kind": "rdbms"}},
+    "challenges": {"sec-tls": "Cifrado en tránsito exigido por el motor de datos"},
+    "obligations": {
+        "OBL-RGPD-32-3": {
+            "title": "Cifrado en tránsito hacia los sistemas con datos personales",
+            "norm": "RGPD",
+            "article": "32.1.b",
+            "summary": "Las conexiones a los almacenes con datos personales exigen cifrado.",
+        }
+    },
+}
+
+
+def _for_people(labels: dict[str, Any] | None = LABELS) -> list[str]:
+    dossier = json.loads(_dossier())
+    dossier.pop("sha256", None)
+    dossier["campaign"]["scope"] = {"system_ids": [SYSTEM]}
+    finding = dossier["findings"][0]
+    dossier["findings"] = [
+        finding | {"id": "f1", "system_id": SYSTEM, "element": "public.patients.ssn"},
+        finding | {"id": "f2", "system_id": SYSTEM, "element": "public.patients.email"},
+    ]
+    if labels is not None:
+        dossier["labels"] = labels
+    return [page.replace("\n", " ") for page in _text(render_pdf(seal_document(dossier), URL))]
+
+
+def test_the_first_page_says_what_was_audited_and_how_it_went() -> None:
+    first = _for_people()[0]
+    assert "historia-clinica" in first, "the system audited, by its name"
+    assert "Se comprobaron 17 controles" in first
+    assert "11 se cumplen" in first and "4 no se cumplen" in first
+    assert "2 hallazgos" in first and "1 problema" in first
+
+
+def test_findings_are_grouped_into_problems_with_their_elements_by_name() -> None:
+    content = " ".join(_for_people())
+    assert content.count("Cifrado en tránsito exigido por el motor de datos") == 1, "one problem"
+    assert "2 elementos afectados" in content
+    assert "public.patients.ssn" in content and "public.patients.email" in content
+    assert "Cifrado en tránsito hacia los sistemas con datos personales" in content
+    assert "RGPD, art. 32.1.b" in content
+
+
+def test_the_technical_details_go_to_an_annex_at_the_end() -> None:
+    pages = _for_people()
+    annex = next(i for i, page in enumerate(pages) if "Anexo técnico" in page)
+    assert annex == len(pages) - 1 or all("Anexo" not in p for p in pages[annex + 1 :])
+    assert "a" * 64 not in " ".join(pages[:annex]), "no artifact hash before the annex"
+    assert "a" * 64 in " ".join(pages[annex:]).replace(" ", "")
+
+
+def test_a_dossier_without_labels_is_still_read_by_its_codes() -> None:
+    """A dossier sealed before the labels existed renders the same way, with its codes."""
+    content = " ".join(_for_people(labels=None))
+    assert "sec-tls" in content and "OBL-RGPD-32-3" in content
+    assert "public.patients.ssn" in content

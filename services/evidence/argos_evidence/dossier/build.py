@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import psycopg
+import yaml
 from botocore.exceptions import ClientError
 
 from argos_common.errors import ArgosError
@@ -21,10 +22,13 @@ from argos_evidence.core.integrity import canonical_instant, file_digest, seal_d
 from argos_evidence.journal import report_key
 from argos_evidence.roots import get_root
 from argos_evidence.worm import WormAlreadyStoredError, WormStore
+from argos_ontology.editorial.compiler import read_obligation
+from argos_ontology.vocabulary import LIBRARY_DIR
 
 SCHEMA = "argos/dossier/1"
 RESULTS = ("compliant", "non_compliant", "not_demonstrated", "inconclusive")
 SEVERITY_ORDER = ("critical", "high", "medium", "low")
+CHALLENGE_CATALOG = LIBRARY_DIR / "challenges" / "catalog.yaml"
 
 
 class DossierError(ArgosError):
@@ -109,11 +113,18 @@ def _approvals(conn: psycopg.Connection[Any], campaign_id: str) -> list[dict[str
     ]
 
 
-def _findings(conn: psycopg.Connection[Any], campaign_id: str) -> list[dict[str, Any]]:
+def _findings(
+    conn: psycopg.Connection[Any], campaign_id: str, snapshot_id: str | None
+) -> list[dict[str, Any]]:
+    # The element a finding is about, by its name in the inventory the campaign measured
+    # (2026-10-08): a person fixes `public.patients.ssn`, not a node key.
     rows = conn.execute(
-        "SELECT id::text, challenge_id, obligation, severity, status, occurrences"
-        " FROM argos.findings WHERE campaign_id = %s OR %s = ANY(campaigns_seen)",
-        (campaign_id, campaign_id),
+        "SELECT f.id::text, f.challenge_id, f.obligation, f.severity, f.status, f.occurrences,"
+        " f.system_id::text, coalesce(n.qualified_name, n.name)"
+        " FROM argos.findings f LEFT JOIN argos.inventory_snapshot_nodes n"
+        "   ON n.snapshot_id = %s::uuid AND n.node_key = f.node_key"
+        " WHERE f.campaign_id = %s OR %s = ANY(f.campaigns_seen)",
+        (snapshot_id, campaign_id, campaign_id),
     ).fetchall()
     findings = [
         {
@@ -123,7 +134,9 @@ def _findings(conn: psycopg.Connection[Any], campaign_id: str) -> list[dict[str,
             "severity": r[3],
             "status": r[4],
             "occurrences": int(r[5]),
+            "system_id": r[6],
         }
+        | ({"element": r[7]} if r[7] else {})
         for r in rows
     ]
     return sorted(
@@ -225,18 +238,71 @@ def evidence_chain(dsn: str, store: WormStore, campaign_id: str) -> Any:
         return _chain(conn, dsn, store, campaign_id)
 
 
+def _challenge_titles() -> dict[str, str]:
+    if not CHALLENGE_CATALOG.is_file():
+        return {}
+    catalog = yaml.safe_load(CHALLENGE_CATALOG.read_text(encoding="utf-8")) or {}
+    return {str(c["id"]): str(c["description"]) for c in catalog.get("challenges", [])}
+
+
+def _labels(
+    conn: psycopg.Connection[Any],
+    campaign: dict[str, Any],
+    findings: list[dict[str, Any]],
+    by_obligation: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """The names a person reads for the codes of this dossier, fixed when it is assembled.
+
+    The PDF comes only from the JSON (deviation note ARG-067), so the titles of the challenges and
+    the obligations and the names of the systems travel inside it, and only those it uses. A code
+    whose name is not known has no label, and the PDF shows the code.
+    """
+    system_ids = sorted(
+        {
+            *((campaign.get("scope") or {}).get("system_ids") or []),
+            *(f["system_id"] for f in findings),
+        }
+    )
+    systems = {}
+    if system_ids:
+        rows = conn.execute(
+            "SELECT id::text, name, kind FROM argos.systems WHERE id = ANY(%s::uuid[])",
+            (system_ids,),
+        ).fetchall()
+        systems = {r[0]: {"name": r[1], "kind": r[2]} for r in rows}
+    known = _challenge_titles()
+    challenges = {c: known[c] for c in sorted({f["challenge_id"] for f in findings}) if c in known}
+    obligations = {}
+    codes = {
+        str(o)
+        for o in (*(f["obligation"] for f in findings), *(r["obligation"] for r in by_obligation))
+    }
+    for code in sorted(codes):
+        spec = read_obligation(code)
+        if spec is not None:
+            obligations[spec.id] = {
+                "title": spec.title,
+                "norm": spec.norm,
+                "article": spec.article,
+                "summary": spec.summary or "",
+            }
+    return {"systems": systems, "challenges": challenges, "obligations": obligations}
+
+
 def assemble(dsn: str, store: WormStore, campaign_id: str, verifier_url: str) -> bytes:
     """Canonical bytes of the dossier of a sealed campaign, with its own SHA-256."""
     with psycopg.connect(dsn) as conn:
         campaign = _campaign(conn, campaign_id)
         results, by_obligation = _results(conn, campaign_id)
+        findings = _findings(conn, campaign_id, campaign["snapshot_id"])
         document = {
             "schema": SCHEMA,
             "campaign": campaign,
             "results": results,
             "results_by_obligation": by_obligation,
             "approvals": _approvals(conn, campaign_id),
-            "findings": _findings(conn, campaign_id),
+            "findings": findings,
+            "labels": _labels(conn, campaign, findings, by_obligation),
             "texts": _texts(conn, campaign_id),
             "evidence_chain": _chain(conn, dsn, store, campaign_id),
             "verification": {"verifier_url": verifier_url},
