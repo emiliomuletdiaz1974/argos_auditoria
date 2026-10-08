@@ -1,6 +1,6 @@
 # Guía de despliegue del banco k3s de ARGOS
 
-**Versión de la guía:** 1.0 · **Fecha:** 2026-10-07 · **Banco probado:** `banco-v0.18.2` · **Confidencialidad:** `internal`
+**Versión de la guía:** 1.1 · **Fecha:** 2026-10-08 · **Banco probado:** `banco-v0.18.2` · **Confidencialidad:** `internal`
 
 Esta guía explica, paso a paso y con los comandos exactos, cómo se monta el banco de ARGOS sobre k3s en una máquina virtual, cómo se publica cada versión y cómo se comprueba cada capa. Está escrita a partir de lo que hicimos de verdad en `vm-argos` (Google Cloud, octubre de 2026), con los problemas que encontramos y cómo se resolvieron.
 
@@ -256,7 +256,7 @@ bash platform/k8s/bench/accounts.sh reset dpo.test   # otra contraseña temporal
 
 Cada contraseña temporal sirve una vez: Keycloak pide una nueva al primer inicio de sesión, y el TOTP a quien decide. La política TOTP es **HMAC-SHA256**, así que hay que usar FreeOTP, Aegis o 2FAS. Google Authenticator y Microsoft Authenticator no la soportan.
 
-**Si falla:** si la página de cuenta responde 401, faltan los roles por defecto (corregido en `banco-v0.18.1`).
+**Si falla:** si la página de cuenta responde 401, faltan los roles por defecto (corregido en `banco-v0.18.1`). Si una cuenta dice «Account is disabled», ver §11.11.
 
 ### 6.4 Capa 2 · servicios de ARGOS (K-06)
 
@@ -503,6 +503,39 @@ Con «OPA is not running the signed bundle» en el log del worker: el motor comp
 ### 11.10 Una verificación de subsanación no avanza
 
 No es un fallo. Espera la aprobación del DPO en la compuerta de inicio, como cualquier campaña: la campaña queda en `pinned` y el hallazgo en `pending_verification` hasta que alguien aprueba.
+
+### 11.11 Una cuenta dice «Account is disabled, contact your administrator»
+
+Hay dos mensajes parecidos y no son lo mismo:
+
+| Mensaje en Keycloak | Qué pasa | Qué hacer |
+|---|---|---|
+| «Account is temporarily disabled…» | Cinco contraseñas fallidas seguidas: bloqueo temporal (60 s que crecen hasta 15 min). | Esperar, o desbloquear abajo. |
+| «Account is disabled…» | La cuenta tiene `enabled: false` y no vuelve sola. | Habilitarla abajo. |
+
+En el banco (2026-10-08) `manager.test` pasó del primero al segundo: se reinició con `accounts.sh reset` mientras estaba bloqueada. Keycloak muestra una cuenta bloqueada como `enabled: false`, y el Job reescribía la cuenta entera, así que el bloqueo temporal se quedó guardado como deshabilitación. Desde `banco-v0.18.3`, el reinicio solo escribe las acciones obligatorias y además desbloquea y habilita la cuenta: `accounts.sh reset <cuenta>` lo arregla todo de una vez.
+
+**Comprobar** (desde la VM; no muestra ninguna contraseña):
+
+```bash
+sudo k3s kubectl -n argos-core exec deploy/keycloak -- sh -c 'K=/opt/keycloak/bin/kcadm.sh; C="--config /tmp/kcadm.config"; $K config credentials $C --server http://localhost:8080 --realm master --user admin --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" && $K get users $C -r argos -q username=manager.test -q exact=true --fields username,enabled; rm -f /tmp/kcadm.config'
+```
+
+**Arreglar con la versión corregida desplegada:**
+
+```bash
+bash platform/k8s/bench/accounts.sh reset manager.test
+```
+
+Da otra contraseña temporal (y pide el TOTP de nuevo a quien lo tenga). **Si solo se quiere habilitar la cuenta, sin cambiarle la contraseña**, o la versión desplegada es anterior a `banco-v0.18.3`:
+
+```bash
+sudo k3s kubectl -n argos-core exec deploy/keycloak -- sh -c 'K=/opt/keycloak/bin/kcadm.sh; C="--config /tmp/kcadm.config"; $K config credentials $C --server http://localhost:8080 --realm master --user admin --password "$KC_BOOTSTRAP_ADMIN_PASSWORD" && ID=$($K get users $C -r argos -q username=manager.test -q exact=true --fields id --format csv --noquotes) && $K delete attack-detection/brute-force/users/$ID $C -r argos && $K update users/$ID $C -r argos -s enabled=true; rm -f /tmp/kcadm.config'
+```
+
+También se puede desde la consola de administración de Keycloak (`https://id.<ip>.sslip.io/admin`, realm `master`, usuario `admin`): realm `argos` → Users → la cuenta → interruptor **Enabled**.
+
+**Para que no vuelva a pasar:** no reiniciar una cuenta a ciegas mientras alguien sigue probando contraseñas; si el bloqueo es solo temporal, esperar 15 minutos basta.
 
 ---
 

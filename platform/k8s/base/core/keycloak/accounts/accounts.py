@@ -60,6 +60,8 @@ class Accounts(Protocol):
 
     def set_required_actions(self, user_id: str, actions: list[str]) -> None: ...
 
+    def unlock(self, user_id: str) -> None: ...
+
 
 def provision(realm: Realm, keep: Callable[[dict[str, str]], None]) -> int:
     """Temporary passwords for the accounts without one; the others are never touched.
@@ -121,8 +123,9 @@ def reset_accounts(
 ) -> list[str]:
     """Another temporary password for these accounts, and their second factor to be set up again.
 
-    For a person who spent their temporary password, or lost their authenticator. Only accounts
-    of the realm file are accepted; nothing is touched if one is not.
+    For a person who spent their temporary password, or lost their authenticator: usually after
+    failed sign-ins, so the account is unlocked too. Only accounts of the realm file are accepted;
+    nothing is touched if one is not.
     """
     present, known = realm.users_of_realm(), {str(u["username"]): u for u in wanted}
     unknown = [name for name in names if name not in known or name not in present]
@@ -135,6 +138,7 @@ def reset_accounts(
         realm.drop_otp(user_id)
         realm.reset_password(user_id, {"type": "password", "value": password, "temporary": True})
         realm.set_required_actions(user_id, [str(a) for a in known[name]["requiredActions"]])
+        realm.unlock(user_id)
         given[name] = password
     if given:
         keep(given)
@@ -254,13 +258,22 @@ class KeycloakRealm:
                 )
 
     def set_required_actions(self, user_id: str, actions: list[str]) -> None:
-        user = _call("GET", f"{self._base}/users/{user_id}", token=self._token)
+        # Only the field that changes: Keycloak shows a locked account as `enabled: false`, and
+        # writing back the whole account disabled it for good (bench, 2026-10-08).
         _call(
             "PUT",
             f"{self._base}/users/{user_id}",
             token=self._token,
-            body={**user, "requiredActions": actions},
+            body={"requiredActions": actions},
         )
+
+    def unlock(self, user_id: str) -> None:
+        _call(
+            "DELETE",
+            f"{self._base}/attack-detection/brute-force/users/{user_id}",
+            token=self._token,
+        )
+        _call("PUT", f"{self._base}/users/{user_id}", token=self._token, body={"enabled": True})
 
 
 def _kubernetes(method: str, path: str, body: Any = None, kind: str = "application/json") -> int:

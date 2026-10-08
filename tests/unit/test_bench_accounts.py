@@ -85,6 +85,7 @@ class Accounts(Keycloak):
         self.roles: dict[str, list[str]] = {}
         self.otp_dropped: list[str] = []
         self.actions: dict[str, list[str]] = {}
+        self.unlocked: list[str] = []
 
     def create_user(self, representation: dict[str, Any]) -> str:
         self.created.append(representation)
@@ -100,6 +101,9 @@ class Accounts(Keycloak):
 
     def set_required_actions(self, user_id: str, actions: list[str]) -> None:
         self.actions[user_id] = actions
+
+    def unlock(self, user_id: str) -> None:
+        self.unlocked.append(user_id)
 
 
 WANTED = [
@@ -160,6 +164,57 @@ def test_resetting_an_account_drops_its_second_factor_and_asks_for_everything_ag
     assert credential["temporary"] is True and credential["value"] == kept["dpo.test"]
     assert len(kept["dpo.test"]) >= 20
     assert kept["dpo.test"] not in capsys.readouterr().out, "no password in the logs"
+
+
+def test_resetting_an_account_locked_by_failed_sign_ins_unlocks_it() -> None:
+    """Who asks for a reset has usually spent the password trying: the account must work again."""
+    accounts = _accounts()
+    keycloak = Accounts(with_password={"dpo.test"})
+    accounts.reset_accounts(keycloak, ["dpo.test"], WANTED, {}.update)
+    assert keycloak.unlocked == [keycloak.users["dpo.test"]]
+
+
+def test_the_required_actions_are_set_without_writing_back_the_rest_of_the_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keycloak shows a locked account as `enabled: false`; writing it back disabled it for good.
+
+    It happened on the bench on 2026-10-08: manager.test was reset while locked by failed sign-ins
+    and stayed disabled after the lock expired.
+    """
+    accounts = _accounts()
+    calls: list[tuple[str, str, Any]] = []
+
+    def call(method: str, url: str, *, token: str = "", body: Any = None, **_: Any) -> Any:
+        calls.append((method, url, body))
+        return {"id": "2", "username": "manager.test", "enabled": False, "email": "m@argos.local"}
+
+    monkeypatch.setattr(accounts, "_call", call)
+    realm = object.__new__(accounts.KeycloakRealm)
+    realm._base, realm._token = "http://keycloak/admin/realms/argos", "t"
+    realm.set_required_actions("2", ["UPDATE_PASSWORD"])
+    [(method, url, body)] = [c for c in calls if c[0] == "PUT"]
+    assert url.endswith("/users/2")
+    assert body == {"requiredActions": ["UPDATE_PASSWORD"]}
+
+
+def test_unlocking_clears_the_failures_and_enables_the_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    accounts = _accounts()
+    calls: list[tuple[str, str, Any]] = []
+    monkeypatch.setattr(
+        accounts,
+        "_call",
+        lambda method, url, *, token="", body=None, **_: calls.append((method, url, body)),
+    )
+    realm = object.__new__(accounts.KeycloakRealm)
+    realm._base, realm._token = "http://keycloak/admin/realms/argos", "t"
+    realm.unlock("2")
+    assert calls == [
+        ("DELETE", "http://keycloak/admin/realms/argos/attack-detection/brute-force/users/2", None),
+        ("PUT", "http://keycloak/admin/realms/argos/users/2", {"enabled": True}),
+    ]
 
 
 def test_only_the_accounts_of_the_realm_can_be_reset() -> None:
