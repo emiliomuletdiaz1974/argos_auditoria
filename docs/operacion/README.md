@@ -23,4 +23,4 @@ Los comandos de los runbooks usan el entorno de desarrollo (`docker compose -f d
 
 La alta disponibilidad de cada talla está en [alta-disponibilidad.md](alta-disponibilidad.md).
 
-La prueba del banco k3s con datos sintéticos (K-99) está en [banco-k3s.md](banco-k3s.md).
+La prueba del banco k3s con datos sintéticos (K-99) está en [banco-k3s.md](banco-k3s.md). Cómo se despliega, paso a paso: [guia-despliegue-banco.md](guia-despliegue-banco.md).
