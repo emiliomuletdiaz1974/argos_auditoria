@@ -1595,7 +1595,26 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));",
+                  "",
+                  "// Not every verdict cites a journal entry (internal probes do not query a source): look for the",
+                  "// first artifact that does, and keep its verdict and its entry for the next requests.",
+                  "if (pm.response.code === 200) {",
+                  "  const ids = (pm.response.json().items || []).map(it => it.verdict_id || it.id);",
+                  "  const auth = pm.request.headers.get('Authorization');",
+                  "  const base = pm.variables.get('baseUrl');",
+                  "  const next = (i) => {",
+                  "    if (i >= ids.length) { console.log('no artifact of this page cites a journal entry'); return; }",
+                  "    pm.sendRequest({ url: `${base}/api/v1/evidence/artifacts/${ids[i]}`, method: 'GET', header: { Authorization: auth } }, (err, res) => {",
+                  "      const seq = !err && res.code === 200 ? (res.json().artifact || {}).query_journal_seq : null;",
+                  "      if (seq) {",
+                  "        pm.collectionVariables.set('verdict_id', ids[i]);",
+                  "        pm.collectionVariables.set('journal_seq', String(seq));",
+                  "      } else { next(i + 1); }",
+                  "    });",
+                  "  };",
+                  "  next(0);",
+                  "}"
                 ]
               }
             }
