@@ -10,9 +10,10 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from fastapi import HTTPException, Request, status
+from fastapi import Request, status
 
 from argos_api.auth import CurrentIdentity
+from argos_api.errors import ApiError, ErrorCode
 from argos_api.security_events import security_event
 from argos_auth import ROLES, Identity
 
@@ -103,16 +104,19 @@ class PermissionGuard:
                 "refused",
                 {"permission": self.permission},
             )
-            raise HTTPException(
+            raise ApiError(
                 status.HTTP_403_FORBIDDEN,
-                "this identity holds incompatible roles: planning and approving are two people",
+                ErrorCode.ROLES_INCOMPATIBLE,
+                "La cuenta tiene roles incompatibles: planificar y aprobar son dos personas.",
             )
         if not identity.roles & self.roles:
             security_event(
                 request, "authz.denied", identity.actor, "refused", {"permission": self.permission}
             )
-            raise HTTPException(
-                status.HTTP_403_FORBIDDEN, f"the permission {self.permission} is not yours"
+            raise ApiError(
+                status.HTTP_403_FORBIDDEN,
+                ErrorCode.PERMISSION_DENIED,
+                f"Su rol no permite esta acción ({self.permission}).",
             )
         if self.permission in SECOND_FACTOR and not identity.has_second_factor:
             # Only after the role check: the refusal says what to do, not which permission it was.
@@ -123,9 +127,10 @@ class PermissionGuard:
                 "refused",
                 {"permission": self.permission},
             )
-            raise HTTPException(
+            raise ApiError(
                 status.HTTP_401_UNAUTHORIZED,
-                "this action requires signing in with a second factor",
+                ErrorCode.SECOND_FACTOR_REQUIRED,
+                "Esta acción exige iniciar sesión con segundo factor.",
                 {"WWW-Authenticate": STEP_UP},
             )
         if (

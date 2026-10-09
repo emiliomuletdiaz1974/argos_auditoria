@@ -12,8 +12,10 @@ import json
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Annotated, Any
 
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, Query, status
 from pydantic import BaseModel, Field
+
+from argos_api.errors import ApiError, ErrorCode
 
 CURSOR_VERSION = 1
 DEFAULT_PAGE = 50
@@ -87,8 +89,12 @@ def page_request(
 ) -> PageRequest:
     try:
         position_of(cursor)
-    except CursorError as broken:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(broken)) from None
+    except CursorError:
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST,
+            ErrorCode.CURSOR_INVALID,
+            "El cursor no es válido: pida la primera página de nuevo.",
+        ) from None
     return PageRequest(cursor=cursor, limit=limit)
 
 

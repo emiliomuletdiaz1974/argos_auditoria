@@ -37,6 +37,23 @@ FROZEN = {
     "invalid_value",
     "store_unavailable",
     "origin_not_allowed",
+    "token_missing",
+    "token_invalid",
+    "auth_not_configured",
+    "session_closed",
+    "role_missing",
+    "permission_denied",
+    "roles_incompatible",
+    "second_factor_required",
+    "cursor_invalid",
+    "idempotency_key_invalid",
+    "idempotency_key_reused",
+    "idempotency_in_progress",
+    "session_header_missing",
+    "session_cookie_missing",
+    "session_refused",
+    "sign_in_refused",
+    "webhook_target_not_allowed",
 }
 
 

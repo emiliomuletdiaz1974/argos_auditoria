@@ -2,9 +2,10 @@
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from argos_api.errors import ApiError, ErrorCode
 from argos_api.security_events import security_event
 from argos_api.sessions import SessionClosures
 from argos_auth import ROLES, AuthError, Identity, JwtValidator
@@ -20,24 +21,48 @@ def authenticate(
     validator: JwtValidator | None = getattr(request.app.state, "validator", None)
     if credentials is None or not credentials.credentials:
         security_event(request, "auth.token_missing", "anonymous", "refused")
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "bearer token required", _CHALLENGE)
+        raise ApiError(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.TOKEN_MISSING,
+            "Falta el token de acceso.",
+            _CHALLENGE,
+        )
     if validator is None:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "no token validator", _CHALLENGE)
+        raise ApiError(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.AUTH_NOT_CONFIGURED,
+            "La API no tiene configurada la validación de tokens.",
+            _CHALLENGE,
+        )
     try:
         identity = validator.validate(credentials.credentials)
     except AuthError as refused:
         # The kind of failure (expired, bad signature...), never the token (F09-08).
         reason = str(refused).rpartition(": ")[2][:80]
         security_event(request, "auth.token_rejected", "anonymous", "refused", {"reason": reason})
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token", _CHALLENGE) from None
+        raise ApiError(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.TOKEN_INVALID,
+            "El token de acceso no es válido o ha caducado.",
+            _CHALLENGE,
+        ) from None
     closed: SessionClosures | None = getattr(request.app.state, "closed_sessions", None)
     if identity.sid and closed is not None and closed.is_closed(identity.sid):
         # The person closed this session: its tokens are worth nothing, expired or not (SEC-060).
         security_event(request, "auth.session_closed", identity.actor, "refused")
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "the session was closed", _CHALLENGE)
+        raise ApiError(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.SESSION_CLOSED,
+            "La sesión se cerró: vuelva a iniciarla.",
+            _CHALLENGE,
+        )
     if not identity.roles & frozenset(ROLES):
         security_event(request, "auth.no_role", identity.actor, "refused")
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "an ARGOS realm role is required")
+        raise ApiError(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.ROLE_MISSING,
+            "La cuenta no tiene ningún rol de ARGOS.",
+        )
     return identity
 
 

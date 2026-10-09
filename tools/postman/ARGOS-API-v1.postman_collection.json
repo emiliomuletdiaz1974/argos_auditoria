@@ -2930,7 +2930,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 401', () => pm.expect(pm.response.code).to.be.oneOf([401]));"
+                  "pm.test('Código esperado: 401', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('code: token_missing', () => pm.expect(pm.response.json().code).to.eql('token_missing'));"
                 ]
               }
             }
@@ -2969,7 +2970,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 401', () => pm.expect(pm.response.code).to.be.oneOf([401]));"
+                  "pm.test('Código esperado: 401', () => pm.expect(pm.response.code).to.be.oneOf([401]));",
+                  "pm.test('code: token_invalid', () => pm.expect(pm.response.json().code).to.eql('token_invalid'));"
                 ]
               }
             }
@@ -3019,7 +3021,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 403', () => pm.expect(pm.response.code).to.be.oneOf([403]));"
+                  "pm.test('Código esperado: 403', () => pm.expect(pm.response.code).to.be.oneOf([403]));",
+                  "pm.test('code: permission_denied', () => pm.expect(pm.response.json().code).to.eql('permission_denied'));"
                 ]
               }
             }
@@ -3073,7 +3076,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 403', () => pm.expect(pm.response.code).to.be.oneOf([403]));"
+                  "pm.test('Código esperado: 403', () => pm.expect(pm.response.code).to.be.oneOf([403]));",
+                  "pm.test('code: permission_denied', () => pm.expect(pm.response.json().code).to.eql('permission_denied'));"
                 ]
               }
             }
@@ -3175,7 +3179,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 422 o 400', () => pm.expect(pm.response.code).to.be.oneOf([422, 400]));"
+                  "pm.test('Código esperado: 422 o 400', () => pm.expect(pm.response.code).to.be.oneOf([422, 400]));",
+                  "pm.test('code: webhook_target_not_allowed', () => pm.expect(pm.response.json().code).to.eql('webhook_target_not_allowed'));"
                 ]
               }
             }
@@ -3217,7 +3222,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 400', () => pm.expect(pm.response.code).to.be.oneOf([400]));"
+                  "pm.test('Código esperado: 400', () => pm.expect(pm.response.code).to.be.oneOf([400]));",
+                  "pm.test('code: cursor_invalid', () => pm.expect(pm.response.json().code).to.eql('cursor_invalid'));"
                 ]
               }
             }
@@ -3253,7 +3259,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 404', () => pm.expect(pm.response.code).to.be.oneOf([404]));"
+                  "pm.test('Código esperado: 404', () => pm.expect(pm.response.code).to.be.oneOf([404]));",
+                  "pm.test('code: route_not_found', () => pm.expect(pm.response.json().code).to.eql('route_not_found'));"
                 ]
               }
             }

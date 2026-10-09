@@ -3,7 +3,7 @@ id: GUIA-integracion-frontend
 kind: guide
 title: Guía de integración del front end con la API v1
 phases: ["08"]
-version: 0.6.0
+version: 0.7.0
 commit: 3322940
 date: 2026-10-08
 status: current
@@ -67,13 +67,13 @@ El cliente público que usa la API es `argos-console` (`services/api/argos_api/k
 
 - Cada llamada lleva `Authorization: Bearer <access_token>`.
 - El front no necesita validar el token: lo valida la API. Si lo decodifica para leer roles o nombre, `aud` es una **lista** (`["argos-api", "account"]` desde `banco-v0.18.1`), no un texto.
-- Un `401` sin más: se llama **una vez** a `POST /api/v1/auth/refresh` (sin cuerpo, con la cookie y `X-Argos-Session: 1`) y se reintenta **una vez**. Si el refresco da `401`, la sesión ha terminado o el navegador no envió la cookie: se vuelve a Keycloak (§3). No hay que entrar en bucle.
-- Un `401` con `WWW-Authenticate: Bearer error="insufficient_user_authentication"` no es una sesión caducada: la acción pide **segundo factor** (§2.4).
+- Un `401` con `code` `token_invalid` o `session_closed`: se llama **una vez** a `POST /api/v1/auth/refresh` (sin cuerpo, con la cookie y `X-Argos-Session: 1`) y se reintenta **una vez**. Si el refresco da `401`, la sesión ha terminado o el navegador no envió la cookie: se vuelve a Keycloak (§3). No hay que entrar en bucle.
+- Un `401` con `code` `second_factor_required` (y `WWW-Authenticate: Bearer error="insufficient_user_authentication"`) no es una sesión caducada: la acción pide **segundo factor** (§2.4).
 - `POST /api/v1/auth/logout` (con `X-Argos-Session: 1`) revoca el refresco en Keycloak, borra la cookie y cierra la sesión también para los tokens de acceso que siguieran vivos. Responde `204`.
 
 ### 2.4 Segundo factor (step-up)
 
-Las acciones que deciden piden un token emitido con TOTP (`amr` contiene `otp`). Sin él, la API responde `401` con `error="insufficient_user_authentication"` y `acr_values="otp"` (RFC 9470). El front debe explicar a la persona que la acción pide su código y volver a iniciar sesión pidiendo ese nivel.
+Las acciones que deciden piden un token emitido con TOTP (`amr` contiene `otp`). Sin él, la API responde `401` con `code` `second_factor_required` y `error="insufficient_user_authentication"` y `acr_values="otp"` (RFC 9470). El front debe explicar a la persona que la acción pide su código y volver a iniciar sesión pidiendo ese nivel.
 
 Permisos con segundo factor: `campaigns.approve`, `findings.transition`, `credentials.create`, `credentials.revoke`, `synthetic.authorize`, `inventory.review`, `webhooks.create`, `system.update`, `support.package`, `airgap.import`, `airgap.export`, `systems.create`. Solo `platform_admin` y `dpo_reviewer` tienen TOTP.
 
@@ -139,6 +139,28 @@ Códigos comunes a todas las rutas:
 | `invalid_value` | 400 | Un valor que el almacén no puede leer (un cursor con una fecha imposible) |
 | `store_unavailable` | 503 | La base de datos no responde |
 | `origin_not_allowed` | 403 | Cambio enviado desde un origen que no está en la lista (§3) |
+
+Quién llama y con qué (autenticación, permisos, paginación, idempotencia y sesión):
+
+| `code` | Estado | Significa | Qué hace el front |
+|---|---|---|---|
+| `token_missing` | 401 | La llamada no lleva token | Iniciar sesión |
+| `token_invalid` | 401 | Token falso, de otro emisor o caducado | Refrescar una vez (§2.3); si falla, iniciar sesión |
+| `session_closed` | 401 | La persona cerró la sesión y el token ya no vale | Iniciar sesión |
+| `auth_not_configured` | 401 | La API arrancó sin validador de tokens | Avisar: es un fallo de instalación |
+| `role_missing` | 403 | La cuenta no tiene ningún rol de ARGOS | Explicar que pida un rol |
+| `permission_denied` | 403 | El rol no permite la acción; `detail` nombra el permiso | No ofrecer la acción a ese rol |
+| `roles_incompatible` | 403 | La cuenta planifica y aprueba a la vez (SEC-008) | Avisar: hay que separar las cuentas |
+| `second_factor_required` | 401 | La acción pide TOTP (§2.4) | Volver a iniciar sesión con segundo factor |
+| `cursor_invalid` | 400 | El cursor no es nuestro o está manipulado | Pedir la primera página |
+| `idempotency_key_invalid` | 400 | `Idempotency-Key` con caracteres no admitidos | Generar otra clave |
+| `idempotency_key_reused` | 409 | La clave ya se usó con otra petición | Generar otra clave por cada acción nueva |
+| `idempotency_in_progress` | 409 | La misma petición sigue en curso | Esperar y reintentar con la misma clave |
+| `session_header_missing` | 403 | Falta `X-Argos-Session: 1` en `/auth/*` | Enviar la cabecera (§3) |
+| `session_cookie_missing` | 401 | No hay cookie de refresco | Iniciar sesión |
+| `session_refused` | 401 | Keycloak rechazó el refresco (caducado, revocado) | Iniciar sesión |
+| `sign_in_refused` | 401 | Keycloak rechazó el código de autorización | Volver a iniciar sesión |
+| `webhook_target_not_allowed` | 422 | Destino del webhook sin https, interno, privado o que no resuelve; `detail` dice cuál | Pedir otra dirección |
 
 | Código | Significa | Qué hace el front |
 |---|---|---|
@@ -369,3 +391,4 @@ Lo que la consola de la Fase 08 ya resolvía y el front real también debe cumpl
 | 0.4.0 | 2026-10-08 | Rutas nuevas del sujeto sintético (generar, estado y paquete) y su flujo; veredictos del primero al último; `409` al aprobar compuertas de campañas cerradas; la verificación de una subsanación espera al DPO; `aud` es una lista (QA-36, K-99) |
 | 0.5.0 | 2026-10-08 | En el detalle de un hallazgo, `obligation` trae `id` corto e `iri`, y ya no llegan vacíos la norma, el artículo, el título y el resumen. La IRI de una obligación se abre en el catálogo normativo público (§5.5) |
 | 0.6.0 | 2026-10-08 | Los errores llevan `code` estable y `title` y `detail` en castellano (§4.1, nota ARG-071); códigos comunes a todas las rutas |
+| 0.7.0 | 2026-10-09 | Códigos de autenticación, permisos, segundo factor, cursor, idempotencia, sesión y destino de webhooks (§2.3, §2.4 y §4.1) |

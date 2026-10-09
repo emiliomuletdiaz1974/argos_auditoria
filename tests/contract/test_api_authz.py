@@ -149,7 +149,7 @@ def test_a_token_with_incompatible_roles_is_refused_everywhere() -> None:
     for path in ("/api/v1/campaigns", "/api/v1/findings"):
         response = client.get(path, headers=BEARER)
         assert response.status_code == 403, path
-        assert "incompatible" in response.json()["detail"]
+        assert response.json()["code"] == "roles_incompatible"
 
 
 # --- F09-07 (ARG-072): the permissions that decide ask for a second factor -----------------------

@@ -4,9 +4,9 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.48.0-alpha
-commit: 7cea717
-date: 2026-10-08
+version: 0.49.0-alpha
+commit: fc1ca37
+date: 2026-10-09
 status: current
 confidentiality: client
 ---
@@ -228,3 +228,4 @@ La imagen (`services/api/Dockerfile`) solo lleva la API: desde el 2026-09-29 no 
 | 0.46.0-alpha | 2026-10-08 | El detalle de un hallazgo resuelve la obligación también por su IRI, que es lo que guardan los hallazgos (antes devolvía norma, artículo, título y resumen vacíos), y la devuelve con `id` corto e `iri`; la IRI se abre en el catálogo normativo del comprobador | petición directa (nota ARG-069) |
 | 0.47.0-alpha | 2026-10-08 | Al aprobar una compuerta se guarda el nombre y apellidos de la persona (claim `name`, o su usuario si la cuenta no lo tiene) para el expediente impreso | petición directa |
 | 0.48.0-alpha | 2026-10-08 | Los errores llevan `code` estable (contrato v1: `Problem.code` obligatorio) y `title` en castellano; ruta inexistente, cuerpo inválido, valor ilegible, almacén caído y otro origen con código propio y `detail` en castellano | ERR-01 (nota ARG-071, DP-24) |
+| 0.49.0-alpha | 2026-10-09 | Rechazos de autenticación, permisos, segundo factor, cursor, idempotencia, sesión y destino de webhooks con código propio y `detail` en castellano; el texto de Keycloak ya no sale en la respuesta (va al log); `DestinationRefusedError.reason` | ERR-02 (nota ARG-071) |

@@ -27,10 +27,11 @@ from dataclasses import dataclass
 from typing import Any
 
 import psycopg
-from fastapi import Depends, HTTPException, Request, Response, status
+from fastapi import Depends, Request, Response, status
 from fastapi.routing import APIRoute
 from psycopg.types.json import Jsonb
 
+from argos_api.errors import ApiError, ErrorCode
 from argos_auth import AuthError, Identity, JwtValidator
 
 MUTATIONS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -163,9 +164,10 @@ async def idempotency_gate(request: Request) -> None:
     if key is None or store is None or getattr(request.state, "reservation", None) is not None:
         return
     if not KEY_PATTERN.match(key):
-        raise HTTPException(
+        raise ApiError(
             status.HTTP_400_BAD_REQUEST,
-            f"{IDEMPOTENCY_HEADER} must be 1 to 128 letters, digits, '-' or '_'",
+            ErrorCode.IDEMPOTENCY_KEY_INVALID,
+            f"{IDEMPOTENCY_HEADER} debe tener de 1 a 128 letras, dígitos, «-» o «_».",
         )
     identity = await asyncio.to_thread(identity_of, request)
     actor = identity.actor if identity else ANONYMOUS
@@ -176,12 +178,16 @@ async def idempotency_gate(request: Request) -> None:
             store.reserve, actor, key, request.method, path, fingerprint
         )
     except IdempotencyConflictError:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, f"the key {key} was already used for another request"
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.IDEMPOTENCY_KEY_REUSED,
+            f"La clave de idempotencia {key} ya se usó con otra petición.",
         ) from None
     except IdempotencyInProgressError:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, f"the request with key {key} is still running"
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.IDEMPOTENCY_IN_PROGRESS,
+            f"La petición con la clave de idempotencia {key} aún está en curso.",
         ) from None
     if replay is not None:
         raise _Replay(replay)

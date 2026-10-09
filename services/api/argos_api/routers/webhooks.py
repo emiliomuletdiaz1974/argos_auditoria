@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
+from argos_api.errors import ApiError, ErrorCode
 from argos_api.http import IdempotencyKey, caller, database
 from argos_api.paging import Page, Paging, paginate
 from argos_api.webhooks.destination import (
@@ -30,6 +31,19 @@ from argos_api.webhooks.store import (
 from argos_api.webhooks.templates import load_templates
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"], route_class=CoreRoute)
+
+
+# Why a destination is refused, said to the person (ARG-071). Every reason of the check is here.
+_REFUSED_DESTINATION = {
+    "not_https": "Un webhook solo se entrega por https.",
+    "no_host": "La dirección del webhook no tiene servidor.",
+    "appliance_service": "La dirección apunta a un servicio interno del appliance.",
+    "unresolvable": "El nombre del servidor del webhook no se resuelve.",
+    "private_address": (
+        "El servidor del webhook resuelve a una dirección privada o reservada,"
+        " que la configuración no admite."
+    ),
+}
 
 
 class NewWebhook(BaseModel):
@@ -79,7 +93,11 @@ def subscribe(
     try:
         check_destination(body.url, resolve=resolve, allowed=allowed)
     except DestinationRefusedError as refused:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(refused)) from None
+        raise ApiError(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            ErrorCode.WEBHOOK_TARGET_NOT_ALLOWED,
+            _REFUSED_DESTINATION[refused.reason],
+        ) from None
     return create_webhook(
         database(request),
         _secrets(request),

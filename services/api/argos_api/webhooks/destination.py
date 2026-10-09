@@ -45,7 +45,14 @@ Resolver = Callable[[str], Sequence[str]]
 
 
 class DestinationRefusedError(ValueError):
-    """The webhook would point where the appliance does not send anything."""
+    """The webhook would point where the appliance does not send anything.
+
+    `reason` names why, so the API can answer it without reading the message.
+    """
+
+    def __init__(self, reason: str, message: str) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 def resolve_host(host: str) -> list[str]:
@@ -53,7 +60,9 @@ def resolve_host(host: str) -> list[str]:
     try:
         infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
     except socket.gaierror as exc:
-        raise DestinationRefusedError(f"the host {host!r} does not resolve") from exc
+        raise DestinationRefusedError(
+            "unresolvable", f"the host {host!r} does not resolve"
+        ) from exc
     return sorted({str(info[4][0]) for info in infos})
 
 
@@ -79,24 +88,27 @@ def check_destination(
     """Nothing if the appliance may deliver to `url`; `DestinationRefusedError` saying why."""
     parts = urlsplit(url)
     if parts.scheme != "https":
-        raise DestinationRefusedError("a webhook is delivered over https only")
+        raise DestinationRefusedError("not_https", "a webhook is delivered over https only")
     host = (parts.hostname or "").rstrip(".")
     if not host:
-        raise DestinationRefusedError("the webhook has no host")
+        raise DestinationRefusedError("no_host", "the webhook has no host")
     allowed = tuple(allowed)
     if host.lower() in INTERNAL_NAMES and not any(
         entry.strip().lower() == host.lower() for entry in allowed
     ):
-        raise DestinationRefusedError(f"{host!r} is a service of the appliance")
+        raise DestinationRefusedError(
+            "appliance_service", f"{host!r} is a service of the appliance"
+        )
     try:
         addresses: Sequence[str] = [str(ipaddress.ip_address(host))]
     except ValueError:
         addresses = resolve(host)
     if not addresses:
-        raise DestinationRefusedError(f"the host {host!r} does not resolve")
+        raise DestinationRefusedError("unresolvable", f"the host {host!r} does not resolve")
     for address in addresses:
         if ipaddress.ip_address(address).is_global or _allowed(address, host, allowed):
             continue
         raise DestinationRefusedError(
-            f"{host!r} resolves to a private or reserved address, not allowed by configuration"
+            "private_address",
+            f"{host!r} resolves to a private or reserved address, not allowed by configuration",
         )

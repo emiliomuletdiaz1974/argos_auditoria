@@ -14,24 +14,31 @@ grants only to the listed origins.
 
 import contextlib
 import datetime as dt
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from argos_api import API_PREFIX
+from argos_api.errors import ApiError, ErrorCode
 from argos_api.http import pending
 from argos_api.sessions import CLOSED_FOR, SessionClosures, sid_of
 
 SESSION_HEADER = "X-Argos-Session"
 
 
+_log = logging.getLogger(__name__)
+
+
 def _session_header(request: Request) -> None:
     if request.headers.get(SESSION_HEADER) != "1":
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, f"the session routes ask for the header {SESSION_HEADER}: 1"
+        raise ApiError(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.SESSION_HEADER_MISSING,
+            f"Las rutas de sesión exigen la cabecera {SESSION_HEADER}: 1.",
         )
 
 
@@ -92,8 +99,13 @@ async def open_session(request: Request, body: Authorization) -> JSONResponse:
     try:
         tokens = await exchanger(body.code, body.code_verifier, body.redirect_uri)
     except PermissionError as refused:
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, f"the sign-in was refused: {refused}", _CHALLENGE
+        # What the realm said stays out of the answer: it is in English and not for the person.
+        _log.info("sign-in refused", extra={"error": str(refused)[:80]})
+        raise ApiError(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.SIGN_IN_REFUSED,
+            "El servidor de identidad rechazó el inicio de sesión: vuelva a intentarlo.",
+            _CHALLENGE,
         ) from None
     return _with_cookie(request, tokens)
 
@@ -102,7 +114,12 @@ async def open_session(request: Request, body: Authorization) -> JSONResponse:
 async def refresh(request: Request) -> JSONResponse:
     token = request.cookies.get(COOKIE)
     if not token:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "no session cookie", _CHALLENGE)
+        raise ApiError(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.SESSION_COOKIE_MISSING,
+            "No hay sesión abierta en este navegador: inicie sesión.",
+            _CHALLENGE,
+        )
     refresher = getattr(request.app.state, "refresher", None)
     if refresher is None:
         pending("the session refresh")
@@ -110,8 +127,12 @@ async def refresh(request: Request) -> JSONResponse:
         tokens: dict[str, Any] = await refresher(token)
     except PermissionError as refused:
         # The realm said no (expired, revoked): the session is over, and the page signs in again.
-        raise HTTPException(
-            status.HTTP_401_UNAUTHORIZED, f"the session was refused: {refused}", _CHALLENGE
+        _log.info("refresh refused", extra={"error": str(refused)[:80]})
+        raise ApiError(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.SESSION_REFUSED,
+            "La sesión ha caducado o se ha revocado: inicie sesión de nuevo.",
+            _CHALLENGE,
         ) from None
     return _with_cookie(request, tokens, fallback_refresh=token)
 

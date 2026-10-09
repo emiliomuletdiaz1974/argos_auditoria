@@ -33,6 +33,24 @@ class ErrorCode(StrEnum):
     INVALID_VALUE = "invalid_value"
     STORE_UNAVAILABLE = "store_unavailable"
     ORIGIN_NOT_ALLOWED = "origin_not_allowed"
+    # Who calls and with what (folder 12 of the collection).
+    TOKEN_MISSING = "token_missing"  # noqa: S105 - an error code, not a secret
+    TOKEN_INVALID = "token_invalid"  # noqa: S105 - an error code, not a secret
+    AUTH_NOT_CONFIGURED = "auth_not_configured"
+    SESSION_CLOSED = "session_closed"
+    ROLE_MISSING = "role_missing"
+    PERMISSION_DENIED = "permission_denied"
+    ROLES_INCOMPATIBLE = "roles_incompatible"
+    SECOND_FACTOR_REQUIRED = "second_factor_required"
+    CURSOR_INVALID = "cursor_invalid"
+    IDEMPOTENCY_KEY_INVALID = "idempotency_key_invalid"
+    IDEMPOTENCY_KEY_REUSED = "idempotency_key_reused"
+    IDEMPOTENCY_IN_PROGRESS = "idempotency_in_progress"
+    SESSION_HEADER_MISSING = "session_header_missing"
+    SESSION_COOKIE_MISSING = "session_cookie_missing"
+    SESSION_REFUSED = "session_refused"
+    SIGN_IN_REFUSED = "sign_in_refused"
+    WEBHOOK_TARGET_NOT_ALLOWED = "webhook_target_not_allowed"
 
 
 TITLES: dict[int, str] = {
