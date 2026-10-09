@@ -15,11 +15,11 @@
 
 ## Contra el banco de pruebas (K-99)
 
-El banco (k3s, datos sintéticos) tiene sus propias cuentas: cada persona eligió su contraseña al entrar la primera vez, y `admin.test` y `dpo.test` configuraron su TOTP.
+El banco (k3s, datos sintéticos) tiene sus propias cuentas: cada persona eligió su contraseña al entrar la primera vez, y las de DPO y administrador configuraron su TOTP. Además de las del equipo (`manager.test`, `dpo.test`, `dpo2.test`, `admin.test`, `auditor.test`), el equipo del front y el probador externo tienen una por rol: `front.<rol>` y `guest.<rol>`, con `manager`, `dpo`, `admin` y `auditor`. La guía para quien usa la colección es [docs/operacion/manual-usuario-banco.md](../../docs/operacion/manual-usuario-banco.md).
 
 1. Importa también `ARGOS-banco.postman_environment.json` y selecciónalo. Lleva las direcciones del banco (`baseUrl`, `keycloakUrl`, `keycloakHost`).
-2. En el entorno, como **Current value** (valor actual, local), pon la contraseña de cada cuenta (`password_manager`, `password_dpo`, `password_admin`, `password_auditor`) y la clave TOTP de `dpo.test` y `admin.test` (`totp_key_dpo`, `totp_key_admin`). Es la clave en Base32 que muestra Keycloak al configurar el autenticador, en «¿No puedes escanear?». La política del realm es HMAC-SHA256, así que el autenticador tiene que respetarla: FreeOTP, Aegis o 2FAS sí; Google Authenticator y Microsoft Authenticator calculan con SHA-1 y sus códigos no valen.
-3. En **Settings → General** desactiva **SSL certificate verification** mientras el banco tenga el certificado provisional de Traefik (puertos 80 y 443 cerrados, `platform/k8s/bench/tunnel.sh`).
+2. En el entorno, como **Current value** (valor actual, local), pon la cuenta de cada rol (`user_manager`, `user_dpo`, `user_admin`, `user_auditor`; vacía, la del equipo), la contraseña de cada cuenta (`password_manager`, `password_dpo`, `password_admin`, `password_auditor`) y la clave TOTP de `dpo.test` y `admin.test` (`totp_key_dpo`, `totp_key_admin`). Es la clave en Base32 que muestra Keycloak al configurar el autenticador, en «¿No puedes escanear?». La política del realm es HMAC-SHA256, así que el autenticador tiene que respetarla: FreeOTP, Aegis o 2FAS sí; Google Authenticator y Microsoft Authenticator calculan con SHA-1 y sus códigos no valen.
+3. Si el banco aún no tiene certificado público (puertos 80 y 443 cerrados, `platform/k8s/bench/tunnel.sh`), desactiva en **Settings → General** la **SSL certificate verification**. Con los puertos abiertos no hace falta.
 4. Recorre **03 · Campañas (flujo completo)** a **06 · Credenciales verificables** y **12 · Pruebas de seguridad (deben fallar)**.
 
 Los valores actuales no se exportan ni se versionan. En el banco no hay asistente, porque no tiene modelo de IA (la carpeta **08** responde 503).

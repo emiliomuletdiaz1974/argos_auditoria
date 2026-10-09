@@ -192,6 +192,130 @@
         "UPDATE_PASSWORD",
         "CONFIGURE_TOTP"
       ]
+    },
+    {
+      "username": "front.manager",
+      "enabled": true,
+      "email": "front.manager@argos.local",
+      "emailVerified": true,
+      "firstName": "Front end",
+      "lastName": "Manager",
+      "realmRoles": [
+        "campaign_manager",
+        "default-roles-argos"
+      ],
+      "requiredActions": [
+        "UPDATE_PASSWORD"
+      ]
+    },
+    {
+      "username": "front.dpo",
+      "enabled": true,
+      "email": "front.dpo@argos.local",
+      "emailVerified": true,
+      "firstName": "Front end",
+      "lastName": "DPO",
+      "realmRoles": [
+        "dpo_reviewer",
+        "default-roles-argos"
+      ],
+      "requiredActions": [
+        "UPDATE_PASSWORD",
+        "CONFIGURE_TOTP"
+      ]
+    },
+    {
+      "username": "front.admin",
+      "enabled": true,
+      "email": "front.admin@argos.local",
+      "emailVerified": true,
+      "firstName": "Front end",
+      "lastName": "Admin",
+      "realmRoles": [
+        "platform_admin",
+        "default-roles-argos"
+      ],
+      "requiredActions": [
+        "UPDATE_PASSWORD",
+        "CONFIGURE_TOTP"
+      ]
+    },
+    {
+      "username": "front.auditor",
+      "enabled": true,
+      "email": "front.auditor@argos.local",
+      "emailVerified": true,
+      "firstName": "Front end",
+      "lastName": "Auditor",
+      "realmRoles": [
+        "read_only_auditor",
+        "default-roles-argos"
+      ],
+      "requiredActions": [
+        "UPDATE_PASSWORD"
+      ]
+    },
+    {
+      "username": "guest.manager",
+      "enabled": true,
+      "email": "guest.manager@argos.local",
+      "emailVerified": true,
+      "firstName": "External tester",
+      "lastName": "Manager",
+      "realmRoles": [
+        "campaign_manager",
+        "default-roles-argos"
+      ],
+      "requiredActions": [
+        "UPDATE_PASSWORD"
+      ]
+    },
+    {
+      "username": "guest.dpo",
+      "enabled": true,
+      "email": "guest.dpo@argos.local",
+      "emailVerified": true,
+      "firstName": "External tester",
+      "lastName": "DPO",
+      "realmRoles": [
+        "dpo_reviewer",
+        "default-roles-argos"
+      ],
+      "requiredActions": [
+        "UPDATE_PASSWORD",
+        "CONFIGURE_TOTP"
+      ]
+    },
+    {
+      "username": "guest.admin",
+      "enabled": true,
+      "email": "guest.admin@argos.local",
+      "emailVerified": true,
+      "firstName": "External tester",
+      "lastName": "Admin",
+      "realmRoles": [
+        "platform_admin",
+        "default-roles-argos"
+      ],
+      "requiredActions": [
+        "UPDATE_PASSWORD",
+        "CONFIGURE_TOTP"
+      ]
+    },
+    {
+      "username": "guest.auditor",
+      "enabled": true,
+      "email": "guest.auditor@argos.local",
+      "emailVerified": true,
+      "firstName": "External tester",
+      "lastName": "Auditor",
+      "realmRoles": [
+        "read_only_auditor",
+        "default-roles-argos"
+      ],
+      "requiredActions": [
+        "UPDATE_PASSWORD"
+      ]
     }
   ],
   "identityProviders": [

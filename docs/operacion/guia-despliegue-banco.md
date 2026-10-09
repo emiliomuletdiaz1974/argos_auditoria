@@ -247,12 +247,14 @@ sudo k3s kubectl -n argos-core logs job/argos-bootstrap | tail -n 20      # term
 
 ### 6.3 Keycloak y cuentas (K-05, K-11)
 
-**Qué:** Keycloak 26.0.8 en modo producción, con el nombre público `id.<ip>.sslip.io`. El realm `argos` se importa una vez. El Job `keycloak-accounts` crea las cuentas del banco (`admin.test`, `manager.test`, `dpo.test`, `dpo2.test` y `auditor.test`) con contraseña temporal y TOTP obligatorio para administrador y DPO, y les asigna los roles por defecto del realm.
+**Qué:** Keycloak 26.0.8 en modo producción, con el nombre público `id.<ip>.sslip.io`. El realm `argos` se importa una vez. El Job `keycloak-accounts` crea las cuentas del banco con contraseña temporal: las del equipo (`admin.test`, `manager.test`, `dpo.test`, `dpo2.test` y `auditor.test`) y una por rol para el equipo del front (`front.manager`, `front.dpo`, `front.admin`, `front.auditor`) y para el probador externo (`guest.manager`, `guest.dpo`, `guest.admin`, `guest.auditor`). Exige TOTP a administradores y DPO, y les asigna los roles por defecto del realm.
 
 ```bash
 bash platform/k8s/bench/accounts.sh                  # contraseñas temporales, solo en esta consola
 bash platform/k8s/bench/accounts.sh reset dpo.test   # otra contraseña temporal y TOTP a configurar de nuevo
 ```
+
+Las cuentas que se añaden al realm las crea el Job en la siguiente etiqueta, y `accounts.sh` muestra sus contraseñas temporales. Cómo las usa cada persona, con Keycloak y Postman: [manual-usuario-banco.md](manual-usuario-banco.md).
 
 Cada contraseña temporal sirve una vez: Keycloak pide una nueva al primer inicio de sesión, y el TOTP a quien decide. La política TOTP es **HMAC-SHA256**, así que hay que usar FreeOTP, Aegis o 2FAS. Google Authenticator y Microsoft Authenticator no la soportan.
 

@@ -33,6 +33,36 @@ FRONT_ORIGIN = "http://localhost:5173"
 # K-11: the sampling gate asks for two different DPOs, and development has one. The second is a
 # copy of the first with its own name and address; it exists in the bench only.
 SECOND_DPO = {"username": "dpo2.test", "email": "dpo2.test@argos.local", "lastName": "Synthetic 2"}
+# The front end team and the external tester sign in with accounts of their own, one per role: a
+# reset or a lockout of theirs never touches the accounts of the team, and the security log says
+# who did what. They exist in the bench only and start like the others, with no credential.
+GROUPS = {"front": "Front end", "guest": "External tester"}
+ROLES = {
+    "manager": ("campaign_manager", "Manager"),
+    "dpo": ("dpo_reviewer", "DPO"),
+    "admin": ("platform_admin", "Admin"),
+    "auditor": ("read_only_auditor", "Auditor"),
+}
+
+
+def _group_users() -> list[dict[str, Any]]:
+    users = []
+    for group, first_name in GROUPS.items():
+        for short, (role, last_name) in ROLES.items():
+            actions = ["UPDATE_PASSWORD"] + (["CONFIGURE_TOTP"] if role in DECIDE else [])
+            users.append(
+                {
+                    "username": f"{group}.{short}",
+                    "enabled": True,
+                    "email": f"{group}.{short}@argos.local",
+                    "emailVerified": True,
+                    "firstName": first_name,
+                    "lastName": last_name,
+                    "realmRoles": [role],
+                    "requiredActions": actions,
+                }
+            )
+    return users
 
 
 def bench_realm(development: dict[str, Any]) -> dict[str, Any]:
@@ -54,6 +84,7 @@ def bench_realm(development: dict[str, Any]) -> dict[str, Any]:
         users.append(user)
     first = next(u for u in users if u["username"] == "dpo.test")
     users.append({**copy.deepcopy(first), **SECOND_DPO})
+    users.extend(_group_users())
     for user in users:
         roles = user.setdefault("realmRoles", [])
         if DEFAULT_ROLES not in roles:

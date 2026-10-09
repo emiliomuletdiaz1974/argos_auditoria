@@ -80,6 +80,29 @@ def test_the_bench_has_two_dpo_accounts_because_the_sampling_gate_asks_for_two_p
     assert "dpo2.test" not in {u["username"] for u in _json(DEVELOPMENT)["users"]}, "bench only"
 
 
+ROLES = {
+    "manager": "campaign_manager",
+    "dpo": "dpo_reviewer",
+    "admin": "platform_admin",
+    "auditor": "read_only_auditor",
+}
+
+
+def test_the_front_end_team_and_the_external_tester_have_one_account_per_role_each() -> None:
+    """Each group signs in with its own accounts: a reset or a lockout of theirs never touches the
+    accounts of the team, and the security log says who did what."""
+    users = {u["username"]: u for u in _json(BENCH)["users"]}
+    for group in ("front", "guest"):
+        for short, role in ROLES.items():
+            user = users[f"{group}.{short}"]
+            assert user["realmRoles"] == [role, "default-roles-argos"], user["username"]
+            assert user["email"] == f"{group}.{short}@argos.local"
+    emails = [u["email"] for u in users.values()]
+    assert len(emails) == len(set(emails)), "one address per account"
+    development = {u["username"] for u in _json(DEVELOPMENT)["users"]}
+    assert not {u for u in users if u.startswith(("front.", "guest."))} & development, "bench only"
+
+
 def _client(realm: dict[str, Any], client_id: str) -> dict[str, Any]:
     return next(c for c in realm["clients"] if c["clientId"] == client_id)
 

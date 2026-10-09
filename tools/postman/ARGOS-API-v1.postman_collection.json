@@ -82,7 +82,7 @@
                 },
                 {
                   "key": "username",
-                  "value": "manager.test"
+                  "value": "{{login_user}}"
                 },
                 {
                   "key": "password",
@@ -102,7 +102,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "// La contraseña de cada cuenta: password_manager (banco, en el entorno) o password (desarrollo). Solo en el ámbito de esta petición: no queda guardada en la colección.",
-                  "pm.variables.set('login_password', pm.variables.get('password_manager') || pm.variables.get('password'));"
+                  "pm.variables.set('login_password', pm.variables.get('password_manager') || pm.variables.get('password'));",
+                  "pm.variables.set('login_user', pm.variables.get('user_manager') || 'manager.test');"
                 ]
               }
             },
@@ -117,9 +118,10 @@
                   "  const t = pm.response.json();",
                   "  pm.collectionVariables.set('token_manager', t.access_token);",
                   "  pm.collectionVariables.set('token_manager_exp', String(Date.now() + t.expires_in * 1000));",
+                  "  pm.collectionVariables.set('token_manager_user', pm.variables.get('login_user'));",
                   "  const claims = JSON.parse(atob(t.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
                   "  pm.test('El emisor es el que valida la API (keycloak:8080)', () => pm.expect(claims.iss).to.eql('http://' + pm.variables.get('keycloakHost') + '/realms/argos'));",
-                  "  console.log('Token de manager.test: roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
+                  "  console.log('Token de ' + pm.variables.get('login_user') + ': roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
                   "}"
                 ]
               }
@@ -167,7 +169,7 @@
                 },
                 {
                   "key": "username",
-                  "value": "dpo.test"
+                  "value": "{{login_user}}"
                 },
                 {
                   "key": "password",
@@ -192,6 +194,7 @@
                 "exec": [
                   "// La contraseña de cada cuenta: password_dpo (banco, en el entorno) o password (desarrollo). Solo en el ámbito de esta petición: no queda guardada en la colección.",
                   "pm.variables.set('login_password', pm.variables.get('password_dpo') || pm.variables.get('password'));",
+                  "pm.variables.set('login_user', pm.variables.get('user_dpo') || 'dpo.test');",
                   "// K-99 · Keycloak shows the key of an authenticator in Base32; the development realm keeps it raw.",
                   "function argosBase32(text) {",
                   "  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';",
@@ -240,9 +243,10 @@
                   "  const t = pm.response.json();",
                   "  pm.collectionVariables.set('token_dpo', t.access_token);",
                   "  pm.collectionVariables.set('token_dpo_exp', String(Date.now() + t.expires_in * 1000));",
+                  "  pm.collectionVariables.set('token_dpo_user', pm.variables.get('login_user'));",
                   "  const claims = JSON.parse(atob(t.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
                   "  pm.test('El emisor es el que valida la API (keycloak:8080)', () => pm.expect(claims.iss).to.eql('http://' + pm.variables.get('keycloakHost') + '/realms/argos'));",
-                  "  console.log('Token de dpo.test: roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
+                  "  console.log('Token de ' + pm.variables.get('login_user') + ': roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
                   "}"
                 ]
               }
@@ -290,7 +294,7 @@
                 },
                 {
                   "key": "username",
-                  "value": "admin.test"
+                  "value": "{{login_user}}"
                 },
                 {
                   "key": "password",
@@ -315,6 +319,7 @@
                 "exec": [
                   "// La contraseña de cada cuenta: password_admin (banco, en el entorno) o password (desarrollo). Solo en el ámbito de esta petición: no queda guardada en la colección.",
                   "pm.variables.set('login_password', pm.variables.get('password_admin') || pm.variables.get('password'));",
+                  "pm.variables.set('login_user', pm.variables.get('user_admin') || 'admin.test');",
                   "// K-99 · Keycloak shows the key of an authenticator in Base32; the development realm keeps it raw.",
                   "function argosBase32(text) {",
                   "  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';",
@@ -363,9 +368,10 @@
                   "  const t = pm.response.json();",
                   "  pm.collectionVariables.set('token_admin', t.access_token);",
                   "  pm.collectionVariables.set('token_admin_exp', String(Date.now() + t.expires_in * 1000));",
+                  "  pm.collectionVariables.set('token_admin_user', pm.variables.get('login_user'));",
                   "  const claims = JSON.parse(atob(t.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
                   "  pm.test('El emisor es el que valida la API (keycloak:8080)', () => pm.expect(claims.iss).to.eql('http://' + pm.variables.get('keycloakHost') + '/realms/argos'));",
-                  "  console.log('Token de admin.test: roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
+                  "  console.log('Token de ' + pm.variables.get('login_user') + ': roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
                   "}"
                 ]
               }
@@ -413,7 +419,7 @@
                 },
                 {
                   "key": "username",
-                  "value": "auditor.test"
+                  "value": "{{login_user}}"
                 },
                 {
                   "key": "password",
@@ -433,7 +439,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "// La contraseña de cada cuenta: password_auditor (banco, en el entorno) o password (desarrollo). Solo en el ámbito de esta petición: no queda guardada en la colección.",
-                  "pm.variables.set('login_password', pm.variables.get('password_auditor') || pm.variables.get('password'));"
+                  "pm.variables.set('login_password', pm.variables.get('password_auditor') || pm.variables.get('password'));",
+                  "pm.variables.set('login_user', pm.variables.get('user_auditor') || 'auditor.test');"
                 ]
               }
             },
@@ -448,9 +455,10 @@
                   "  const t = pm.response.json();",
                   "  pm.collectionVariables.set('token_auditor', t.access_token);",
                   "  pm.collectionVariables.set('token_auditor_exp', String(Date.now() + t.expires_in * 1000));",
+                  "  pm.collectionVariables.set('token_auditor_user', pm.variables.get('login_user'));",
                   "  const claims = JSON.parse(atob(t.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));",
                   "  pm.test('El emisor es el que valida la API (keycloak:8080)', () => pm.expect(claims.iss).to.eql('http://' + pm.variables.get('keycloakHost') + '/realms/argos'));",
-                  "  console.log('Token de auditor.test: roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
+                  "  console.log('Token de ' + pm.variables.get('login_user') + ': roles', claims.realm_access && claims.realm_access.roles, '· amr', claims.amr);",
                   "}"
                 ]
               }
@@ -3434,11 +3442,13 @@
           "  const key = pm.variables.get('totp_key_' + role);",
           "  return key ? argosBase32(key) : (pm.variables.get('totp_secret_' + role) || null);",
           "}",
+          "// The account of each role comes from user_<role> (the front end team and the external tester",
+          "// have their own in the bench); without it, the account of the team.",
           "const USERS = {",
-          "  manager: { user: 'manager.test', secret: null },",
-          "  dpo:     { user: 'dpo.test',     secret: argosSecret('dpo') },",
-          "  admin:   { user: 'admin.test',   secret: argosSecret('admin') },",
-          "  auditor: { user: 'auditor.test', secret: null },",
+          "  manager: { user: pm.variables.get('user_manager') || 'manager.test', secret: null },",
+          "  dpo:     { user: pm.variables.get('user_dpo') || 'dpo.test',         secret: argosSecret('dpo') },",
+          "  admin:   { user: pm.variables.get('user_admin') || 'admin.test',     secret: argosSecret('admin') },",
+          "  auditor: { user: pm.variables.get('user_auditor') || 'auditor.test', secret: null },",
           "};",
           "const header = pm.request.headers.get('Authorization') || '';",
           "const match = header.match(/\\{\\{token_(manager|dpo|admin|auditor)\\}\\}/);",
@@ -3446,7 +3456,8 @@
           "  const role = match[1];",
           "  const token = pm.collectionVariables.get('token_' + role);",
           "  const exp = Number(pm.collectionVariables.get('token_' + role + '_exp') || 0);",
-          "  if (!token || Date.now() > exp - 20000) {",
+          "  const owner = pm.collectionVariables.get('token_' + role + '_user');",
+          "  if (!token || Date.now() > exp - 20000 || owner !== USERS[role].user) {",
           "    const u = USERS[role];",
           "    if ((role === 'dpo' || role === 'admin') && !u.secret) { throw new Error('ARGOS · falta totp_secret_' + role + ' (desarrollo: el de ' + u.user + ' en deploy/dev/keycloak/realm-argos.json) o totp_key_' + role + ' (banco: la clave Base32 que muestra Keycloak al configurar el autenticador), como valor actual (local). No se exporta ni se versiona.'); }",
           "    const win = Math.floor(Date.now() / 30000);",
@@ -3477,6 +3488,7 @@
           "        const t = res.json();",
           "        pm.collectionVariables.set('token_' + role, t.access_token);",
           "        pm.collectionVariables.set('token_' + role + '_exp', String(Date.now() + t.expires_in * 1000));",
+          "        pm.collectionVariables.set('token_' + role + '_user', u.user);",
           "      });",
           "    }, wait);",
           "  }",
