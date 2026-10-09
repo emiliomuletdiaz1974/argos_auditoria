@@ -4,8 +4,8 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.49.0-alpha
-commit: fc1ca37
+version: 0.50.0-alpha
+commit: 33c6e97
 date: 2026-10-09
 status: current
 confidentiality: client
@@ -28,7 +28,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 - `argos_api.app.create_app(validator)`: monta `/health`, los routers de cada recurso bajo `/api/v1` y los manejadores de error; expone el contrato en `/api/v1/openapi.json`.
 - `argos_api.routers.*`: un módulo por recurso (`systems`, `inventory`, `campaigns`, `findings`, `evidence`, `credentials`, `assistant`, `approvals`, `webhooks`, `session`).
 - `argos_api.http`: el problema RFC 9457, la cabecera de idempotencia y el `501` de lo que aún no está.
-- `argos_api.errors`: el catálogo de códigos de error (`ErrorCode`), los títulos en castellano por estado y `ApiError`, el error con código propio y `detail` para la persona (nota ARG-071).
+- `argos_api.errors`: el catálogo de códigos de error (`ErrorCode`), los títulos en castellano por estado y `ApiError`, el error con código propio y `detail` para la persona (nota ARG-071); `DOMAIN_ERRORS` y `domain_error` traducen los rechazos del motor de retos por su `code`.
 - `argos_api.paging`: el cursor opaco (`created_at`, `id`), su validación en la dependencia de paginación y el gemelo en memoria del predicado SQL (`apply_keyset`), para que la consulta y la prueba digan lo mismo.
 - `argos_api.core`: `CoreRoute`, la clase de ruta que envuelve a todas. Es clase de ruta y no middleware a propósito: un middleware corre antes de resolver las dependencias y no sabe todavía quién llama. Aquí la identidad ya está resuelta, así que el asiento del diario lleva el actor real y una llamada denegada no deja rastro de algo que no ocurrió.
 - `argos_api.auth`: exige un token del realm `argos` con algún rol de ARGOS.
@@ -229,3 +229,4 @@ La imagen (`services/api/Dockerfile`) solo lleva la API: desde el 2026-09-29 no 
 | 0.47.0-alpha | 2026-10-08 | Al aprobar una compuerta se guarda el nombre y apellidos de la persona (claim `name`, o su usuario si la cuenta no lo tiene) para el expediente impreso | petición directa |
 | 0.48.0-alpha | 2026-10-08 | Los errores llevan `code` estable (contrato v1: `Problem.code` obligatorio) y `title` en castellano; ruta inexistente, cuerpo inválido, valor ilegible, almacén caído y otro origen con código propio y `detail` en castellano | ERR-01 (nota ARG-071, DP-24) |
 | 0.49.0-alpha | 2026-10-09 | Rechazos de autenticación, permisos, segundo factor, cursor, idempotencia, sesión y destino de webhooks con código propio y `detail` en castellano; el texto de Keycloak ya no sale en la respuesta (va al log); `DestinationRefusedError.reason` | ERR-02 (nota ARG-071) |
+| 0.50.0-alpha | 2026-10-09 | Campañas, compuertas y sujeto sintético con código propio y `detail` en castellano; los rechazos del motor se traducen por su `code` (`domain_error`), nunca por su texto; validadores del cuerpo en castellano | ERR-03 (nota ARG-071) |

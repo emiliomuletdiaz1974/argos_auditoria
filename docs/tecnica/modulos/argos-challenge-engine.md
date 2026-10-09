@@ -4,9 +4,9 @@ kind: module
 title: Motor de retos y campañas (argos-challenge-engine)
 module: argos-challenge-engine
 phases: ["01"]
-version: 0.15.0-alpha
-commit: 7cea717
-date: 2026-10-08
+version: 0.16.0-alpha
+commit: 33c6e97
+date: 2026-10-09
 status: current
 confidentiality: client
 ---
@@ -211,12 +211,12 @@ El cierre de un hallazgo no lo declara el cliente: lo confirma **el mismo reto q
 | Clase | `SnapshotSelectorResolver(dsn, snapshot_id)` con `resolve(selector)` y `nodes`; función `matches(node, selector, system_ids)` | Resolución de selectores sobre la instantánea |
 | Funciones | `compile_campaign(campaign_id, plan, challenges, nodes, systems, context)`, `connector_id(system)`, `unit_id(...)`; tipos `CompiledCampaign`, `CompilerError`; tabla `CONNECTOR_IDS` | Compilador de campañas |
 | Tablas | `argos.campaigns` (ampliada), `argos.campaign_units`, `argos.verdicts`, `argos.approval_requests`, `argos.approvals` (migración `0012`) | Campañas, unidades, veredictos y compuertas |
-| Funciones | `create_campaign`, `pin_campaign`, `save_units`, `persist_verdict`, `request_approval`, `grant_approval`, `set_status`, `campaign_record`; `CampaignStateError`, `STATUSES`, `TRANSITIONS` | Almacén del motor (única escritura de veredictos) |
+| Funciones | `create_campaign`, `pin_campaign`, `save_units`, `persist_verdict`, `request_approval`, `grant_approval`, `set_status`, `campaign_record`; `CampaignStateError` (con `code` estable y `details`), `STATUSES`, `TRANSITIONS` | Almacén del motor (única escritura de veredictos) |
 | Asientos | `campaign.create`, `campaign.pin`, `approval.request`, `approval.grant`, `verdict.emit` | Trazabilidad de la campaña |
 | Funciones | `evaluate(unit, probe_result, opa_decision=None)`; tipo `Verdict` (`canonical()`, `hash`); constantes `RESULTS`, `OPERATORS` | Evaluador determinista (única fuente de veredictos) |
 | Funciones | `sample_size`, `wilson_upper`, `required_sample_size`, `plan_sampling`; tipo `SamplingPlan`; constantes `Z`, `POPULATION_THRESHOLD` | Muestreo estadístico declarado |
 | Tablas | `argos.synthetic_subjects`, `argos.synthetic_injections` (migración `0011`), `argos.synthetic_exercises` (migración `0032`) | Inventario auditado de sujetos sintéticos y derechos ejercidos |
-| Funciones | `generate_subjects(seed, count)`, `is_synthetic(value)`, `client_package(subject, injections)`, `register_subjects`, `authorize_injection`, `confirm_injection`, `confirm_exercise(..., *, requested_at, answered_at)`, `confirm_revert`, `injections(dsn, campaign_id)`, `pending_reversions`; tipos `SyntheticSubject`, `SyntheticError` | Sujeto sintético |
+| Funciones | `generate_subjects(seed, count)`, `is_synthetic(value)`, `client_package(subject, injections)`, `register_subjects`, `authorize_injection`, `confirm_injection`, `confirm_exercise(..., *, requested_at, answered_at)`, `confirm_revert`, `injections(dsn, campaign_id)`, `pending_reversions`; tipos `SyntheticSubject`, `SyntheticError` (con `code` estable y `details`) | Sujeto sintético |
 | Asientos | `synthetic.generate`, `synthetic.authorize`, `synthetic.injected`, `synthetic.exercised`, `synthetic.revert` | Trazabilidad del sujeto sintético |
 | Herramienta de desarrollo | `tools/demo_client_actions.py inject\|erase\|revert` | Hace de cliente en la demostración (fuera del producto) |
 
@@ -412,3 +412,4 @@ Seis infracciones plantadas comprueban que el analizador las detecta, y el repos
 | 0.13.2-alpha | 2026-09-28 | Listado de hallazgos sin ocurrencias en la clave del cursor | QA-31 (QA-064) |
 | 0.14.0-alpha | 2026-10-07 | La campaña de subsanación se anota como `system:remediation` con el solicitante en el asiento; las compuertas no admiten aprobaciones en una campaña sellada o fallida; el worker hace caducar cada hora las aceptaciones de riesgo; sujetos sintéticos generados por campaña y su estado y paquete legibles | QA-36 |
 | 0.15.0-alpha | 2026-10-08 | `grant_approval(approver_name=)` y columna `argos.approvals.approver_name` (migración 0052) | petición directa |
+| 0.16.0-alpha | 2026-10-09 | Cada `CampaignStateError` y `SyntheticError` lleva un `code` estable (`gate_not_requested`, `campaign_closed`, `synthetic_subject_not_in_campaign`…) y los datos de la ocurrencia en `details`; el mensaje sigue en inglés y la API traduce por el código | ERR-03 (nota ARG-071) |

@@ -10,7 +10,18 @@ from typing import Any
 
 from fastapi import HTTPException, status
 
-__all__ = ["TITLES", "ApiError", "ErrorCode", "generic_code", "title", "validation_detail"]
+from argos_common.errors import ArgosError
+
+__all__ = [
+    "DOMAIN_ERRORS",
+    "TITLES",
+    "ApiError",
+    "ErrorCode",
+    "domain_error",
+    "generic_code",
+    "title",
+    "validation_detail",
+]
 
 
 class ErrorCode(StrEnum):
@@ -51,6 +62,35 @@ class ErrorCode(StrEnum):
     SESSION_REFUSED = "session_refused"
     SIGN_IN_REFUSED = "sign_in_refused"
     WEBHOOK_TARGET_NOT_ALLOWED = "webhook_target_not_allowed"
+    # Campaigns and gates (folder 03).
+    ACTOR_NOT_PERSON = "actor_not_person"
+    CAMPAIGN_NOT_FOUND = "campaign_not_found"
+    CAMPAIGN_RUNNER_UNAVAILABLE = "campaign_runner_unavailable"
+    CAMPAIGN_ALREADY_RUNNING = "campaign_already_running"
+    REMEDIATION_ALREADY_RUNNING = "remediation_already_running"
+    CAMPAIGN_PLAN_NOT_READY = "campaign_plan_not_ready"
+    CAMPAIGN_NOT_RUNNING = "campaign_not_running"
+    CAMPAIGN_NOT_PLANNED = "campaign_not_planned"
+    CAMPAIGN_TRANSITION_ILLEGAL = "campaign_transition_illegal"
+    CAMPAIGN_CLOSED = "campaign_closed"
+    GATE_NOT_REQUESTED = "gate_not_requested"
+    GATE_ALREADY_APPROVED = "gate_already_approved"
+    SAME_PERSON_APPROVAL = "same_person_approval"
+    VERDICT_CONFLICT = "verdict_conflict"
+    # The synthetic subject (folders 03 and 07, ADR-0008).
+    SYNTHETIC_SUBJECT_NOT_FOUND = "synthetic_subject_not_found"
+    SYNTHETIC_SUBJECT_NOT_IN_CAMPAIGN = "synthetic_subject_not_in_campaign"
+    SYNTHETIC_SUBJECTS_ALREADY_GENERATED = "synthetic_subjects_already_generated"
+    SYNTHETIC_CAMPAIGN_CLOSED = "synthetic_campaign_closed"
+    SYNTHETIC_REVERT_PROCEDURE_MISSING = "synthetic_revert_procedure_missing"
+    SYNTHETIC_INJECTION_NOT_FOUND = "synthetic_injection_not_found"
+    SYNTHETIC_INJECTION_NOT_CONFIRMED = "synthetic_injection_not_confirmed"
+    SYNTHETIC_SAME_PERSON_CONFIRMATION = "synthetic_same_person_confirmation"
+    SYNTHETIC_ALREADY_CONFIRMED = "synthetic_already_confirmed"
+    SYNTHETIC_RIGHT_UNKNOWN = "synthetic_right_unknown"
+    SYNTHETIC_TIMEZONE_MISSING = "synthetic_timezone_missing"
+    SYNTHETIC_DATES_IN_FUTURE = "synthetic_dates_in_future"
+    SYNTHETIC_ANSWER_BEFORE_REQUEST = "synthetic_answer_before_request"
 
 
 TITLES: dict[int, str] = {
@@ -144,3 +184,176 @@ def _reason(error: dict[str, Any]) -> str:
 def validation_detail(errors: list[dict[str, Any]]) -> str:
     """`body.to: campo obligatorio; query.limit: valor demasiado grande` — field and reason."""
     return "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {_reason(e)}" for e in errors)
+
+
+# How a person reads the states and gates the details name.
+CAMPAIGN_STATUS = {
+    "planned": "planificada",
+    "pinned": "fijada",
+    "running": "en ejecución",
+    "sealed": "sellada",
+    "failed": "fallida",
+}
+GATE_LABELS = {"start": "Inicio de la campaña", "sampling": "Muestreo (doble control)"}
+
+_CONFLICT = status.HTTP_409_CONFLICT
+_NOT_FOUND = status.HTTP_404_NOT_FOUND
+_INVALID = status.HTTP_422_UNPROCESSABLE_CONTENT
+
+# The refusals of the domain, by their stable code (`ArgosError.code`): what the API answers.
+# `{name}` takes the value of `details[name]`, already put into words.
+DOMAIN_ERRORS: dict[str, tuple[int, ErrorCode, str]] = {
+    "actor_not_person": (
+        status.HTTP_403_FORBIDDEN,
+        ErrorCode.ACTOR_NOT_PERSON,
+        "Esta acción solo la puede hacer una persona, no un servicio.",
+    ),
+    "campaign_not_found": (
+        _NOT_FOUND,
+        ErrorCode.CAMPAIGN_NOT_FOUND,
+        "La campaña {campaign_id} no existe.",
+    ),
+    "campaign_not_planned": (
+        _CONFLICT,
+        ErrorCode.CAMPAIGN_NOT_PLANNED,
+        "La campaña ya no está planificada: no se puede fijar de nuevo.",
+    ),
+    "campaign_transition_illegal": (
+        _CONFLICT,
+        ErrorCode.CAMPAIGN_TRANSITION_ILLEGAL,
+        "La campaña no puede pasar de «{from}» a «{to}».",
+    ),
+    "campaign_status_unknown": (
+        _CONFLICT,
+        ErrorCode.CAMPAIGN_TRANSITION_ILLEGAL,
+        "La campaña no puede pasar a un estado que no existe.",
+    ),
+    "campaign_closed": (
+        _CONFLICT,
+        ErrorCode.CAMPAIGN_CLOSED,
+        "La campaña está {status} y no admite más aprobaciones.",
+    ),
+    "gate_not_requested": (
+        _CONFLICT,
+        ErrorCode.GATE_NOT_REQUESTED,
+        "La compuerta «{gate}» no se ha solicitado.",
+    ),
+    "gate_already_approved": (
+        _CONFLICT,
+        ErrorCode.GATE_ALREADY_APPROVED,
+        "Ya aprobó la compuerta «{gate}»: la segunda aprobación es de otra persona.",
+    ),
+    "same_person_approval": (
+        _CONFLICT,
+        ErrorCode.SAME_PERSON_APPROVAL,
+        "Quien creó la campaña no puede aprobarla: hace falta otra persona.",
+    ),
+    "verdict_missing": (
+        _CONFLICT,
+        ErrorCode.VERDICT_CONFLICT,
+        "El veredicto no se pudo leer después de escribirlo.",
+    ),
+    "verdict_conflict": (
+        _CONFLICT,
+        ErrorCode.VERDICT_CONFLICT,
+        "La unidad ya tiene un veredicto distinto.",
+    ),
+    "synthetic_subject_without_campaign": (
+        _CONFLICT,
+        ErrorCode.SYNTHETIC_SUBJECT_NOT_IN_CAMPAIGN,
+        "Un sujeto sintético se registra siempre para una campaña.",
+    ),
+    "synthetic_revert_procedure_missing": (
+        _INVALID,
+        ErrorCode.SYNTHETIC_REVERT_PROCEDURE_MISSING,
+        "Una inyección solo se autoriza con su procedimiento para revertirla.",
+    ),
+    "synthetic_subject_not_in_campaign": (
+        _CONFLICT,
+        ErrorCode.SYNTHETIC_SUBJECT_NOT_IN_CAMPAIGN,
+        "El sujeto no pertenece a esta campaña.",
+    ),
+    "synthetic_injection_not_found": (
+        _NOT_FOUND,
+        ErrorCode.SYNTHETIC_INJECTION_NOT_FOUND,
+        "La inyección {injection_id} no existe.",
+    ),
+    "synthetic_same_person_confirmation": (
+        _CONFLICT,
+        ErrorCode.SYNTHETIC_SAME_PERSON_CONFIRMATION,
+        "Quien autorizó la inyección no puede confirmarla: lo hace el cliente.",
+    ),
+    "synthetic_injection_not_confirmed": (
+        _CONFLICT,
+        ErrorCode.SYNTHETIC_INJECTION_NOT_CONFIRMED,
+        "El sujeto aún no está inyectado: confirme antes la inyección.",
+    ),
+    "synthetic_already_confirmed": (
+        _CONFLICT,
+        ErrorCode.SYNTHETIC_ALREADY_CONFIRMED,
+        "Este paso ya está confirmado para la inyección.",
+    ),
+    "synthetic_right_unknown": (
+        _INVALID,
+        ErrorCode.SYNTHETIC_RIGHT_UNKNOWN,
+        "El derecho «{right}» no existe.",
+    ),
+    "synthetic_timezone_missing": (
+        _INVALID,
+        ErrorCode.SYNTHETIC_TIMEZONE_MISSING,
+        "La fecha «{field}» necesita su zona horaria.",
+    ),
+    "synthetic_dates_in_future": (
+        _INVALID,
+        ErrorCode.SYNTHETIC_DATES_IN_FUTURE,
+        "Las fechas del ejercicio de un derecho no pueden ser futuras.",
+    ),
+    "synthetic_answer_before_request": (
+        _INVALID,
+        ErrorCode.SYNTHETIC_ANSWER_BEFORE_REQUEST,
+        "La respuesta no puede ser anterior a la solicitud.",
+    ),
+    "synthetic_campaign_closed": (
+        _CONFLICT,
+        ErrorCode.SYNTHETIC_CAMPAIGN_CLOSED,
+        "La campaña está {status} y no admite sujetos nuevos.",
+    ),
+    "synthetic_subjects_already_generated": (
+        _CONFLICT,
+        ErrorCode.SYNTHETIC_SUBJECTS_ALREADY_GENERATED,
+        "Los sujetos de esta campaña ya se generaron.",
+    ),
+}
+
+
+class _Words(dict[str, str]):
+    """The details put into words; a value the domain did not give is left as a dash."""
+
+    def __missing__(self, key: str) -> str:
+        return "—"
+
+
+def _words(details: dict[str, object]) -> _Words:
+    words = _Words()
+    for key, value in details.items():
+        text = str(value)
+        if key in ("status", "from", "to"):
+            text = CAMPAIGN_STATUS.get(text, text)
+        elif key == "gate":
+            text = GATE_LABELS.get(text, text)
+        words[key] = text
+    return words
+
+
+def domain_error(refused: ArgosError) -> ApiError:
+    """The answer to a refusal of the domain: its own code and a detail in Spanish.
+
+    A code the API does not know yet answers a generic conflict, never the English of the domain.
+    """
+    known = DOMAIN_ERRORS.get(refused.code)
+    if known is None:
+        return ApiError(
+            _CONFLICT, ErrorCode.CONFLICT, "La operación no es posible en el estado actual."
+        )
+    status_code, code, template = known
+    return ApiError(status_code, code, template.format_map(_words(refused.details)))

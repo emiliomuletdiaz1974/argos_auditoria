@@ -161,7 +161,9 @@ def register_subjects(
     the seal (security review F09-02, SEC-015).
     """
     if not campaign_id:
-        raise SyntheticError("a synthetic subject is registered for a campaign")
+        raise SyntheticError(
+            "a synthetic subject is registered for a campaign", "synthetic_subject_without_campaign"
+        )
     rows = [
         (
             subject.id,
@@ -195,7 +197,9 @@ def register_subjects(
 
 def _person(actor: str, what: str) -> None:
     if not actor.startswith("user:"):
-        raise SyntheticError(f"{what} is done by a person: the actor must be user:<sub>")
+        raise SyntheticError(
+            f"{what} is done by a person: the actor must be user:<sub>", "actor_not_person"
+        )
 
 
 def authorize_injection(
@@ -215,7 +219,10 @@ def authorize_injection(
     """
     _person(reviewer, "authorising an injection")
     if not revert_procedure.strip():
-        raise SyntheticError("an injection is authorised only with its revert procedure")
+        raise SyntheticError(
+            "an injection is authorised only with its revert procedure",
+            "synthetic_revert_procedure_missing",
+        )
     injection_id = str(uuid7())
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:
@@ -225,7 +232,10 @@ def authorize_injection(
                 (subject_id,),
             ).fetchone()
             if owner is None or owner[0] != campaign_id:
-                raise SyntheticError("the subject does not belong to this campaign")
+                raise SyntheticError(
+                    "the subject does not belong to this campaign",
+                    "synthetic_subject_not_in_campaign",
+                )
         conn.execute(
             "INSERT INTO argos.synthetic_injections "
             "(id, subject_id, system_id, point, method, revert_procedure, authorized_by) "
@@ -265,14 +275,26 @@ def _confirm(
             (injection_id,),
         ).fetchone()
         if row is None:
-            raise SyntheticError(f"unknown synthetic injection: {injection_id}")
+            raise SyntheticError(
+                f"unknown synthetic injection: {injection_id}",
+                "synthetic_injection_not_found",
+                {"injection_id": injection_id},
+            )
         if row[2] == actor:
             # The DPO who authorised and the client who confirms are two people (SEC-008).
-            raise SyntheticError(f"{actor} authorised this injection and does not confirm it")
+            raise SyntheticError(
+                f"{actor} authorised this injection and does not confirm it",
+                "synthetic_same_person_confirmation",
+            )
         if needs_injection and row[0] is None:
-            raise SyntheticError("the subject is not injected yet: confirm the injection first")
+            raise SyntheticError(
+                "the subject is not injected yet: confirm the injection first",
+                "synthetic_injection_not_confirmed",
+            )
         if row[1] is not None:
-            raise SyntheticError(f"{action} is already confirmed for this injection")
+            raise SyntheticError(
+                f"{action} is already confirmed for this injection", "synthetic_already_confirmed"
+            )
         # `sets` is a literal written in this module, never user input; the values are parameters.
         statement = f"UPDATE argos.synthetic_injections SET {sets} WHERE id = %s"  # noqa: S608
         conn.execute(statement, (*args, injection_id))
@@ -312,15 +334,23 @@ def confirm_exercise(
     """
     _person(confirmed_by, "confirming the exercise of a right")
     if right not in RIGHTS:
-        raise SyntheticError(f"unknown right: {right!r}")
+        raise SyntheticError(
+            f"unknown right: {right!r}", "synthetic_right_unknown", {"right": right}
+        )
     for name, value in (("requested_at", requested_at), ("answered_at", answered_at)):
         if value.tzinfo is None:
-            raise SyntheticError(f"{name} needs its time zone")
+            raise SyntheticError(
+                f"{name} needs its time zone", "synthetic_timezone_missing", {"field": name}
+            )
     now = _now()
     if requested_at > now or answered_at > now:
-        raise SyntheticError("the dates of an exercised right cannot be in the future")
+        raise SyntheticError(
+            "the dates of an exercised right cannot be in the future", "synthetic_dates_in_future"
+        )
     if answered_at < requested_at:
-        raise SyntheticError("the answer cannot come before the request")
+        raise SyntheticError(
+            "the answer cannot come before the request", "synthetic_answer_before_request"
+        )
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:
         row = conn.execute(
@@ -329,21 +359,32 @@ def confirm_exercise(
             (injection_id,),
         ).fetchone()
         if row is None:
-            raise SyntheticError(f"unknown synthetic injection: {injection_id}")
+            raise SyntheticError(
+                f"unknown synthetic injection: {injection_id}",
+                "synthetic_injection_not_found",
+                {"injection_id": injection_id},
+            )
         if row[1] == confirmed_by:
             # The DPO who authorised and the client who confirms are two people (SEC-008).
             raise SyntheticError(
-                f"{confirmed_by} authorised this injection and does not confirm it"
+                f"{confirmed_by} authorised this injection and does not confirm it",
+                "synthetic_same_person_confirmation",
             )
         if row[0] is None:
-            raise SyntheticError("the subject is not injected yet: confirm the injection first")
+            raise SyntheticError(
+                "the subject is not injected yet: confirm the injection first",
+                "synthetic_injection_not_confirmed",
+            )
         repeated = conn.execute(
             "SELECT 1 FROM argos.synthetic_exercises "
             "WHERE injection_id = %s AND exercised_right = %s",
             (injection_id, right),
         ).fetchone()
         if repeated is not None:
-            raise SyntheticError("synthetic.exercised is already confirmed for this injection")
+            raise SyntheticError(
+                "synthetic.exercised is already confirmed for this injection",
+                "synthetic_already_confirmed",
+            )
         conn.execute(
             "INSERT INTO argos.synthetic_exercises "
             "(id, injection_id, exercised_right, requested_at, answered_at, confirmed_by) "
@@ -450,16 +491,28 @@ def generate_for_campaign(dsn: str, campaign_id: str, count: int) -> list[Synthe
             (campaign_id,),
         ).fetchone()
     if row is None:
-        raise SyntheticError(f"unknown campaign: {campaign_id}")
+        raise SyntheticError(
+            f"unknown campaign: {campaign_id}", "campaign_not_found", {"campaign_id": campaign_id}
+        )
     if row[0] in ("sealed", "failed"):
-        raise SyntheticError(f"the campaign is {row[0]} and takes no new subjects")
+        raise SyntheticError(
+            f"the campaign is {row[0]} and takes no new subjects",
+            "synthetic_campaign_closed",
+            {"status": row[0]},
+        )
     if row[1]:
-        raise SyntheticError("the subjects of this campaign were already generated")
+        raise SyntheticError(
+            "the subjects of this campaign were already generated",
+            "synthetic_subjects_already_generated",
+        )
     subjects = generate_subjects(f"campaign-{campaign_id}", count)
     try:
         register_subjects(dsn, campaign_id, subjects)
     except psycopg.errors.UniqueViolation:
-        raise SyntheticError("the subjects of this campaign were already generated") from None
+        raise SyntheticError(
+            "the subjects of this campaign were already generated",
+            "synthetic_subjects_already_generated",
+        ) from None
     return subjects
 
 

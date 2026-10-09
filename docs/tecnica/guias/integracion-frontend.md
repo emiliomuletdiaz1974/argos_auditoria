@@ -3,7 +3,7 @@ id: GUIA-integracion-frontend
 kind: guide
 title: Guía de integración del front end con la API v1
 phases: ["08"]
-version: 0.7.0
+version: 0.8.0
 commit: 3322940
 date: 2026-10-08
 status: current
@@ -161,6 +161,24 @@ Quién llama y con qué (autenticación, permisos, paginación, idempotencia y s
 | `session_refused` | 401 | Keycloak rechazó el refresco (caducado, revocado) | Iniciar sesión |
 | `sign_in_refused` | 401 | Keycloak rechazó el código de autorización | Volver a iniciar sesión |
 | `webhook_target_not_allowed` | 422 | Destino del webhook sin https, interno, privado o que no resuelve; `detail` dice cuál | Pedir otra dirección |
+
+Campañas y compuertas (§5.4):
+
+| `code` | Estado | Significa | Qué hace el front |
+|---|---|---|---|
+| `campaign_not_found` | 404 | La campaña no existe | Volver al listado |
+| `campaign_runner_unavailable` | 503 | El motor de campañas (Temporal) no está conectado | Avisar de que el servicio no está disponible |
+| `campaign_already_running` | 409 | La campaña ya se lanzó | Refrescar su estado |
+| `remediation_already_running` | 409 | Ya hay una reejecución de esa campaña en curso | Esperar a que acabe |
+| `campaign_plan_not_ready` | 409 | El plan previo existe cuando la campaña se prepara, tras lanzarla | Ofrecer lanzarla |
+| `campaign_not_running` | 409 | Sin progreso: la campaña no está en marcha | Mostrar su estado |
+| `gate_not_requested` | 409 | La compuerta no se ha pedido todavía | Refrescar las compuertas |
+| `gate_already_approved` | 409 | La misma persona ya aprobó; la segunda aprobación es de otra | Explicarlo |
+| `same_person_approval` | 409 | Quien creó la campaña no la aprueba (SEC-008) | Explicarlo |
+| `campaign_closed` | 409 | La campaña está sellada o fallida y no admite aprobaciones | Refrescar el estado |
+| `actor_not_person` | 403 | La acción la tiene que hacer una persona, no un servicio | Avisar: es un fallo de integración |
+
+Sujeto sintético desde la campaña (§5.8): `synthetic_subject_not_found` (404), `synthetic_subjects_already_generated` (409), `synthetic_campaign_closed` (409), `synthetic_subject_not_in_campaign` (409) y `synthetic_revert_procedure_missing` (422). El resto de códigos `synthetic_*` llegan con las confirmaciones del cliente.
 
 | Código | Significa | Qué hace el front |
 |---|---|---|
@@ -392,3 +410,4 @@ Lo que la consola de la Fase 08 ya resolvía y el front real también debe cumpl
 | 0.5.0 | 2026-10-08 | En el detalle de un hallazgo, `obligation` trae `id` corto e `iri`, y ya no llegan vacíos la norma, el artículo, el título y el resumen. La IRI de una obligación se abre en el catálogo normativo público (§5.5) |
 | 0.6.0 | 2026-10-08 | Los errores llevan `code` estable y `title` y `detail` en castellano (§4.1, nota ARG-071); códigos comunes a todas las rutas |
 | 0.7.0 | 2026-10-09 | Códigos de autenticación, permisos, segundo factor, cursor, idempotencia, sesión y destino de webhooks (§2.3, §2.4 y §4.1) |
+| 0.8.0 | 2026-10-09 | Códigos de campañas, compuertas y sujeto sintético (§4.1) |

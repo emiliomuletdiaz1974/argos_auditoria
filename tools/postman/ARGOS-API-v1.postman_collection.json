@@ -952,7 +952,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));"
+                  "pm.test('Código esperado: 200 o 404', () => pm.expect(pm.response.code).to.be.oneOf([200, 404]));",
+                  "if (pm.response.code >= 400) pm.test('code del error', () => pm.expect(pm.response.json().code).to.be.oneOf(['campaign_not_found']));"
                 ]
               }
             }
@@ -990,7 +991,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 200 o 409 o 429', () => pm.expect(pm.response.code).to.be.oneOf([200, 409, 429]));"
+                  "pm.test('Código esperado: 200 o 409 o 429', () => pm.expect(pm.response.code).to.be.oneOf([200, 409, 429]));",
+                  "if (pm.response.code >= 400) pm.test('code del error', () => pm.expect(pm.response.json().code).to.be.oneOf(['campaign_already_running', 'conflict']));"
                 ]
               }
             }
@@ -1028,7 +1030,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));",
+                  "if (pm.response.code >= 400) pm.test('code del error', () => pm.expect(pm.response.json().code).to.be.oneOf(['campaign_plan_not_ready']));"
                 ]
               }
             }
@@ -1156,7 +1159,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));",
+                  "if (pm.response.code >= 400) pm.test('code del error', () => pm.expect(pm.response.json().code).to.be.oneOf(['gate_not_requested', 'gate_already_approved', 'campaign_closed', 'same_person_approval']));"
                 ]
               }
             }
@@ -1194,7 +1198,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));"
+                  "pm.test('Código esperado: 200 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 409]));",
+                  "if (pm.response.code >= 400) pm.test('code del error', () => pm.expect(pm.response.json().code).to.be.oneOf(['campaign_not_running']));"
                 ]
               }
             }
@@ -1284,7 +1289,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Código esperado: 200 o 202 o 404 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 202, 404, 409]));"
+                  "pm.test('Código esperado: 200 o 202 o 404 o 409', () => pm.expect(pm.response.code).to.be.oneOf([200, 202, 404, 409]));",
+                  "if (pm.response.code >= 400) pm.test('code del error', () => pm.expect(pm.response.json().code).to.be.oneOf(['campaign_not_found', 'remediation_already_running']));"
                 ]
               }
             }

@@ -12,11 +12,12 @@ from typing import Annotated, Any
 from uuid import UUID
 
 import psycopg
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from fastapi import APIRouter, Depends, Path, Request, status
 from pydantic import BaseModel, Field, field_validator
 
 from argos_api.authz import require_perm
 from argos_api.core import CoreRoute
+from argos_api.errors import ApiError, ErrorCode, domain_error
 from argos_api.http import IdempotencyKey, caller, database
 from argos_api.paging import Page, Paging, paginate
 from argos_api.runner import AlreadyRunningError, CampaignRunner
@@ -60,7 +61,7 @@ class NewCampaign(BaseModel):
     @classmethod
     def _bounded(cls, scope: dict[str, Any]) -> dict[str, Any]:
         if len(json.dumps(scope, ensure_ascii=False).encode("utf-8")) > MAX_SCOPE_BYTES:
-            raise ValueError(f"the scope is larger than {MAX_SCOPE_BYTES} bytes")
+            raise ValueError(f"El alcance ocupa más de {MAX_SCOPE_BYTES} bytes.")
         return scope
 
 
@@ -71,7 +72,11 @@ class GateApproval(BaseModel):
 def _runner(request: Request) -> CampaignRunner:
     runner: CampaignRunner | None = getattr(request.app.state, "campaign_runner", None)
     if runner is None:
-        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "no campaign runner attached")
+        raise ApiError(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            ErrorCode.CAMPAIGN_RUNNER_UNAVAILABLE,
+            "El motor de campañas no está disponible.",
+        )
     return runner
 
 
@@ -79,7 +84,7 @@ def _record(dsn: str, campaign_id: str) -> dict[str, Any]:
     try:
         return campaign_record(dsn, campaign_id)
     except CampaignStateError as unknown:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(unknown)) from None
+        raise domain_error(unknown) from None
 
 
 @router.post(
@@ -146,8 +151,12 @@ async def launch(request: Request, campaign_id: UUID) -> dict[str, Any]:
         async with within_size(request, dsn, "parallel_campaigns", holds_place=holds) as conn:
             await asyncio.to_thread(conn.execute, _MARK_LAUNCHED, (str(campaign_id),))
             workflow_id = await runner.start(str(campaign_id))
-    except AlreadyRunningError as running:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(running)) from None
+    except AlreadyRunningError:
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.CAMPAIGN_ALREADY_RUNNING,
+            "La campaña ya está en marcha.",
+        ) from None
     # Who launched which campaign, and not only that a mutation happened (SEC-030).
     await asyncio.to_thread(
         PostgresJournal(dsn).append,
@@ -167,11 +176,13 @@ def plan_preview(request: Request, campaign_id: UUID) -> dict[str, Any]:
     try:
         preview = campaign_plan(database(request), str(campaign_id))
     except CampaignStateError as unknown:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, str(unknown)) from None
+        raise domain_error(unknown) from None
     if preview is None:
-        raise HTTPException(
+        raise ApiError(
             status.HTTP_409_CONFLICT,
-            "no plan until the campaign is prepared: launch it and it stops at the start gate",
+            ErrorCode.CAMPAIGN_PLAN_NOT_READY,
+            "La campaña aún no tiene plan. Lance la campaña: se prepara y se detiene en la"
+            " compuerta de inicio.",
         )
     return preview
 
@@ -187,7 +198,11 @@ async def progress(request: Request, campaign_id: UUID) -> dict[str, Any]:
     try:
         return await runner.progress(str(campaign_id))
     except LookupError:
-        raise HTTPException(status.HTTP_409_CONFLICT, "the campaign is not running") from None
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.CAMPAIGN_NOT_RUNNING,
+            "La campaña no está en marcha.",
+        ) from None
 
 
 @router.get(
@@ -221,7 +236,7 @@ async def approve(
             needed,
         )
     except CampaignStateError as refused:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(refused)) from None
+        raise domain_error(refused) from None
     runner: CampaignRunner | None = getattr(request.app.state, "campaign_runner", None)
     if enough and runner is not None:
         await runner.signal(str(campaign_id), "approve", gate)
@@ -248,7 +263,7 @@ class Injection(BaseModel):
     @classmethod
     def _undoing_it_is_written_down(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("an injection is authorised only with its revert procedure")
+            raise ValueError("una inyección solo se autoriza con su procedimiento para revertirla")
         return value
 
 
@@ -280,7 +295,7 @@ def generate_subjects(request: Request, campaign_id: UUID, body: Subjects) -> di
     try:
         generate_for_campaign(dsn, str(campaign_id), body.count)
     except SyntheticError as refused:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(refused)) from None
+        raise domain_error(refused) from None
     return {"campaign_id": str(campaign_id), "subjects": campaign_subjects(dsn, str(campaign_id))}
 
 
@@ -311,8 +326,10 @@ def subject_package(request: Request, campaign_id: UUID, subject_id: UUID) -> di
     _record(dsn, str(campaign_id))
     subject = subject_of_campaign(dsn, str(campaign_id), str(subject_id))
     if subject is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND, f"no subject {subject_id} in campaign {campaign_id}"
+        raise ApiError(
+            status.HTTP_404_NOT_FOUND,
+            ErrorCode.SYNTHETIC_SUBJECT_NOT_FOUND,
+            f"La campaña no tiene el sujeto {subject_id}.",
         )
     return client_package(subject, authorized_injections(dsn, str(campaign_id), str(subject_id)))
 
@@ -338,7 +355,7 @@ def authorize(request: Request, campaign_id: UUID, body: Injection) -> dict[str,
             campaign_id=str(campaign_id),
         )
     except SyntheticError as refused:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(refused)) from None
+        raise domain_error(refused) from None
     return {"injection_id": injection_id, "campaign_id": str(campaign_id)}
 
 
@@ -354,5 +371,9 @@ async def remediation(request: Request, campaign_id: UUID) -> dict[str, str]:
     scope = {"campaign_id": str(campaign_id), "requested_by": caller(request).actor}
     try:
         return {"workflow_id": await runner.remediate(scope)}
-    except AlreadyRunningError as running:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(running)) from None
+    except AlreadyRunningError:
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.REMEDIATION_ALREADY_RUNNING,
+            "La reejecución de esta campaña ya está en marcha.",
+        ) from None

@@ -61,7 +61,9 @@ def create_campaign(
     the entry, while `created_by` stays theirs, because it is what keeps them from approving it.
     """
     if not created_by.startswith("user:"):
-        raise CampaignStateError("a campaign is created by a person: user:<sub>")
+        raise CampaignStateError(
+            "a campaign is created by a person: user:<sub>", "actor_not_person"
+        )
     campaign_id = str(uuid7())
     journal = PostgresJournal(dsn)
     payload: dict[str, Any] = {"campaign": campaign_id, "name": name}
@@ -105,7 +107,9 @@ def pin_campaign(
             ),
         ).rowcount
         if not updated:
-            raise CampaignStateError(f"the campaign {campaign_id} is not planned, or is pinned")
+            raise CampaignStateError(
+                f"the campaign {campaign_id} is not planned, or is pinned", "campaign_not_planned"
+            )
         journal.append(
             JOURNAL_ACTOR,
             "campaign.pin",
@@ -169,12 +173,15 @@ def persist_verdict(
                 (campaign_id, verdict.unit_id),
             ).fetchone()
             if existing is None:  # pragma: no cover - only if someone deleted it, which is barred
-                raise CampaignStateError("the verdict disappeared between write and read")
+                raise CampaignStateError(
+                    "the verdict disappeared between write and read", "verdict_missing"
+                )
             if str(existing[1]) != verdict.hash:
                 # A retry writes the same verdict; a different one for the same unit means
                 # someone evaluated it with other inputs (security review F09-02, SEC-007).
                 raise CampaignStateError(
-                    f"the unit {verdict.unit_id} already has a different verdict"
+                    f"the unit {verdict.unit_id} already has a different verdict",
+                    "verdict_conflict",
                 )
             return str(existing[0]), False
         conn.execute(
@@ -244,7 +251,7 @@ def grant_approval(
     approved, for every rule, is `approver`.
     """
     if not approver.startswith("user:"):
-        raise CampaignStateError("a gate is approved by a person: user:<sub>")
+        raise CampaignStateError("a gate is approved by a person: user:<sub>", "actor_not_person")
     journal = PostgresJournal(dsn)
     with psycopg.connect(dsn) as conn:
         request = conn.execute(
@@ -253,23 +260,35 @@ def grant_approval(
             (campaign_id, gate),
         ).fetchone()
         if request is None:
-            raise CampaignStateError(f"the gate {gate} was not requested")
+            raise CampaignStateError(
+                f"the gate {gate} was not requested", "gate_not_requested", {"gate": gate}
+            )
         owner = conn.execute(
             "SELECT created_by, status FROM argos.campaigns WHERE id = %s", (campaign_id,)
         ).fetchone()
         if owner is not None and owner[1] in CLOSED_STATUSES:
             # The seal covers the approvals as they were; one more afterwards would break its check.
-            raise CampaignStateError(f"the campaign is {owner[1]} and takes no more approvals")
+            raise CampaignStateError(
+                f"the campaign is {owner[1]} and takes no more approvals",
+                "campaign_closed",
+                {"status": owner[1]},
+            )
         if owner is not None and owner[0] == approver:
             # Whatever roles the realm gave them, nobody approves what they asked for (SEC-008).
-            raise CampaignStateError(f"{approver} created the campaign and does not approve it")
+            raise CampaignStateError(
+                f"{approver} created the campaign and does not approve it", "same_person_approval"
+            )
         already = conn.execute(
             "SELECT 1 FROM argos.approvals "
             "WHERE campaign_id = %s AND gate = %s AND approved_by = %s",
             (campaign_id, gate, approver),
         ).fetchone()
         if already is not None:
-            raise CampaignStateError(f"the gate {gate} was already approved by {approver}")
+            raise CampaignStateError(
+                f"the gate {gate} was already approved by {approver}",
+                "gate_already_approved",
+                {"gate": gate},
+            )
         conn.execute(
             "INSERT INTO argos.approvals (campaign_id, gate, approved_by, approver_name)"
             " VALUES (%s, %s, %s, %s)",
@@ -312,15 +331,23 @@ def gate_is_open(dsn: str, campaign_id: str, gate: str) -> bool:
 
 def set_status(dsn: str, campaign_id: str, status: str) -> None:
     if status not in STATUSES:
-        raise CampaignStateError(f"unknown campaign status: {status!r}")
+        raise CampaignStateError(f"unknown campaign status: {status!r}", "campaign_status_unknown")
     with psycopg.connect(dsn) as conn:
         current = conn.execute(
             "SELECT status FROM argos.campaigns WHERE id = %s", (campaign_id,)
         ).fetchone()
         if current is None:
-            raise CampaignStateError(f"unknown campaign: {campaign_id}")
+            raise CampaignStateError(
+                f"unknown campaign: {campaign_id}",
+                "campaign_not_found",
+                {"campaign_id": campaign_id},
+            )
         if status not in TRANSITIONS[str(current[0])]:
-            raise CampaignStateError(f"illegal status change {current[0]} -> {status}")
+            raise CampaignStateError(
+                f"illegal status change {current[0]} -> {status}",
+                "campaign_transition_illegal",
+                {"from": current[0], "to": status},
+            )
         conn.execute("UPDATE argos.campaigns SET status = %s WHERE id = %s", (status, campaign_id))
 
 
@@ -334,7 +361,9 @@ def campaign_record(dsn: str, campaign_id: str) -> dict[str, Any]:
             (campaign_id,),
         ).fetchone()
     if row is None:
-        raise CampaignStateError(f"unknown campaign: {campaign_id}")
+        raise CampaignStateError(
+            f"unknown campaign: {campaign_id}", "campaign_not_found", {"campaign_id": campaign_id}
+        )
     fields = (
         "name",
         "scope",
