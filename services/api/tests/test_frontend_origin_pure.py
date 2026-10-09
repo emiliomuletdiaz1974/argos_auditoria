@@ -47,7 +47,7 @@ def test_a_listed_origin_may_send_a_mutation() -> None:
     answer = _client(FRONT).post(
         f"{API_PREFIX}/webhooks", json={}, headers={**MANAGER, "Origin": FRONT}
     )
-    assert "another origin" not in answer.text
+    assert "origin_not_allowed" not in answer.text
 
 
 def test_an_origin_that_is_not_listed_is_still_refused() -> None:
@@ -55,7 +55,7 @@ def test_an_origin_that_is_not_listed_is_still_refused() -> None:
         f"{API_PREFIX}/webhooks", json={}, headers={**MANAGER, "Origin": OTHER}
     )
     assert answer.status_code == 403
-    assert "another origin" in answer.text
+    assert answer.json()["code"] == "origin_not_allowed"
 
 
 def test_a_listed_origin_is_compared_whole_not_as_a_prefix() -> None:

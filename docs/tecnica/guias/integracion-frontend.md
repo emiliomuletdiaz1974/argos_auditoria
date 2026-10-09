@@ -3,7 +3,7 @@ id: GUIA-integracion-frontend
 kind: guide
 title: Guía de integración del front end con la API v1
 phases: ["08"]
-version: 0.5.0
+version: 0.6.0
 commit: 3322940
 date: 2026-10-08
 status: current
@@ -120,10 +120,25 @@ Front y API viven en dominios distintos (decisión C-02, 2026-09-29). Desde C-03
 Todos los errores son `application/problem+json` (RFC 9457):
 
 ```json
-{"type": "about:blank", "title": "conflict", "status": 409,
- "detail": "illegal transition pending_verification -> risk_accepted",
- "instance": "/api/v1/findings/…/transition"}
+{"type": "about:blank", "code": "route_not_found", "title": "No encontrado", "status": 404,
+ "detail": "La ruta no existe.", "instance": "/api/v1/nada-por-aqui"}
 ```
+
+- **`code`** es el contrato: estable, en inglés y `snake_case`. **Decidid siempre por `code`**, nunca por el texto. Un código no se renombra ni se quita sin versión nueva de la API.
+- **`title`** está en castellano y es el mismo para cada estado (`Conflicto`, `No encontrado`…).
+- **`detail`** está en castellano, escrito para la persona, con los datos de la ocurrencia: se puede mostrar tal cual.
+
+Los errores se van dando de alta por recurso (nota ARG-071). Mientras un error no tenga código propio, responde con el genérico de su estado (`bad_request`, `unauthenticated`, `forbidden`, `not_found`, `conflict`, `unprocessable`, `too_many_requests`, `internal_error`, `not_implemented`, `service_unavailable`) y su `detail` puede seguir en inglés.
+
+Códigos comunes a todas las rutas:
+
+| `code` | Estado | Significa |
+|---|---|---|
+| `route_not_found` | 404 | La ruta no existe (o el método no lo admite: 405 con el genérico) |
+| `invalid_request` | 422 | Cuerpo o parámetros inválidos; `detail` dice campo y motivo: `body.to: campo obligatorio` |
+| `invalid_value` | 400 | Un valor que el almacén no puede leer (un cursor con una fecha imposible) |
+| `store_unavailable` | 503 | La base de datos no responde |
+| `origin_not_allowed` | 403 | Cambio enviado desde un origen que no está en la lista (§3) |
 
 | Código | Significa | Qué hace el front |
 |---|---|---|
@@ -138,7 +153,7 @@ Todos los errores son `application/problem+json` (RFC 9457):
 | `501` | Ruta declarada sin implementar (`GET /approvals`) | No usarla |
 | `503` | Algo no está configurado o no responde (modelo local, base de datos, Temporal) | Mostrar que el servicio no está disponible |
 
-`detail` está en inglés. Sirve para diagnosticar; el front debe traducir los casos que enseña a la persona.
+El estado HTTP sigue sirviendo para la reacción general de la tabla de arriba; para distinguir casos del mismo estado, `code`.
 
 ### 4.2 Paginación
 
@@ -353,3 +368,4 @@ Lo que la consola de la Fase 08 ya resolvía y el front real también debe cumpl
 | 0.3.0 | 2026-10-05 | Direcciones del banco de pruebas, origen admitido y túnel mientras los puertos sigan cerrados (K-08) |
 | 0.4.0 | 2026-10-08 | Rutas nuevas del sujeto sintético (generar, estado y paquete) y su flujo; veredictos del primero al último; `409` al aprobar compuertas de campañas cerradas; la verificación de una subsanación espera al DPO; `aud` es una lista (QA-36, K-99) |
 | 0.5.0 | 2026-10-08 | En el detalle de un hallazgo, `obligation` trae `id` corto e `iri`, y ya no llegan vacíos la norma, el artículo, el título y el resumen. La IRI de una obligación se abre en el catálogo normativo público (§5.5) |
+| 0.6.0 | 2026-10-08 | Los errores llevan `code` estable y `title` y `detail` en castellano (§4.1, nota ARG-071); códigos comunes a todas las rutas |

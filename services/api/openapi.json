@@ -294,6 +294,11 @@
       "Problem": {
         "description": "An error as RFC 9457 describes it: the same shape whatever went wrong.",
         "properties": {
+          "code": {
+            "description": "stable identifier of the error, in English snake_case: decide on this",
+            "title": "Code",
+            "type": "string"
+          },
           "detail": {
             "anyOf": [
               {
@@ -303,7 +308,7 @@
                 "type": "null"
               }
             ],
-            "description": "what happened in this occurrence",
+            "description": "what happened in this occurrence, in Spanish",
             "title": "Detail"
           },
           "instance": {
@@ -317,7 +322,7 @@
             "type": "integer"
           },
           "title": {
-            "description": "short human summary, the same for every occurrence",
+            "description": "short summary in Spanish, the same for every occurrence",
             "title": "Title",
             "type": "string"
           },
@@ -329,6 +334,7 @@
           }
         },
         "required": [
+          "code",
           "title",
           "status",
           "instance"

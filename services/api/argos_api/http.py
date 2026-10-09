@@ -11,6 +11,7 @@ from fastapi import Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from argos_api.errors import title
 from argos_api.paging import Page, PageRequest, Paging
 from argos_auth import Identity
 
@@ -35,9 +36,14 @@ class Problem(BaseModel):
     """An error as RFC 9457 describes it: the same shape whatever went wrong."""
 
     type: str = Field(default="about:blank", description="identifier of the kind of problem")
-    title: str = Field(description="short human summary, the same for every occurrence")
+    code: str = Field(
+        description="stable identifier of the error, in English snake_case: decide on this"
+    )
+    title: str = Field(description="short summary in Spanish, the same for every occurrence")
     status: int = Field(description="HTTP status code")
-    detail: str | None = Field(default=None, description="what happened in this occurrence")
+    detail: str | None = Field(
+        default=None, description="what happened in this occurrence, in Spanish"
+    )
     instance: str = Field(description="path where it happened")
 
 
@@ -46,10 +52,14 @@ class ProblemResponse(JSONResponse):
 
 
 def problem_response(
-    request: Request, status_code: int, title: str, detail: str | None
+    request: Request, status_code: int, code: str, detail: str | None
 ) -> ProblemResponse:
     body = Problem(
-        title=title, status=status_code, detail=detail, instance=request.url.path
+        code=code,
+        title=title(status_code),
+        status=status_code,
+        detail=detail,
+        instance=request.url.path,
     ).model_dump()
     return ProblemResponse(status_code=status_code, content=body)
 

@@ -144,7 +144,7 @@ def test_every_route_but_health_and_refresh_answers_401_as_problem_json() -> Non
 
 def test_the_error_shape_is_rfc_9457() -> None:
     schema = _generated()["components"]["schemas"]["Problem"]
-    assert {"type", "title", "status", "instance"} <= set(schema["properties"])
+    assert {"type", "code", "title", "status", "instance"} <= set(schema["properties"])
 
 
 def test_an_anonymous_call_is_refused_as_a_problem() -> None:

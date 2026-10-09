@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 
 import psycopg
 from fastapi import APIRouter, Depends, FastAPI, Request, status
+from fastapi import HTTPException as FastApiHTTPException
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
@@ -24,6 +25,7 @@ from argos_api import API_PREFIX, API_VERSION, SERVICE_NAME
 from argos_api.assistant import AssistantClient
 from argos_api.authz import require_perm
 from argos_api.core import IDEMPOTENCY_HEADER, MUTATIONS, IdempotencyStore
+from argos_api.errors import ApiError, ErrorCode, generic_code, validation_detail
 from argos_api.http import ERRORS, PROBLEM_MEDIA_TYPE, ProblemResponse, problem_response
 from argos_api.operations import Alerts, Metrics, PostgresAlerts
 from argos_api.routers import (
@@ -188,7 +190,10 @@ def create_app(
             detail = {"origin": origin[:100]}
             security_event(request, "http.origin_refused", "anonymous", "refused", detail)
             return problem_response(
-                request, status.HTTP_403_FORBIDDEN, _title(403), "a change sent from another origin"
+                request,
+                status.HTTP_403_FORBIDDEN,
+                ErrorCode.ORIGIN_NOT_ALLOWED,
+                "Cambio enviado desde otro origen.",
             )
         return await call_next(request)
 
@@ -226,7 +231,8 @@ def create_app(
     @app.exception_handler(HTTPException)
     def _http_error(request: Request, exc: HTTPException) -> ProblemResponse:
         status_code = exc.status_code
-        response = problem_response(request, status_code, _title(status_code), exc.detail)
+        code, detail = _code_and_detail(exc)
+        response = problem_response(request, status_code, code, detail)
         response.headers.update(exc.headers or {})
         return response
 
@@ -235,8 +241,8 @@ def create_app(
         return problem_response(
             request,
             status.HTTP_422_UNPROCESSABLE_CONTENT,
-            "invalid request",
-            "; ".join(f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()),
+            ErrorCode.INVALID_REQUEST,
+            validation_detail(list(exc.errors())),
         )
 
     @app.exception_handler(psycopg.DataError)
@@ -247,8 +253,8 @@ def create_app(
         return problem_response(
             request,
             status.HTTP_400_BAD_REQUEST,
-            _title(status.HTTP_400_BAD_REQUEST),
-            "a value of the request is not valid",
+            ErrorCode.INVALID_VALUE,
+            "Un valor de la petición no es válido.",
         )
 
     @app.exception_handler(psycopg.Error)
@@ -259,8 +265,8 @@ def create_app(
         return problem_response(
             request,
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            _title(status.HTTP_503_SERVICE_UNAVAILABLE),
-            "the store is not available",
+            ErrorCode.STORE_UNAVAILABLE,
+            "El almacén de datos no está disponible.",
         )
 
     @app.get("/health", tags=["health"], summary="Liveness of the API")
@@ -325,12 +331,14 @@ def _graph_router(dsn: str) -> APIRouter:
     return router
 
 
-def _title(code: int) -> str:
-    return {
-        status.HTTP_400_BAD_REQUEST: "bad request",
-        status.HTTP_401_UNAUTHORIZED: "unauthenticated",
-        status.HTTP_403_FORBIDDEN: "forbidden",
-        status.HTTP_404_NOT_FOUND: "not found",
-        status.HTTP_409_CONFLICT: "conflict",
-        status.HTTP_501_NOT_IMPLEMENTED: "not implemented",
-    }.get(code, "error")
+def _code_and_detail(exc: HTTPException) -> tuple[str, str | None]:
+    """The code and the detail of an error; the router's own 404 and 405 are named too."""
+    if isinstance(exc, ApiError):
+        return exc.code, exc.detail
+    if not isinstance(exc, FastApiHTTPException):
+        # Raised by the router itself, not by a route: the path or the method does not exist.
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
+            return ErrorCode.ROUTE_NOT_FOUND, "La ruta no existe."
+        if exc.status_code == status.HTTP_405_METHOD_NOT_ALLOWED:
+            return generic_code(exc.status_code), "La ruta no admite este método."
+    return generic_code(exc.status_code), exc.detail

@@ -4,7 +4,7 @@ kind: module
 title: API única autenticada v1 (argos-api)
 module: argos-api
 phases: ["08"]
-version: 0.47.0-alpha
+version: 0.48.0-alpha
 commit: 7cea717
 date: 2026-10-08
 status: current
@@ -28,6 +28,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 - `argos_api.app.create_app(validator)`: monta `/health`, los routers de cada recurso bajo `/api/v1` y los manejadores de error; expone el contrato en `/api/v1/openapi.json`.
 - `argos_api.routers.*`: un módulo por recurso (`systems`, `inventory`, `campaigns`, `findings`, `evidence`, `credentials`, `assistant`, `approvals`, `webhooks`, `session`).
 - `argos_api.http`: el problema RFC 9457, la cabecera de idempotencia y el `501` de lo que aún no está.
+- `argos_api.errors`: el catálogo de códigos de error (`ErrorCode`), los títulos en castellano por estado y `ApiError`, el error con código propio y `detail` para la persona (nota ARG-071).
 - `argos_api.paging`: el cursor opaco (`created_at`, `id`), su validación en la dependencia de paginación y el gemelo en memoria del predicado SQL (`apply_keyset`), para que la consulta y la prueba digan lo mismo.
 - `argos_api.core`: `CoreRoute`, la clase de ruta que envuelve a todas. Es clase de ruta y no middleware a propósito: un middleware corre antes de resolver las dependencias y no sabe todavía quién llama. Aquí la identidad ya está resuelta, así que el asiento del diario lleva el actor real y una llamada denegada no deja rastro de algo que no ocurrió.
 - `argos_api.auth`: exige un token del realm `argos` con algún rol de ARGOS.
@@ -39,7 +40,7 @@ Es la única puerta autenticada a ARGOS: sistemas, inventario, campañas, hallaz
 | Decisión | Cómo se materializa |
 |---|---|
 | Versión en la ruta | Todo cuelga de `/api/v1`; solo `/health` queda fuera |
-| Errores | `application/problem+json` (RFC 9457) en **todos** los códigos ≥ 400, incluido el 404 de una ruta inexistente |
+| Errores | `application/problem+json` (RFC 9457) en **todos** los códigos ≥ 400, incluido el 404 de una ruta inexistente. Cada error lleva `code`, estable y en inglés, que es lo que decide el cliente; `title` y `detail` van en castellano (nota ARG-071). Un error aún sin código propio responde con el genérico de su estado |
 | Paginación | `cursor` opaco y `limit` (1…200, por defecto 50); nunca `offset` |
 | Idempotencia | `Idempotency-Key` en los POST que crean (campañas, credenciales, suscripciones) |
 | Autenticación | `Bearer` del Keycloak del appliance; sin token, `401` con `WWW-Authenticate` |
@@ -132,7 +133,7 @@ El proceso (`python -m argos_api.main`) lee `ARGOS_DATABASE_URL`, `ARGOS_TEMPORA
 - Los cuerpos se validan con Pydantic y un cuerpo inválido sale como `422` en formato problema, sin filtrar trazas.
 - Decisiones aplicables: ADR-0012 (API única), ADR-0013 (consola; su punto 5 lo sustituye la nota ARG-073), nota de desviación ARG-071-080 (identificadores en inglés y sin `INSERT` propios).
 - **Entradas acotadas** (auditoría del 2026-09-18, trasladada en F09-17): identificadores de ruta tipados como UUID, textos libres de 2000 caracteres como máximo, `scope` de campaña de 16 KiB y nombre de compuerta `^[a-z_]{1,32}$`; lo que no cumple responde 422 sin tocar la base.
-- **Errores de la base sin detalle:** un `psycopg.Error` responde 503 problem+json («the store is not available») y solo su tipo queda en el log; el mensaje del driver nombra host, SQL o restricción.
+- **Errores de la base sin detalle:** un `psycopg.Error` responde 503 problem+json (`store_unavailable`, «El almacén de datos no está disponible.») y solo su tipo queda en el log; el mensaje del driver nombra host, SQL o restricción.
 - **Mapa de rutas solo en desarrollo:** `/api/v1/docs` y `/api/v1/openapi.json` se sirven con `ARGOS_ENVIRONMENT=development`; el contrato versionado se sigue generando de `openapi()`.
 - **Sujeto sintético ligado a su campaña:** la autorización pasa el `campaign_id` de la ruta y el dominio rechaza un sujeto de otra campaña.
 - **Señal a campañas sin workflow propio** (F09-23): `TemporalCampaigns.signal` ignora que no exista `campaign-<id>`, porque una campaña de subsanación consulta sus compuertas por su cuenta.
@@ -226,3 +227,4 @@ La imagen (`services/api/Dockerfile`) solo lleva la API: desde el 2026-09-29 no 
 | 0.45.0-alpha | 2026-10-07 | Rutas de sujeto sintético (`POST /campaigns/{id}/synthetic/subjects`, `GET /campaigns/{id}/synthetic`, `GET …/subjects/{subject_id}/package`) con los permisos `synthetic.generate` y `synthetic.read`; el listado de veredictos pagina sin repetir ni perder elementos | QA-36 |
 | 0.46.0-alpha | 2026-10-08 | El detalle de un hallazgo resuelve la obligación también por su IRI, que es lo que guardan los hallazgos (antes devolvía norma, artículo, título y resumen vacíos), y la devuelve con `id` corto e `iri`; la IRI se abre en el catálogo normativo del comprobador | petición directa (nota ARG-069) |
 | 0.47.0-alpha | 2026-10-08 | Al aprobar una compuerta se guarda el nombre y apellidos de la persona (claim `name`, o su usuario si la cuenta no lo tiene) para el expediente impreso | petición directa |
+| 0.48.0-alpha | 2026-10-08 | Los errores llevan `code` estable (contrato v1: `Problem.code` obligatorio) y `title` en castellano; ruta inexistente, cuerpo inválido, valor ilegible, almacén caído y otro origen con código propio y `detail` en castellano | ERR-01 (nota ARG-071, DP-24) |

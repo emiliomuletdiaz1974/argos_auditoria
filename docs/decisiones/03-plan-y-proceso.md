@@ -162,6 +162,19 @@ La fuente de todas es la bitácora del plan (`.scratch/plan/BITACORA.md`), que n
 - **Por qué:** el programa no puede quedarse parado por dependencias externas. Cada informe de cierre las declara como pendientes y ningún documento las presenta como hechas.
 - **Excepción:** la Fase 06 **no tiene tag**, porque F06-99 depende de F06-05 (pesos del modelo, MANUAL). Ver [revisión](04-revision-2026-09-23.md).
 
+### DP-24
+**Los errores de la API hablan castellano y llevan un código estable** · 2026-10-08
+
+- **Decidimos:**
+  - cada error `problem+json` lleva `code`, un identificador estable en inglés y `snake_case`; es el contrato con el front y un test fija el catálogo;
+  - `title` (uno por estado) y `detail` pasan al castellano, redactados para la persona y sin datos internos;
+  - logs, excepciones de dominio e identificadores siguen en inglés: nos apartamos del ADR-0005 solo en esos dos campos (nota ARG-071);
+  - se aplica por carpetas de la colección Postman: base y 12 (seguridad), 03 (campañas), 04 (hallazgos) y 06 (credenciales) primero; después el resto, y un test arquitectónico al final (tareas ERR-01 a ERR-99).
+- **Por qué:** el front de otro equipo enseña estos errores a la persona y hoy tiene que traducirlos y, para distinguir casos del mismo estado, buscar palabras en un `detail` inglés que puede cambiar.
+- **Qué comprobamos antes:** los `HTTPException` de `services/api/argos_api` (unos 75, repartidos en 20 archivos, varios con el mensaje de una excepción de dominio en inglés), los manejadores de error de `app.py` y la guía del front, §4.1, que pedía traducir en el front. Los tests que miraban el texto de un error comprobaban sobre todo el nombre del campo, que el `detail` nuevo conserva.
+- **Descartamos:** traducir en el front (cada front repetiría el catálogo, y un `detail` con datos de la ocurrencia no se traduce bien desde fuera), negociar el idioma con `Accept-Language` (nadie ha pedido un segundo idioma; el `code` permite añadirlo sin romper nada) y añadir solo `code` dejando el texto en inglés.
+- **Aplicado en:** ERR-01 (base: `argos_api.errors`, `Problem.code`, códigos comunes) y las tareas ERR siguientes.
+
 ### DP-23
 **El banco usa nombres sslip.io y admite un único front: `http://localhost:5173`** · 2026-10-05
 

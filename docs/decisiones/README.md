@@ -73,5 +73,6 @@ Leyenda del **Quién**: **U** = decisión nuestra en una tarea DECISIÓN o por i
 | DP-21 | 2026-10-02 | U | El banco se despliega solo desde una etiqueta `banco-vX.Y.Z`: imágenes y manifiestos firmados en GHCR, aplicados por Flux tras verificar la firma | [→](03-plan-y-proceso.md#dp-21) |
 | DP-22 | 2026-10-03 | U | En cada push solo `verify`; `integration` y `build`, a mano. El banco se monta por capas, empezando por unos 16 contenedores | [→](03-plan-y-proceso.md#dp-22) |
 | DP-23 | 2026-10-05 | U | El banco usa nombres sslip.io y admite un único front, `http://localhost:5173`, en la API y en el realm | [→](03-plan-y-proceso.md#dp-23) |
+| DP-24 | 2026-10-08 | U | Los errores de la API llevan `code` estable en inglés y `title` y `detail` en castellano (nota ARG-071 al ADR-0005) | [→](03-plan-y-proceso.md#dp-24) |
 
-Las decisiones técnicas tomadas dentro de las tareas (unas 90) están agrupadas por fase en [03 · Plan y proceso](03-plan-y-proceso.md#decisiones-técnicas-dentro-de-las-tareas). Las 32 notas de desviación, en [02 · Desviaciones](02-desviaciones.md).
+Las decisiones técnicas tomadas dentro de las tareas (unas 90) están agrupadas por fase en [03 · Plan y proceso](03-plan-y-proceso.md#decisiones-técnicas-dentro-de-las-tareas). Las 33 notas de desviación, en [02 · Desviaciones](02-desviaciones.md).
