@@ -1,6 +1,7 @@
 # K-08 · the API on its public name, only on 443 (websecure); the certificate, from Let's Encrypt.
 # Only Traefik reaches the API from outside its namespace, and the ACME solver that cert-manager
-# starts here while it issues the certificate.
+# starts here while it issues the certificate. Only /api/v1/ and /health are published: /metrics
+# (for Prometheus) and /internal (for Alertmanager) answer only inside the cluster (K-99).
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -18,7 +19,14 @@ spec:
     - host: api.34-134-21-66.sslip.io
       http:
         paths:
-          - path: /
+          - path: /api/v1/
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8000
+          - path: /health
             pathType: Prefix
             backend:
               service:

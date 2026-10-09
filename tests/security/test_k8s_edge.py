@@ -92,9 +92,11 @@ def _check_ingress(ingress: dict[str, Any], host: str, service: str, port: int) 
     return paths
 
 
-def test_the_api_is_published_whole_on_its_name() -> None:
+def test_the_api_publishes_only_its_v1_and_its_health() -> None:
+    """K-99: published whole, /metrics told anyone the security events by kind, and the receiver of
+    Alertmanager (/internal) answered from the Internet too."""
     paths = _check_ingress(_named("Ingress", "api", "argos-services"), API_HOST, "api", 8000)
-    assert paths == ["/"]
+    assert sorted(paths) == ["/api/v1/", "/health"]
 
 
 def test_from_keycloak_only_what_a_browser_signs_in_with() -> None:
